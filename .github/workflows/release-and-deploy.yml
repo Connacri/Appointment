@@ -220,8 +220,10 @@ jobs:
             npm install --legacy-peer-deps
           }
 
-      - name: Build Web Application
+      - name: Build Web Application (relative base for desktop WebView)
         run: npm run build
+        env:
+          VITE_BASE: ./
 
       - name: Package Windows Executable Desktop Application
         shell: pwsh
