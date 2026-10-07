@@ -125,8 +125,8 @@ jobs:
         id: keystore_prep
         run: |
           mkdir -p /tmp/keystore
-          mkdir -p build/outputs/apk/release
-          mkdir -p build/outputs/bundle/release
+          mkdir -p android/app/build/outputs/apk/release
+          mkdir -p android/app/build/outputs/bundle/release
 
           if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
             echo "::error::ANDROID_KEYSTORE_BASE64 secret is missing. Run scripts/bootstrap-secrets.sh (AGENTS.md §Appendix B). Never hardcode keystores or passwords."
@@ -146,14 +146,15 @@ jobs:
       - name: Compile & Package Signed Android Release (APK & AAB)
         run: |
           echo "Packaging Production Android Binaries for Package ID: com.planning.oran..."
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew assembleRelease bundleRelease \
+          if [ -f "./android/gradlew" ]; then
+            chmod +x ./android/gradlew
+            VERSION_NAME="$(node -p "require('./package.json').version")"
+            cd android && ./gradlew assembleRelease bundleRelease \
               -Pandroid.injected.signing.store.file=/tmp/keystore/release.keystore \
               -Pandroid.injected.signing.store.password="$STORE_PASS" \
               -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
               -Pandroid.injected.signing.key.password="$KEY_PASS" \
-              --no-daemon --parallel
+              --no-daemon --parallel -PversionName="$VERSION_NAME" -PversionCode="${{ github.run_number }}"; cd ..
           else
             echo "::error::gradlew not found — android/ Capacitor project missing."
             exit 1
@@ -162,17 +163,17 @@ jobs:
       - name: Verify Cryptographic Android Signatures
         run: |
           echo "== Audit Signature APK =="
-          jarsigner -verify -verbose -certs build/outputs/apk/release/Planning-Oran-release.apk || true
+          jarsigner -verify -verbose -certs android/app/build/outputs/apk/release/app-release.apk || true
           echo "== Audit Signature AAB =="
-          jarsigner -verify -verbose -certs build/outputs/bundle/release/Planning-Oran-release.aab || true
+          jarsigner -verify -verbose -certs android/app/build/outputs/bundle/release/app-release.aab || true
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-release
           path: |
-            build/outputs/apk/release/Planning-Oran-release.apk
-            build/outputs/bundle/release/Planning-Oran-release.aab
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 30
 
       - name: Cleanup Keystore
@@ -275,8 +276,8 @@ jobs:
           mkdir -p release-final
           
           # Copy Android Artifacts
-          cp release-assets/android/apk/release/Planning-Oran-release.apk release-final/Planning-Oran-release.apk || true
-          cp release-assets/android/bundle/release/Planning-Oran-release.aab release-final/Planning-Oran-release.aab || true
+          cp release-assets/android/app/build/outputs/apk/release/app-release.apk release-final/Planning-Oran-release.apk || true
+          cp release-assets/android/app/build/outputs/bundle/release/app-release.aab release-final/Planning-Oran-release.aab || true
           
           # Copy Windows Artifacts
           cp release-assets/windows/Planning-Oran-Setup.exe release-final/Planning-Oran-Setup.exe || true
