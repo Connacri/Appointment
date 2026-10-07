@@ -16,12 +16,17 @@ import {
   BarChart2,
   Clock,
   ShieldAlert,
+  Cpu,
+  Activity,
+  Layers,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsTrendPoint, ScheduleOptimizationInsight, InternationalKpis } from '../types/booking';
+import { ResourceUsageDashboard } from './ResourceUsageDashboard';
 
 export const BookingAnalyticsView: React.FC = () => {
   const { bookings, resourceGroups, language } = useApp();
+  const [activeAnalyticsTab, setActiveAnalyticsTab] = useState<'resources' | 'business' | 'all'>('resources');
   const [timeRange, setTimeRange] = useState<'7d' | '14d' | '30d'>('14d');
   const [activeMetricFilter, setActiveMetricFilter] = useState<'all' | 'occupancy' | 'clinic' | 'revenue'>('all');
 
@@ -392,56 +397,112 @@ export const BookingAnalyticsView: React.FC = () => {
 
   return (
     <div className="flex-1 p-4 md:p-6 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-6">
-      {/* Header with Title & Action Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-              {language === 'fr'
-                ? 'Booking Analytics & Optimisation des Plannings'
-                : language === 'ar'
-                ? 'تحليلات الحجوزات وتحسين الجداول'
-                : 'Booking Analytics & Schedule Optimization'}
-            </h1>
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 uppercase">
-              D3.js Data Engine
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {language === 'fr'
-              ? 'Indicateurs USALI (RevPAR, ADR), taux d\'occupation hôtelier et flux de consultations cliniques'
-              : 'USALI hospital metrics (RevPAR, ADR), lodging occupancy curves and healthcare consultation flows'}
-          </p>
-        </div>
-
-        {/* Filter and Export buttons */}
-        <div className="flex items-center gap-2">
-          {/* Time range pills */}
-          <div className="flex items-center bg-slate-200 dark:bg-slate-800 p-0.5 rounded-lg text-xs font-semibold">
-            {(['7d', '14d', '30d'] as const).map((r) => (
-              <button
-                key={r}
-                onClick={() => setTimeRange(r)}
-                className={`px-2.5 py-1 rounded transition-colors ${
-                  timeRange === r
-                    ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                {r === '7d' ? '7 Jours' : r === '14d' ? '14 Jours' : '30 Jours'}
-              </button>
-            ))}
-          </div>
+      {/* Analytics Master Switcher Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div className="flex items-center gap-1 bg-slate-200/80 dark:bg-slate-900 p-1 rounded-xl text-xs font-semibold">
+          <button
+            onClick={() => setActiveAnalyticsTab('resources')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all ${
+              activeAnalyticsTab === 'resources'
+                ? 'bg-white dark:bg-slate-800 text-cyan-600 dark:text-cyan-400 shadow-xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Cpu size={15} />
+            <span>⚡ CPU & RAM Builds Agents (D3.js)</span>
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+          </button>
 
           <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+            onClick={() => setActiveAnalyticsTab('business')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all ${
+              activeAnalyticsTab === 'business'
+                ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
           >
-            <Download size={14} />
-            <span>Export CSV</span>
+            <TrendingUp size={15} />
+            <span>🏨 Plannings & KPIs Métier (Hôtel / Clinique)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveAnalyticsTab('all')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all hidden md:flex ${
+              activeAnalyticsTab === 'all'
+                ? 'bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 shadow-xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Layers size={14} />
+            <span>Vue Complète</span>
           </button>
         </div>
+
+        <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
+          <span>Engine : D3.js v7.9</span>
+          <span>·</span>
+          <span>Runner : Ubuntu 24.04</span>
+        </div>
       </div>
+
+      {/* 1. RESOURCE USAGE DASHBOARD (CPU & Memory for Automated Builds) */}
+      {(activeAnalyticsTab === 'resources' || activeAnalyticsTab === 'all') && (
+        <ResourceUsageDashboard />
+      )}
+
+      {/* 2. BUSINESS HOSPITALITY & CLINIC ANALYTICS */}
+      {(activeAnalyticsTab === 'business' || activeAnalyticsTab === 'all') && (
+        <div className="space-y-6 pt-2">
+          {/* Header with Title & Action Controls */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+                  {language === 'fr'
+                    ? 'Booking Analytics & Optimisation des Plannings'
+                    : language === 'ar'
+                    ? 'تحليلات الحجوزات وتحسين الجداول'
+                    : 'Booking Analytics & Schedule Optimization'}
+                </h1>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 uppercase">
+                  D3.js Data Engine
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {language === 'fr'
+                  ? 'Indicateurs USALI (RevPAR, ADR), taux d\'occupation hôtelier et flux de consultations cliniques'
+                  : 'USALI hospital metrics (RevPAR, ADR), lodging occupancy curves and healthcare consultation flows'}
+              </p>
+            </div>
+
+            {/* Filter and Export buttons */}
+            <div className="flex items-center gap-2">
+              {/* Time range pills */}
+              <div className="flex items-center bg-slate-200 dark:bg-slate-800 p-0.5 rounded-lg text-xs font-semibold">
+                {(['7d', '14d', '30d'] as const).map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setTimeRange(r)}
+                    className={`px-2.5 py-1 rounded transition-colors ${
+                      timeRange === r
+                        ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {r === '7d' ? '7 Jours' : r === '14d' ? '14 Jours' : '30 Jours'}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={handleExportCSV}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+              >
+                <Download size={14} />
+                <span>Export CSV</span>
+              </button>
+            </div>
+          </div>
 
       {/* International Hospitality & Clinic KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -662,6 +723,8 @@ export const BookingAnalyticsView: React.FC = () => {
           ))}
         </div>
       </div>
+      </div>
+      )}
 
       {/* Floating D3 Tooltip */}
       <div

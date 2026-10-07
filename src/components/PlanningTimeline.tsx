@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -13,6 +13,13 @@ import {
   Download,
   AlertCircle,
   X,
+  Maximize2,
+  Minimize2,
+  ChevronsLeft,
+  ChevronsRight,
+  MoveLeft,
+  MoveRight,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { initialResourceGroups } from '../data/mockData';
@@ -36,6 +43,15 @@ export const PlanningTimeline: React.FC = () => {
     updateBookingStatus,
   } = useApp();
 
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Responsive mode: compact (phone), standard, or wide
+  const [columnZoomMode, setColumnZoomMode] = useState<'compact' | 'standard' | 'wide'>('standard');
+  const [isLeftBarCompact, setIsLeftBarCompact] = useState(false);
+
+  // Dynamic day column width
+  const colWidth = columnZoomMode === 'compact' ? 76 : columnZoomMode === 'wide' ? 144 : 112;
+
   // Collapsed state for resource groups
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
@@ -51,6 +67,21 @@ export const PlanningTimeline: React.FC = () => {
       ...prev,
       [groupId]: !prev[groupId],
     }));
+  };
+
+  // Smooth scroll helpers
+  const scrollTimeline = (delta: number) => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: delta, behavior: 'smooth' });
+    }
+  };
+
+  const scrollToToday = () => {
+    if (scrollContainerRef.current) {
+      // "Today" is at index 1
+      const targetScroll = Math.max(0, 1 * colWidth - 80);
+      scrollContainerRef.current.scrollTo({ left: targetScroll, behavior: 'smooth' });
+    }
   };
 
   // Generate date list based on currentBaseDate & mode
@@ -176,14 +207,98 @@ export const PlanningTimeline: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-950 relative">
+      {/* Responsive Toolbar: Zoom pills, Collapse toggle, Quick Scroll */}
+      <div className="h-10 border-b border-slate-200 dark:border-slate-800 px-3 flex items-center justify-between bg-slate-50 dark:bg-slate-900 select-none text-xs shrink-0">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setIsLeftBarCompact(!isLeftBarCompact)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-2xs"
+            title={isLeftBarCompact ? 'Agrandir Colonne Ressources' : 'Compacter Colonne Ressources'}
+          >
+            <SlidersHorizontal size={13} />
+            <span className="text-[11px]">{isLeftBarCompact ? 'Normal' : 'Compact'}</span>
+          </button>
+        </div>
+
+        {/* Day Column Zoom Selector */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5 bg-slate-200 dark:bg-slate-800 p-0.5 rounded-lg text-[11px] font-semibold">
+            <button
+              onClick={() => setColumnZoomMode('compact')}
+              className={`px-2 py-0.5 rounded transition-colors ${
+                columnZoomMode === 'compact'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400'
+              }`}
+              title="Compact (76px par jour)"
+            >
+              Étroit
+            </button>
+            <button
+              onClick={() => setColumnZoomMode('standard')}
+              className={`px-2 py-0.5 rounded transition-colors ${
+                columnZoomMode === 'standard'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400'
+              }`}
+              title="Normal (112px par jour)"
+            >
+              Normal
+            </button>
+            <button
+              onClick={() => setColumnZoomMode('wide')}
+              className={`px-2 py-0.5 rounded transition-colors hidden sm:block ${
+                columnZoomMode === 'wide'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400'
+              }`}
+              title="Large (144px par jour)"
+            >
+              Large
+            </button>
+          </div>
+
+          {/* Quick horizontal scroll arrows */}
+          <div className="flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 bg-white dark:bg-slate-800">
+            <button
+              onClick={() => scrollTimeline(-colWidth * 2)}
+              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-600 dark:text-slate-300"
+              title="Reculer de 2 jours"
+            >
+              <MoveLeft size={13} />
+            </button>
+            <button
+              onClick={scrollToToday}
+              className="px-1.5 py-0.5 text-[10px] font-bold font-mono text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950 rounded"
+              title="Aller à Aujourd'hui"
+            >
+              Aujourd'hui
+            </button>
+            <button
+              onClick={() => scrollTimeline(colWidth * 2)}
+              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-600 dark:text-slate-300"
+              title="Avancer de 2 jours"
+            >
+              <MoveRight size={13} />
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Scrollable Container with horizontal scroll for days and vertical scroll for resources */}
-      <div className="flex-1 overflow-auto flex">
+      <div ref={scrollContainerRef} className="flex-1 overflow-auto flex">
         {/* LEFT COLUMN: Resource Tree */}
-        <div className="w-56 md:w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 sticky left-0 z-20 select-none shadow-xs">
-          {/* Header of Resources Column */}
-          <div className="h-20 border-b border-slate-200 dark:border-slate-800 px-3 flex flex-col justify-center bg-slate-100 dark:bg-slate-800">
+        <div
+          className={`${
+            isLeftBarCompact ? 'w-24 sm:w-28' : 'w-44 sm:w-56 md:w-64'
+          } shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 sticky left-0 z-20 select-none shadow-xs transition-all duration-200`}
+        >
+          {/* Header of Resources Column with STICKY TOP-0 FIX */}
+          <div className="h-20 border-b border-slate-200 dark:border-slate-800 px-2 sm:px-3 flex flex-col justify-center bg-slate-100 dark:bg-slate-800 sticky top-0 left-0 z-30">
             <span className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider truncate">
-              {currentDomain === 'hotel'
+              {isLeftBarCompact
+                ? 'Ressources'
+                : currentDomain === 'hotel'
                 ? (language === 'fr' ? 'Chambres & Suites' : language === 'ar' ? 'الغرف والأجنحة' : 'Rooms & Suites')
                 : currentDomain === 'residence'
                 ? (language === 'fr' ? 'Logements & Villas' : language === 'ar' ? 'الشقق والفيلات' : 'Rentals & Villas')
@@ -195,10 +310,8 @@ export const PlanningTimeline: React.FC = () => {
                 ? (language === 'fr' ? 'Guichets & Démarches' : language === 'ar' ? 'الشبابيك والمعاملات' : 'Service Desks')
                 : (language === 'fr' ? 'Cabines & Soins' : language === 'ar' ? 'كابينات الاسترخاء' : 'Care Cabins')}
             </span>
-            <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium truncate mt-0.5">
-              {language === 'fr'
-                ? `Domaine : ${currentDomain.toUpperCase()} · Rôle : ${currentRole}`
-                : `Domain: ${currentDomain.toUpperCase()} · Role: ${currentRole}`}
+            <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium truncate mt-0.5">
+              {currentDomain.toUpperCase()}
             </span>
           </div>
 
@@ -211,11 +324,13 @@ export const PlanningTimeline: React.FC = () => {
                   {/* Group Header Row */}
                   <div
                     onClick={() => toggleGroup(grp.id)}
-                    className="h-10 px-3 bg-slate-200/60 dark:bg-slate-800/60 flex items-center justify-between cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                    className="h-10 px-2 sm:px-3 bg-slate-200/60 dark:bg-slate-800/60 flex items-center justify-between cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
                   >
-                    <div className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-200 truncate">
-                      {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
-                      <span className="truncate">{grp.name[language] || grp.name.en}</span>
+                    <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200 truncate">
+                      {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                      <span className="truncate text-[11px] sm:text-xs">
+                        {grp.name[language] || grp.name.en}
+                      </span>
                     </div>
                     {getSectorIcon(grp.sector)}
                   </div>
@@ -226,17 +341,19 @@ export const PlanningTimeline: React.FC = () => {
                       {grp.resources.map((res) => (
                         <div
                           key={res.id}
-                          className="h-12 px-3 pl-6 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                          className="h-12 px-2 sm:px-3 sm:pl-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                         >
-                          <div className="flex items-center gap-2 truncate">
+                          <div className="flex items-center gap-1.5 truncate">
                             {renderHousekeepingTag(res.housekeepingStatus)}
                             <span className="font-medium text-slate-800 dark:text-slate-200 truncate text-[11px]">
                               {res.name}
                             </span>
                           </div>
-                          <span className="text-[10px] text-slate-400 font-mono tabular-nums shrink-0">
-                            {res.pricePerDay}€
-                          </span>
+                          {!isLeftBarCompact && (
+                            <span className="text-[10px] text-slate-400 font-mono tabular-nums shrink-0 hidden sm:inline">
+                              {res.pricePerDay}€
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -254,7 +371,8 @@ export const PlanningTimeline: React.FC = () => {
             {timelineDays.map((day) => (
               <div
                 key={day.dateStr}
-                className={`w-28 shrink-0 border-r border-slate-200/70 dark:border-slate-800/70 flex flex-col justify-between p-1.5 transition-colors ${
+                style={{ width: `${colWidth}px` }}
+                className={`shrink-0 border-r border-slate-200/70 dark:border-slate-800/70 flex flex-col justify-between p-1.5 transition-colors ${
                   day.isToday
                     ? 'bg-emerald-50/70 dark:bg-emerald-950/20'
                     : day.isWeekend
@@ -282,7 +400,7 @@ export const PlanningTimeline: React.FC = () => {
 
                 {/* Day status indicator / highlight */}
                 {day.isToday && (
-                  <span className="inline-block text-[9px] px-1 bg-emerald-500 text-white font-bold rounded text-center">
+                  <span className="inline-block text-[9px] px-1 bg-emerald-500 text-white font-bold rounded text-center truncate">
                     {language === 'fr' ? 'Aujourd\'hui' : language === 'ar' ? 'اليوم' : 'Today'}
                   </span>
                 )}
@@ -305,7 +423,8 @@ export const PlanningTimeline: React.FC = () => {
                       return (
                         <div
                           key={day.dateStr}
-                          className="w-28 shrink-0 border-r border-slate-200/60 dark:border-slate-800/60 flex items-center justify-center p-1"
+                          style={{ width: `${colWidth}px` }}
+                          className="shrink-0 border-r border-slate-200/60 dark:border-slate-800/60 flex items-center justify-center p-1"
                         >
                           <span
                             className={`w-6 h-5 rounded text-[11px] font-bold font-mono flex items-center justify-center shadow-2xs ${
@@ -337,6 +456,7 @@ export const PlanningTimeline: React.FC = () => {
                           {timelineDays.map((day) => (
                             <div
                               key={day.dateStr}
+                              style={{ width: `${colWidth}px` }}
                               onClick={() => {
                                 setNewBookingInitialSlot({
                                   resourceId: res.id,
@@ -344,7 +464,7 @@ export const PlanningTimeline: React.FC = () => {
                                 });
                                 setIsNewBookingModalOpen(true);
                               }}
-                              className={`w-28 shrink-0 border-r border-slate-100 dark:border-slate-800/40 cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors ${
+                              className={`shrink-0 border-r border-slate-100 dark:border-slate-800/40 cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors ${
                                 day.isWeekend ? 'bg-slate-50/30 dark:bg-slate-900/20' : ''
                               }`}
                               title={`Cliquez pour réserver le ${day.dateStr}`}
@@ -366,8 +486,53 @@ export const PlanningTimeline: React.FC = () => {
                             if (visibleEnd <= visibleStart) return null;
 
                             const daysSpan = visibleEnd - visibleStart;
-                            const leftOffset = visibleStart * 112; // 112px width per day (w-28 = 7rem = 112px)
-                            const barWidth = Math.max(daysSpan * 112 - 8, 48); // with 8px margin
+                            const leftOffset = visibleStart * colWidth;
+                            const barWidth = Math.max(daysSpan * colWidth - 8, 36);
+
+                            const statusStyle = statusConfig[bkg.status] || statusConfig.confirmed;
+
+                            return (
+                              <div
+                                key={bkg.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedBooking(bkg);
+                                }}
+                                onMouseEnter={(e) => {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setHoveredBooking({
+                                    booking: bkg,
+                                    x: rect.left,
+                                    y: rect.bottom + 6,
+                                  });
+                                }}
+                                onMouseLeave={() => setHoveredBooking(null)}
+                                style={{
+                                  left: `${leftOffset + 4}px`,
+                                  width: `${barWidth}px`,
+                                }}
+                                className={`absolute top-1.5 h-9 rounded-md px-2 flex items-center justify-between cursor-pointer shadow-sm hover:brightness-105 active:scale-[0.99] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
+                              >
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <Globe size={12} className="shrink-0 opacity-80" />
+                                  <span className="text-[11px] font-semibold truncate tracking-tight">
+                                    {bkg.guestName}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] opacity-90 font-mono shrink-0 ml-1 hidden sm:inline">
+                                  {bkg.totalPrice}€
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
                             const statusStyle = statusConfig[bkg.status] || statusConfig.confirmed;
 
