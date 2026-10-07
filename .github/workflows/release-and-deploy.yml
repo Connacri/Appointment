@@ -114,8 +114,10 @@ jobs:
             npm install --legacy-peer-deps
           fi
 
-      - name: Build Web Production Assets
+      - name: Build Web Production Assets (relative base for WebView)
         run: npm run build
+        env:
+          VITE_BASE: ./
 
       - name: Sync Capacitor assets to Android project
         run: npx cap sync android
@@ -129,7 +131,7 @@ jobs:
           mkdir -p android/app/build/outputs/bundle/release
 
           if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 secret is missing. Run scripts/bootstrap-secrets.sh (AGENTS.md Ãƒâ€šÃ‚Â§Appendix B). Never hardcode keystores or passwords."
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret is missing. Run scripts/bootstrap-secrets.sh (AGENTS.md ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§Appendix B). Never hardcode keystores or passwords."
             exit 1
           fi
           echo " Using official ANDROID_KEYSTORE_BASE64 from GitHub Secrets."
@@ -190,7 +192,7 @@ jobs:
           track: ${{ vars.PLAY_TRACK_RELEASE || 'internal' }}
           status: ${{ vars.PLAY_RELEASE_STATUS || 'draft' }}
 
-      - name: Note — Play upload skipped
+      - name: Note â€” Play upload skipped
         if: ${{ vars.PLAY_STORE_JSON_KEY_PRESENT != 'true' }}
         run: echo "PLAY_STORE_JSON_KEY not configured; skipping Play upload (set vars.PLAY_STORE_JSON_KEY_PRESENT=true after adding the secret)."
 
