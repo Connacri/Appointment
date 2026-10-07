@@ -533,51 +533,6 @@ export const PlanningTimeline: React.FC = () => {
             })}
           </div>
         </div>
-
-                            const statusStyle = statusConfig[bkg.status] || statusConfig.confirmed;
-
-                            return (
-                              <div
-                                key={bkg.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedBooking(bkg);
-                                }}
-                                onMouseEnter={(e) => {
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  setHoveredBooking({
-                                    booking: bkg,
-                                    x: rect.left,
-                                    y: rect.bottom + 6,
-                                  });
-                                }}
-                                onMouseLeave={() => setHoveredBooking(null)}
-                                style={{
-                                  left: `${leftOffset + 4}px`,
-                                  width: `${barWidth}px`,
-                                }}
-                                className={`absolute top-1.5 h-9 rounded-md px-2.5 flex items-center justify-between cursor-pointer shadow-sm hover:brightness-105 active:scale-[0.99] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
-                              >
-                                <div className="flex items-center gap-1.5 truncate">
-                                  <Globe size={13} className="shrink-0 opacity-80" />
-                                  <span className="text-xs font-semibold truncate tracking-tight">
-                                    {bkg.guestName}
-                                  </span>
-                                </div>
-                                <span className="text-[10px] opacity-90 font-mono shrink-0 ml-1">
-                                  {bkg.totalPrice}€
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
 
       {/* Floating Tooltip Card matching the screenshot */}

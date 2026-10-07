@@ -42,7 +42,7 @@ export interface ChannelAlert {
   bookingRef?: string;
   title: { fr: string; en: string; ar?: string };
   description: { fr: string; en: string; ar?: string };
-  recommendedAction: { fr: string; en: string };
+  recommendedAction: { fr: string; en: string; ar?: string };
   timestamp: string;
   isResolved: boolean;
 }
