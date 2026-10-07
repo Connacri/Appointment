@@ -287,8 +287,8 @@ jobs:
           mkdir -p release-final
           
           # Copy Android Artifacts
-          cp release-assets/android/Planning-Oran-release.apk release-final/Planning-Oran-release.apk || true
-          cp release-assets/android/Planning-Oran-release.aab release-final/Planning-Oran-release.aab || true
+          cp release-assets/android/apk/release/Planning-Oran-release.apk release-final/Planning-Oran-release.apk || true
+          cp release-assets/android/bundle/release/Planning-Oran-release.aab release-final/Planning-Oran-release.aab || true
           
           # Copy Windows Artifacts
           cp release-assets/windows/Planning-Oran-Setup.exe release-final/Planning-Oran-Setup.exe || true
