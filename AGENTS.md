@@ -1378,3 +1378,56 @@ updates:
     directory: /
     schedule: { interval: weekly }
 ```
+---
+
+# APPENDIX G — SIGNED RELEASE PIPELINE (APK · AAB · WINDOWS EXE · GITHUB RELEASE)
+
+Status: **mandatory and persistent**. Every tag `vX.Y.Z` and every push to `main`
+MUST build signed artifacts through `.github/workflows/release-and-deploy.yml`.
+This pipeline is the single release path; do not add parallel unsigned paths.
+
+## G.1 What the pipeline produces
+
+| Artifact | Toolchain | Signed by |
+|---|---|---|
+| `Planning-Oran-release.apk` | Gradle `assembleRelease` (or web bundle fallback via `jarsigner`) | Upload keystore from `ANDROID_KEYSTORE_BASE64` |
+| `Planning-Oran-release.aab` | Gradle `bundleRelease` (or same fallback) | Upload keystore from `ANDROID_KEYSTORE_BASE64` |
+| `Planning-Oran-Setup.exe` / `Planning-Oran-v1.0.0.exe` | `scripts/package-windows.ps1` (C# WebView launcher) | Authenticode cert from `WINDOWS_CERT_BASE64` (else CI self-signed) |
+| `Planning-Oran-Setup-Inno.exe` | Inno Setup `ISCC scripts/installer.iss` | Authenticode cert from `WINDOWS_CERT_BASE64` (else CI self-signed) |
+| Website | `npm run build` → GitHub Pages | n/a |
+
+All artifacts are published to a GitHub Release with `SHA256SUMS.txt` on tags,
+`main` pushes, and manual `workflow_dispatch`.
+
+## G.2 Required GitHub Secrets (owner creates them, never the agent)
+
+```text
+ANDROID_KEYSTORE_BASE64   upload keystore, Base64
+ANDROID_KEYSTORE_PASSWORD keystore password
+ANDROID_KEY_ALIAS         key alias
+ANDROID_KEY_PASSWORD      key password
+PLAY_STORE_JSON_KEY       Play Developer API service account JSON (when Play upload is enabled)
+GOOGLE_SERVICES_JSON_BASE64  google-services.json, Base64 (when Firebase is used)
+WINDOWS_CERT_BASE64       Authenticode code-signing .pfx, Base64 (optional; CI falls back to self-signed)
+```
+
+## G.3 Required GitHub Variables
+
+```text
+ANDROID_PACKAGE_NAME / APPLICATION_ID   com.planning.oran (immutable)
+UPLOAD_CERT_SHA256                      upload-cert fingerprint, verified at every build
+SITE_URL / SUPPORT_EMAIL                website + contact
+PLAY_TRACK_RELEASE / PLAY_RELEASE_STATUS / VERSION_CODE_OFFSET
+```
+
+## G.4 Owner procedure
+
+```bash
+bash scripts/bootstrap-secrets.sh   # generates keystore OUTSIDE the repo, pushes secrets/variables
+```
+
+The agent NEVER generates, prints, commits, or rotates keystores, passwords, or certs.
+If a secret is missing the workflow MUST fail loudly (no hardcoded keystores,
+no baked-in passwords — when `ANDROID_KEYSTORE_BASE64` is absent the Android
+job exits 1). CI verifies signatures (`jarsigner`, `Get-AuthenticodeSignature`)
+and only then publishes the GitHub Release.

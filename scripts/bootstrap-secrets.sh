@@ -46,7 +46,7 @@ fi
 SHA256="$(keytool -list -v -keystore "$KS" -alias "$ALIAS" -storepass "$PASS" | grep -m1 'SHA256:' | awk '{print $2}')"
 SHA1="$(keytool -list -v -keystore "$KS" -alias "$ALIAS" -storepass "$PASS" | grep -m1 'SHA1:' | awk '{print $2}')"
 
-echo "Uploading secrets (values are never printed)…"
+echo "Uploading secrets..."
 base64 < "$KS" | tr -d '\n' | gh secret set ANDROID_KEYSTORE_BASE64
 printf '%s' "$PASS"  | gh secret set ANDROID_KEYSTORE_PASSWORD
 printf '%s' "$ALIAS" | gh secret set ANDROID_KEY_ALIAS
@@ -62,7 +62,11 @@ if [[ -n "${SA:-}" && -f "$SA" ]]; then
   echo "Delete the local JSON now: shred -u \"$SA\""
 fi
 
-echo "Setting variables…"
+read -rp "Path to Windows code-signing .pfx (Enter to skip): " PFX
+if [[ -n "${PFX:-}" && -f "$PFX" ]]; then
+  base64 < "$PFX" | tr -d '\n' | gh secret set WINDOWS_CERT_BASE64
+fi
+echo "Setting variables..."
 gh variable set ANDROID_PACKAGE_NAME --body "$APP_ID"
 gh variable set APPLICATION_ID       --body "$APP_ID"
 gh variable set UPLOAD_CERT_SHA256   --body "$SHA256"
