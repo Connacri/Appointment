@@ -121,6 +121,7 @@ export interface TimelineBooking {
   paymentStatus: 'paid' | 'pending' | 'partial';
   notes?: string;
   color?: string;
+  customMetadata?: Record<string, any>;
 }
 
 export interface AvailabilityCount {
