@@ -396,40 +396,75 @@ export const AgentsCockpitModal: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-xs text-white flex items-center gap-1.5">
                     <Terminal size={14} className="text-emerald-400" />
-                    Workflow CI/CD : .github/workflows/release-signed.yml
+                    Workflow CI/CD : .github/workflows/release-and-deploy.yml
                   </span>
                   <button
                     onClick={() =>
                       copyToClipboard(
-                        `# GitHub Actions Signed Android Release
-name: Production Signed Release
+                        `# GitHub Actions: Signed APK/AAB Releases & Website Update
+name: Production Release & Website Update
 on:
   push:
     tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
-  build-and-sign:
+  build-and-publish-android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { java-version: '17', distribution: 'temurin' }
-      - name: Decode Keystore
-        run: echo "\${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
-      - name: Build Signed AAB
-        run: ./gradlew bundleRelease
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: Decode Android Keystore
+        run: echo "\${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.keystore
+      - name: Build Signed APK & AAB
+        run: |
+          ./gradlew assembleRelease bundleRelease \\
+            -Pandroid.injected.signing.store.file=/tmp/release.keystore \\
+            -Pandroid.injected.signing.store.password="\${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \\
+            -Pandroid.injected.signing.key.alias="\${{ secrets.ANDROID_KEY_ALIAS }}" \\
+            -Pandroid.injected.signing.key.password="\${{ secrets.ANDROID_KEY_PASSWORD }}"
+      - name: Verify Signatures
+        run: |
+          apksigner verify --print-certs build/outputs/apk/release/app-release.apk
+          apksigner verify --print-certs build/outputs/bundle/release/app-release.aab
+      - name: Publish GitHub Releases (Signed APK & AAB)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/outputs/apk/release/app-release.apk
+            build/outputs/bundle/release/app-release.aab
         env:
-          SIGNING_KEY_ALIAS: \${{ secrets.ANDROID_KEY_ALIAS }}
-          SIGNING_KEY_PASSWORD: \${{ secrets.ANDROID_KEY_PASSWORD }}
-          SIGNING_KEYSTORE_PASSWORD: \${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      - name: Verify Signature Fingerprint
-        run: apksigner verify --print-certs build/outputs/bundle/release/app-release.aab
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
       - name: Upload to Play Store
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: \${{ secrets.PLAY_STORE_JSON_KEY }}
           packageName: \${{ vars.APPLICATION_ID }}
           releaseFiles: build/outputs/bundle/release/app-release.aab
-          track: \${{ vars.RELEASE_TRACK }}`,
+          track: \${{ vars.RELEASE_TRACK }}
+
+  build-and-update-website:
+    runs-on: ubuntu-latest
+    needs: [build-and-publish-android]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: 'dist' }
+      - uses: actions/deploy-pages@v4`,
                         'ci-snippet'
                       )
                     }
@@ -440,14 +475,14 @@ jobs:
                   </button>
                 </div>
                 <pre className="text-[10px] font-mono text-emerald-400/90 overflow-x-auto p-2 bg-slate-900 rounded max-h-40 leading-relaxed">
-{`# 1. GitHub Actions effectue la signature sécurisée :
-echo "\${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
-./gradlew bundleRelease -PsigningKeystore=release.keystore
+{`# 1. Build & Signature APK et AAB :
+./gradlew assembleRelease bundleRelease -PsigningKeystore=release.keystore
 
-# 2. Vérification de l'empreinte cryptographique :
-apksigner verify --print-certs app-release.apk
+# 2. Publication GitHub Release avec binaires attachés (.apk + .aab) :
+softprops/action-gh-release@v2 (app-release.apk, app-release.aab)
 
-# 3. Déploiement automatique Google Play Track sans intervention manuelle`}
+# 3. Déploiement AAB sur Google Play Console & Mise à jour du Site Web :
+upload-google-play@v1 + npm run build + actions/deploy-pages@v4`}
                 </pre>
               </div>
             </div>

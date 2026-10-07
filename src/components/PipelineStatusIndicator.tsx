@@ -41,6 +41,7 @@ export const PipelineStatusIndicator: React.FC = () => {
   const { language, setIsCockpitOpen } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Initial mock workflow run based on GitHub Actions API
@@ -58,9 +59,10 @@ export const PipelineStatusIndicator: React.FC = () => {
       { name: 'Checkout repository & audit git state', status: 'completed', duration: '4s' },
       { name: 'Setup Java 17 Temurin & Node.js 22', status: 'completed', duration: '12s' },
       { name: 'Decode Keystore from ANDROID_KEYSTORE_BASE64', status: 'completed', duration: '2s' },
-      { name: 'Build signed AAB (bundleRelease)', status: 'completed', duration: '42s' },
-      { name: 'apksigner verify SHA-256 fingerprint', status: 'completed', duration: '6s' },
-      { name: 'Deploy Google Play Track & Web Artifacts', status: 'completed', duration: '42s' },
+      { name: 'Build signed APK & AAB (assembleRelease + bundleRelease)', status: 'completed', duration: '42s' },
+      { name: 'apksigner verify SHA-256 fingerprint (APK & AAB)', status: 'completed', duration: '6s' },
+      { name: 'Publish GitHub Releases (Signed APK & AAB)', status: 'completed', duration: '14s' },
+      { name: 'Deploy Google Play & Update Production Website', status: 'completed', duration: '28s' },
     ],
   });
 
@@ -92,9 +94,10 @@ export const PipelineStatusIndicator: React.FC = () => {
       { name: 'Checkout repository & audit git state', status: 'pending' },
       { name: 'Setup Java 17 Temurin & Node.js 22', status: 'pending' },
       { name: 'Decode Keystore from ANDROID_KEYSTORE_BASE64', status: 'pending' },
-      { name: 'Build signed AAB (bundleRelease)', status: 'pending' },
-      { name: 'apksigner verify SHA-256 fingerprint', status: 'pending' },
-      { name: 'Deploy Google Play Track & Web Artifacts', status: 'pending' },
+      { name: 'Build signed APK & AAB (assembleRelease + bundleRelease)', status: 'pending' },
+      { name: 'apksigner verify SHA-256 fingerprint (APK & AAB)', status: 'pending' },
+      { name: 'Publish GitHub Releases (Signed APK & AAB)', status: 'pending' },
+      { name: 'Deploy Google Play & Update Production Website', status: 'pending' },
     ];
 
     // 1. Queued state
@@ -121,7 +124,7 @@ export const PipelineStatusIndicator: React.FC = () => {
       }));
 
       // Simulate steps progressing
-      const stepDurations = [800, 1000, 700, 1500, 900, 1100];
+      const stepDurations = [700, 900, 600, 1400, 800, 1100, 1200];
       let accumulated = 0;
 
       stepDurations.forEach((dur, idx) => {
@@ -159,32 +162,36 @@ export const PipelineStatusIndicator: React.FC = () => {
         return {
           icon: CheckCircle2,
           color: 'text-emerald-500',
+          textColor: 'text-emerald-700 dark:text-emerald-400',
           bg: 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800',
-          label: language === 'fr' ? 'Pipeline : Réussi' : language === 'ar' ? 'البناء: ناجح' : 'Build: Passed',
+          label: 'Success',
         };
       case 'in_progress':
-        return {
-          icon: RotateCw,
-          color: 'text-blue-500 animate-spin',
-          bg: 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-800',
-          label: language === 'fr' ? 'Build en cours...' : language === 'ar' ? 'البناء جاري...' : 'Building...',
-        };
       case 'queued':
         return {
-          icon: Clock,
-          color: 'text-amber-500 animate-pulse',
-          bg: 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800',
-          label: language === 'fr' ? 'En attente...' : language === 'ar' ? 'قيد الانتظار...' : 'Queued...',
+          icon: status === 'in_progress' ? RotateCw : Clock,
+          color: status === 'in_progress' ? 'text-blue-500 animate-spin' : 'text-amber-500 animate-pulse',
+          textColor: status === 'in_progress' ? 'text-blue-700 dark:text-blue-400' : 'text-amber-700 dark:text-amber-400',
+          bg: status === 'in_progress' ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-800' : 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800',
+          label: 'Pending',
         };
       case 'failure':
         return {
           icon: AlertCircle,
           color: 'text-rose-500',
+          textColor: 'text-rose-700 dark:text-rose-400',
           bg: 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800',
-          label: language === 'fr' ? 'Échec Build' : language === 'ar' ? 'فشل البناء' : 'Build Failed',
+          label: 'Failed',
         };
     }
   };
+
+  const specificStatus: 'Pending' | 'Success' | 'Failed' =
+    currentRun.status === 'success'
+      ? 'Success'
+      : currentRun.status === 'failure'
+      ? 'Failed'
+      : 'Pending';
 
   const badge = getStatusBadge(currentRun.status);
   const StatusIcon = badge.icon;
@@ -194,8 +201,10 @@ export const PipelineStatusIndicator: React.FC = () => {
       {/* TopBar Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all select-none ${badge.bg} hover:opacity-90 active:scale-98`}
-        title="GitHub Actions CI/CD Pipeline Status"
+        title={`Pipeline: ${specificStatus} · Last run duration: ${currentRun.duration} (Run #${currentRun.id})`}
       >
         <span className="relative flex h-2 w-2">
           {currentRun.status === 'in_progress' && (
@@ -205,19 +214,25 @@ export const PipelineStatusIndicator: React.FC = () => {
             className={`relative inline-flex rounded-full h-2 w-2 ${
               currentRun.status === 'success'
                 ? 'bg-emerald-500'
+                : currentRun.status === 'failure'
+                ? 'bg-rose-500'
                 : currentRun.status === 'in_progress'
                 ? 'bg-blue-500'
-                : currentRun.status === 'queued'
-                ? 'bg-amber-500'
-                : 'bg-rose-500'
+                : 'bg-amber-500'
             }`}
           ></span>
         </span>
 
         <StatusIcon size={14} className={badge.color} />
 
-        <span className="hidden xl:inline text-slate-800 dark:text-slate-200">
-          CI #{currentRun.id}
+        {/* Specific Status Label: Pending, Success, Failed */}
+        <span className="flex items-center gap-1 text-[11px]">
+          <span className="hidden xl:inline text-slate-500 dark:text-slate-400 font-mono">
+            CI #{currentRun.id} ·
+          </span>
+          <span className={`font-bold ${badge.textColor}`}>
+            {specificStatus}
+          </span>
         </span>
 
         <ChevronDown
@@ -225,6 +240,25 @@ export const PipelineStatusIndicator: React.FC = () => {
           className={`text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
+
+      {/* Floating Hover Tooltip: Showing Last Run Duration */}
+      {isHovered && !isOpen && (
+        <div className="absolute right-0 top-full mt-1.5 z-40 bg-slate-900/95 dark:bg-slate-800/95 text-white text-[11px] font-sans px-3 py-2 rounded-xl shadow-xl border border-slate-700/80 whitespace-nowrap pointer-events-none animate-in fade-in zoom-in-95 duration-100 flex flex-col gap-0.5">
+          <div className="flex items-center gap-1.5">
+            <Clock size={12} className="text-blue-400 shrink-0" />
+            <span className="text-slate-300">
+              Last run duration: <strong className="font-mono text-emerald-400 font-bold">{currentRun.duration}</strong>
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
+            <span>Status: <strong className={badge.textColor}>{specificStatus}</strong></span>
+            <span>·</span>
+            <span>Run #{currentRun.id}</span>
+            <span>·</span>
+            <span>{currentRun.startedAt}</span>
+          </div>
+        </div>
+      )}
 
       {/* Popover Card */}
       {isOpen && (
@@ -264,8 +298,9 @@ export const PipelineStatusIndicator: React.FC = () => {
               <div className="flex items-center gap-2">
                 <StatusIcon size={16} className={badge.color} />
                 <div>
-                  <span className="font-bold text-slate-800 dark:text-slate-200 text-xs block">
-                    {badge.label}
+                  <span className="font-bold text-slate-800 dark:text-slate-200 text-xs block flex items-center gap-1.5">
+                    <span>Status:</span>
+                    <span className={badge.textColor}>{specificStatus}</span>
                   </span>
                   <span className="text-[10px] text-slate-400">
                     {currentRun.startedAt} · Durée : {currentRun.duration}
@@ -274,8 +309,40 @@ export const PipelineStatusIndicator: React.FC = () => {
               </div>
 
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold uppercase">
-                {currentRun.status}
+                {specificStatus}
               </span>
+            </div>
+
+            {/* Quick Status Preview / Simulation Switcher */}
+            <div className="flex items-center justify-between p-2 bg-slate-100/70 dark:bg-slate-800/40 rounded-xl text-[11px]">
+              <span className="text-slate-500 text-[10px] font-medium">Aperçu statut :</span>
+              <div className="flex items-center gap-1">
+                {(['Pending', 'Success', 'Failed'] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => {
+                      const mappedStatus: PipelineStatus =
+                        st === 'Success' ? 'success' : st === 'Failed' ? 'failure' : 'queued';
+                      setCurrentRun((prev) => ({
+                        ...prev,
+                        status: mappedStatus,
+                        duration: st === 'Failed' ? '38s (failed)' : st === 'Pending' ? '12s (queued)' : '1m 48s',
+                      }));
+                    }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono transition-colors ${
+                      specificStatus === st
+                        ? st === 'Success'
+                          ? 'bg-emerald-600 text-white'
+                          : st === 'Failed'
+                          ? 'bg-rose-600 text-white'
+                          : 'bg-amber-600 text-white'
+                        : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Commit message */}

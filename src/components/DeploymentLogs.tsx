@@ -70,25 +70,35 @@ export const DeploymentLogs: React.FC<DeploymentLogsProps> = ({
     { id: '11', timestamp: '06:04:13.620Z', stepId: 3, stepName: 'Decode Keystore Secret', level: 'warn', message: 'AGENTS.md §2.1 enforcement: local release builds blocked, executing in isolated GitHub runner.' },
     { id: '12', timestamp: '06:04:14.200Z', stepId: 3, stepName: 'Decode Keystore Secret', level: 'success', message: '✔ Keystore loaded securely into memory, chmod 0600 enforced.' },
 
-    // Step 4: bundleRelease
-    { id: '13', timestamp: '06:04:14.800Z', stepId: 4, stepName: 'Build Signed AAB', level: 'cmd', message: '$ ./gradlew bundleRelease --no-daemon --parallel -PminifyWithR8=true' },
-    { id: '14', timestamp: '06:04:22.400Z', stepId: 4, stepName: 'Build Signed AAB', level: 'info', message: ':app:preReleaseBuild UP-TO-DATE' },
-    { id: '15', timestamp: '06:04:31.900Z', stepId: 4, stepName: 'Build Signed AAB', level: 'info', message: ':app:compileReleaseKotlin [OmniBook Domain Modules, ObjectBox Entities]' },
-    { id: '16', timestamp: '06:04:45.100Z', stepId: 4, stepName: 'Build Signed AAB', level: 'info', message: ':app:minifyReleaseWithR8: Shrinking resources, bytecode optimizations applied.' },
-    { id: '17', timestamp: '06:04:54.300Z', stepId: 4, stepName: 'Build Signed AAB', level: 'info', message: ':app:signReleaseBundle: Signing with alias [omnibook-release-key]' },
-    { id: '18', timestamp: '06:04:58.200Z', stepId: 4, stepName: 'Build Signed AAB', level: 'success', message: '✔ Output generated: build/outputs/bundle/release/app-release.aab (18.4 MB)' },
+    // Step 4: Build Signed APK & AAB
+    { id: '13', timestamp: '06:04:14.800Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'cmd', message: '$ ./gradlew assembleRelease bundleRelease --no-daemon --parallel -PminifyWithR8=true' },
+    { id: '14', timestamp: '06:04:22.400Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'info', message: ':app:preReleaseBuild UP-TO-DATE' },
+    { id: '15', timestamp: '06:04:31.900Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'info', message: ':app:compileReleaseKotlin [OmniBook Domain Modules, ObjectBox Entities]' },
+    { id: '16', timestamp: '06:04:45.100Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'info', message: ':app:minifyReleaseWithR8: Shrinking resources, bytecode optimizations applied.' },
+    { id: '17', timestamp: '06:04:54.300Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'info', message: ':app:signReleaseBundle & signReleaseApk with alias [omnibook-release-key]' },
+    { id: '18', timestamp: '06:04:58.200Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'success', message: '✔ Signed APK ready: build/outputs/apk/release/app-release.apk (15.2 MB)' },
+    { id: '19', timestamp: '06:04:59.100Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'success', message: '✔ Signed AAB ready: build/outputs/bundle/release/app-release.aab (18.4 MB)' },
 
     // Step 5: apksigner Verify
-    { id: '19', timestamp: '06:04:59.010Z', stepId: 5, stepName: 'apksigner Verify SHA-256', level: 'cmd', message: '$ apksigner verify --print-certs --verbose build/outputs/bundle/release/app-release.aab' },
-    { id: '20', timestamp: '06:05:01.300Z', stepId: 5, stepName: 'apksigner Verify SHA-256', level: 'info', message: 'Signer #1 certificate DN: CN=OmniBook Release, O=OmniBook SAS, C=FR' },
-    { id: '21', timestamp: '06:05:02.100Z', stepId: 5, stepName: 'apksigner Verify SHA-256', level: 'info', message: 'SHA-256 digest: 8F:42:C1:99:A3:21:BC:EE:54:10:98:DF:4A:8C:7E:5B:3D:12:90:FA:BB:61:9A:8C' },
-    { id: '22', timestamp: '06:05:03.400Z', stepId: 5, stepName: 'apksigner Verify SHA-256', level: 'success', message: '✔ Verified: V1, V2, V3 APK signature scheme valid. Matches Google Play Developer Console certificate.' },
+    { id: '20', timestamp: '06:04:59.810Z', stepId: 5, stepName: 'apksigner Verify SHA-256', level: 'cmd', message: '$ apksigner verify --print-certs --verbose build/outputs/apk/release/app-release.apk build/outputs/bundle/release/app-release.aab' },
+    { id: '21', timestamp: '06:05:01.300Z', stepId: 5, stepName: 'apksigner Verify SHA-256', level: 'info', message: 'Signer certificate DN: CN=OmniBook Production, O=OmniBook SAS, C=FR' },
+    { id: '22', timestamp: '06:05:02.100Z', stepId: 5, stepName: 'apksigner Verify SHA-256', level: 'info', message: 'SHA-256 digest: 8F:42:C1:99:A3:21:BC:EE:54:10:98:DF:4A:8C:7E:5B:3D:12:90:FA:BB:61:9A:8C' },
+    { id: '23', timestamp: '06:05:03.400Z', stepId: 5, stepName: 'apksigner Verify SHA-256', level: 'success', message: '✔ Verified: V1, V2, V3 APK signature scheme valid. Matches Google Play Console certificate.' },
 
-    // Step 6: Deploy
-    { id: '23', timestamp: '06:05:04.100Z', stepId: 6, stepName: 'Deploy Track & Web', level: 'cmd', message: '$ r0adkll/upload-google-play@v1 --track=internal --rollout=0.10' },
-    { id: '24', timestamp: '06:05:18.700Z', stepId: 6, stepName: 'Deploy Track & Web', level: 'info', message: 'Uploaded release track [internal] versionCode: 2026102601' },
-    { id: '25', timestamp: '06:05:32.400Z', stepId: 6, stepName: 'Deploy Track & Web', level: 'info', message: 'Publishing Web Single Page App bundle to Google Cloud Run (EU-West1)' },
-    { id: '26', timestamp: '06:05:46.000Z', stepId: 6, stepName: 'Deploy Track & Web', level: 'success', message: '✔ Pipeline finished in 1m 44s: Production Release Active & Certified.' },
+    // Step 6: Publish GitHub Releases (APK & AAB)
+    { id: '24', timestamp: '06:05:04.100Z', stepId: 6, stepName: 'Publish GitHub Releases', level: 'cmd', message: '$ softprops/action-gh-release@v2 --tag=v2026.10.2 --files=app-release.apk,app-release.aab' },
+    { id: '25', timestamp: '06:05:07.400Z', stepId: 6, stepName: 'Publish GitHub Releases', level: 'info', message: 'Creating release tag [v2026.10.2] with auto-generated changelog.' },
+    { id: '26', timestamp: '06:05:11.800Z', stepId: 6, stepName: 'Publish GitHub Releases', level: 'info', message: 'Uploading binary asset: app-release.apk (15.2 MB) [application/vnd.android.package-archive]' },
+    { id: '27', timestamp: '06:05:16.200Z', stepId: 6, stepName: 'Publish GitHub Releases', level: 'info', message: 'Uploading binary asset: app-release.aab (18.4 MB) [application/octet-stream]' },
+    { id: '28', timestamp: '06:05:18.000Z', stepId: 6, stepName: 'Publish GitHub Releases', level: 'success', message: '✔ GitHub Release v2026.10.2 published with signed APK & AAB attachments.' },
+
+    // Step 7: Deploy Play Store & Update Website
+    { id: '29', timestamp: '06:05:18.700Z', stepId: 7, stepName: 'Deploy Play Store & Website', level: 'cmd', message: '$ r0adkll/upload-google-play@v1 --track=internal --rollout=0.10' },
+    { id: '30', timestamp: '06:05:25.200Z', stepId: 7, stepName: 'Deploy Play Store & Website', level: 'info', message: 'Uploaded release track [internal] versionCode: 2026102601' },
+    { id: '31', timestamp: '06:05:27.100Z', stepId: 7, stepName: 'Deploy Play Store & Website', level: 'cmd', message: '$ npm run build && actions/deploy-pages@v4' },
+    { id: '32', timestamp: '06:05:36.400Z', stepId: 7, stepName: 'Deploy Play Store & Website', level: 'info', message: 'vite v8.3.0 building for production... 42 modules transformed, dist/ generated.' },
+    { id: '33', timestamp: '06:05:42.800Z', stepId: 7, stepName: 'Deploy Play Store & Website', level: 'info', message: 'Deploying updated static website build to production hosting (Pages/Cloud Run)' },
+    { id: '34', timestamp: '06:05:46.000Z', stepId: 7, stepName: 'Deploy Play Store & Website', level: 'success', message: '✔ Pipeline finished in 1m 44s: Signed APK/AAB published & Website updated successfully!' },
   ];
 
   const [logs, setLogs] = useState<LogLine[]>(initialLogLines);
@@ -140,9 +150,10 @@ export const DeploymentLogs: React.FC<DeploymentLogsProps> = ({
     { id: 1, name: '1. Checkout' },
     { id: 2, name: '2. Toolchains' },
     { id: 3, name: '3. Secrets' },
-    { id: 4, name: '4. bundleRelease' },
+    { id: 4, name: '4. Build APK & AAB' },
     { id: 5, name: '5. apksigner' },
-    { id: 6, name: '6. Deploy' },
+    { id: 6, name: '6. GitHub Releases' },
+    { id: 7, name: '7. Play Store & Web' },
   ];
 
   return (
