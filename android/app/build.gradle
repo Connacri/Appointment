@@ -7,8 +7,8 @@ android {
         applicationId "com.planning.oran"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode (project.findProperty("versionCode") ?: "1").toInteger()
-        versionName (project.findProperty("versionName") ?: "1.0.1")
+        versionCode Integer.parseInt(String.valueOf(project.findProperty("versionCode") ?: "1"))
+        versionName String.valueOf(project.findProperty("versionName") ?: "1.0.1")
         resConfigs "fr", "en", "ar"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
