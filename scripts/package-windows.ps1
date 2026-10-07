@@ -50,7 +50,8 @@ namespace PlanningOran {
 }
 "@
 Set-Content -Path "dist-windows\Program.cs" -Value $sourceCSharp
-Add-Type -TypeDefinition $sourceCSharp -OutputAssembly "dist-windows\Planning-Oran-Setup.exe" -OutputType WindowsApplication
+$csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+& $csc /nologo /target:winexe /platform:anycpu /out:"dist-windows\Planning-Oran-Setup.exe" /r:"System.Windows.Forms.dll" "dist-windows\Program.cs"
 
 Copy-Item -Path "dist-windows\Planning-Oran-Setup.exe" -Destination "dist-windows\Planning-Oran-v1.0.0.exe"
 
