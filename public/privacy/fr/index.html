@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Politique de Confidentialité - AgentOps AGENTS.md</title>
+  <meta name="description" content="Politique de confidentialité de l'application AgentOps AGENTS.md Autonomous Cockpit.">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem 1rem; line-height: 1.6; }
+    .container { max-width: 840px; margin: 0 auto; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 2.5rem; }
+    h1 { color: #38bdf8; font-size: 2rem; margin-top: 0; }
+    h2 { color: #e2e8f0; font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid #334155; padding-bottom: 0.5rem; }
+    p, li { color: #cbd5e1; font-size: 0.95rem; }
+    ul { padding-left: 1.5rem; }
+    .nav { margin-bottom: 1.5rem; display: flex; gap: 1rem; }
+    .nav a { color: #38bdf8; text-decoration: none; font-size: 0.9rem; }
+    .badge { display: inline-block; background: #0369a1; color: #e0f2fe; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; margin-bottom: 1rem; }
+    .contact-box { background: #0f172a; border-left: 4px solid #38bdf8; padding: 1rem; margin-top: 1.5rem; border-radius: 0 8px 8px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="../">← Choix de la langue</a>
+      <a href="../en/">English</a>
+      <a href="../ar/" dir="rtl">العربية</a>
+      <a href="/delete-account/fr/">Suppression de compte</a>
+    </div>
+    <span class="badge">Dernière mise à jour : Octobre 2026</span>
+    <h1>Politique de Confidentialité</h1>
+    
+    <h2>1. Responsable du Traitement</h2>
+    <p>La présente Politique de Confidentialité définit les règles appliquées par <strong>AgentOps Software Engineering Lab</strong> (« nous », « notre ») pour la collecte, le traitement et la protection de vos données personnelles via l'application AgentOps AGENTS.md.</p>
+    <p>Contact référent : <strong>ramzi.guedouar@gmail.com</strong></p>
+
+    <h2>2. Données Collectées</h2>
+    <p>Conformément au principe de minimisation du RGPD, nous ne recueillons que les informations strictement nécessaires :</p>
+    <ul>
+      <li><strong>Données d'authentification :</strong> Adresse e-mail, nom public et identifiant unique de compte lors de la connexion via Google Auth ou Firebase Authentication.</li>
+      <li><strong>Jetons de notification push (FCM) :</strong> Identifiant d'appareil pour vous informer de l'état des compilations et des déploiements CI/CD.</li>
+      <li><strong>Espace de travail local :</strong> Audit de santé, checklists AGENTS.md et configurations conservées localement dans votre navigateur (IndexedDB / LocalStorage).</li>
+      <li><strong>Télémétrie de stabilité :</strong> Rapports de plantage et métriques de performance anonymisés pour maintenir le service opérationnel.</li>
+    </ul>
+
+    <h2>3. Sous-traitants et Services Tiers</h2>
+    <p>Nos intégrations respectent les exigences de sécurité les plus strictes :</p>
+    <ul>
+      <li><strong>Google Firebase :</strong> Authentification et notifications Firebase Cloud Messaging (FCM).</li>
+      <li><strong>Google Play Services :</strong> Validation de l'intégrité de l'application (Play Integrity) et gestion des versions.</li>
+      <li><strong>GitHub Actions :</strong> Automatisation de la chaîne d'intégration continue via des jetons sécurisés.</li>
+    </ul>
+
+    <h2>4. Sécurité et Durée de Conservation</h2>
+    <p>Vos sessions restent actives jusqu'à votre déconnexion ou suppression. Les données de projet locales restent sous votre contrôle exclusif. Toutes les communications réseau transitent par le protocole sécurisé TLS 1.3. Aucun mot de passe ni clé privée n'est enregistré sur nos serveurs.</p>
+
+    <h2>5. Vos Droits (Conformité RGPD)</h2>
+    <p>Vous disposez d'un droit permanent d'accès, de rectification, de portabilité et de suppression de l'ensemble de vos données. Pour supprimer définitivement vos données personnelles, utilisez notre formulaire dédié <a href="/delete-account/fr/" style="color:#38bdf8;">Suppression de Compte</a> ou contactez-nous par e-mail à <strong>ramzi.guedouar@gmail.com</strong>.</p>
+
+    <h2>6. Protection des Mineurs</h2>
+    <p>Nos services s'adressent aux ingénieurs et développeurs âgés d'au moins 13 ans. Nous ne collectons sciemment aucune donnée personnelle relative aux enfants de moins de 13 ans.</p>
+
+    <div class="contact-box">
+      <strong>Délégué à la Protection des Données (DPO) :</strong> Ramzi Guedouar<br>
+      E-mail : <strong>ramzi.guedouar@gmail.com</strong><br>
+      Délai de réponse : Inférieur à 48 heures ouvrées.
+    </div>
+  </div>
+</body>
+</html>

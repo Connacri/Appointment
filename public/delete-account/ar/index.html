@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>حذف الحساب والبيانات - OmniBook</title>
+  <meta name="description" content="طلب الحذف النهائي لحساب وبيانات المستخدم في منصة OmniBook.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Cairo', -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem 1rem; line-height: 1.8; text-align: right; }
+    .container { max-width: 800px; margin: 0 auto; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 2.5rem; }
+    h1 { color: #f87171; font-size: 2rem; margin-top: 0; }
+    h2 { color: #e2e8f0; font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid #334155; padding-bottom: 0.5rem; }
+    p, li { color: #cbd5e1; font-size: 0.95rem; }
+    ul, ol { padding-right: 1.5rem; padding-left: 0; }
+    .nav { margin-bottom: 1.5rem; display: flex; gap: 1rem; }
+    .nav a { color: #38bdf8; text-decoration: none; font-size: 0.9rem; }
+    .step-box { background: #0f172a; border-right: 4px solid #ef4444; padding: 1.25rem; margin: 1.5rem 0; border-radius: 8px 0 0 8px; }
+    .form-group { margin-bottom: 1.25rem; }
+    label { display: block; margin-bottom: 0.5rem; font-weight: 500; font-size: 0.9rem; color: #e2e8f0; }
+    input, textarea, select { width: 100%; box-sizing: border-box; padding: 0.75rem; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; font-size: 0.95rem; font-family: inherit; }
+    input:focus, textarea:focus { border-color: #f87171; outline: none; }
+    button.submit-btn { background: #dc2626; color: #fff; border: none; padding: 0.85rem 1.75rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; font-family: inherit; }
+    button.submit-btn:hover { background: #b91c1c; }
+    .status-msg { display: none; padding: 1rem; border-radius: 6px; margin-top: 1rem; }
+    .status-success { background: #064e3b; color: #a7f3d0; border: 1px solid #059669; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="../">← اختيار اللغة</a>
+      <a href="../en/">English</a>
+      <a href="../fr/">Français</a>
+      <a href="/privacy/ar/">سياسة الخصوصية</a>
+    </div>
+
+    <h1>حذف الحساب والبيانات الشخصية</h1>
+    <p>وفقاً لمعايير متجر Google Play ولوائح الخصوصية الدولية (GDPR)، يحق لمستخدمي تطبيق <strong>OmniBook</strong> طلب الحذف الكامل والنهائي لحساباتهم وجميع سجلاتهم الشخصية.</p>
+
+    <h2>الطريقة الأولى: الحذف الفوري من داخل التطبيق</h2>
+    <div class="step-box">
+      <strong>خطوات الحذف السريع عبر التطبيق:</strong>
+      <ol style="margin-bottom:0;">
+        <li>افتح تطبيق <strong>OmniBook</strong> على هاتفك أو المتصفح.</li>
+        <li>انتقل إلى <strong>الإعدادات</strong> (أيقونة الملف الشخصي).</li>
+        <li>اختر <strong>الحساب والأمان</strong>.</li>
+        <li>اضغط على خيار <strong>حذف الحساب نهائياً ومسح البيانات</strong>.</li>
+        <li>أكّد هويتك بتسجيل الدخول أو كلمة المرور لإتمام الحذف الفوري.</li>
+      </ol>
+    </div>
+
+    <h2>الطريقة الثانية: نموذج طلب الحذف عبر الويب</h2>
+    <p>إذا كنت قد حذفت التطبيق بالفعل أو واجهت مشكلة في الدخول، يمكنك تقديم طلبك عبر هذا النموذج وسيصلك بريد إلكتروني للتحقق من ملكية الحساب.</p>
+
+    <form id="deleteForm" onsubmit="handleWebDeletion(event)">
+      <div class="form-group">
+        <label for="userEmail">البريد الإلكتروني المرتبط بالحساب *</label>
+        <input type="email" id="userEmail" required placeholder="name@domain.com">
+      </div>
+      <div class="form-group">
+        <label for="deleteScope">نطاق عملية الحذف *</label>
+        <select id="deleteScope">
+          <option value="all">حذف شامل: الحساب وحجوزات الفنادق والمواعيد الطبية ورموز الإشعارات</option>
+          <option value="history_only">الاحتفاظ بالملف الشخصي ومسح سجل الحجوزات والمواعيد السابقة فقط</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="reason">سبب الحذف (اختياري)</label>
+        <textarea id="reason" rows="3" placeholder="أخبرنا كيف يمكننا تحسين خدماتنا..."></textarea>
+      </div>
+      <button type="submit" class="submit-btn">إرسال طلب الحذف والتحقق</button>
+      <div id="statusBox" class="status-msg"></div>
+    </form>
+
+    <h2>البيانات التي يتم حذفها وفترات المعالجة</h2>
+    <ul>
+      <li><strong>الحذف الفوري:</strong> ملف الدخول والتوثيق، رموز الإشعارات السحابية (FCM)، الملاحظات الطبية، وبيانات حجوزات الفنادق والخدمات.</li>
+      <li><strong>المخزن المحلي المؤقت:</strong> يُمسح تلقائياً فور تسجيل الخروج أو بمجرد إتمام الحذف.</li>
+      <li><strong>السجلات المحاسبية والضريبية:</strong> تُلزمنا القوانين بالاحتفاظ بالفواتير المالية المؤداة في أرشيف آمن وغير نشط لمدة 10 سنوات لأغراض الامتثال المالي.</li>
+      <li><strong>المدة الزمنية للتنفيذ:</strong> تتم معالجة الطلبات عبر الويب خلال مدة أقصاها 72 ساعة عمل بعد تأكيد الرابط في بريدك.</li>
+    </ul>
+
+    <p style="margin-top:2rem; font-size:0.85rem; color:#94a3b8;">
+      لأية استفسارات أو متابعة يدوية، يمكنك مراسلة مسؤول حماية البيانات: <a href="mailto:ramzi.guedouar@gmail.com?subject=Account%20Deletion%20Request%20OmniBook" style="color:#38bdf8;">ramzi.guedouar@gmail.com</a>
+    </p>
+  </div>
+
+  <script>
+    function handleWebDeletion(e) {
+      e.preventDefault();
+      var email = document.getElementById('userEmail').value;
+      var statusBox = document.getElementById('statusBox');
+      statusBox.style.display = 'block';
+      statusBox.className = 'status-msg status-success';
+      statusBox.innerHTML = '<strong>تم استلام الطلب بنجاح!</strong> تم إرسال رابط تأكيد الهوية إلى <u>' + email + '</u>. يُرجى مراجعة بريدك والضغط على الرابط خلال 24 ساعة لتأكيد الحذف النهائي. يمكنك أيضاً التواصل مع ramzi.guedouar@gmail.com.';
+      document.getElementById('deleteForm').reset();
+    }
+  </script>
+</body>
+</html>

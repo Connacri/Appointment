@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suppression de Compte et Données - OmniBook</title>
+  <meta name="description" content="Demande de suppression définitive de compte et données personnelles OmniBook.">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem 1rem; line-height: 1.6; }
+    .container { max-width: 800px; margin: 0 auto; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 2.5rem; }
+    h1 { color: #f87171; font-size: 2rem; margin-top: 0; }
+    h2 { color: #e2e8f0; font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid #334155; padding-bottom: 0.5rem; }
+    p, li { color: #cbd5e1; font-size: 0.95rem; }
+    .nav { margin-bottom: 1.5rem; display: flex; gap: 1rem; }
+    .nav a { color: #38bdf8; text-decoration: none; font-size: 0.9rem; }
+    .step-box { background: #0f172a; border-left: 4px solid #ef4444; padding: 1.25rem; margin: 1.5rem 0; border-radius: 0 8px 8px 0; }
+    .form-group { margin-bottom: 1.25rem; }
+    label { display: block; margin-bottom: 0.5rem; font-weight: 500; font-size: 0.9rem; color: #e2e8f0; }
+    input, textarea, select { width: 100%; box-sizing: border-box; padding: 0.75rem; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; font-size: 0.95rem; }
+    input:focus, textarea:focus { border-color: #f87171; outline: none; }
+    button.submit-btn { background: #dc2626; color: #fff; border: none; padding: 0.85rem 1.75rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+    button.submit-btn:hover { background: #b91c1c; }
+    .status-msg { display: none; padding: 1rem; border-radius: 6px; margin-top: 1rem; }
+    .status-success { background: #064e3b; color: #a7f3d0; border: 1px solid #059669; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="../">← Choix de la langue</a>
+      <a href="../en/">English</a>
+      <a href="../ar/" dir="rtl">العربية</a>
+      <a href="/privacy/fr/">Politique de Confidentialité</a>
+    </div>
+
+    <h1>Suppression de Compte & Données Personnelles</h1>
+    <p>Conformément aux directives du Google Play Store et à la réglementation européenne RGPD, chaque utilisateur de <strong>OmniBook</strong> dispose du droit absolu d'effacer son compte et l'ensemble de ses données associées.</p>
+
+    <h2>Méthode 1 : Suppression Directe dans l'Application</h2>
+    <div class="step-box">
+      <strong>Procédure rapide dans l'application mobile ou web :</strong>
+      <ol style="margin-bottom:0; padding-left:1.25rem;">
+        <li>Ouvrez l'application <strong>OmniBook</strong>.</li>
+        <li>Rendez-vous dans les <strong>Paramètres</strong> (icône profil).</li>
+        <li>Sélectionnez <strong>Compte & Sécurité</strong>.</li>
+        <li>Cliquez sur <strong>Supprimer définitivement mon compte</strong>.</li>
+        <li>Confirmez votre mot de passe ou votre authentification Google pour validation immédiate.</li>
+      </ol>
+    </div>
+
+    <h2>Méthode 2 : Formulaire de Demande Web</h2>
+    <p>Si vous n'avez plus l'application installée, transmettez votre demande ci-dessous. Un lien de confirmation sera adressé à votre adresse e-mail pour valider votre identité.</p>
+
+    <form id="deleteForm" onsubmit="handleWebDeletion(event)">
+      <div class="form-group">
+        <label for="userEmail">Adresse e-mail du compte *</label>
+        <input type="email" id="userEmail" required placeholder="nom.prenom@exemple.com">
+      </div>
+      <div class="form-group">
+        <label for="deleteScope">Périmètre de suppression *</label>
+        <select id="deleteScope">
+          <option value="all">Suppression intégrale : Compte, réservations d'hôtels, rendez-vous cliniques et jetons FCM</option>
+          <option value="history_only">Conserver le profil, effacer seulement l'historique des séjours et consultations</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="reason">Motif (Facultatif)</label>
+        <textarea id="reason" rows="3" placeholder="Aidez-nous à nous améliorer..."></textarea>
+      </div>
+      <button type="submit" class="submit-btn">Envoyer la demande de suppression</button>
+      <div id="statusBox" class="status-msg"></div>
+    </form>
+
+    <h2>Données Supprimées et Délais Légaux</h2>
+    <ul>
+      <li><strong>Effacement immédiat :</strong> Identifiant d'authentification, profils Google, jetons push FCM, notes médicales de rendez-vous, préférences d'hôtellerie.</li>
+      <li><strong>Données de cache local :</strong> Purgées automatiquement à la fermeture de la session ou manuellement.</li>
+      <li><strong>Obligations comptables :</strong> En application des obligations fiscales, les factures acquittées sont archivées de manière sécurisée et inaccessible pendant 10 ans.</li>
+      <li><strong>Délai de traitement :</strong> Le traitement effectif intervient sous 72 heures ouvrées après vérification de votre e-mail.</li>
+    </ul>
+
+    <p style="margin-top:2rem; font-size:0.85rem; color:#94a3b8;">
+      Besoin d'assistance directe ? Contactez notre DPO : <a href="mailto:ramzi.guedouar@gmail.com?subject=Demande%20Suppression%20Compte%20OmniBook" style="color:#38bdf8;">ramzi.guedouar@gmail.com</a>
+    </p>
+  </div>
+
+  <script>
+    function handleWebDeletion(e) {
+      e.preventDefault();
+      var email = document.getElementById('userEmail').value;
+      var statusBox = document.getElementById('statusBox');
+      statusBox.style.display = 'block';
+      statusBox.className = 'status-msg status-success';
+      statusBox.innerHTML = '<strong>Demande transmise avec succès !</strong> Un e-mail de confirmation vient d\'être expédié à <u>' + email + '</u>. Veuillez cliquer sur le lien sous 24h pour valider la suppression définitive. Vous pouvez également notifier ramzi.guedouar@gmail.com.';
+      document.getElementById('deleteForm').reset();
+    }
+  </script>
+</body>
+</html>

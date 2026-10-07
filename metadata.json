@@ -1,0 +1,6 @@
+{
+  "name": "AgentOps AGENTS.md Autonomous Cockpit",
+  "description": "Autonomous Senior Engineering Agent cockpit, release manager, and compliance suite implementing AGENTS.md standards.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
