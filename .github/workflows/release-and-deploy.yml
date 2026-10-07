@@ -99,7 +99,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
@@ -129,7 +129,7 @@ jobs:
           mkdir -p android/app/build/outputs/bundle/release
 
           if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 secret is missing. Run scripts/bootstrap-secrets.sh (AGENTS.md §Appendix B). Never hardcode keystores or passwords."
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret is missing. Run scripts/bootstrap-secrets.sh (AGENTS.md Â§Appendix B). Never hardcode keystores or passwords."
             exit 1
           fi
           echo " Using official ANDROID_KEYSTORE_BASE64 from GitHub Secrets."
@@ -156,7 +156,7 @@ jobs:
               -Pandroid.injected.signing.key.password="$KEY_PASS" \
               --no-daemon --parallel -PversionName="$VERSION_NAME" -PversionCode="${{ github.run_number }}"; cd ..
           else
-            echo "::error::gradlew not found — android/ Capacitor project missing."
+            echo "::error::gradlew not found â€” android/ Capacitor project missing."
             exit 1
           fi
 
