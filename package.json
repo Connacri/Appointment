@@ -1,5 +1,5 @@
 {
-  "name": "planning-oran",
+  "name": "omnibook",
   "private": true,
   "version": "1.0.4",
   "type": "module",
@@ -45,3 +45,4 @@
     "typescript": "^7.0.2"
   }
 }
+

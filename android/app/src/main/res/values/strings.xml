@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">planning-oran</string>
-    <string name="title_activity_main">planning-oran</string>
+    <string name="app_name">OmniBook</string>
+    <string name="title_activity_main">OmniBook</string>
     <string name="package_name">com.planning.oran</string>
     <string name="custom_url_scheme">com.planning.oran</string>
 </resources>
