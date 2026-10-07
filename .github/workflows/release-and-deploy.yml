@@ -117,6 +117,9 @@ jobs:
       - name: Build Web Production Assets
         run: npm run build
 
+      - name: Sync Capacitor assets to Android project
+        run: npx cap sync android
+
       # Setup or generate Keystore with com.planning.oran credentials
       - name: Prepare Signing Keystore (com.planning.oran)
         id: keystore_prep
@@ -134,6 +137,9 @@ jobs:
           echo "STORE_PASS=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
           echo "KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
           echo "KEY_PASS=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
+          echo "KEYSTORE_PATH=/tmp/keystore/release.keystore" >> $GITHUB_ENV
+          echo "KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
           chmod 600 /tmp/keystore/release.keystore
 
       # Build Signed APK & Signed AAB
@@ -149,26 +155,8 @@ jobs:
               -Pandroid.injected.signing.key.password="$KEY_PASS" \
               --no-daemon --parallel
           else
-            echo "Capacitor / Standalone Web-Android Container Packaging..."
-            cd dist
-            zip -qr /tmp/web-bundle.zip .
-            cd ..
-
-            # Create signed release APK & AAB archives
-            cp /tmp/web-bundle.zip build/outputs/apk/release/Planning-Oran-release.apk
-            cp /tmp/web-bundle.zip build/outputs/bundle/release/Planning-Oran-release.aab
-
-            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-              -keystore /tmp/keystore/release.keystore \
-              -storepass "$STORE_PASS" \
-              -keypass "$KEY_PASS" \
-              build/outputs/apk/release/Planning-Oran-release.apk "$KEY_ALIAS"
-
-            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-              -keystore /tmp/keystore/release.keystore \
-              -storepass "$STORE_PASS" \
-              -keypass "$KEY_PASS" \
-              build/outputs/bundle/release/Planning-Oran-release.aab "$KEY_ALIAS"
+            echo "::error::gradlew not found — android/ Capacitor project missing."
+            exit 1
           fi
 
       - name: Verify Cryptographic Android Signatures
