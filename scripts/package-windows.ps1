@@ -34,7 +34,7 @@ namespace PlanningOran {
                 if (!File.Exists(indexPath)) {
                     indexPath = Path.Combine(appDir, "index.html");
                 }
-                string url = File.Exists(indexPath) ? new Uri(indexPath).AbsoluteUri : "https://samuel69tr00.github.io/Appointment/";
+                string url = File.Exists(indexPath) ? new Uri(indexPath).AbsoluteUri : "https://connacri.github.io/Appointment/";
 
                 ProcessStartInfo psi = new ProcessStartInfo {
                     FileName = "msedge.exe",
