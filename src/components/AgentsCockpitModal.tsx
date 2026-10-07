@@ -375,7 +375,8 @@ export const AgentsCockpitModal: React.FC = () => {
 
                 <div className="space-y-1.5 font-mono text-[11px]">
                   {[
-                    { key: 'APPLICATION_ID', val: 'com.omnibook.app' },
+                    { key: 'APPLICATION_ID', val: 'com.planning.oran' },
+                    { key: 'ANDROID_PACKAGE_NAME', val: 'com.planning.oran' },
                     { key: 'APP_NAME', val: 'OmniBook' },
                     { key: 'RELEASE_TRACK', val: 'internal' },
                     { key: 'PLAY_ROLLOUT_PERCENT', val: '10' },

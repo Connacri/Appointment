@@ -81,6 +81,13 @@ export const Sidebar: React.FC = () => {
       roles: ['manager', 'staff'],
     },
     {
+      id: 'channels',
+      label: language === 'fr' ? 'Channel Manager (OTA)' : language === 'ar' ? 'إدارة القنوات' : 'Channel Manager (OTA)',
+      icon: Globe,
+      view: 'channels' as const,
+      roles: ['manager', 'receptionist'],
+    },
+    {
       id: 'reports',
       label: language === 'fr' ? 'Rapports & Chiffres' : language === 'ar' ? 'التقارير المالية' : 'Financial Reports',
       icon: CreditCard,
@@ -218,20 +225,24 @@ export const Sidebar: React.FC = () => {
           </button>
 
           <button
-            onClick={() => {}}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/70 transition-colors"
+            onClick={() => setActiveView('channels')}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+              activeView === 'channels'
+                ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+            }`}
           >
             <Globe size={18} className="shrink-0" />
             {!isCollapsed && <span>{language === 'fr' ? 'Channel Manager' : language === 'ar' ? 'إدارة القنوات' : 'Channel Manager'}</span>}
           </button>
 
           <button
-            onClick={() => {}}
+            onClick={() => setActiveView('channels')}
             className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/70 transition-colors"
           >
             <div className="flex items-center gap-3">
               <Bell size={18} className="shrink-0" />
-              {!isCollapsed && <span>{language === 'fr' ? 'Alertes' : language === 'ar' ? 'التنبيهات' : 'Alerts'}</span>}
+              {!isCollapsed && <span>{language === 'fr' ? 'Alertes OTA' : language === 'ar' ? 'التنبيهات' : 'OTA Alerts'}</span>}
             </div>
             {!isCollapsed && (
               <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">

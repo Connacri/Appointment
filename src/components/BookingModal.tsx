@@ -52,6 +52,7 @@ export const BookingModal: React.FC = () => {
   const [status, setStatus] = useState<BookingStatus>('confirmed');
   const [notes, setNotes] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending' | 'partial'>('paid');
+  const [conflictError, setConflictError] = useState<string | null>(null);
 
   // Populate when opening modal
   useEffect(() => {
@@ -114,8 +115,6 @@ export const BookingModal: React.FC = () => {
 
   const calculatedDays = calcDays();
   const totalPrice = calculatedDays * (currentResource?.pricePerDay || 85);
-
-  const [conflictError, setConflictError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -193,6 +192,12 @@ export const BookingModal: React.FC = () => {
 
         {/* Modal Body */}
         <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 text-xs">
+          {conflictError && (
+            <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+              <span className="font-semibold">{conflictError}</span>
+            </div>
+          )}
+
           {/* Sector selection (only when creating new) */}
           {!isEditing && (
             <div>

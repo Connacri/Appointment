@@ -19,6 +19,7 @@ import { OfflineBanner } from './components/OfflineBanner';
 import { BookingAnalyticsView } from './components/BookingAnalyticsView';
 import { HousekeepingView } from './components/HousekeepingView';
 import { BillingInvoicingView } from './components/BillingInvoicingView';
+import { ChannelManagerView } from './components/ChannelManagerView';
 import { ObjectBoxInspectorModal } from './components/ObjectBoxInspectorModal';
 
 const MainLayout: React.FC = () => {
@@ -54,6 +55,8 @@ const MainLayout: React.FC = () => {
             {activeView === 'my_bookings' && <MyBookingsView />}
 
             {activeView === 'housekeeping' && <HousekeepingView />}
+
+            {activeView === 'channels' && <ChannelManagerView />}
 
             {activeView === 'reports' && <ReportsView />}
           </main>

@@ -43,8 +43,8 @@ interface AppContextType {
   isOffline: boolean;
   setIsOffline: (offline: boolean) => void;
   purgeAllUserData: () => void;
-  activeView: 'planning' | 'my_bookings' | 'reports' | 'analytics' | 'housekeeping' | 'billing';
-  setActiveView: (view: 'planning' | 'my_bookings' | 'reports' | 'analytics' | 'housekeeping' | 'billing') => void;
+  activeView: 'planning' | 'my_bookings' | 'reports' | 'analytics' | 'housekeeping' | 'billing' | 'channels';
+  setActiveView: (view: 'planning' | 'my_bookings' | 'reports' | 'analytics' | 'housekeeping' | 'billing' | 'channels') => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -80,7 +80,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [searchQuery, setSearchQuery] = useState('');
   const [dateRangeMode, setDateRangeMode] = useState<'two_weeks' | 'one_month'>('two_weeks');
   const [currentBaseDate, setCurrentBaseDate] = useState('2026-10-26');
-  const [activeView, setActiveView] = useState<'planning' | 'my_bookings' | 'reports' | 'analytics' | 'housekeeping' | 'billing'>('planning');
+  const [activeView, setActiveView] = useState<'planning' | 'my_bookings' | 'reports' | 'analytics' | 'housekeeping' | 'billing' | 'channels'>('planning');
 
   const [resourceGroups, setResourceGroups] = useState<ResourceGroup[]>(() => {
     const saved = localStorage.getItem('omnibook_resource_groups');
