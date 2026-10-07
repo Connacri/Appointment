@@ -46,33 +46,39 @@ export const initialResourceGroups: ResourceGroup[] = [
     ],
   },
 
-  // CLINIQUE & MÉDECINS
-  {
-    id: 'grp_clinic_consult',
-    name: {
-      fr: 'Cabinets Médicaux & Spécialités',
-      en: 'Medical Cabinets & Specialists',
-      ar: 'العيادات الطبية والاستشارات',
-    },
-    sector: 'clinic',
-    resources: [
-      { id: 'cl_101', name: 'Dr. Ramona - Dermatologie', type: 'Consultation', sector: 'clinic', pricePerDay: 75, housekeepingStatus: 'clean' },
-      { id: 'cl_102', name: 'Dr. Alexander - Cardiologie', type: 'Consultation', sector: 'clinic', pricePerDay: 90, housekeepingStatus: 'clean' },
-      { id: 'cl_103', name: 'Dr. Sophie - Pédiatrie', type: 'Consultation', sector: 'clinic', pricePerDay: 65, housekeepingStatus: 'clean' },
-      { id: 'cl_104', name: 'Dr. Dieter - Médecine Générale', type: 'Consultation', sector: 'clinic', pricePerDay: 50, housekeepingStatus: 'clean' },
-    ],
-  },
+  // CLINIQUE & PLATEAU TECHNIQUE
   {
     id: 'grp_clinic_exam',
     name: {
-      fr: 'Salles d\'Examens & Soins',
-      en: 'Exam & Procedure Rooms',
-      ar: 'غرف الفحص والتحاليل',
+      fr: 'Clinique - Plateau Technique & Imagerie',
+      en: 'Clinic - Technical Platform & Imaging',
+      ar: 'المصحة - الأجهزة التقنية والتصوير الطبي',
     },
     sector: 'clinic',
     resources: [
-      { id: 'cl_201', name: 'Salle Échographie & Imagerie', type: 'Exam Room', sector: 'clinic', pricePerDay: 120, housekeepingStatus: 'clean' },
-      { id: 'cl_202', name: 'Salle Prélèvements & Soins', type: 'Care Room', sector: 'clinic', pricePerDay: 40, housekeepingStatus: 'clean' },
+      { id: 'cl_201', name: 'Salle Échographie & Imagerie 3D', type: 'Imagerie', sector: 'clinic', pricePerDay: 120, housekeepingStatus: 'clean' },
+      { id: 'cl_202', name: 'Salle Prélèvements & Soins Infirmiers', type: 'Soins', sector: 'clinic', pricePerDay: 40, housekeepingStatus: 'clean' },
+      { id: 'cl_203', name: 'Bloc Ambulatoire & Endoscopie', type: 'Bloc Chirurgie', sector: 'clinic', pricePerDay: 280, housekeepingStatus: 'clean' },
+      { id: 'cl_204', name: 'Unité Hospitalisation de Jour L1', type: 'Ambulatoire', sector: 'clinic', pricePerDay: 160, housekeepingStatus: 'clean' },
+    ],
+  },
+
+  // MÉDECINS & CABINETS MÉDICAUX
+  {
+    id: 'grp_doctor_consult',
+    name: {
+      fr: 'Médecins Spécialistes & Cabinets',
+      en: 'Medical Doctors & Practices',
+      ar: 'الأطباء المتخصصون والعيادات',
+    },
+    sector: 'doctor',
+    resources: [
+      { id: 'doc_101', name: 'Dr. Ramona - Dermatologie & Laser', type: 'Consultation', sector: 'doctor', pricePerDay: 75, housekeepingStatus: 'clean' },
+      { id: 'doc_102', name: 'Dr. Alexander - Cardiologie & Écho', type: 'Consultation', sector: 'doctor', pricePerDay: 90, housekeepingStatus: 'clean' },
+      { id: 'doc_103', name: 'Dr. Sophie - Pédiatrie & Vaccins', type: 'Consultation', sector: 'doctor', pricePerDay: 65, housekeepingStatus: 'clean' },
+      { id: 'doc_104', name: 'Dr. Dieter - Médecine Générale', type: 'Consultation', sector: 'doctor', pricePerDay: 50, housekeepingStatus: 'clean' },
+      { id: 'doc_105', name: 'Dr. Yasmine - Ophtalmologie & Vue', type: 'Consultation', sector: 'doctor', pricePerDay: 80, housekeepingStatus: 'clean' },
+      { id: 'doc_106', name: 'Dr. Karim - Chirurgie Dentaire', type: 'Dentisterie', sector: 'doctor', pricePerDay: 95, housekeepingStatus: 'clean' },
     ],
   },
 
@@ -522,16 +528,27 @@ export const domainConfigs: Record<string, any> = {
     kpiLabel2: { fr: 'Rotation des Tables', en: 'Table Turnover', ar: 'دوران الطاولات' },
     icon: 'UtensilsCrossed',
   },
+  doctor: {
+    id: 'doctor',
+    label: { fr: 'Médecin & Spécialités', en: 'Doctor & Medical Specialists', ar: 'الأطباء والعيادات التخصصية' },
+    badge: { fr: 'Médecin', en: 'Doctor', ar: 'طبيب' },
+    unitTerm: { fr: 'Médecin / Cabinet', en: 'Doctor / Practice', ar: 'طبيب / عيادة' },
+    userTerm: { fr: 'Patient', en: 'Patient', ar: 'مريض' },
+    bookingTerm: { fr: 'Consultation Médicale', en: 'Doctor Visit', ar: 'استشارة طبية' },
+    kpiLabel1: { fr: 'Consultations Jour', en: 'Consultations / Day', ar: 'كشوفات اليوم' },
+    kpiLabel2: { fr: 'Délai Moyen Prise RDV', en: 'Avg Wait Time', ar: 'متوسط الحجز' },
+    icon: 'Stethoscope',
+  },
   clinic: {
     id: 'clinic',
-    label: { fr: 'Clinique & Cabinet Médical', en: 'Medical Clinic & Practice', ar: 'العيادات والمراكز الطبية' },
-    badge: { fr: 'Clinique', en: 'Clinic', ar: 'عيادة' },
-    unitTerm: { fr: 'Cabinet / Praticien', en: 'Cabinet / Specialist', ar: 'عيادة / طبيب' },
-    userTerm: { fr: 'Patient', en: 'Patient', ar: 'مريض' },
-    bookingTerm: { fr: 'Consultation', en: 'Medical Visit', ar: 'استشارة طبية' },
-    kpiLabel1: { fr: 'Actes Médicaux', en: 'Consultation Volume', ar: 'عدد الكشوفات' },
-    kpiLabel2: { fr: 'Utilisation Praticiens', en: 'Specialist Utilization', ar: 'نسبة استخدام العيادات' },
-    icon: 'Stethoscope',
+    label: { fr: 'Clinique & Soins Médicaux', en: 'Medical Clinic & Care', ar: 'المصحات والمراكز الطبية' },
+    badge: { fr: 'Clinique', en: 'Clinic', ar: 'مصحة' },
+    unitTerm: { fr: 'Salle / Unité Clinique', en: 'Exam Room / Unit', ar: 'قاعة فحص / وحدة' },
+    userTerm: { fr: 'Patient / Hospitalisé', en: 'Patient', ar: 'مريض' },
+    bookingTerm: { fr: 'Examen / Admission', en: 'Exam / Admission', ar: 'فحص / دخول' },
+    kpiLabel1: { fr: 'Actes Médicaux', en: 'Medical Procedures', ar: 'الفحوصات الطبية' },
+    kpiLabel2: { fr: 'Taux Utilisation Plateau', en: 'Clinic Utilization', ar: 'استغلال الأجهزة' },
+    icon: 'HeartPulse',
   },
   administration: {
     id: 'administration',

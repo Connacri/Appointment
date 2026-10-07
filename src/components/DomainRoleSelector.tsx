@@ -4,6 +4,7 @@ import {
   Building2,
   UtensilsCrossed,
   Stethoscope,
+  HeartPulse,
   Landmark,
   Sparkles,
   UserCheck,
@@ -19,10 +20,11 @@ export const DomainRoleSelector: React.FC = () => {
   const { currentDomain, setCurrentDomain, currentRole, setCurrentRole, language } = useApp();
 
   const domainIcons: Record<DomainType, any> = {
+    doctor: Stethoscope,
+    clinic: HeartPulse,
     hotel: Hotel,
     residence: Building2,
     restaurant: UtensilsCrossed,
-    clinic: Stethoscope,
     administration: Landmark,
     wellness: Sparkles,
     other: Sparkles,
@@ -46,7 +48,7 @@ export const DomainRoleSelector: React.FC = () => {
     },
     {
       id: 'client',
-      label: { fr: 'Portail Client / Patient', en: 'Customer / Patient Portal', ar: 'بوابة العميل / المريض' },
+      label: { fr: 'Client / Guest (Pass QR Code)', en: 'Client / Guest (QR Pass)', ar: 'العميل / النزيل (رمز QR)' },
       icon: Users,
     },
   ];

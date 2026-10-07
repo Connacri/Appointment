@@ -11,6 +11,8 @@ import {
   Wifi,
   WifiOff,
   Filter,
+  QrCode,
+  Camera,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -34,6 +36,10 @@ export const TopBar: React.FC = () => {
     setIsOffline,
     activeSector,
     setActiveSector,
+    currentRole,
+    setIsQrScannerOpen,
+    setActiveQrPassBooking,
+    bookings,
   } = useApp();
 
   // Helper to format date display
@@ -238,6 +244,30 @@ export const TopBar: React.FC = () => {
         >
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>
+
+        {/* QR Action Button according to active role */}
+        {currentRole === 'client' ? (
+          <button
+            onClick={() => {
+              const latest = bookings[0] || null;
+              if (latest) setActiveQrPassBooking(latest);
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded-lg shadow-xs transition-all whitespace-nowrap"
+            title="Afficher mon QR Code Pass d'Arrivée"
+          >
+            <QrCode size={15} />
+            <span className="hidden md:inline">Mon Pass QR Code</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => setIsQrScannerOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors whitespace-nowrap"
+            title="Scanner un QR Code d'arrivée client"
+          >
+            <Camera size={15} />
+            <span className="hidden md:inline">Scanner QR</span>
+          </button>
+        )}
 
         {/* Primary Action Button: + New Booking matching green or cyan button in screenshot */}
         <button

@@ -374,10 +374,12 @@ export const PlanningTimeline: React.FC = () => {
             <span className="text-[11px] md:text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider truncate">
               {leftBarMode === 'mini'
                 ? 'Ress.'
+                : currentDomain === 'doctor'
+                ? (language === 'fr' ? 'Médecins & Cabinets' : language === 'ar' ? 'الأطباء والعيادات' : 'Doctors & Practices')
+                : currentDomain === 'clinic'
+                ? (language === 'fr' ? 'Plateau Clinique & Soins' : language === 'ar' ? 'أقسام المصحة' : 'Clinic Units')
                 : currentDomain === 'hotel'
                 ? (language === 'fr' ? 'Chambres & Suites' : language === 'ar' ? 'الغرف والأجنحة' : 'Rooms & Suites')
-                : currentDomain === 'clinic'
-                ? (language === 'fr' ? 'Cabinets & Praticiens' : language === 'ar' ? 'العيادات والأطباء' : 'Doctor Cabinets')
                 : currentDomain === 'restaurant'
                 ? (language === 'fr' ? 'Plan de Salle & Tables' : language === 'ar' ? 'مخطط الصالة والطاولات' : 'Dining Tables')
                 : (language === 'fr' ? 'Ressources' : 'Resources')}

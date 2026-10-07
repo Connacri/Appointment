@@ -1,5 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Language, Theme, SectorType, TimelineBooking, BookingStatus, ResourceGroup, DomainType, UserRole } from '../types/booking';
+import {
+  Language,
+  Theme,
+  SectorType,
+  TimelineBooking,
+  BookingStatus,
+  ResourceGroup,
+  DomainType,
+  UserRole,
+  ClientProfile,
+} from '../types/booking';
 import { initialBookings, initialResourceGroups, initialInvoices } from '../data/mockData';
 import { objectBox } from '../db/objectbox';
 
@@ -12,6 +22,8 @@ interface AppContextType {
   setCurrentDomain: (domain: DomainType) => void;
   currentRole: UserRole;
   setCurrentRole: (role: UserRole) => void;
+  clientProfile: ClientProfile;
+  setClientProfile: (profile: ClientProfile) => void;
   activeSector: SectorType | 'all';
   setActiveSector: (sector: SectorType | 'all') => void;
   searchQuery: string;
@@ -25,9 +37,17 @@ interface AppContextType {
   resourceGroups: ResourceGroup[];
   updateHousekeepingStatus: (resourceId: string, status: 'clean' | 'cleaning' | 'dirty' | 'out_of_order') => void;
   checkConflict: (resourceId: string, startDate: string, endDate: string, excludeBookingId?: string) => boolean;
-  addBooking: (booking: Omit<TimelineBooking, 'id'>) => { success: boolean; error?: string };
+  addBooking: (booking: Omit<TimelineBooking, 'id'>) => { success: boolean; error?: string; booking?: TimelineBooking };
   updateBookingStatus: (id: string, status: BookingStatus) => void;
   deleteBooking: (id: string) => void;
+  confirmCheckInAndCashPayment: (
+    bookingId: string,
+    cashReceived?: boolean
+  ) => { success: boolean; message: string; booking?: TimelineBooking };
+  markBookingAsPaid: (
+    bookingId: string,
+    receiptNote?: string
+  ) => { success: boolean; message: string; booking?: TimelineBooking };
   selectedBooking: TimelineBooking | null;
   setSelectedBooking: (booking: TimelineBooking | null) => void;
   isNewBookingModalOpen: boolean;
@@ -40,6 +60,10 @@ interface AppContextType {
   setIsLegalModalOpen: (open: boolean) => void;
   isObjectBoxOpen: boolean;
   setIsObjectBoxOpen: (open: boolean) => void;
+  isQrScannerOpen: boolean;
+  setIsQrScannerOpen: (open: boolean) => void;
+  activeQrPassBooking: TimelineBooking | null;
+  setActiveQrPassBooking: (booking: TimelineBooking | null) => void;
   isOffline: boolean;
   setIsOffline: (offline: boolean) => void;
   purgeAllUserData: () => void;
@@ -106,12 +130,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return initialBookings;
   });
 
+  const [clientProfile, setClientProfileState] = useState<ClientProfile>(() => {
+    const saved = localStorage.getItem('omnibook_client_profile');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return {
+      id: 'clt_2026_9812',
+      name: 'Alexander Kaufmann',
+      email: 'alex.kaufmann@example.com',
+      phone: '+33 6 12 34 56 78',
+      memberNumber: 'CLT-2026-9812',
+      loyaltyPoints: 350,
+    };
+  });
+
+  const setClientProfile = (p: ClientProfile) => {
+    setClientProfileState(p);
+    localStorage.setItem('omnibook_client_profile', JSON.stringify(p));
+  };
+
   const [selectedBooking, setSelectedBooking] = useState<TimelineBooking | null>(null);
   const [isNewBookingModalOpen, setIsNewBookingModalOpen] = useState(false);
   const [newBookingInitialSlot, setNewBookingInitialSlot] = useState<{ resourceId?: string; date?: string } | null>(null);
   const [isCockpitOpen, setIsCockpitOpen] = useState(false);
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
   const [isObjectBoxOpen, setIsObjectBoxOpen] = useState(false);
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+  const [activeQrPassBooking, setActiveQrPassBooking] = useState<TimelineBooking | null>(null);
   const [isOffline, setIsOffline] = useState(false);
 
   // Sync language with HTML dir and lang
@@ -243,7 +293,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `bkg_${Date.now()}`,
     };
     setBookings((prev) => [newBkg, ...prev]);
-    return { success: true };
+    return { success: true, booking: newBkg };
   };
 
   const updateBookingStatus = (id: string, status: BookingStatus) => {
@@ -260,6 +310,85 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (selectedBooking && selectedBooking.id === id) {
       setSelectedBooking(null);
     }
+  };
+
+  const markBookingAsPaid = (
+    bookingId: string,
+    receiptNote?: string
+  ): { success: boolean; message: string; booking?: TimelineBooking } => {
+    let targetBooking: TimelineBooking | undefined;
+    setBookings((prev) =>
+      prev.map((b) => {
+        if (b.id === bookingId) {
+          const updated: TimelineBooking = {
+            ...b,
+            paymentStatus: 'paid',
+            notes:
+              (b.notes || '') +
+              (receiptNote ||
+                ' [✓ Reçu de paiement acquitté via QR Code - Marqué PAYÉ par le personnel]'),
+          };
+          targetBooking = updated;
+          return updated;
+        }
+        return b;
+      })
+    );
+
+    if (selectedBooking && selectedBooking.id === bookingId) {
+      setSelectedBooking((prev) =>
+        prev ? { ...prev, paymentStatus: 'paid' } : null
+      );
+    }
+
+    return {
+      success: true,
+      message:
+        language === 'fr'
+          ? 'Reçu scanné avec succès : Dossier marqué comme PAYÉ !'
+          : language === 'ar'
+          ? 'تم مسح الإيصال بنجاح: تم تسجيل الحجز كمدفوع بالكامل!'
+          : 'Receipt scanned successfully: Booking marked as PAID!',
+      booking: targetBooking,
+    };
+  };
+
+  const confirmCheckInAndCashPayment = (
+    bookingId: string,
+    cashReceived: boolean = true
+  ): { success: boolean; message: string; booking?: TimelineBooking } => {
+    let targetBooking: TimelineBooking | undefined;
+    setBookings((prev) =>
+      prev.map((b) => {
+        if (b.id === bookingId) {
+          const isCash = b.paymentStatus === 'pending' || cashReceived;
+          const updated: TimelineBooking = {
+            ...b,
+            status: 'checked_in',
+            paymentStatus: isCash ? 'paid' : b.paymentStatus,
+            notes: (b.notes || '') + (isCash ? ' [✓ Présence confirmée via QR Code & Paiement Cash finalisé]' : ' [✓ Présence confirmée via QR Code]'),
+          };
+          targetBooking = updated;
+          return updated;
+        }
+        return b;
+      })
+    );
+
+    if (selectedBooking && selectedBooking.id === bookingId) {
+      setSelectedBooking((prev) => (prev ? { ...prev, status: 'checked_in', paymentStatus: 'paid' } : null));
+    }
+
+    return {
+      success: true,
+      message:
+        language === 'fr'
+          ? 'Présence confirmée par QR Code et règlement finalisé avec succès !'
+          : language === 'ar'
+          ? 'تم تأكيد الحضور برمز QR وتسوية الدفع بنجاح!'
+          : 'Check-in confirmed with QR Code and payment settled successfully!',
+      booking: targetBooking,
+    };
   };
 
   const purgeAllUserData = () => {
@@ -280,6 +409,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentDomain,
         currentRole,
         setCurrentRole,
+        clientProfile,
+        setClientProfile,
         activeSector,
         setActiveSector,
         searchQuery,
@@ -296,6 +427,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addBooking,
         updateBookingStatus,
         deleteBooking,
+        confirmCheckInAndCashPayment,
+        markBookingAsPaid,
         selectedBooking,
         setSelectedBooking,
         isNewBookingModalOpen,
@@ -308,6 +441,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsLegalModalOpen,
         isObjectBoxOpen,
         setIsObjectBoxOpen,
+        isQrScannerOpen,
+        setIsQrScannerOpen,
+        activeQrPassBooking,
+        setActiveQrPassBooking,
         isOffline,
         setIsOffline,
         purgeAllUserData,

@@ -47,6 +47,8 @@ export const BookingModal: React.FC = () => {
     deleteBooking,
     currentBaseDate,
     currentDomain,
+    currentRole,
+    clientProfile,
     resourceGroups,
   } = useApp();
 
@@ -237,15 +239,21 @@ export const BookingModal: React.FC = () => {
         }
       }
 
-      setGuestName('');
-      setGuestEmail('');
-      setGuestPhone('');
+      if (currentRole === 'client') {
+        setGuestName(clientProfile.name);
+        setGuestEmail(clientProfile.email);
+        setGuestPhone(clientProfile.phone);
+      } else {
+        setGuestName('');
+        setGuestEmail('');
+        setGuestPhone('');
+      }
       setStatus('confirmed');
       setNotes('');
       setPaymentStatus(activeDomain === 'administration' ? 'paid' : 'paid');
       setConflictError(null);
     }
-  }, [isOpen, selectedBooking, newBookingInitialSlot, currentBaseDate, activeDomain, domainResources]);
+  }, [isOpen, selectedBooking, newBookingInitialSlot, currentBaseDate, activeDomain, domainResources, currentRole, clientProfile]);
 
   // Current selected resource
   const currentResource = useMemo(() => {
@@ -300,7 +308,7 @@ export const BookingModal: React.FC = () => {
       };
     }
 
-    if (activeDomain === 'clinic') {
+    if (activeDomain === 'clinic' || activeDomain === 'doctor') {
       const actRate = baseDaily || 75;
       return {
         totalPrice: actRate,
@@ -464,14 +472,16 @@ export const BookingModal: React.FC = () => {
 
   const getDomainIcon = () => {
     switch (activeDomain) {
+      case 'doctor':
+        return Stethoscope;
+      case 'clinic':
+        return HeartPulse;
       case 'hotel':
         return Bed;
       case 'residence':
         return Building2;
       case 'restaurant':
         return UtensilsCrossed;
-      case 'clinic':
-        return Stethoscope;
       case 'administration':
         return Landmark;
       case 'wellness':
@@ -486,6 +496,18 @@ export const BookingModal: React.FC = () => {
   // Localized Sheet Titles
   const getSheetTitle = () => {
     switch (activeDomain) {
+      case 'doctor':
+        return {
+          fr: 'Fiche de Consultation Médicale (Médecin)',
+          en: 'Doctor Medical Appointment Sheet',
+          ar: 'استمارة استشارة طبية وفحص',
+        };
+      case 'clinic':
+        return {
+          fr: 'Fiche d\'Admission & Plateau Clinique',
+          en: 'Clinic Care & Admission Sheet',
+          ar: 'استمارة فحص وعلاج بالمصحة',
+        };
       case 'hotel':
         return {
           fr: 'Fiche de Réservation Hôtelière',
@@ -932,8 +954,8 @@ export const BookingModal: React.FC = () => {
             </div>
           )}
 
-          {/* === D. CLINIC PREDEFINED SHEET === */}
-          {activeDomain === 'clinic' && (
+          {/* === D. CLINIC & DOCTOR PREDEFINED SHEET === */}
+          {(activeDomain === 'clinic' || activeDomain === 'doctor') && (
             <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/70 dark:border-emerald-900/40 space-y-3">
               <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-bold text-xs uppercase tracking-wider">
                 <Stethoscope size={14} />
@@ -1204,11 +1226,11 @@ export const BookingModal: React.FC = () => {
               <select
                 value={paymentStatus}
                 onChange={(e) => setPaymentStatus(e.target.value as any)}
-                className="w-full h-9 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-9 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
               >
-                <option value="paid">{language === 'fr' ? 'Payé intégralement' : 'Paid in full'}</option>
-                <option value="pending">{language === 'fr' ? 'En attente' : 'Pending'}</option>
-                <option value="partial">{language === 'fr' ? 'Acompte versé' : 'Deposit partial'}</option>
+                <option value="paid">{language === 'fr' ? '💳 Paiement en ligne immédiat (CB / Payé)' : '💳 Online Payment (Paid in full)'}</option>
+                <option value="pending">{language === 'fr' ? '💵 Règlement en Espèces / Cash sur place à l\'arrivée (Pass QR)' : '💵 Cash on Arrival (QR Pass)'}</option>
+                <option value="partial">{language === 'fr' ? '⏳ Acompte versé / Solde à l\'arrivée' : '⏳ Deposit partial'}</option>
               </select>
             </div>
           </div>

@@ -3,11 +3,21 @@ export type DomainType =
   | 'residence'
   | 'restaurant'
   | 'clinic'
+  | 'doctor'
   | 'administration'
   | 'wellness'
   | 'other';
 
 export type UserRole = 'manager' | 'receptionist' | 'staff' | 'client';
+
+export interface ClientProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  memberNumber: string;
+  loyaltyPoints: number;
+}
 
 export interface DomainConfig {
   id: DomainType;

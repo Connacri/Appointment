@@ -21,9 +21,19 @@ import { HousekeepingView } from './components/HousekeepingView';
 import { BillingInvoicingView } from './components/BillingInvoicingView';
 import { ChannelManagerView } from './components/ChannelManagerView';
 import { ObjectBoxInspectorModal } from './components/ObjectBoxInspectorModal';
+import { QrPassModal } from './components/QrPassModal';
+import { QrScannerModal } from './components/QrScannerModal';
 
 const MainLayout: React.FC = () => {
-  const { activeView, isObjectBoxOpen, setIsObjectBoxOpen } = useApp();
+  const {
+    activeView,
+    isObjectBoxOpen,
+    setIsObjectBoxOpen,
+    activeQrPassBooking,
+    setActiveQrPassBooking,
+    isQrScannerOpen,
+    setIsQrScannerOpen,
+  } = useApp();
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-50 dark:bg-slate-950 font-sans">
@@ -70,6 +80,14 @@ const MainLayout: React.FC = () => {
       <ObjectBoxInspectorModal
         isOpen={isObjectBoxOpen}
         onClose={() => setIsObjectBoxOpen(false)}
+      />
+      <QrPassModal
+        booking={activeQrPassBooking}
+        onClose={() => setActiveQrPassBooking(null)}
+      />
+      <QrScannerModal
+        isOpen={isQrScannerOpen}
+        onClose={() => setIsQrScannerOpen(false)}
       />
     </div>
   );
