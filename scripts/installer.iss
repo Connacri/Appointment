@@ -1,6 +1,11 @@
+; Version is injected by CI: ISCC /DAppVersion=<package.json version>
+#ifndef AppVersion
+  #define AppVersion "0.0.0"
+#endif
+
 [Setup]
 AppName=Planning Oran
-AppVersion=1.0.0
+AppVersion={#AppVersion}
 AppPublisher=Planning Oran Lab
 DefaultDirName={autopf}\PlanningOran
 DefaultGroupName=Planning Oran
