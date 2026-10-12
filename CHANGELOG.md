@@ -6,6 +6,21 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-10-12
+
+### Fixed
+
+- **Artefacts de release désormais versionnés** (`Planning-Oran-vX.Y.Z.apk`, `-vX.Y.Z.aab`, launcher Windows, installeur Inno Setup, archive web). Les anciens noms codés en dur (`Planning-Oran-release.apk`, `Planning-Oran-v1.0.0.exe`, `Planning-Oran-Windows-v1.0.0.zip`) laissaient croire que la dernière version n'était pas publiée.
+- Version réellement injectée dans le launcher Windows (`AssemblyVersion` / `FileVersion`), dans l'installeur Inno Setup (`/DAppVersion`) et dans le manifeste Android (`versionName` / `versionCode`).
+- Titre de la GitHub Release aligné sur le tag (`vX.Y.Z`) et notes de version générées depuis la section correspondante de `CHANGELOG.md`.
+- `fail_on_unmatched_files` activé : la publication échoue désormais explicitement si un artefact attendu est absent (fini les copies silencieuses `|| true`).
+- Vérification cryptographique de la signature Android rendue bloquante (`apksigner` pour l'APK, `jarsigner` pour l'AAB) avec contrôle de l'empreinte `UPLOAD_CERT_SHA256`.
+
+### Added
+
+- Archive web versionnée `web-build-vX.Y.Z.zip` publiée dans la release.
+- Fichier de mapping R8 `mapping-vX.Y.Z.txt` publié dans la release (analyse des rapports de crash).
+
 ## [1.0.7] - 2026-10-12
 
 ### Changed
@@ -67,7 +82,8 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 - Version initiale : planning Gantt multi-secteurs (hôtellerie, clinique, restauration, spa), channel manager OTA (XML / iCal), pipeline CI/CD multicouche (Android APK/AAB signés, Windows EXE, Web sur GitHub Pages), trilingue fr/en/ar avec RTL, pages légales `/privacy/` et `/delete-account/`.
 
-[Unreleased]: https://github.com/Connacri/Appointment/compare/v1.0.7...HEAD
+[Unreleased]: https://github.com/Connacri/Appointment/compare/v1.0.8...HEAD
+[1.0.8]: https://github.com/Connacri/Appointment/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/Connacri/Appointment/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/Connacri/Appointment/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/Connacri/Appointment/compare/v1.0.4...v1.0.5

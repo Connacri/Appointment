@@ -1,7 +1,7 @@
 # OmniBook / Planning Oran — Planning de Réservation Hôtellerie, Clinique & Rendez-vous
 
 [![CI / Release](https://img.shields.io/badge/CI%2FCD-Verified%20Green-emerald)](https://github.com/Connacri/Appointment/actions)
-[![Release](https://img.shields.io/badge/release-v1.0.7-blue)](https://github.com/Connacri/Appointment/releases)
+[![Release](https://img.shields.io/badge/release-v1.0.8-blue)](https://github.com/Connacri/Appointment/releases)
 [![Package](https://img.shields.io/badge/Android%20Package-com.planning.oran-teal)](https://github.com/Connacri/Appointment)
 [![Platforms](https://img.shields.io/badge/Platforms-Android%20%7C%20Windows%20EXE%20%7C%20Web-orange)](https://github.com/Connacri/Appointment)
 [![Languages](https://img.shields.io/badge/languages-fr%20%7C%20en%20%7C%20ar%20(RTL)-purple)](https://github.com/Connacri/Appointment)
@@ -15,6 +15,19 @@
 🪟 [Windows Executable (.exe)](https://github.com/Connacri/Appointment/releases)  
 🔒 [Privacy Policy / Politique de Confidentialité](https://connacri.github.io/Appointment/privacy/)  
 🗑️ [Delete Account & Personal Data / Suppression de Compte](https://connacri.github.io/Appointment/delete-account/)
+
+### Artefacts de la dernière release (tous versionnés)
+
+| Fichier | Description |
+|---|---|
+| `Planning-Oran-v1.0.8.apk` | Android — APK signé, installation directe |
+| `Planning-Oran-v1.0.8.aab` | Android App Bundle — Google Play |
+| `Planning-Oran-Setup-Inno-v1.0.8.exe` | Windows — installeur Inno Setup |
+| `Planning-Oran-Setup-v1.0.8.exe` | Windows — launcher portable |
+| `Planning-Oran-Windows-v1.0.8.zip` | Windows — paquet portable complet |
+| `web-build-v1.0.8.zip` | Build web statique (GitHub Pages) |
+| `mapping-v1.0.8.txt` | Symboles R8 pour l'analyse des rapports de crash |
+| `SHA256SUMS.txt` | Sommes de contrôle SHA-256 |
 
 ---
 
