@@ -1,7 +1,7 @@
 # OmniBook / Planning Oran — Planning de Réservation Hôtellerie, Clinique & Rendez-vous
 
 [![CI / Release](https://img.shields.io/badge/CI%2FCD-Verified%20Green-emerald)](https://github.com/Connacri/Appointment/actions)
-[![Release](https://img.shields.io/badge/release-v1.0.4-blue)](https://github.com/Connacri/Appointment/releases)
+[![Release](https://img.shields.io/badge/release-v1.0.7-blue)](https://github.com/Connacri/Appointment/releases)
 [![Package](https://img.shields.io/badge/Android%20Package-com.planning.oran-teal)](https://github.com/Connacri/Appointment)
 [![Platforms](https://img.shields.io/badge/Platforms-Android%20%7C%20Windows%20EXE%20%7C%20Web-orange)](https://github.com/Connacri/Appointment)
 [![Languages](https://img.shields.io/badge/languages-fr%20%7C%20en%20%7C%20ar%20(RTL)-purple)](https://github.com/Connacri/Appointment)
