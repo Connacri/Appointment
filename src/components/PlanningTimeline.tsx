@@ -536,19 +536,18 @@ export const PlanningTimeline: React.FC = () => {
                     : ''
                 }`}
               >
-                {/* Day status indicator / highlight */}
+                {/* Day status indicator: Simple icon indicating today in the table */}
                 {day.isToday ? (
-                  <div className="flex items-center justify-between text-[9px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider bg-rose-100/90 dark:bg-rose-900/50 px-1.5 py-0.5 rounded border border-rose-300 dark:border-rose-700/50 shadow-2xs">
-                    <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block" />
-                      {language === 'fr' ? 'Aujourd’hui' : language === 'ar' ? 'اليوم' : 'Today'}
-                    </span>
-                    <span className="font-mono tabular-nums text-rose-700 dark:text-rose-200 text-[9px]">
-                      {currentTimeStr}
+                  <div
+                    className="flex items-center justify-center py-0.5"
+                    title={`${language === 'fr' ? 'Aujourd’hui' : language === 'ar' ? 'اليوم' : 'Today'} • ${currentTimeStr}`}
+                  >
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-100 dark:bg-rose-950/70 text-rose-600 dark:text-rose-400 border border-rose-300 dark:border-rose-700/60 shadow-2xs">
+                      <Clock size={12} className="animate-pulse" />
                     </span>
                   </div>
                 ) : (
-                  <div className="h-3" />
+                  <div className="h-5" />
                 )}
 
                 {/* Day Number and Weekday */}
@@ -844,7 +843,7 @@ export const PlanningTimeline: React.FC = () => {
 
           {/* Mobile Touch Action Sheet for Smartphone Tap */}
           {activePreviewBooking && activePreviewBooking.isMobileSheet && (
-            <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-2xs flex items-end justify-center p-0 sm:p-4">
+            <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-2xs flex items-end justify-center p-0 sm:p-4">
               <div className="w-full sm:max-w-md bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-2xl p-4 shadow-2xl space-y-3 animate-in slide-in-from-bottom-5">
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
                   <div className="flex items-center gap-2">

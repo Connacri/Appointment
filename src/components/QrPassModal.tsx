@@ -161,7 +161,7 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
   const changeDue = Math.max(0, cashAmountGiven - booking.totalPrice);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/70 backdrop-blur-xs animate-in fade-in overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 bg-black/70 backdrop-blur-xs animate-in fade-in overflow-y-auto">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden flex flex-col my-auto max-h-[95vh]">
         {/* Pass Top Banner */}
         <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 p-5 text-white relative">
