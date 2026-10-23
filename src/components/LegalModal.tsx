@@ -77,7 +77,7 @@ export const LegalModal: React.FC = () => {
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <a
-                    href={`/privacy/${language}/`}
+                    href={`./privacy/${language}/`}
                     target="_blank"
                     rel="noreferrer"
                     className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-between font-medium text-slate-700 dark:text-slate-200"
@@ -87,7 +87,7 @@ export const LegalModal: React.FC = () => {
                   </a>
 
                   <a
-                    href={`/delete-account/${language}/`}
+                    href={`./delete-account/${language}/`}
                     target="_blank"
                     rel="noreferrer"
                     className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-between font-medium text-slate-700 dark:text-slate-200"

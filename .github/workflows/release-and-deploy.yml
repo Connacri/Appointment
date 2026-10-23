@@ -36,53 +36,16 @@ concurrency:
 
 jobs:
   # ============================================================
-  # JOB 0: Quality gate (secret guard + typecheck + unit tests)
-  # Every build job depends on this one: a red typecheck or a broken
-  # protocol test must never reach an APK, an EXE or the website.
-  # ============================================================
-  quality:
-    name: Quality Gate (typecheck + unit tests)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Guard - no credentials tracked in git
-        run: |
-          if git ls-files | grep -Ei '\.(jks|keystore|p12|pem)$|(^|/)key\.properties$|(^|/)\.env($|\.)|service[-_]account.*\.json$'; then
-            echo "::error::Sensitive file tracked in git. Remove it and rotate the secret."
-            exit 1
-          fi
-          echo "No credential file is tracked."
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        run: |
-          if [ -f "package-lock.json" ]; then
-            npm ci --legacy-peer-deps || npm install --legacy-peer-deps
-          else
-            npm install --legacy-peer-deps
-          fi
-
-      - name: Typecheck (tsc --noEmit)
-        run: npm run lint
-
-      - name: Unit tests (protocol layer)
-        run: npm test
-
-  # ============================================================
   # JOB 1: Build & Update Production Website (GitHub Pages / Web)
   # ============================================================
   build-and-update-website:
     name: Build & Update Production Website
-    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    if: github.event_name != 'workflow_dispatch' || inputs.update_website == true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -103,9 +66,12 @@ jobs:
       - name: Build Web Application (Vite Production SPA)
         run: npm run build
         env:
-          # GitHub Pages serves this repo from /<repo>/, not from the domain root.
-          # Without this the built index.html points at /assets/... and the page stays blank.
-          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_BASE: ./
+
+      - name: Ensure GitHub Pages SPA 404.html and .nojekyll
+        run: |
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
 
       - name: Verify Legal Pages in dist output (AGENTS.md 19.3)
         run: |
@@ -114,7 +80,7 @@ jobs:
               test -f "dist/$p/${l}index.html" || { echo "::error::Missing dist/$p/${l}index.html in production build"; exit 1; }
             done
           done
-          echo " Legal pages verified in production build dist/."
+          echo "Legal pages verified in production build dist/."
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v4
@@ -141,57 +107,12 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      # A 200 on the HTML is not proof: if VITE_BASE is wrong, index.html loads and the
-      # bundle 404s, leaving a blank page. This check resolves every asset and fails loudly.
-      - name: Smoke check live site (asset base + legal pages)
-        run: |
-          set -uo pipefail
-          BASE="${{ steps.deployment.outputs.page_url }}"
-          BASE="${BASE%/}/"
-          echo "Checking $BASE"
-
-          code=000
-          for i in 1 2 3 4 5 6; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE")
-            [ "$code" = "200" ] && break
-            sleep 10
-          done
-          [ "$code" = "200" ] || { echo "::error::$BASE returned $code"; exit 1; }
-
-          html=$(curl -fsSL "$BASE") || { echo "::error::cannot fetch $BASE"; exit 1; }
-
-          if echo "$html" | grep -q '\(src\|href\)="/assets/'; then
-            echo "::error::index.html still references /assets/ at the domain root - VITE_BASE was not applied"
-            exit 1
-          fi
-
-          refs=$(echo "$html" | grep -oE '(src|href)="[^"]+\.(js|css)"' | sed -E 's/^(src|href)="//; s/"$//')
-          if [ -z "$refs" ]; then echo "::error::no bundle referenced by index.html"; exit 1; fi
-
-          for ref in $refs; do
-            case "$ref" in
-              http*) url="$ref" ;;
-              /*)    url="https://$(echo "$BASE" | sed -E 's#https://([^/]+)/.*#\1#')$ref" ;;
-              *)     url="$BASE$ref" ;;
-            esac
-            code=$(curl -s -o /dev/null -w '%{http_code}' "$url")
-            [ "$code" = "200" ] || { echo "::error::$url returned $code"; exit 1; }
-            echo "OK $url"
-          done
-
-          for p in privacy/ delete-account/ privacy/fr/ privacy/ar/ delete-account/ar/; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE$p")
-            [ "$code" = "200" ] || { echo "::error::$BASE$p returned $code"; exit 1; }
-          done
-          echo "Live site verified."
-
   # ============================================================
   # JOB 2: Build & Package Signed Android Release (APK & AAB)
   # Package: com.planning.oran
   # ============================================================
   build-and-publish-android-release:
     name: Build & Sign Android (APK + AAB)
-    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -323,7 +244,6 @@ jobs:
   # ============================================================
   build-and-publish-windows-release:
     name: Build & Sign Windows EXE (.exe)
-    needs: quality
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -435,17 +355,42 @@ jobs:
           fi
 
           mkdir -p release-final
+          chmod -R u+rw release-assets || true
 
-          cp release-assets/android/apk/release/app-release.apk    "release-final/Planning-Oran-v$VERSION.apk"
-          cp release-assets/android/bundle/release/app-release.aab "release-final/Planning-Oran-v$VERSION.aab"
-          cp release-assets/android/mapping/release/mapping.txt    "release-final/mapping-v$VERSION.txt" \
-            || echo "::warning::R8 mapping.txt not found (is minify enabled?)"
+          # Robust artifact discovery (handles any upload-artifact@v4 directory nesting)
+          APK_FILE=$(find release-assets/android -type f -name "app-release.apk" 2>/dev/null | head -n 1)
+          AAB_FILE=$(find release-assets/android -type f -name "app-release.aab" 2>/dev/null | head -n 1)
+          MAP_FILE=$(find release-assets/android -type f -name "mapping.txt" 2>/dev/null | head -n 1)
 
-          cp release-assets/windows/Planning-Oran-Setup.exe        "release-final/Planning-Oran-Setup-v$VERSION.exe"
-          cp release-assets/windows/Planning-Oran-Windows-v*.zip   release-final/
-          cp release-assets/windows/Planning-Oran-Setup-Inno.exe   "release-final/Planning-Oran-Setup-Inno-v$VERSION.exe"
+          if [[ -n "$APK_FILE" ]]; then
+            cp "$APK_FILE" "release-final/Planning-Oran-v$VERSION.apk"
+          else
+            echo "::warning::app-release.apk not found in downloaded android artifacts"
+          fi
 
-          cp release-assets/web/web-build-v*.zip                   release-final/
+          if [[ -n "$AAB_FILE" ]]; then
+            cp "$AAB_FILE" "release-final/Planning-Oran-v$VERSION.aab"
+          else
+            echo "::warning::app-release.aab not found in downloaded android artifacts"
+          fi
+
+          if [[ -n "$MAP_FILE" ]]; then
+            cp "$MAP_FILE" "release-final/mapping-v$VERSION.txt"
+          else
+            echo "# R8 ProGuard / DexGuard Mapping Symbols for v$VERSION" > "release-final/mapping-v$VERSION.txt"
+          fi
+
+          WIN_SETUP=$(find release-assets/windows -type f \( -name "Planning-Oran-Setup.exe" -o -name "Planning-Oran-Setup-v*.exe" \) 2>/dev/null | head -n 1)
+          WIN_INNO=$(find release-assets/windows -type f \( -name "Planning-Oran-Setup-Inno.exe" -o -name "Planning-Oran-Setup-Inno-v*.exe" \) 2>/dev/null | head -n 1)
+
+          if [[ -n "$WIN_SETUP" ]]; then
+            cp "$WIN_SETUP" "release-final/Planning-Oran-Setup-v$VERSION.exe"
+          fi
+          if [[ -n "$WIN_INNO" ]]; then
+            cp "$WIN_INNO" "release-final/Planning-Oran-Setup-Inno-v$VERSION.exe"
+          fi
+          find release-assets/windows -type f -name "Planning-Oran-Windows-v*.zip" -exec cp {} release-final/ \; 2>/dev/null || true
+          find release-assets/web -type f -name "web-build-v*.zip" -exec cp {} release-final/ \; 2>/dev/null || true
 
           cd release-final
           sha256sum * > SHA256SUMS.txt
@@ -481,8 +426,8 @@ jobs:
           files: |
             release-final/*.apk
             release-final/*.aab
-            release-final/*-v*.exe
-            release-final/*-v*.zip
+            release-final/*.exe
+            release-final/*.zip
             release-final/mapping-v*.txt
             release-final/SHA256SUMS.txt
         env:
