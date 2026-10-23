@@ -61,6 +61,7 @@ interface AppContextType {
   updateHousekeepingStatus: (resourceId: string, status: 'clean' | 'cleaning' | 'dirty' | 'out_of_order') => void;
   checkConflict: (resourceId: string, startDate: string, endDate: string, excludeBookingId?: string) => boolean;
   addBooking: (booking: Omit<TimelineBooking, 'id'>) => { success: boolean; error?: string; booking?: TimelineBooking };
+  updateBooking: (id: string, updates: Partial<TimelineBooking>) => void;
   updateBookingStatus: (id: string, status: BookingStatus) => void;
   deleteBooking: (id: string) => void;
   confirmCheckInAndCashPayment: (
@@ -93,12 +94,12 @@ interface AppContextType {
   activeView: ActiveAppView;
   setActiveView: (view: ActiveAppView) => void;
 
-  // Rich Hotel PMS State
+  // PMS Hotel Complex & Multi-Currency State
   establishments: HotelEstablishment[];
   selectedEstablishmentId: string | 'all';
   setSelectedEstablishmentId: (id: string | 'all') => void;
-  currency: 'DA' | 'EUR';
-  setCurrency: (c: 'DA' | 'EUR') => void;
+  currency: 'DA' | 'DZD' | 'EUR' | 'USD' | 'RMB' | 'GBP' | 'SAR' | string;
+  setCurrency: (c: string) => void;
   tasks: PmsTask[];
   addTask: (task: Omit<PmsTask, 'id'>) => void;
   updateTaskStatus: (id: string, status: PmsTask['status']) => void;
@@ -134,9 +135,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return (localStorage.getItem('omnibook_role') as UserRole) || 'manager';
   });
 
+  const isViewAllowedForDomain = (view: ActiveAppView, domain: DomainType) => {
+    switch (view) {
+      case 'channels':
+      case 'housekeeping':
+        return domain === 'hotel' || domain === 'residence';
+      case 'pricing':
+        return domain === 'hotel' || domain === 'residence' || domain === 'wellness';
+      default:
+        return true;
+    }
+  };
+
   const setCurrentDomain = (d: DomainType) => {
     setCurrentDomainState(d);
     localStorage.setItem('omnibook_domain', d);
+    if (!isViewAllowedForDomain(activeView, d)) {
+      setActiveView('planning');
+    }
   };
 
   const setCurrentRole = (r: UserRole) => {
@@ -157,14 +173,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [activeView, setActiveView] = useState<ActiveAppView>('planning');
 
-  // PMS Hotel Complex & Currency
+  // PMS Hotel Complex & Multi-Currency (DZD, EUR, USD, RMB, GBP, SAR)
   const [establishments] = useState<HotelEstablishment[]>(initialEstablishments);
   const [selectedEstablishmentId, setSelectedEstablishmentId] = useState<string | 'all'>('all');
-  const [currency, setCurrencyState] = useState<'DA' | 'EUR'>(() => {
-    return (localStorage.getItem('omnibook_currency') as 'DA' | 'EUR') || 'DA';
+  const [currency, setCurrencyState] = useState<string>(() => {
+    return localStorage.getItem('omnibook_currency') || 'DA';
   });
 
-  const setCurrency = (c: 'DA' | 'EUR') => {
+  const setCurrency = (c: string) => {
     setCurrencyState(c);
     localStorage.setItem('omnibook_currency', c);
   };
@@ -423,6 +439,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setBookings((prev) => [newBkg, ...prev]);
     return { success: true, booking: newBkg };
+  };
+
+  const updateBooking = (id: string, updates: Partial<TimelineBooking>) => {
+    setBookings((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, ...updates } : b))
+    );
+    if (selectedBooking && selectedBooking.id === id) {
+      setSelectedBooking((prev) => (prev ? { ...prev, ...updates } : null));
+    }
   };
 
   const updateBookingStatus = (id: string, status: BookingStatus) => {
@@ -753,6 +778,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateHousekeepingStatus,
         checkConflict,
         addBooking,
+        updateBooking,
         updateBookingStatus,
         deleteBooking,
         confirmCheckInAndCashPayment,

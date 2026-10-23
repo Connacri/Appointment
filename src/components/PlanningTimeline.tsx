@@ -27,6 +27,7 @@ import { initialResourceGroups } from '../data/mockData';
 import { ResourceGroup, ResourceItem, TimelineBooking, BookingStatus } from '../types/booking';
 import { statusConfig } from './LegendBar';
 import { downloadICS } from '../utils/icsExport';
+import { useTimelineSync } from '../hooks/useTimelineSync';
 
 export const PlanningTimeline: React.FC = () => {
   const {
@@ -105,42 +106,39 @@ export const PlanningTimeline: React.FC = () => {
   };
 
   const scrollToToday = () => {
-    const now = new Date();
-    const realTodayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    
-    const existingIdx = timelineDays.findIndex((d) => d.dateStr === realTodayStr);
-
-    if (existingIdx >= 0 && scrollContainerRef.current) {
-      // Today is in the current visible range, scroll smoothly to it
-      const targetScroll = Math.max(0, existingIdx * colWidth - (isMobileScreen ? 40 : 80));
-      const dirMultiplier = language === 'ar' ? -1 : 1;
-      scrollContainerRef.current.scrollTo({ left: targetScroll * dirMultiplier, behavior: 'smooth' });
+    if (timelineSync.isTodayInRange) {
+      timelineSync.scrollToNow();
     } else {
-      // Today is outside current view: reset base date so today is at column 1 (base = today - 1 day)
+      const now = new Date();
       const yesterday = new Date(now);
       yesterday.setDate(now.getDate() - 1);
       const targetBaseStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
       setCurrentBaseDate(targetBaseStr);
-
       setTimeout(() => {
-        if (scrollContainerRef.current) {
-          const dirMultiplier = language === 'ar' ? -1 : 1;
-          const targetScroll = Math.max(0, 1 * colWidth - (isMobileScreen ? 40 : 80));
-          scrollContainerRef.current.scrollTo({ left: targetScroll * dirMultiplier, behavior: 'smooth' });
-        }
-      }, 50);
+        timelineSync.scrollToNow();
+      }, 80);
     }
   };
 
   // Generate date list based on currentBaseDate & mode
   const totalDays = dateRangeMode === 'two_weeks' ? 14 : 28;
 
+  // Global Timeline Sync Hook: observes date state changes globally to keep
+  // the 'current time' red line and 'today' view header perfectly synchronized.
+  const timelineSync = useTimelineSync({
+    currentBaseDate,
+    totalDays,
+    colWidth,
+    scrollContainerRef,
+    language,
+    direction: language === 'ar' ? 'rtl' : 'ltr',
+  });
+
   const timelineDays = useMemo(() => {
     const [y, m, d] = currentBaseDate.split('-').map(Number);
     const dates: { dateStr: string; dayNum: number; dayName: string; isWeekend: boolean; isToday: boolean }[] = [];
 
-    const now = new Date();
-    const realTodayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const realTodayStr = timelineSync.todayDateStr;
 
     const dayFormatter = new Intl.DateTimeFormat(
       language === 'fr' ? 'fr-FR' : language === 'ar' ? 'ar-EG' : 'en-US',
@@ -169,27 +167,11 @@ export const PlanningTimeline: React.FC = () => {
       });
     }
     return dates;
-  }, [currentBaseDate, totalDays, language]);
+  }, [currentBaseDate, totalDays, language, timelineSync.todayDateStr]);
 
-  const todayIndex = useMemo(() => {
-    return timelineDays.findIndex((d) => d.isToday);
-  }, [timelineDays]);
-
-  const [currentTimeStr, setCurrentTimeStr] = useState(() => {
-    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  });
-
-  const currentHourFraction = useMemo(() => {
-    const now = new Date();
-    return (now.getHours() * 60 + now.getMinutes()) / 1440;
-  }, [currentTimeStr]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTimeStr(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    }, 15000);
-    return () => clearInterval(interval);
-  }, []);
+  const todayIndex = timelineSync.todayIndex;
+  const currentTimeStr = timelineSync.currentTimeStr;
+  const currentHourFraction = timelineSync.currentHourFraction;
 
   // Filter resource groups strictly by currentDomain (NEVER MIX) & searchQuery & establishment
   const filteredGroups = useMemo(() => {
@@ -521,19 +503,19 @@ export const PlanningTimeline: React.FC = () => {
 
         {/* RIGHT AREA: Timeline Grid with Horizontal Scrolling */}
         <div className="flex-1 flex flex-col min-w-max relative">
-          {/* Live Current Time Line Marker (Active ONLY when real today is in view) */}
-          {todayIndex >= 0 && (
+          {/* Live Current Time Line Marker: Dynamic offset relative to timeline's scroll position and container width */}
+          {timelineSync.isTodayInRange && (
             <div
-              className="absolute top-0 bottom-0 pointer-events-none z-30 flex flex-col items-center"
+              className="absolute top-0 bottom-0 pointer-events-none z-30 flex flex-col items-center transition-[left] duration-300"
               style={{
-                left: `${(todayIndex + currentHourFraction) * colWidth}px`,
+                left: `${timelineSync.absoluteGridX}px`,
                 transform: 'translateX(-50%)',
               }}
             >
-              {/* Floating Pill Time Badge: Positioned at header-grid threshold (top-16 md:top-20 -mt-3.5) with high contrast and shadow so it is never clipped */}
+              {/* Floating Pill Time Badge: Positioned at header-grid threshold (top-16 md:top-20 -mt-3.5) with live pulse */}
               <div className="sticky top-16 md:top-20 -mt-3.5 z-40 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono text-white bg-rose-600 shadow-md shadow-rose-600/50 whitespace-nowrap flex items-center gap-1.5 border-2 border-white dark:border-slate-900 select-none">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                <span>{currentTimeStr}</span>
+                <span>{timelineSync.currentTimeStr}</span>
               </div>
               {/* Continuous vertical red line passing down through the whole grid */}
               <div className="w-0.5 flex-1 bg-rose-500/90 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
@@ -671,6 +653,18 @@ export const PlanningTimeline: React.FC = () => {
 
                             const statusStyle = statusConfig[bkg.status] || statusConfig.confirmed;
 
+                            const adults = bkg.adults ?? (bkg.customMetadata?.hotelAdults) ?? (bkg.customMetadata?.residenceOccupants) ?? 1;
+                            const children = bkg.children ?? (bkg.customMetadata?.hotelChildren) ?? 0;
+                            const occupantsCount = adults + children;
+
+                            const isAlgerian = bkg.guestType === 'algerian' || bkg.nationality === 'Algérienne' || bkg.nationality === 'Algerian' || bkg.nationality === 'DZ';
+                            const isForeigner = bkg.guestType === 'foreigner' || (!isAlgerian && !!bkg.nationality);
+                            const nationalityBadge = isAlgerian ? '🇩🇿' : (isForeigner ? '🌐' : '');
+
+                            const bookingCurrency = bkg.paymentCurrency || currency;
+                            const currencySymbol = bookingCurrency === 'DA' || bookingCurrency === 'DZD' ? 'DA' : bookingCurrency === 'EUR' ? '€' : bookingCurrency === 'USD' ? '$' : bookingCurrency === 'RMB' ? '¥' : bookingCurrency === 'GBP' ? '£' : bookingCurrency === 'SAR' ? 'SAR' : bookingCurrency;
+                            const displayPrice = bkg.originalCurrencyAmount || bkg.totalPrice;
+
                             return (
                               <div
                                 key={bkg.id}
@@ -705,109 +699,69 @@ export const PlanningTimeline: React.FC = () => {
                                   left: `${leftOffset + 3}px`,
                                   width: `${barWidth}px`,
                                 }}
-                                className={`absolute top-1.5 h-9 rounded-md px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-sm hover:brightness-105 active:scale-[0.98] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
-                              >
-                                <div className="flex items-center gap-1 truncate">
-                                  <Globe size={11} className="shrink-0 opacity-80" />
-                                  <span className="text-[10px] md:text-[11px] font-semibold truncate tracking-tight">
-                                    {bkg.guestName}
-                                  </span>
-                                </div>
-                                <span className="text-[9px] md:text-[10px] opacity-90 font-mono shrink-0 ml-1 hidden sm:inline tabular-nums">
-                                  {bkg.totalPrice}€
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+                                    className={`absolute top-1.5 h-9 rounded-md px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-sm hover:brightness-105 active:scale-[0.98] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
+                                  >
+                                    <div className="flex items-center gap-1.5 truncate min-w-0">
+                                      {/* Person icons: if multiple occupants in the room, render multiple person icons */}
+                                      <div
+                                        className="flex items-center -space-x-1 shrink-0"
+                                        title={`${occupantsCount} occupant(s) : ${adults} adulte(s)${children > 0 ? `, ${children} enfant(s)` : ''}`}
+                                      >
+                                        {Array.from({ length: Math.min(occupantsCount, 4) }).map((_, idx) => (
+                                          <User
+                                            key={idx}
+                                            size={11}
+                                            className={`shrink-0 ${
+                                              idx > 0 ? 'opacity-90 text-amber-300' : 'opacity-100'
+                                            }`}
+                                          />
+                                        ))}
+                                        {occupantsCount > 4 && (
+                                          <span className="text-[8px] font-bold font-mono pl-0.5">+{occupantsCount - 4}</span>
+                                        )}
+                                      </div>
 
-      {/* Floating Tooltip Card for Desktop */}
-      {activePreviewBooking && !activePreviewBooking.isMobileSheet && activePreviewBooking.x !== undefined && (
-        <div
-          style={{
-            position: 'fixed',
-            left: `${Math.min(window.innerWidth - 260, Math.max(10, activePreviewBooking.x))}px`,
-            top: `${Math.min(window.innerHeight - 240, activePreviewBooking.y ?? 100)}px`,
-          }}
-          className="w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-3 z-50 text-xs animate-in fade-in zoom-in-95 pointer-events-auto"
-          onMouseEnter={() => {}}
-          onMouseLeave={() => setActivePreviewBooking(null)}
-        >
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 mb-2">
-            <span className="font-bold text-slate-900 dark:text-white truncate">
-              {activePreviewBooking.booking.resourceName}
-            </span>
-            <span
-              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                statusConfig[activePreviewBooking.booking.status]?.pillBg
-              }`}
-            >
-              {statusConfig[activePreviewBooking.booking.status]?.label[language] ||
-                activePreviewBooking.booking.status}
-            </span>
-          </div>
+                                      {/* Nationality indicator */}
+                                      {nationalityBadge && (
+                                        <span className="text-[10px] shrink-0" title={isAlgerian ? 'Locataire Algérien (CNI)' : 'Locataire Étranger (Devises / Passeport)'}>
+                                          {nationalityBadge}
+                                        </span>
+                                      )}
 
-          <div className="space-y-1 text-slate-600 dark:text-slate-300">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Invité :</span>
-              <span className="font-semibold text-blue-600 dark:text-blue-400 truncate">
-                {activePreviewBooking.booking.guestName}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between font-mono text-[11px]">
-              <span className="text-slate-400 font-sans">Dates :</span>
-              <span>
-                {activePreviewBooking.booking.startDate} → {activePreviewBooking.booking.endDate}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
-              <span className="font-bold text-slate-800 dark:text-slate-200">Total :</span>
-              <span className="font-bold text-slate-900 dark:text-white font-mono text-xs tabular-nums">
-                {activePreviewBooking.booking.totalPrice} €
-              </span>
+                                      <span className="text-[10px] md:text-[11px] font-semibold truncate tracking-tight">
+                                        {bkg.guestName}
+                                      </span>
+                                    </div>
+                                    <span className="text-[9px] md:text-[10px] opacity-90 font-mono shrink-0 ml-1 hidden sm:inline tabular-nums">
+                                      {displayPrice} {currencySymbol}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
-          <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
-            <button
-              onClick={() => {
-                setSelectedBooking(activePreviewBooking.booking);
-                setActivePreviewBooking(null);
+          {/* Floating Tooltip Card for Desktop */}
+          {activePreviewBooking && !activePreviewBooking.isMobileSheet && activePreviewBooking.x !== undefined && (
+            <div
+              style={{
+                position: 'fixed',
+                left: `${Math.min(window.innerWidth - 270, Math.max(10, activePreviewBooking.x))}px`,
+                top: `${Math.min(window.innerHeight - 250, activePreviewBooking.y ?? 100)}px`,
               }}
-              className="flex-1 py-1 bg-blue-600 text-white rounded text-center font-medium hover:bg-blue-700 transition-colors"
+              className="w-68 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-3 z-50 text-xs animate-in fade-in zoom-in-95 pointer-events-auto"
+              onMouseEnter={() => {}}
+              onMouseLeave={() => setActivePreviewBooking(null)}
             >
-              Détails
-            </button>
-            <button
-              onClick={() => {
-                downloadICS(activePreviewBooking.booking);
-              }}
-              className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-white border border-slate-200 dark:border-slate-700 rounded transition-colors"
-              title="Exporter .ICS"
-            >
-              <Download size={13} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile Touch Action Sheet for Smartphone Tap */}
-      {activePreviewBooking && activePreviewBooking.isMobileSheet && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-2xs flex items-end justify-center p-0 sm:p-4">
-          <div className="w-full sm:max-w-md bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-2xl p-4 shadow-2xl space-y-3 animate-in slide-in-from-bottom-5">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-900 dark:text-white text-sm">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 mb-2">
+                <span className="font-bold text-slate-900 dark:text-white truncate">
                   {activePreviewBooking.booking.resourceName}
                 </span>
                 <span
@@ -819,40 +773,135 @@ export const PlanningTimeline: React.FC = () => {
                     activePreviewBooking.booking.status}
                 </span>
               </div>
-              <button
-                onClick={() => setActivePreviewBooking(null)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                <X size={16} />
-              </button>
-            </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl">
-              <div>
-                <span className="text-[10px] text-slate-400 block">Invité / Patient :</span>
-                <span className="font-bold text-slate-900 dark:text-white truncate block">
-                  {activePreviewBooking.booking.guestName}
-                </span>
+              <div className="space-y-1.5 text-slate-600 dark:text-slate-300">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Locataire :</span>
+                  <div className="flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 truncate">
+                    <span>{activePreviewBooking.booking.guestType === 'algerian' ? '🇩🇿' : '🌐'}</span>
+                    <span className="truncate">{activePreviewBooking.booking.guestName}</span>
+                  </div>
+                </div>
+
+                {/* Occupants count with icons */}
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">Occupants :</span>
+                  <div className="flex items-center gap-1 font-medium text-slate-800 dark:text-slate-200">
+                    <div className="flex items-center -space-x-1">
+                      {Array.from({
+                        length: Math.min(
+                          (activePreviewBooking.booking.adults || 1) + (activePreviewBooking.booking.children || 0),
+                          4
+                        ),
+                      }).map((_, i) => (
+                        <User key={i} size={11} className={i > 0 ? 'text-amber-400' : 'text-blue-500'} />
+                      ))}
+                    </div>
+                    <span>
+                      {(activePreviewBooking.booking.adults || 1) + (activePreviewBooking.booking.children || 0)} pers.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between font-mono text-[11px]">
+                  <span className="text-slate-400 font-sans">Dates :</span>
+                  <span>
+                    {activePreviewBooking.booking.startDate} → {activePreviewBooking.booking.endDate}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
+                  <span className="font-bold text-slate-800 dark:text-slate-200">Règlement :</span>
+                  <span className="font-bold text-slate-900 dark:text-white font-mono text-xs tabular-nums">
+                    {activePreviewBooking.booking.originalCurrencyAmount || activePreviewBooking.booking.totalPrice}{' '}
+                    {activePreviewBooking.booking.paymentCurrency || currency}
+                  </span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-slate-400 block">Montant :</span>
-                <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400 block tabular-nums">
-                  {activePreviewBooking.booking.totalPrice} €
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 block">Arrivée :</span>
-                <span className="font-mono text-slate-700 dark:text-slate-300 block">
-                  {activePreviewBooking.booking.startDate}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 block">Départ :</span>
-                <span className="font-mono text-slate-700 dark:text-slate-300 block">
-                  {activePreviewBooking.booking.endDate}
-                </span>
+
+              <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
+                <button
+                  onClick={() => {
+                    setSelectedBooking(activePreviewBooking.booking);
+                    setActivePreviewBooking(null);
+                  }}
+                  className="flex-1 py-1 bg-blue-600 text-white rounded text-center font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Fiche & Police
+                </button>
+                <button
+                  onClick={() => {
+                    downloadICS(activePreviewBooking.booking);
+                  }}
+                  className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-white border border-slate-200 dark:border-slate-700 rounded transition-colors"
+                  title="Exporter .ICS"
+                >
+                  <Download size={13} />
+                </button>
               </div>
             </div>
+          )}
+
+          {/* Mobile Touch Action Sheet for Smartphone Tap */}
+          {activePreviewBooking && activePreviewBooking.isMobileSheet && (
+            <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-2xs flex items-end justify-center p-0 sm:p-4">
+              <div className="w-full sm:max-w-md bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-2xl p-4 shadow-2xl space-y-3 animate-in slide-in-from-bottom-5">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-900 dark:text-white text-sm">
+                      {activePreviewBooking.booking.resourceName}
+                    </span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                        statusConfig[activePreviewBooking.booking.status]?.pillBg
+                      }`}
+                    >
+                      {statusConfig[activePreviewBooking.booking.status]?.label[language] ||
+                        activePreviewBooking.booking.status}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setActivePreviewBooking(null)}
+                    className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Locataire :</span>
+                    <span className="font-bold text-slate-900 dark:text-white truncate block">
+                      {activePreviewBooking.booking.guestType === 'algerian' ? '🇩🇿 ' : '🌐 '}
+                      {activePreviewBooking.booking.guestName}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Règlement :</span>
+                    <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400 block tabular-nums">
+                      {activePreviewBooking.booking.originalCurrencyAmount || activePreviewBooking.booking.totalPrice}{' '}
+                      {activePreviewBooking.booking.paymentCurrency || currency}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Arrivée :</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300 block">
+                      {activePreviewBooking.booking.startDate}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Départ :</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300 block">
+                      {activePreviewBooking.booking.endDate}
+                    </span>
+                  </div>
+                  <div className="col-span-2 pt-1 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">Occupants chambre :</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {(activePreviewBooking.booking.adults || 1) + (activePreviewBooking.booking.children || 0)} pers. ({activePreviewBooking.booking.adults || 1} adultes)
+                    </span>
+                  </div>
+                </div>
 
             <div className="flex items-center gap-2 pt-1">
               <button

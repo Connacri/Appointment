@@ -227,30 +227,21 @@ export const TopBar: React.FC = () => {
           </span>
         </button>
 
-        {/* Currency Switcher: DA / EUR */}
+        {/* Multi-Currency Switcher: DZD (DA) / EUR / USD / RMB / GBP / SAR */}
         <div className="flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 text-xs font-semibold">
-          <button
-            onClick={() => setCurrency('DA')}
-            className={`px-1.5 py-1 rounded transition-colors ${
-              currency === 'DA'
-                ? 'bg-amber-500 text-white shadow-xs font-bold'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-            title="Dinar Algérien (DA)"
+          <select
+            value={currency === 'DZD' ? 'DA' : currency}
+            onChange={(e) => setCurrency(e.target.value)}
+            className="bg-transparent text-slate-800 dark:text-slate-100 font-bold px-1.5 py-0.5 rounded cursor-pointer focus:outline-none text-[11px]"
+            title="Devise d'affichage et de facturation"
           >
-            DA
-          </button>
-          <button
-            onClick={() => setCurrency('EUR')}
-            className={`px-1.5 py-1 rounded transition-colors ${
-              currency === 'EUR'
-                ? 'bg-blue-600 text-white shadow-xs font-bold'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-            title="Euro (€)"
-          >
-            EUR
-          </button>
+            <option value="DA">🇩🇿 DA (DZD)</option>
+            <option value="EUR">🇪🇺 EUR (€)</option>
+            <option value="USD">🇺🇸 USD ($)</option>
+            <option value="RMB">🇨🇳 RMB (¥)</option>
+            <option value="GBP">🇬🇧 GBP (£)</option>
+            <option value="SAR">🇸🇦 SAR (﷼)</option>
+          </select>
         </div>
 
         {/* Quick Turnaround Alert Badges */}

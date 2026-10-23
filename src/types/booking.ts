@@ -146,6 +146,18 @@ export interface TimelineBooking {
   payments?: { amount: number; method: 'cash' | 'cib' | 'transfer'; date: string }[];
   identityNumber?: string;
   nationality?: string;
+  guestType?: 'algerian' | 'foreigner';
+  idType?: 'cni' | 'nin' | 'passport';
+  identityType?: 'cni' | 'nin' | 'passport';
+  passportNumber?: string;
+  visaNumber?: string;
+  entryDateInCountry?: string;
+  wilayaOfOrigin?: string;
+  paymentCurrency?: 'DZD' | 'EUR' | 'USD' | 'RMB' | 'GBP' | 'SAR' | string;
+  originalCurrencyAmount?: number;
+  currencyRateToDzd?: number;
+  paymentMethodType?: 'cash_dzd' | 'cib' | 'edahabia' | 'cash_forex' | 'card_international' | 'bank_transfer';
+  occupantsList?: { name: string; isAdult: boolean; idDoc?: string }[];
   customMetadata?: Record<string, any>;
 }
 

@@ -23,6 +23,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
 import { domainConfigs } from '../data/mockData';
+import { DomainType } from '../types/booking';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -41,7 +42,7 @@ export const Sidebar: React.FC = () => {
 
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // Strictly filter navigation items by Role to never mix responsibilities
+  // Strictly filter navigation items by Role AND Domain to NEVER mix establishment screens
   const allNavItems = [
     {
       id: 'planning',
@@ -49,60 +50,93 @@ export const Sidebar: React.FC = () => {
       icon: CalendarDays,
       view: 'planning' as const,
       roles: ['manager', 'receptionist', 'staff', 'client'],
+      domains: ['hotel', 'residence', 'restaurant', 'clinic', 'doctor', 'administration', 'wellness', 'other'] as DomainType[],
     },
     {
       id: 'analytics',
-      label: language === 'fr' ? 'Booking Analytics (D3)' : language === 'ar' ? 'تحليلات الحجوزات D3' : 'Booking Analytics (D3)',
+      label:
+        currentDomain === 'clinic' || currentDomain === 'doctor'
+          ? (language === 'fr' ? 'Analytique Médicale (D3)' : 'Clinical Analytics (D3)')
+          : currentDomain === 'restaurant'
+          ? (language === 'fr' ? 'Analytique Restauration (D3)' : 'Restaurant Analytics (D3)')
+          : (language === 'fr' ? 'Booking Analytics (D3)' : 'Booking Analytics (D3)'),
       icon: BarChart3,
       view: 'analytics' as const,
       roles: ['manager'],
+      domains: ['hotel', 'residence', 'restaurant', 'clinic', 'doctor', 'wellness'] as DomainType[],
     },
     {
       id: 'billing',
-      label: language === 'fr' ? 'Facturation & Devis' : language === 'ar' ? 'الفواتير والعروض' : 'Billing & Quotes',
+      label:
+        currentDomain === 'clinic' || currentDomain === 'doctor'
+          ? (language === 'fr' ? 'Honoraires & Factures' : 'Medical Billing')
+          : currentDomain === 'restaurant'
+          ? (language === 'fr' ? 'Additions & Encaissement' : 'Dining Checks & Billing')
+          : (language === 'fr' ? 'Facturation & Devis' : 'Billing & Quotes'),
       icon: Receipt,
       view: 'billing' as const,
       roles: ['manager', 'receptionist', 'client'],
+      domains: ['hotel', 'residence', 'restaurant', 'clinic', 'doctor', 'wellness', 'administration', 'other'] as DomainType[],
     },
     {
       id: 'my_bookings',
-      label: getTranslation('navMyBookings', language),
+      label:
+        currentDomain === 'clinic' || currentDomain === 'doctor'
+          ? (language === 'fr' ? 'Dossiers Patients & RDV' : 'Patient Appointments')
+          : currentDomain === 'restaurant'
+          ? (language === 'fr' ? 'Réservations de Tables' : 'Table Reservations')
+          : currentDomain === 'administration'
+          ? (language === 'fr' ? 'Rendez-vous Usagers' : 'Public Appointments')
+          : (language === 'fr' ? 'Séjours & Réservations' : 'My Bookings'),
       icon: LayoutDashboard,
       view: 'my_bookings' as const,
       roles: ['manager', 'receptionist', 'client'],
+      domains: ['hotel', 'residence', 'restaurant', 'clinic', 'doctor', 'wellness', 'administration', 'other'] as DomainType[],
     },
     {
       id: 'housekeeping',
-      label:
-        currentDomain === 'clinic'
-          ? (language === 'fr' ? 'Salles & Stérilisation' : 'Rooms & Sterilization')
-          : currentDomain === 'restaurant'
-          ? (language === 'fr' ? 'Tables & Mise en Place' : 'Tables & Setup')
-          : (language === 'fr' ? 'Housekeeping & Étages' : 'Housekeeping & Rooms'),
+      label: language === 'fr' ? 'Housekeeping & Étages' : 'Housekeeping & Rooms',
       icon: Sparkles,
       view: 'housekeeping' as const,
       roles: ['manager', 'staff'],
+      domains: ['hotel', 'residence'] as DomainType[], // Strictly for hotel & residence!
     },
     {
       id: 'tasks',
-      label: getTranslation('navTasks', language),
+      label:
+        currentDomain === 'clinic' || currentDomain === 'doctor'
+          ? (language === 'fr' ? 'Protocoles & Stérilisation' : 'Clinical Protocols')
+          : currentDomain === 'restaurant'
+          ? (language === 'fr' ? 'Mise en Place & Salle' : 'Mise en Place')
+          : (language === 'fr' ? 'Tâches PMS & Remise en État' : 'PMS Tasks'),
       icon: ClipboardList,
       view: 'tasks' as const,
       roles: ['manager', 'receptionist', 'staff'],
+      domains: ['hotel', 'residence', 'clinic', 'doctor', 'restaurant', 'wellness'] as DomainType[],
     },
     {
       id: 'stock',
-      label: getTranslation('navStock', language),
+      label:
+        currentDomain === 'clinic' || currentDomain === 'doctor'
+          ? (language === 'fr' ? 'Pharmacie & Matériel' : 'Medical Supplies')
+          : currentDomain === 'restaurant'
+          ? (language === 'fr' ? 'Économat & Ingrédients' : 'F&B Inventory')
+          : (language === 'fr' ? 'Stock Linge & Minibar' : 'Linen & Minibar Stock'),
       icon: Boxes,
       view: 'stock' as const,
       roles: ['manager', 'staff'],
+      domains: ['hotel', 'residence', 'clinic', 'doctor', 'restaurant', 'wellness'] as DomainType[],
     },
     {
       id: 'pricing',
-      label: getTranslation('navPricing', language),
+      label:
+        currentDomain === 'wellness'
+          ? (language === 'fr' ? 'Tarifs Spa & Forfaits' : 'Spa Dynamic Rates')
+          : (language === 'fr' ? 'Yield & Dynamic Pricing' : 'Dynamic Pricing'),
       icon: Coins,
       view: 'pricing' as const,
       roles: ['manager'],
+      domains: ['hotel', 'residence', 'wellness'] as DomainType[], // Strictly hotel, residence, wellness!
     },
     {
       id: 'channels',
@@ -110,6 +144,7 @@ export const Sidebar: React.FC = () => {
       icon: Globe,
       view: 'channels' as const,
       roles: ['manager', 'receptionist'],
+      domains: ['hotel', 'residence'] as DomainType[], // Strictly hotel & residence!
     },
     {
       id: 'reports',
@@ -117,10 +152,13 @@ export const Sidebar: React.FC = () => {
       icon: CreditCard,
       view: 'reports' as const,
       roles: ['manager'],
+      domains: ['hotel', 'residence', 'clinic', 'doctor', 'restaurant', 'wellness', 'administration'] as DomainType[],
     },
   ];
 
-  const navItems = allNavItems.filter((item) => item.roles.includes(currentRole));
+  const navItems = allNavItems.filter(
+    (item) => item.roles.includes(currentRole) && item.domains.includes(currentDomain)
+  );
 
   return (
     <aside
@@ -233,48 +271,6 @@ export const Sidebar: React.FC = () => {
             </button>
           );
         })}
-
-        {/* Secondary mock items matching the screenshot */}
-        <div className="pt-2 mt-2 border-t border-slate-800/60 space-y-1">
-          <button
-            onClick={() => setActiveView('billing')}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-              activeView === 'billing'
-                ? 'bg-blue-600 text-white font-semibold shadow-xs'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
-            }`}
-          >
-            <CreditCard size={18} className="shrink-0" />
-            {!isCollapsed && <span>{language === 'fr' ? 'Facturation & Devis' : language === 'ar' ? 'الفواتير والعروض' : 'Billing & Quotes'}</span>}
-          </button>
-
-          <button
-            onClick={() => setActiveView('channels')}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-              activeView === 'channels'
-                ? 'bg-blue-600 text-white font-semibold shadow-xs'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
-            }`}
-          >
-            <Globe size={18} className="shrink-0" />
-            {!isCollapsed && <span>{language === 'fr' ? 'Channel Manager' : language === 'ar' ? 'إدارة القنوات' : 'Channel Manager'}</span>}
-          </button>
-
-          <button
-            onClick={() => setActiveView('channels')}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/70 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <Bell size={18} className="shrink-0" />
-              {!isCollapsed && <span>{language === 'fr' ? 'Alertes OTA' : language === 'ar' ? 'التنبيهات' : 'OTA Alerts'}</span>}
-            </div>
-            {!isCollapsed && (
-              <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
-                4
-              </span>
-            )}
-          </button>
-        </div>
       </nav>
 
       {/* Sidebar Footer: ObjectBox DB, AGENTS.md Cockpit & Legal */}

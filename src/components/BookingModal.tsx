@@ -27,6 +27,9 @@ import {
   Baby,
   Users,
   Info,
+  Globe,
+  Printer,
+  Coins,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { BookingStatus, DomainType, TimelineBooking, ResourceItem } from '../types/booking';
@@ -43,6 +46,7 @@ export const BookingModal: React.FC = () => {
     selectedBooking,
     setSelectedBooking,
     addBooking,
+    updateBooking,
     updateBookingStatus,
     deleteBooking,
     currentBaseDate,
@@ -51,6 +55,7 @@ export const BookingModal: React.FC = () => {
     clientProfile,
     resourceGroups,
     generateTurnoverTasksForCheckout,
+    currency,
   } = useApp();
 
   const isEditing = !!selectedBooking;
@@ -85,6 +90,23 @@ export const BookingModal: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending' | 'partial'>('paid');
   const [conflictError, setConflictError] = useState<string | null>(null);
+
+  // Tenant Nationality & Police Declaration State (Algérien vs Étranger)
+  const [guestType, setGuestType] = useState<'algerian' | 'foreigner'>('algerian');
+  const [algerianIdType, setAlgerianIdType] = useState<'cni' | 'nin'>('cni');
+  const [algerianIdNumber, setAlgerianIdNumber] = useState('');
+  const [wilayaOfOrigin, setWilayaOfOrigin] = useState('31 - Oran');
+  const [foreignNationality, setForeignNationality] = useState('Française');
+  const [passportNumber, setPassportNumber] = useState('');
+  const [visaNumber, setVisaNumber] = useState('');
+  const [entryDateInCountry, setEntryDateInCountry] = useState('');
+  const [showPoliceSheetModal, setShowPoliceSheetModal] = useState(false);
+
+  // Multi-Currency Payment State (DZD, EUR, USD, RMB, GBP, SAR)
+  const [paymentCurrency, setPaymentCurrency] = useState<string>('DA');
+  const [paymentMethodType, setPaymentMethodType] = useState<
+    'cash_dzd' | 'cib' | 'edahabia' | 'cash_forex' | 'card_international' | 'bank_transfer'
+  >('cash_dzd');
 
   // Dedicated Domain Specific Predefined States
   // 1. HOTEL Specific
@@ -152,6 +174,33 @@ export const BookingModal: React.FC = () => {
       setNotes(selectedBooking.notes || '');
       setPaymentStatus(selectedBooking.paymentStatus || 'paid');
       setConflictError(null);
+
+      // Hydrate tenant origin & nationality
+      if (selectedBooking.guestType) {
+        setGuestType(selectedBooking.guestType);
+      } else if (selectedBooking.nationality === 'Algérienne' || selectedBooking.nationality === 'Algerian') {
+        setGuestType('algerian');
+      } else if (selectedBooking.nationality) {
+        setGuestType('foreigner');
+      } else {
+        setGuestType('algerian');
+      }
+
+      setAlgerianIdNumber(selectedBooking.identityNumber || '');
+      setWilayaOfOrigin(selectedBooking.wilayaOfOrigin || '31 - Oran');
+      setForeignNationality(
+        selectedBooking.nationality && selectedBooking.nationality !== 'Algérienne'
+          ? selectedBooking.nationality
+          : 'Française'
+      );
+      setPassportNumber(selectedBooking.passportNumber || '');
+      setVisaNumber(selectedBooking.visaNumber || '');
+      setEntryDateInCountry(selectedBooking.entryDateInCountry || '');
+      setPaymentCurrency(selectedBooking.paymentCurrency || currency || 'DA');
+      setPaymentMethodType(
+        (selectedBooking.paymentMethodType as any) ||
+          (selectedBooking.guestType === 'foreigner' ? 'card_international' : 'cash_dzd')
+      );
 
       // Hydrate custom metadata if present
       const meta = selectedBooking.customMetadata || {};
@@ -253,6 +302,15 @@ export const BookingModal: React.FC = () => {
       setNotes('');
       setPaymentStatus(activeDomain === 'administration' ? 'paid' : 'paid');
       setConflictError(null);
+      setGuestType('algerian');
+      setAlgerianIdNumber('');
+      setWilayaOfOrigin('31 - Oran');
+      setForeignNationality('Française');
+      setPassportNumber('');
+      setVisaNumber('');
+      setEntryDateInCountry('');
+      setPaymentCurrency(currency || 'DA');
+      setPaymentMethodType('cash_dzd');
     }
   }, [isOpen, selectedBooking, newBookingInitialSlot, currentBaseDate, activeDomain, domainResources, currentRole, clientProfile]);
 
@@ -365,6 +423,29 @@ export const BookingModal: React.FC = () => {
     wellnessPackLuxe,
   ]);
 
+  // Currency Conversion Rates (Base: EUR = 1)
+  const ratesFromEur: Record<string, number> = {
+    EUR: 1,
+    DA: 145.5,
+    USD: 1.08,
+    RMB: 7.74,
+    GBP: 0.85,
+    SAR: 4.05,
+  };
+
+  const currencySymbols: Record<string, string> = {
+    DA: 'DA',
+    EUR: '€',
+    USD: '$',
+    RMB: '¥',
+    GBP: '£',
+    SAR: '﷼',
+  };
+
+  const currentCurrencyRate = ratesFromEur[paymentCurrency] || 1;
+  const priceInPaymentCurrency = Math.round(totalPrice * currentCurrencyRate);
+  const priceInDzd = Math.round(totalPrice * (ratesFromEur['DA'] || 145.5));
+
   // Submitting form
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -431,8 +512,47 @@ export const BookingModal: React.FC = () => {
       };
     }
 
+    const totalAdults =
+      activeDomain === 'hotel'
+        ? hotelAdults
+        : activeDomain === 'residence'
+        ? residenceOccupants
+        : activeDomain === 'restaurant'
+        ? restaurantCovers
+        : 1;
+    const totalChildren = activeDomain === 'hotel' ? hotelChildren : 0;
+    const computedOriginalAmount = Math.round(totalPrice * (ratesFromEur[paymentCurrency] || 1));
+    const computedRateToDzd = ratesFromEur['DA'] / (ratesFromEur[paymentCurrency] || 1);
+
     if (isEditing && selectedBooking) {
-      updateBookingStatus(selectedBooking.id, status);
+      updateBooking(selectedBooking.id, {
+        resourceId,
+        resourceName: currentResource?.name || selectedBooking.resourceName,
+        guestName,
+        guestEmail,
+        guestPhone,
+        startDate,
+        endDate: endDate || startDate,
+        status,
+        totalPrice,
+        paymentStatus,
+        notes,
+        adults: totalAdults,
+        children: totalChildren,
+        guestType,
+        nationality: guestType === 'algerian' ? 'Algérienne' : foreignNationality,
+        identityType: guestType === 'algerian' ? algerianIdType : 'passport',
+        identityNumber: guestType === 'algerian' ? algerianIdNumber : passportNumber,
+        passportNumber: guestType === 'foreigner' ? passportNumber : undefined,
+        visaNumber: guestType === 'foreigner' ? visaNumber : undefined,
+        entryDateInCountry: guestType === 'foreigner' ? entryDateInCountry : undefined,
+        wilayaOfOrigin: guestType === 'algerian' ? wilayaOfOrigin : undefined,
+        paymentCurrency,
+        originalCurrencyAmount: computedOriginalAmount,
+        currencyRateToDzd: computedRateToDzd,
+        paymentMethodType,
+        customMetadata,
+      });
       setSelectedBooking(null);
       setIsNewBookingModalOpen(false);
     } else {
@@ -442,13 +562,28 @@ export const BookingModal: React.FC = () => {
         sector: activeDomain,
         guestName,
         guestEmail: guestEmail || `${guestName.toLowerCase().replace(/\s+/g, '.')}@example.com`,
-        guestPhone: guestPhone || '+33 6 00 00 00 00',
+        guestPhone:
+          guestPhone || (guestType === 'algerian' ? '+213 550 12 34 56' : '+33 6 00 00 00 00'),
         startDate,
         endDate: endDate || startDate,
         status,
         totalPrice,
         paymentStatus,
         notes,
+        adults: totalAdults,
+        children: totalChildren,
+        guestType,
+        nationality: guestType === 'algerian' ? 'Algérienne' : foreignNationality,
+        identityType: guestType === 'algerian' ? algerianIdType : 'passport',
+        identityNumber: guestType === 'algerian' ? algerianIdNumber : passportNumber,
+        passportNumber: guestType === 'foreigner' ? passportNumber : undefined,
+        visaNumber: guestType === 'foreigner' ? visaNumber : undefined,
+        entryDateInCountry: guestType === 'foreigner' ? entryDateInCountry : undefined,
+        wilayaOfOrigin: guestType === 'algerian' ? wilayaOfOrigin : undefined,
+        paymentCurrency,
+        originalCurrencyAmount: computedOriginalAmount,
+        currencyRateToDzd: computedRateToDzd,
+        paymentMethodType,
         customMetadata,
       });
 
@@ -697,6 +832,170 @@ export const BookingModal: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* 2.b TENANT NATIONALITY & POLICE REGULATION (Algérien vs Étranger) */}
+          {(activeDomain === 'hotel' || activeDomain === 'residence') && (
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200 text-xs">
+                  <ShieldCheck size={15} className="text-emerald-600 dark:text-emerald-400" />
+                  <span>
+                    {language === 'fr'
+                      ? 'Nationalité & Fiche de Police (Réglementation DGSN)'
+                      : language === 'ar'
+                      ? 'جنسية النزيل وبطاقة الشرطة التنظيمية'
+                      : 'Tenant Nationality & Police Declaration Form'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPoliceSheetModal(true)}
+                  className="px-2 py-1 text-[11px] font-semibold bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <FileText size={13} />
+                  <span>{language === 'fr' ? 'Aperçu Fiche de Police' : 'Police Form'}</span>
+                </button>
+              </div>
+
+              {/* Guest Type Selector Tabs */}
+              <div className="grid grid-cols-2 gap-2 bg-slate-200/70 dark:bg-slate-700/60 p-1 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGuestType('algerian');
+                    setForeignNationality('Algérienne');
+                  }}
+                  className={`py-1.5 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    guestType === 'algerian'
+                      ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <span>🇩🇿</span>
+                  <span>{language === 'fr' ? 'Citoyen Algérien (National)' : language === 'ar' ? 'مواطن جزائري (وطني)' : 'Algerian National'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGuestType('foreigner');
+                    if (foreignNationality === 'Algérienne') setForeignNationality('Française');
+                  }}
+                  className={`py-1.5 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    guestType === 'foreigner'
+                      ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <span>🌐</span>
+                  <span>{language === 'fr' ? 'Ressortissant Étranger' : language === 'ar' ? 'أجنبي / مقيم بالخارج' : 'Foreign Resident'}</span>
+                </button>
+              </div>
+
+              {guestType === 'algerian' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                  <div>
+                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      {language === 'fr' ? 'Type de Pièce' : 'Document Type'}
+                    </label>
+                    <select
+                      value={algerianIdType}
+                      onChange={(e) => setAlgerianIdType(e.target.value as 'cni' | 'nin')}
+                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    >
+                      <option value="cni">CNI Biométrique</option>
+                      <option value="nin">NIN (Numéro d'Identification Nationale)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      {language === 'fr' ? 'N° Pièce Identité' : 'ID Number'}
+                    </label>
+                    <input
+                      type="text"
+                      value={algerianIdNumber}
+                      onChange={(e) => setAlgerianIdNumber(e.target.value)}
+                      placeholder="Ex: 1102938491029"
+                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      {language === 'fr' ? 'Wilaya de Résidence' : 'Wilaya'}
+                    </label>
+                    <select
+                      value={wilayaOfOrigin}
+                      onChange={(e) => setWilayaOfOrigin(e.target.value)}
+                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
+                    >
+                      <option value="31 - Oran">31 - Oran</option>
+                      <option value="16 - Alger">16 - Alger</option>
+                      <option value="25 - Constantine">25 - Constantine</option>
+                      <option value="09 - Blida">09 - Blida</option>
+                      <option value="13 - Tlemcen">13 - Tlemcen</option>
+                      <option value="15 - Tizi Ouzou">15 - Tizi Ouzou</option>
+                      <option value="19 - Sétif">19 - Sétif</option>
+                      <option value="23 - Annaba">23 - Annaba</option>
+                      <option value="35 - Boumerdès">35 - Boumerdès</option>
+                      <option value="06 - Béjaïa">06 - Béjaïa</option>
+                      <option value="47 - Ghardaïa">47 - Ghardaïa</option>
+                      <option value="30 - Ouargla">30 - Ouargla</option>
+                      <option value="Autre Wilaya">Autre Wilaya</option>
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
+                  <div>
+                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      {language === 'fr' ? 'Nationalité' : 'Nationality'}
+                    </label>
+                    <input
+                      type="text"
+                      value={foreignNationality}
+                      onChange={(e) => setForeignNationality(e.target.value)}
+                      placeholder="Ex: Française, Espagnole, Chinoise..."
+                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      {language === 'fr' ? 'N° Passeport' : 'Passport Number'}
+                    </label>
+                    <input
+                      type="text"
+                      value={passportNumber}
+                      onChange={(e) => setPassportNumber(e.target.value)}
+                      placeholder="Ex: 21EF98124"
+                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      {language === 'fr' ? 'N° Visa Algérie' : 'Visa Number'}
+                    </label>
+                    <input
+                      type="text"
+                      value={visaNumber}
+                      onChange={(e) => setVisaNumber(e.target.value)}
+                      placeholder="Ex: VZ-2026/09"
+                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      {language === 'fr' ? "Date d'Entrée" : 'Entry Date'}
+                    </label>
+                    <input
+                      type="date"
+                      value={entryDateInCountry}
+                      onChange={(e) => setEntryDateInCountry(e.target.value)}
+                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 3. DEDICATED PREDEFINED FIELDS PER DOMAIN */}
 
@@ -1201,38 +1500,120 @@ export const BookingModal: React.FC = () => {
             </div>
           </div>
 
-          {/* 5. STATUS & PAYMENT */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                {language === 'fr' ? 'Statut du dossier :' : language === 'ar' ? 'حالة الحجز:' : 'Status:'}
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as BookingStatus)}
-                className="w-full h-9 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {(Object.keys(statusConfig) as BookingStatus[]).map((st) => (
-                  <option key={st} value={st}>
-                    {statusConfig[st].label[language] || statusConfig[st].label.en}
-                  </option>
-                ))}
-              </select>
+          {/* 5. STATUS, MULTI-CURRENCY & PAYMENT */}
+          <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-2.5">
+            <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200 text-xs">
+              <Coins size={15} className="text-amber-500" />
+              <span>
+                {language === 'fr'
+                  ? 'Devise & Conditions de Règlement'
+                  : language === 'ar'
+                  ? 'العملة وطريقة الدفع'
+                  : 'Currency & Payment Terms'}
+              </span>
             </div>
 
-            <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                {language === 'fr' ? 'Règlement :' : language === 'ar' ? 'حالة الدفع:' : 'Payment:'}
-              </label>
-              <select
-                value={paymentStatus}
-                onChange={(e) => setPaymentStatus(e.target.value as any)}
-                className="w-full h-9 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-              >
-                <option value="paid">{language === 'fr' ? '💳 Paiement en ligne immédiat (CB / Payé)' : '💳 Online Payment (Paid in full)'}</option>
-                <option value="pending">{language === 'fr' ? '💵 Règlement en Espèces / Cash sur place à l\'arrivée (Pass QR)' : '💵 Cash on Arrival (QR Pass)'}</option>
-                <option value="partial">{language === 'fr' ? '⏳ Acompte versé / Solde à l\'arrivée' : '⏳ Deposit partial'}</option>
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  {language === 'fr' ? 'Devise de Paiement' : 'Currency'}
+                </label>
+                <select
+                  value={paymentCurrency}
+                  onChange={(e) => {
+                    const newCurr = e.target.value;
+                    setPaymentCurrency(newCurr);
+                    if (newCurr === 'DA') {
+                      setPaymentMethodType('cash_dzd');
+                    } else {
+                      setPaymentMethodType('cash_forex');
+                    }
+                  }}
+                  className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-bold"
+                >
+                  <option value="DA">🇩🇿 DZD / DA (Dinar Algérien)</option>
+                  <option value="EUR">🇪🇺 EUR (€ - Euro)</option>
+                  <option value="USD">🇺🇸 USD ($ - Dollar US)</option>
+                  <option value="RMB">🇨🇳 RMB (¥ - Yuan Renminbi)</option>
+                  <option value="GBP">🇬🇧 GBP (£ - Livre Sterling)</option>
+                  <option value="SAR">🇸🇦 SAR (﷼ - Riyal Saoudien)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  {language === 'fr' ? 'Mode de Règlement' : 'Payment Method'}
+                </label>
+                <select
+                  value={paymentMethodType}
+                  onChange={(e) => setPaymentMethodType(e.target.value as any)}
+                  className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                >
+                  {paymentCurrency === 'DA' ? (
+                    <>
+                      <option value="cash_dzd">💵 Espèces DZD (Cash)</option>
+                      <option value="cib">💳 Carte CIB / Edahabia</option>
+                      <option value="bank_transfer">🏦 Virement Bancaire (CCP / BEA / BNA)</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="cash_forex">💵 Espèces Devises ({paymentCurrency})</option>
+                      <option value="card_international">💳 Carte Internationale (Visa / MC)</option>
+                      <option value="bank_transfer">🌐 Virement SWIFT International</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  {language === 'fr' ? 'Statut du Dossier' : 'Booking Status'}
+                </label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as BookingStatus)}
+                  className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {(Object.keys(statusConfig) as BookingStatus[]).map((st) => (
+                    <option key={st} value={st}>
+                      {statusConfig[st].label[language] || statusConfig[st].label.en}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+              <div>
+                <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  {language === 'fr' ? 'État d\'encaissement' : 'Payment Status'}
+                </label>
+                <select
+                  value={paymentStatus}
+                  onChange={(e) => setPaymentStatus(e.target.value as any)}
+                  className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-medium"
+                >
+                  <option value="paid">
+                    {language === 'fr' ? '✅ Règlement Total Effectué (Payé)' : '✅ Paid in Full'}
+                  </option>
+                  <option value="pending">
+                    {language === 'fr' ? '⏳ En attente de paiement sur place' : '⏳ Pending / Pay at check-in'}
+                  </option>
+                  <option value="partial">
+                    {language === 'fr' ? '🌓 Acompte versé / Solde à l\'arrivée' : '🌓 Deposit paid / Balance pending'}
+                  </option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between p-2 bg-amber-50/70 dark:bg-amber-950/30 rounded-lg border border-amber-200/60 dark:border-amber-900/40 text-[11px]">
+                <div className="text-amber-900 dark:text-amber-200">
+                  <span className="font-semibold block">Taux de change appliqué :</span>
+                  <span>1 EUR = 145.50 DA • 1 USD = 135.00 DA</span>
+                </div>
+                <span className="px-2 py-0.5 bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 rounded text-[10px] font-bold">
+                  DZD / Forex
+                </span>
+              </div>
             </div>
           </div>
 
@@ -1249,7 +1630,7 @@ export const BookingModal: React.FC = () => {
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Consignes particulières, heure de rendez-vous, accès code..."
+              placeholder="Consignes particulières, heure d'arrivée, accompagnants..."
               className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
             />
           </div>
@@ -1260,9 +1641,23 @@ export const BookingModal: React.FC = () => {
               <span className="text-[11px] text-slate-500 dark:text-slate-400 block truncate max-w-xs">
                 {priceBreakdown}
               </span>
-              <span className="font-extrabold text-slate-900 dark:text-white text-base">
-                Total : {totalPrice === 0 ? 'Gratuit (0.00 €)' : `${totalPrice} €`}
-              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="font-extrabold text-slate-900 dark:text-white text-base">
+                  {totalPrice === 0
+                    ? 'Gratuit (0.00)'
+                    : `${priceInPaymentCurrency.toLocaleString()} ${currencySymbols[paymentCurrency] || paymentCurrency}`}
+                </span>
+                {totalPrice > 0 && paymentCurrency !== 'DA' && (
+                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    ≈ {priceInDzd.toLocaleString()} DA
+                  </span>
+                )}
+                {totalPrice > 0 && paymentCurrency === 'DA' && (
+                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                    ({totalPrice} € base)
+                  </span>
+                )}
+              </div>
             </div>
 
             {isEditing && selectedBooking && (
@@ -1351,6 +1746,194 @@ export const BookingModal: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {/* ALGERIAN POLICE REGISTRATION SHEET MODAL (Fiche Individuelle de Police) */}
+      {showPoliceSheetModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 bg-black/70 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="p-4 bg-emerald-700 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={20} className="text-emerald-200" />
+                <div>
+                  <h4 className="font-bold text-sm leading-tight">
+                    Fiche Individuelle de Police • بطاقة الشرطة الفردية
+                  </h4>
+                  <p className="text-[11px] text-emerald-100">
+                    Réglementation Hôtelière Algérienne — Déclaration DGSN / Tourisme
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPoliceSheetModal(false)}
+                className="p-1.5 text-white/80 hover:text-white hover:bg-emerald-600 rounded-lg transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Document Content */}
+            <div className="p-6 overflow-y-auto space-y-4 text-xs font-sans bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+              <div className="text-center border-b border-slate-200 dark:border-slate-700 pb-3">
+                <p className="font-bold text-[13px] tracking-wide">الجمهورية الجزائرية الديمقراطية الشعبية</p>
+                <p className="font-bold text-[12px] tracking-wide text-slate-700 dark:text-slate-300">
+                  RÉPUBLIQUE ALGÉRIENNE DÉMOCRATIQUE ET POPULAIRE
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  وزارة السياحة والصناعة التقليدية • المديرية العامة للأمن الوطني (DGSN)
+                </p>
+                <h3 className="font-extrabold text-sm uppercase mt-2 tracking-widest text-emerald-800 dark:text-emerald-300">
+                  FICHE DE DÉCLARATION DU SÉJOURNANT EN ÉTABLISSEMENT D'HÉBERGEMENT
+                </h3>
+              </div>
+
+              {/* Grid Details */}
+              <div className="space-y-3">
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
+                  <div className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] text-emerald-700 dark:text-emerald-400">
+                    1. Renseignements Personnels du Locataire / هوية النزيل
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-slate-500 block">Nom & Prénom :</span>
+                      <span className="font-bold text-slate-900 dark:text-white">{guestName || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Statut / Nationalité :</span>
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        {guestType === 'algerian' ? '🇩🇿 Algérienne (Citoyen National)' : `🌐 ${foreignNationality}`}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Pièce d'Identité :</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        {guestType === 'algerian'
+                          ? `${algerianIdType.toUpperCase()}: ${algerianIdNumber || 'Non renseigné'}`
+                          : `Passeport: ${passportNumber || 'Non renseigné'}`}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">
+                        {guestType === 'algerian' ? 'Wilaya d\'origine / Résidence :' : 'Visa / Entrée :'}
+                      </span>
+                      <span className="font-medium text-slate-900 dark:text-white">
+                        {guestType === 'algerian'
+                          ? wilayaOfOrigin
+                          : `Visa N°: ${visaNumber || '—'} (Entrée: ${entryDateInCountry || '—'})`}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Contact Téléphonique :</span>
+                      <span className="font-medium text-slate-900 dark:text-white">{guestPhone || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Email :</span>
+                      <span className="font-medium text-slate-900 dark:text-white">{guestEmail || '—'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
+                  <div className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] text-blue-700 dark:text-blue-400">
+                    2. Modalités du Séjour Hôtelier / تفاصيل الإقامة
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-slate-500 block">Chambre / Hébergement :</span>
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        {currentResource?.name || 'Chambre'} ({currentResource?.type || 'Hébergement'})
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Nombre d'Occupants dans la Chambre :</span>
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        {activeDomain === 'hotel'
+                          ? `${hotelAdults} adulte(s) ${hotelChildren > 0 ? `+ ${hotelChildren} enfant(s)` : ''}`
+                          : `${residenceOccupants} occupant(s)`}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Date d'Arrivée (Check-in) :</span>
+                      <span className="font-medium text-slate-900 dark:text-white">{startDate}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Date de Départ Prévue (Check-out) :</span>
+                      <span className="font-medium text-slate-900 dark:text-white">{endDate || startDate}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
+                  <div className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] text-amber-700 dark:text-amber-400">
+                    3. Règlement & Devises / الدفع والعملة
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <span className="text-slate-500 block">Devise Facturée :</span>
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        {paymentCurrency} ({currencySymbols[paymentCurrency] || paymentCurrency})
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Montant Facturé :</span>
+                      <span className="font-extrabold text-slate-900 dark:text-white">
+                        {priceInPaymentCurrency.toLocaleString()} {currencySymbols[paymentCurrency] || paymentCurrency}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Contre-valeur DZD (DA) :</span>
+                      <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
+                        {priceInDzd.toLocaleString()} DA
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Signatures */}
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-dashed border-slate-300 dark:border-slate-700">
+                  <div className="h-20 border border-slate-300 dark:border-slate-700 rounded-lg p-2 flex flex-col justify-between">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold">
+                      Signature du Séjournant / تأشيرة النزيل
+                    </span>
+                    <span className="text-[10px] text-slate-400 italic">Mention "Lu et approuvé"</span>
+                  </div>
+                  <div className="h-20 border border-slate-300 dark:border-slate-700 rounded-lg p-2 flex flex-col justify-between">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold">
+                      Cachet & Visa de l'Hôtel / خاتم المؤسسة الفندقية
+                    </span>
+                    <span className="text-[10px] text-slate-400 italic">Réceptionniste de service</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Formulaire conforme au Décret exécutif n° 08-364 relatif aux établissements hôteliers.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3 py-1.5 bg-slate-800 dark:bg-slate-200 hover:bg-slate-700 dark:hover:bg-slate-300 text-white dark:text-slate-900 font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Printer size={14} />
+                  <span>Imprimer la Fiche</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPoliceSheetModal(false)}
+                  className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 text-xs font-semibold cursor-pointer"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
