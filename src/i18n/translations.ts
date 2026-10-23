@@ -484,6 +484,83 @@ export const translations = {
     en: 'Visit Web Deletion Portal (/delete-account/)',
     ar: 'زيارة بوابة حذف الحساب عبر الويب (/delete-account/)',
   },
+
+  // PMS Hotel Complex & Tasks Navigation
+  navTasks: {
+    fr: 'Tâches & Livraisons',
+    en: 'Tasks & Deliveries',
+    ar: 'المهام وتوصيل الغرف',
+  },
+  navStock: {
+    fr: 'Stock & Consommables',
+    en: 'Stock & Amenities',
+    ar: 'المخزون والمستلزمات',
+  },
+  navPricing: {
+    fr: 'Tarifs par Date (Yield)',
+    en: 'Dynamic Rates (Yield)',
+    ar: 'الأسعار حسب التاريخ',
+  },
+  filterEstablishment: {
+    fr: 'Établissement / Complexe',
+    en: 'Property / Complex',
+    ar: 'المجمع الفندقي',
+  },
+  allEstablishments: {
+    fr: 'Tous les complexes',
+    en: 'All Complexes',
+    ar: 'جميع المجمعات',
+  },
+  kpiOccupancyToday: {
+    fr: 'Taux d’occupation',
+    en: 'Occupancy Rate',
+    ar: 'نسبة الإشغال',
+  },
+  kpiArrivalsToday: {
+    fr: 'Arrivées du jour',
+    en: 'Arrivals Today',
+    ar: 'وصولات اليوم',
+  },
+  kpiDeparturesToday: {
+    fr: 'Départs du jour',
+    en: 'Departures Today',
+    ar: 'مغادرات اليوم',
+  },
+  kpiAvailableRooms: {
+    fr: 'Chambres disponibles',
+    en: 'Available Rooms',
+    ar: 'غرف متاحة',
+  },
+  kpiRevPar: {
+    fr: 'RevPAR hébergement',
+    en: 'RevPAR (Room)',
+    ar: 'الإيراد لكل غرفة متاحة',
+  },
+  kpiAdr: {
+    fr: 'ADR (Prix moyen)',
+    en: 'ADR (Average Rate)',
+    ar: 'متوسط سعر الليلة',
+  },
+  mealPlanRoomOnly: {
+    fr: 'Chambre seule',
+    en: 'Room only',
+    ar: 'غرفة بدون وجبات',
+  },
+  mealPlanBreakfast: {
+    fr: 'Petit-déjeuner inclus',
+    en: 'Breakfast included',
+    ar: 'إفطار الصباح مشمول',
+  },
+  mealPlanHalfBoard: {
+    fr: 'Demi-pension',
+    en: 'Half-board',
+    ar: 'إقامة مع نصف إعاشة',
+  },
+  mealPlanFullBoard: {
+    fr: 'Pension complète',
+    en: 'Full-board',
+    ar: 'إقامة مع إعاشة كاملة',
+  },
 };
 
 export function getTranslation(key: keyof typeof translations, lang: Language): string {

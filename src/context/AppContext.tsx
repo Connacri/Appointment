@@ -9,9 +9,32 @@ import {
   DomainType,
   UserRole,
   ClientProfile,
+  PmsTask,
+  StockItem,
+  StockMovement,
+  HotelEstablishment,
 } from '../types/booking';
-import { initialBookings, initialResourceGroups, initialInvoices } from '../data/mockData';
+import {
+  initialBookings,
+  initialResourceGroups,
+  initialInvoices,
+  initialEstablishments,
+  initialStockItems,
+  initialPmsTasks,
+} from '../data/mockData';
 import { objectBox } from '../db/objectbox';
+
+export type ActiveAppView =
+  | 'planning'
+  | 'my_bookings'
+  | 'reports'
+  | 'analytics'
+  | 'housekeeping'
+  | 'tasks'
+  | 'stock'
+  | 'pricing'
+  | 'billing'
+  | 'channels';
 
 interface AppContextType {
   language: Language;
@@ -67,8 +90,29 @@ interface AppContextType {
   isOffline: boolean;
   setIsOffline: (offline: boolean) => void;
   purgeAllUserData: () => void;
-  activeView: 'planning' | 'my_bookings' | 'reports' | 'analytics' | 'housekeeping' | 'billing' | 'channels';
-  setActiveView: (view: 'planning' | 'my_bookings' | 'reports' | 'analytics' | 'housekeeping' | 'billing' | 'channels') => void;
+  activeView: ActiveAppView;
+  setActiveView: (view: ActiveAppView) => void;
+
+  // Rich Hotel PMS State
+  establishments: HotelEstablishment[];
+  selectedEstablishmentId: string | 'all';
+  setSelectedEstablishmentId: (id: string | 'all') => void;
+  currency: 'DA' | 'EUR';
+  setCurrency: (c: 'DA' | 'EUR') => void;
+  tasks: PmsTask[];
+  addTask: (task: Omit<PmsTask, 'id'>) => void;
+  updateTaskStatus: (id: string, status: PmsTask['status']) => void;
+  toggleSubtask: (taskId: string, subtaskId: string) => void;
+  deleteTask: (id: string) => void;
+  generateTurnoverTasksForCheckout: (roomName: string) => void;
+  stockItems: StockItem[];
+  stockMovements: StockMovement[];
+  addStockMovement: (itemId: string, delta: number, reason: string, room?: string) => void;
+  updateStockItem: (item: StockItem) => void;
+  deleteStockItem: (id: string) => void;
+  dynamicRates: Record<string, Record<string, number>>;
+  setDynamicRate: (roomType: string, date: string, price: number) => void;
+  applyDynamicRatesBulk: (roomType: string, rates: Record<string, number>) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -104,7 +148,83 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [searchQuery, setSearchQuery] = useState('');
   const [dateRangeMode, setDateRangeMode] = useState<'two_weeks' | 'one_month'>('two_weeks');
   const [currentBaseDate, setCurrentBaseDate] = useState('2026-10-26');
-  const [activeView, setActiveView] = useState<'planning' | 'my_bookings' | 'reports' | 'analytics' | 'housekeeping' | 'billing' | 'channels'>('planning');
+  const [activeView, setActiveView] = useState<ActiveAppView>('planning');
+
+  // PMS Hotel Complex & Currency
+  const [establishments] = useState<HotelEstablishment[]>(initialEstablishments);
+  const [selectedEstablishmentId, setSelectedEstablishmentId] = useState<string | 'all'>('all');
+  const [currency, setCurrencyState] = useState<'DA' | 'EUR'>(() => {
+    return (localStorage.getItem('omnibook_currency') as 'DA' | 'EUR') || 'DA';
+  });
+
+  const setCurrency = (c: 'DA' | 'EUR') => {
+    setCurrencyState(c);
+    localStorage.setItem('omnibook_currency', c);
+  };
+
+  // Stock & Inventory
+  const [stockItems, setStockItems] = useState<StockItem[]>(() => {
+    const saved = localStorage.getItem('omnibook_stock_items');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return initialStockItems;
+  });
+
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>(() => {
+    const saved = localStorage.getItem('omnibook_stock_movements');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [
+      { id: 'sm_1', timestamp: '2026-10-26 08:30', itemId: 'draps', itemName: 'Jeu de draps grand lit', delta: -4, reason: 'Rotation départ VIP', room: 'CV-101', user: 'Amina' },
+      { id: 'sm_2', timestamp: '2026-10-26 09:15', itemId: 'eau', itemName: 'Eau minérale 50 cl', delta: -6, reason: 'Réassort minibar', room: 'PL-305', user: 'Yacine' },
+      { id: 'sm_3', timestamp: '2026-10-25 17:00', itemId: 'shamp', itemName: 'Shampooing argan 30 ml', delta: 100, reason: 'Livraison fournisseur', user: 'Gouvernante' },
+    ];
+  });
+
+  // PMS Tasks & Deliveries
+  const [tasks, setTasks] = useState<PmsTask[]>(() => {
+    const saved = localStorage.getItem('omnibook_pms_tasks');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return initialPmsTasks;
+  });
+
+  // Dynamic Rates Matrix
+  const [dynamicRates, setDynamicRates] = useState<Record<string, Record<string, number>>>(() => {
+    const saved = localStorage.getItem('omnibook_dynamic_rates');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return {
+      'Double Standard': {
+        '2026-10-30': 10500,
+        '2026-10-31': 11000,
+      },
+      'Double Deluxe': {
+        '2026-10-30': 16000,
+        '2026-10-31': 17500,
+      },
+    };
+  });
 
   const [resourceGroups, setResourceGroups] = useState<ResourceGroup[]>(() => {
     const saved = localStorage.getItem('omnibook_resource_groups');
@@ -268,7 +388,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentBaseDate(`${newY}-${newM}-${newD}`);
   };
 
-  const addBooking = (bookingData: Omit<TimelineBooking, 'id'>): { success: boolean; error?: string } => {
+  const addBooking = (
+    bookingData: Omit<TimelineBooking, 'id'>
+  ): { success: boolean; error?: string; booking?: TimelineBooking } => {
     // Business rule check: double booking prevention
     const hasConflict = checkConflict(
       bookingData.resourceId,
@@ -391,9 +513,208 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
+  const addTask = (taskData: Omit<PmsTask, 'id'>) => {
+    const newTask: PmsTask = {
+      ...taskData,
+      id: `tsk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    };
+    setTasks((prev) => {
+      const updated = [newTask, ...prev];
+      localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const updateTaskStatus = (id: string, status: PmsTask['status']) => {
+    setTasks((prev) => {
+      const updated = prev.map((t) => {
+        if (t.id === id) {
+          const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
+          if (status === 'done' && t.status !== 'done' && t.consumedItems?.length) {
+            t.consumedItems.forEach((c) => {
+              addStockMovement(c.itemId, -c.quantity, `Consommation tâche: ${t.typeName}`, t.room);
+            });
+          }
+          if (status === 'done' && (t.typeId === 'clean' || t.typeId === 'depclean')) {
+            const foundRes = resourceGroups.flatMap((g) => g.resources).find((r) => r.name.includes(t.room) || r.id === t.room);
+            if (foundRes) {
+              updateHousekeepingStatus(foundRes.id, 'clean');
+            }
+          }
+          return {
+            ...t,
+            status,
+            completedAt: status === 'done' ? nowStr : t.completedAt,
+            completedBy: status === 'done' ? (currentRole === 'staff' ? 'Amina (Staff)' : 'Gouvernante') : t.completedBy,
+          };
+        }
+        return t;
+      });
+      localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const toggleSubtask = (taskId: string, subtaskId: string) => {
+    setTasks((prev) => {
+      const updated = prev.map((t) => {
+        if (t.id === taskId && t.subtasks) {
+          return {
+            ...t,
+            subtasks: t.subtasks.map((st) => (st.id === subtaskId ? { ...st, completed: !st.completed } : st)),
+          };
+        }
+        return t;
+      });
+      localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const deleteTask = (id: string) => {
+    setTasks((prev) => {
+      const updated = prev.filter((t) => t.id !== id);
+      localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const generateTurnoverTasksForCheckout = (roomName: string) => {
+    const foundRes = resourceGroups.flatMap((g) => g.resources).find((r) => r.name.includes(roomName) || r.id === roomName);
+    if (foundRes) {
+      updateHousekeepingStatus(foundRes.id, 'dirty');
+    }
+
+    const nowStr = new Date().toISOString().slice(0, 10);
+    const checkoutTaskList: Omit<PmsTask, 'id'>[] = [
+      {
+        room: roomName,
+        typeId: 'depclean',
+        typeName: 'Nettoyage départ à fond',
+        category: 'Ménage',
+        assignee: 'Amina',
+        date: nowStr,
+        status: 'pending',
+        priority: 'urgent',
+        note: `Départ client effectué - Remise en état chambre ${roomName}`,
+        subtasks: [
+          { id: 'st_1', text: 'Changement intégral literie & alèses', completed: false },
+          { id: 'st_2', text: 'Désinfection salle d\'eau & poignées', completed: false },
+          { id: 'st_3', text: 'Aspiration & nettoyage sol', completed: false },
+        ],
+        consumedItems: [
+          { itemId: 'sac', itemName: 'Sac poubelle 30L', quantity: 2 },
+          { itemId: 'pt', itemName: 'Papier toilette', quantity: 2 },
+          { itemId: 'draps', itemName: 'Jeu de draps', quantity: 1 },
+          { itemId: 'taie', itemName: 'Taie d’oreiller', quantity: 2 },
+        ],
+      },
+      {
+        room: roomName,
+        typeId: 'towels',
+        typeName: 'Changement du linge de bain',
+        category: 'Linge',
+        assignee: 'Sonia',
+        date: nowStr,
+        status: 'pending',
+        priority: 'normal',
+        note: 'Dotation 2 draps de bain + 2 serviettes main',
+        consumedItems: [
+          { itemId: 'sdb', itemName: 'Serviette de bain', quantity: 2 },
+          { itemId: 'main', itemName: 'Serviette de main', quantity: 2 },
+          { itemId: 'tapis', itemName: 'Tapis de bain', quantity: 1 },
+        ],
+      },
+      {
+        room: roomName,
+        typeId: 'fridge',
+        typeName: 'Inventaire & recharge minibar',
+        category: 'Minibar & accueil',
+        assignee: 'Yacine',
+        date: nowStr,
+        status: 'pending',
+        priority: 'normal',
+        note: 'Relever consommations du séjour pour facturation',
+        consumedItems: [
+          { itemId: 'eau', itemName: 'Eau minérale 50cl', quantity: 2 },
+          { itemId: 'soda', itemName: 'Soda', quantity: 2 },
+        ],
+      },
+    ];
+
+    checkoutTaskList.forEach((t) => addTask(t));
+  };
+
+  const addStockMovement = (itemId: string, delta: number, reason: string, room?: string) => {
+    const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    setStockItems((prev) => {
+      const updated = prev.map((item) => {
+        if (item.id === itemId) {
+          return { ...item, quantity: Math.max(0, item.quantity + delta) };
+        }
+        return item;
+      });
+      localStorage.setItem('omnibook_stock_items', JSON.stringify(updated));
+      return updated;
+    });
+
+    const targetItem = stockItems.find((s) => s.id === itemId);
+    const newMovement: StockMovement = {
+      id: `mov_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: nowStr,
+      itemId,
+      itemName: targetItem?.name || itemId,
+      delta,
+      reason,
+      room,
+      user: currentRole === 'staff' ? 'Amina (Étage)' : 'Gouvernante',
+    };
+
+    setStockMovements((prev) => {
+      const updated = [newMovement, ...prev].slice(0, 200);
+      localStorage.setItem('omnibook_stock_movements', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const updateStockItem = (updatedItem: StockItem) => {
+    setStockItems((prev) => {
+      const updated = prev.map((item) => (item.id === updatedItem.id ? updatedItem : item));
+      localStorage.setItem('omnibook_stock_items', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const deleteStockItem = (id: string) => {
+    setStockItems((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      localStorage.setItem('omnibook_stock_items', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const setDynamicRate = (roomType: string, date: string, price: number) => {
+    setDynamicRates((prev) => {
+      const next = { ...prev, [roomType]: { ...(prev[roomType] || {}), [date]: price } };
+      localStorage.setItem('omnibook_dynamic_rates', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const applyDynamicRatesBulk = (roomType: string, rates: Record<string, number>) => {
+    setDynamicRates((prev) => {
+      const next = { ...prev, [roomType]: { ...(prev[roomType] || {}), ...rates } };
+      localStorage.setItem('omnibook_dynamic_rates', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const purgeAllUserData = () => {
     localStorage.removeItem('omnibook_bookings');
     localStorage.removeItem('omnibook_resource_groups');
+    localStorage.removeItem('omnibook_pms_tasks');
+    localStorage.removeItem('omnibook_stock_items');
+    localStorage.removeItem('omnibook_stock_movements');
     setBookings([]);
     setSelectedBooking(null);
   };
@@ -450,6 +771,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         purgeAllUserData,
         activeView,
         setActiveView,
+
+        // PMS Rich Hotel State
+        establishments,
+        selectedEstablishmentId,
+        setSelectedEstablishmentId,
+        currency,
+        setCurrency,
+        tasks,
+        addTask,
+        updateTaskStatus,
+        toggleSubtask,
+        deleteTask,
+        generateTurnoverTasksForCheckout,
+        stockItems,
+        stockMovements,
+        addStockMovement,
+        updateStockItem,
+        deleteStockItem,
+        dynamicRates,
+        setDynamicRate,
+        applyDynamicRatesBulk,
       }}
     >
       {children}

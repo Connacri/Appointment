@@ -114,6 +114,13 @@ export interface ResourceItem {
   pricePerDay: number;
   housekeepingStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order';
   capacity?: number;
+  building?: string;
+  floor?: string;
+  view?: 'Mer' | 'Jardin' | 'Ville' | 'Piscine' | 'Arrière';
+  beds?: string;
+  sizeM2?: number;
+  amenities?: string[];
+  establishmentId?: string;
 }
 
 export interface TimelineBooking {
@@ -131,7 +138,73 @@ export interface TimelineBooking {
   paymentStatus: 'paid' | 'pending' | 'partial';
   notes?: string;
   color?: string;
+  mealPlan?: '' | 'bf' | 'hb' | 'fb';
+  originChannel?: 'Direct' | 'Booking.com' | 'Airbnb' | 'Expedia';
+  adults?: number;
+  children?: number;
+  extras?: { label: string; amount: number; category?: string }[];
+  payments?: { amount: number; method: 'cash' | 'cib' | 'transfer'; date: string }[];
+  identityNumber?: string;
+  nationality?: string;
   customMetadata?: Record<string, any>;
+}
+
+export interface PmsTask {
+  id: string;
+  room: string;
+  typeId: string;
+  typeName: string;
+  category: 'Ménage' | 'Linge' | 'Minibar & accueil' | 'Livraison' | 'Maintenance';
+  assignee: string; // e.g. "Amina", "Yacine", "Sonia"
+  date: string;
+  status: 'pending' | 'doing' | 'done' | 'cancel';
+  priority: 'normal' | 'urgent';
+  note?: string;
+  subtasks?: { id: string; text: string; completed: boolean }[];
+  tools?: string[];
+  consumedItems?: { itemId: string; itemName: string; quantity: number }[];
+  completedBy?: string;
+  completedAt?: string;
+}
+
+export interface StockItem {
+  id: string;
+  category: 'Linge' | 'Produits de bain' | 'Minibar' | 'Entretien' | 'Accueil' | string;
+  name: string;
+  unit: string;
+  quantity: number;
+  minThreshold: number;
+  unitCost: number; // in DA
+}
+
+export interface StockMovement {
+  id: string;
+  timestamp: string;
+  itemId: string;
+  itemName: string;
+  delta: number;
+  reason: string;
+  room?: string;
+  user: string;
+}
+
+export interface HotelEstablishment {
+  id: string;
+  code: string;
+  name: string;
+  city: string;
+  stars: number;
+  taxRate: number; // e.g. 9
+  checkInTime: string;
+  checkOutTime: string;
+  facilities: string[];
+}
+
+export interface ExtraCatalogItem {
+  id: string;
+  category: string;
+  label: string;
+  price: number;
 }
 
 export interface AvailabilityCount {
@@ -151,7 +224,7 @@ export interface AnalyticsTrendPoint {
 
 export interface InternationalKpis {
   revPar: number; // Revenue per Available Room (USALI standard)
-  adr: number; // Average Daily Rate (EUR)
+  adr: number; // Average Daily Rate (EUR / DA)
   hotelOccupancyRate: number; // %
   alos: number; // Average Length of Stay (days)
   clinicAppointmentsTotal: number;

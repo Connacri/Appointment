@@ -40,7 +40,15 @@ export const TopBar: React.FC = () => {
     setIsQrScannerOpen,
     setActiveQrPassBooking,
     bookings,
+    currency,
+    setCurrency,
+    tasks,
+    stockItems,
+    setActiveView,
   } = useApp();
+
+  const urgentTasksCount = tasks.filter((t) => t.priority === 'urgent' && t.status !== 'done').length;
+  const lowStockCount = stockItems.filter((s) => s.quantity <= s.minThreshold).length;
 
   // Helper to format date display
   const formatDateDisplay = (isoDate: string) => {
@@ -218,6 +226,44 @@ export const TopBar: React.FC = () => {
             {isOffline ? 'Offline' : 'Online'}
           </span>
         </button>
+
+        {/* Currency Switcher: DA / EUR */}
+        <div className="flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 text-xs font-semibold">
+          <button
+            onClick={() => setCurrency('DA')}
+            className={`px-1.5 py-1 rounded transition-colors ${
+              currency === 'DA'
+                ? 'bg-amber-500 text-white shadow-xs font-bold'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+            title="Dinar Algérien (DA)"
+          >
+            DA
+          </button>
+          <button
+            onClick={() => setCurrency('EUR')}
+            className={`px-1.5 py-1 rounded transition-colors ${
+              currency === 'EUR'
+                ? 'bg-blue-600 text-white shadow-xs font-bold'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+            title="Euro (€)"
+          >
+            EUR
+          </button>
+        </div>
+
+        {/* Quick Turnaround Alert Badges */}
+        {(urgentTasksCount > 0 || lowStockCount > 0) && (
+          <button
+            onClick={() => setActiveView(urgentTasksCount > 0 ? 'tasks' : 'stock')}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold cursor-pointer"
+            title="Alertes PMS (Tâches urgentes ou stock bas)"
+          >
+            <span>🔔</span>
+            <span className="font-mono">{urgentTasksCount + lowStockCount}</span>
+          </button>
+        )}
 
         {/* Language selector */}
         <div className="flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 text-xs font-semibold">

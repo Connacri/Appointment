@@ -43,6 +43,10 @@ export const PlanningTimeline: React.FC = () => {
     setIsNewBookingModalOpen,
     setNewBookingInitialSlot,
     updateBookingStatus,
+    selectedEstablishmentId,
+    setSelectedEstablishmentId,
+    establishments,
+    currency,
   } = useApp();
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -144,31 +148,38 @@ export const PlanningTimeline: React.FC = () => {
     return dates;
   }, [currentBaseDate, totalDays, language]);
 
-  // Filter resource groups strictly by currentDomain (NEVER MIX) & searchQuery
+  // Filter resource groups strictly by currentDomain (NEVER MIX) & searchQuery & establishment
   const filteredGroups = useMemo(() => {
     const groups = resourceGroups.length > 0 ? resourceGroups : initialResourceGroups;
     return groups
       .filter((grp) => grp.sector === currentDomain)
       .map((grp) => {
-        if (!searchQuery.trim()) return grp;
-        const q = searchQuery.toLowerCase();
-        const matchingResources = grp.resources.filter(
-          (r) =>
-            r.name.toLowerCase().includes(q) ||
-            r.type.toLowerCase().includes(q) ||
-            bookings.some(
-              (b) =>
-                b.resourceId === r.id &&
-                (b.guestName.toLowerCase().includes(q) || b.guestEmail.toLowerCase().includes(q))
-            )
-        );
+        let matchingResources = grp.resources;
+        if (currentDomain === 'hotel' && selectedEstablishmentId !== 'all') {
+          matchingResources = matchingResources.filter(
+            (r) => !r.establishmentId || r.establishmentId === selectedEstablishmentId
+          );
+        }
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          matchingResources = matchingResources.filter(
+            (r) =>
+              r.name.toLowerCase().includes(q) ||
+              r.type.toLowerCase().includes(q) ||
+              bookings.some(
+                (b) =>
+                  b.resourceId === r.id &&
+                  (b.guestName.toLowerCase().includes(q) || b.guestEmail.toLowerCase().includes(q))
+              )
+          );
+        }
         return {
           ...grp,
           resources: matchingResources,
         };
       })
       .filter((grp) => grp.resources.length > 0);
-  }, [currentDomain, resourceGroups, searchQuery, bookings]);
+  }, [currentDomain, resourceGroups, searchQuery, bookings, selectedEstablishmentId]);
 
   // Calculate day-by-day availability per group
   const groupAvailability = useMemo(() => {
@@ -277,6 +288,24 @@ export const PlanningTimeline: React.FC = () => {
               Complet
             </button>
           </div>
+
+          {/* Hotel Establishment Switcher (ADEF Centre-ville / ADEF Plage) */}
+          {currentDomain === 'hotel' && (
+            <div className="flex items-center gap-1.5 ml-2">
+              <select
+                value={selectedEstablishmentId}
+                onChange={(e) => setSelectedEstablishmentId(e.target.value)}
+                className="px-2.5 py-1 text-[11px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 shadow-2xs cursor-pointer"
+              >
+                <option value="all">🏨 {language === 'fr' ? 'Tous les complexes ADEF' : 'All ADEF Hotels'}</option>
+                {establishments.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.code} – {h.name} ({'★'.repeat(h.stars)})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Center / Right controls: Zoom & Fast Date Navigation */}
@@ -434,7 +463,7 @@ export const PlanningTimeline: React.FC = () => {
                           </div>
                           {leftBarMode === 'normal' && (
                             <span className="text-[10px] text-slate-400 font-mono tabular-nums shrink-0 hidden sm:inline">
-                              {res.pricePerDay}€
+                              {res.pricePerDay} {currency}
                             </span>
                           )}
                         </div>
@@ -448,7 +477,20 @@ export const PlanningTimeline: React.FC = () => {
         </div>
 
         {/* RIGHT AREA: Timeline Grid with Horizontal Scrolling */}
-        <div className="flex-1 flex flex-col min-w-max">
+        <div className="flex-1 flex flex-col min-w-max relative">
+          {/* Live Current Time Line Marker (from uploaded design f0a8290b850fbd4fd4dbd072137389bc.jpg) */}
+          <div
+            className="absolute top-0 bottom-0 pointer-events-none z-20 flex flex-col items-center"
+            style={{
+              left: `${1.5 * colWidth}px`,
+            }}
+          >
+            <div className="px-2 py-0.5 rounded-full text-[9px] font-bold font-mono text-white bg-rose-500 shadow-md shadow-rose-500/40 -mt-1 whitespace-nowrap">
+              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
+            <div className="w-0.5 h-full bg-rose-500/90 shadow-[0_0_8px_rgba(244,63,94,0.7)]" />
+          </div>
+
           {/* Timeline Header: Days row + Availability badge */}
           <div className="h-16 md:h-20 border-b border-slate-200 dark:border-slate-800 flex bg-white dark:bg-slate-900 sticky top-0 z-10 select-none">
             {timelineDays.map((day) => (

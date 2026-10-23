@@ -20,6 +20,9 @@ import { BookingAnalyticsView } from './components/BookingAnalyticsView';
 import { HousekeepingView } from './components/HousekeepingView';
 import { BillingInvoicingView } from './components/BillingInvoicingView';
 import { ChannelManagerView } from './components/ChannelManagerView';
+import { TasksManagementView } from './components/TasksManagementView';
+import { StockManagementView } from './components/StockManagementView';
+import { DynamicPricingView } from './components/DynamicPricingView';
 import { ObjectBoxInspectorModal } from './components/ObjectBoxInspectorModal';
 import { QrPassModal } from './components/QrPassModal';
 import { QrScannerModal } from './components/QrScannerModal';
@@ -57,6 +60,12 @@ const MainLayout: React.FC = () => {
                 <LegendBar />
               </>
             )}
+
+            {activeView === 'tasks' && <TasksManagementView />}
+
+            {activeView === 'stock' && <StockManagementView />}
+
+            {activeView === 'pricing' && <DynamicPricingView />}
 
             {activeView === 'analytics' && <BookingAnalyticsView />}
 

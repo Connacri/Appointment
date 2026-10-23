@@ -16,6 +16,9 @@ import {
   Sparkles,
   Database,
   Receipt,
+  ClipboardList,
+  Boxes,
+  Coins,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -79,6 +82,27 @@ export const Sidebar: React.FC = () => {
       icon: Sparkles,
       view: 'housekeeping' as const,
       roles: ['manager', 'staff'],
+    },
+    {
+      id: 'tasks',
+      label: getTranslation('navTasks', language),
+      icon: ClipboardList,
+      view: 'tasks' as const,
+      roles: ['manager', 'receptionist', 'staff'],
+    },
+    {
+      id: 'stock',
+      label: getTranslation('navStock', language),
+      icon: Boxes,
+      view: 'stock' as const,
+      roles: ['manager', 'staff'],
+    },
+    {
+      id: 'pricing',
+      label: getTranslation('navPricing', language),
+      icon: Coins,
+      view: 'pricing' as const,
+      roles: ['manager'],
     },
     {
       id: 'channels',
