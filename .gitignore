@@ -8,3 +8,6 @@ coverage/
 !.env.example
 
 .idea/caches/
+
+# RE investigation: locally recovered credentials (never commit)
+tools/re-proUSB/local.env
