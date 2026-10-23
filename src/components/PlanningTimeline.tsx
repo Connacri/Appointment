@@ -105,10 +105,30 @@ export const PlanningTimeline: React.FC = () => {
   };
 
   const scrollToToday = () => {
-    if (scrollContainerRef.current) {
-      // "Today" is at index 1
-      const targetScroll = Math.max(0, 1 * colWidth - (isMobileScreen ? 40 : 80));
-      scrollContainerRef.current.scrollTo({ left: targetScroll, behavior: 'smooth' });
+    const now = new Date();
+    const realTodayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    
+    const existingIdx = timelineDays.findIndex((d) => d.dateStr === realTodayStr);
+
+    if (existingIdx >= 0 && scrollContainerRef.current) {
+      // Today is in the current visible range, scroll smoothly to it
+      const targetScroll = Math.max(0, existingIdx * colWidth - (isMobileScreen ? 40 : 80));
+      const dirMultiplier = language === 'ar' ? -1 : 1;
+      scrollContainerRef.current.scrollTo({ left: targetScroll * dirMultiplier, behavior: 'smooth' });
+    } else {
+      // Today is outside current view: reset base date so today is at column 1 (base = today - 1 day)
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const targetBaseStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+      setCurrentBaseDate(targetBaseStr);
+
+      setTimeout(() => {
+        if (scrollContainerRef.current) {
+          const dirMultiplier = language === 'ar' ? -1 : 1;
+          const targetScroll = Math.max(0, 1 * colWidth - (isMobileScreen ? 40 : 80));
+          scrollContainerRef.current.scrollTo({ left: targetScroll * dirMultiplier, behavior: 'smooth' });
+        }
+      }, 50);
     }
   };
 
@@ -118,6 +138,9 @@ export const PlanningTimeline: React.FC = () => {
   const timelineDays = useMemo(() => {
     const [y, m, d] = currentBaseDate.split('-').map(Number);
     const dates: { dateStr: string; dayNum: number; dayName: string; isWeekend: boolean; isToday: boolean }[] = [];
+
+    const now = new Date();
+    const realTodayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
     const dayFormatter = new Intl.DateTimeFormat(
       language === 'fr' ? 'fr-FR' : language === 'ar' ? 'ar-EG' : 'en-US',
@@ -134,8 +157,8 @@ export const PlanningTimeline: React.FC = () => {
       const dayOfWeek = cur.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-      // Base date Oct 27 considered "Today" in our demo simulation
-      const isToday = i === 1;
+      // Real check against actual current calendar day
+      const isToday = iso === realTodayStr;
 
       dates.push({
         dateStr: iso,
@@ -147,6 +170,26 @@ export const PlanningTimeline: React.FC = () => {
     }
     return dates;
   }, [currentBaseDate, totalDays, language]);
+
+  const todayIndex = useMemo(() => {
+    return timelineDays.findIndex((d) => d.isToday);
+  }, [timelineDays]);
+
+  const [currentTimeStr, setCurrentTimeStr] = useState(() => {
+    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  });
+
+  const currentHourFraction = useMemo(() => {
+    const now = new Date();
+    return (now.getHours() * 60 + now.getMinutes()) / 1440;
+  }, [currentTimeStr]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTimeStr(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Filter resource groups strictly by currentDomain (NEVER MIX) & searchQuery & establishment
   const filteredGroups = useMemo(() => {
@@ -478,18 +521,24 @@ export const PlanningTimeline: React.FC = () => {
 
         {/* RIGHT AREA: Timeline Grid with Horizontal Scrolling */}
         <div className="flex-1 flex flex-col min-w-max relative">
-          {/* Live Current Time Line Marker (from uploaded design f0a8290b850fbd4fd4dbd072137389bc.jpg) */}
-          <div
-            className="absolute top-0 bottom-0 pointer-events-none z-20 flex flex-col items-center"
-            style={{
-              left: `${1.5 * colWidth}px`,
-            }}
-          >
-            <div className="px-2 py-0.5 rounded-full text-[9px] font-bold font-mono text-white bg-rose-500 shadow-md shadow-rose-500/40 -mt-1 whitespace-nowrap">
-              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          {/* Live Current Time Line Marker (Active ONLY when real today is in view) */}
+          {todayIndex >= 0 && (
+            <div
+              className="absolute top-0 bottom-0 pointer-events-none z-30 flex flex-col items-center"
+              style={{
+                left: `${(todayIndex + currentHourFraction) * colWidth}px`,
+                transform: 'translateX(-50%)',
+              }}
+            >
+              {/* Floating Pill Time Badge: Positioned at header-grid threshold (top-16 md:top-20 -mt-3.5) with high contrast and shadow so it is never clipped */}
+              <div className="sticky top-16 md:top-20 -mt-3.5 z-40 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono text-white bg-rose-600 shadow-md shadow-rose-600/50 whitespace-nowrap flex items-center gap-1.5 border-2 border-white dark:border-slate-900 select-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                <span>{currentTimeStr}</span>
+              </div>
+              {/* Continuous vertical red line passing down through the whole grid */}
+              <div className="w-0.5 flex-1 bg-rose-500/90 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
             </div>
-            <div className="w-0.5 h-full bg-rose-500/90 shadow-[0_0_8px_rgba(244,63,94,0.7)]" />
-          </div>
+          )}
 
           {/* Timeline Header: Days row + Availability badge */}
           <div className="h-16 md:h-20 border-b border-slate-200 dark:border-slate-800 flex bg-white dark:bg-slate-900 sticky top-0 z-10 select-none">
@@ -497,38 +546,46 @@ export const PlanningTimeline: React.FC = () => {
               <div
                 key={day.dateStr}
                 style={{ width: `${colWidth}px` }}
-                className={`shrink-0 border-r border-slate-200/70 dark:border-slate-800/70 flex flex-col justify-between p-1 md:p-1.5 transition-colors ${
+                className={`shrink-0 border-r border-slate-200/70 dark:border-slate-800/70 flex flex-col justify-between p-1 md:p-1.5 transition-colors relative ${
                   day.isToday
-                    ? 'bg-emerald-50/70 dark:bg-emerald-950/20'
+                    ? 'bg-rose-50/40 dark:bg-rose-950/25 ring-1 ring-inset ring-rose-400/40'
                     : day.isWeekend
                     ? 'bg-slate-50/50 dark:bg-slate-900/40'
                     : ''
                 }`}
               >
+                {/* Day status indicator / highlight */}
+                {day.isToday ? (
+                  <div className="flex items-center justify-between text-[9px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider bg-rose-100/90 dark:bg-rose-900/50 px-1.5 py-0.5 rounded border border-rose-300 dark:border-rose-700/50 shadow-2xs">
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block" />
+                      {language === 'fr' ? 'Aujourd’hui' : language === 'ar' ? 'اليوم' : 'Today'}
+                    </span>
+                    <span className="font-mono tabular-nums text-rose-700 dark:text-rose-200 text-[9px]">
+                      {currentTimeStr}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="h-3" />
+                )}
+
                 {/* Day Number and Weekday */}
-                <div className="flex items-baseline justify-between">
+                <div className="flex items-baseline justify-between mt-auto">
                   <span
                     className={`text-xs md:text-sm font-bold tabular-nums ${
-                      day.isToday ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-200'
+                      day.isToday ? 'text-rose-600 dark:text-rose-400 font-extrabold' : 'text-slate-800 dark:text-slate-200'
                     }`}
                   >
                     {day.dayNum}
                   </span>
                   <span
                     className={`text-[9px] md:text-[10px] font-semibold uppercase ${
-                      day.isToday ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
+                      day.isToday ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-slate-400'
                     }`}
                   >
                     {day.dayName}
                   </span>
                 </div>
-
-                {/* Day status indicator / highlight */}
-                {day.isToday && (
-                  <span className="inline-block text-[8px] md:text-[9px] px-1 bg-emerald-500 text-white font-bold rounded text-center truncate">
-                    {language === 'fr' ? 'Aujourd\'hui' : language === 'ar' ? 'اليوم' : 'Today'}
-                  </span>
-                )}
               </div>
             ))}
           </div>

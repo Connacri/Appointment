@@ -150,10 +150,11 @@ export const initialResourceGroups: ResourceGroup[] = [
   },
 ];
 
-// Helper to format dates YYYY-MM-DD
+// Helper to format dates YYYY-MM-DD relative to current day
 function getDateOffset(daysOffset: number): string {
-  const d = new Date(2026, 9, 26); // Oct 26, 2026 as base date
-  d.setDate(d.getDate() + daysOffset);
+  const d = new Date();
+  // Offset relative to yesterday so daysOffset=1 corresponds to today
+  d.setDate(d.getDate() - 1 + daysOffset);
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
