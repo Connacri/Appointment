@@ -61,6 +61,10 @@ jobs:
 
       - name: Build Web Application (Vite Production SPA)
         run: npm run build
+        env:
+          # GitHub Pages serves this repo from /<repo>/, not from the domain root.
+          # Without this the built index.html points at /assets/... and the page stays blank.
+          VITE_BASE: /${{ github.event.repository.name }}/
 
       - name: Verify Legal Pages in dist output (AGENTS.md 19.3)
         run: |
@@ -95,6 +99,50 @@ jobs:
       - name: Deploy to GitHub Pages Website
         id: deployment
         uses: actions/deploy-pages@v4
+
+      # A 200 on the HTML is not proof: if VITE_BASE is wrong, index.html loads and the
+      # bundle 404s, leaving a blank page. This check resolves every asset and fails loudly.
+      - name: Smoke check live site (asset base + legal pages)
+        run: |
+          set -uo pipefail
+          BASE="${{ steps.deployment.outputs.page_url }}"
+          BASE="${BASE%/}/"
+          echo "Checking $BASE"
+
+          code=000
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE")
+            [ "$code" = "200" ] && break
+            sleep 10
+          done
+          [ "$code" = "200" ] || { echo "::error::$BASE returned $code"; exit 1; }
+
+          html=$(curl -fsSL "$BASE") || { echo "::error::cannot fetch $BASE"; exit 1; }
+
+          if echo "$html" | grep -q '\(src\|href\)="/assets/'; then
+            echo "::error::index.html still references /assets/ at the domain root - VITE_BASE was not applied"
+            exit 1
+          fi
+
+          refs=$(echo "$html" | grep -oE '(src|href)="[^"]+\.(js|css)"' | sed -E 's/^(src|href)="//; s/"$//')
+          if [ -z "$refs" ]; then echo "::error::no bundle referenced by index.html"; exit 1; fi
+
+          for ref in $refs; do
+            case "$ref" in
+              http*) url="$ref" ;;
+              /*)    url="https://$(echo "$BASE" | sed -E 's#https://([^/]+)/.*#\1#')$ref" ;;
+              *)     url="$BASE$ref" ;;
+            esac
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$url")
+            [ "$code" = "200" ] || { echo "::error::$url returned $code"; exit 1; }
+            echo "OK $url"
+          done
+
+          for p in privacy/ delete-account/ privacy/fr/ privacy/ar/ delete-account/ar/; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE$p")
+            [ "$code" = "200" ] || { echo "::error::$BASE$p returned $code"; exit 1; }
+          done
+          echo "Live site verified."
 
   # ============================================================
   # JOB 2: Build & Package Signed Android Release (APK & AAB)
