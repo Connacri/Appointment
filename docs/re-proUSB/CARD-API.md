@@ -137,18 +137,25 @@ interface for a few hundred milliseconds, so every hardware call needs a retry l
 
 ## 5. Frame format (**verified**)
 
-`WriteCard(port, record)` wraps the record in a fixed frame:
+Every request follows the same grammar:
 
 ```
-offset 0   AA
-offset 1   21
-offset 2   EC
-offset 3.. 34  payload (32 bytes copied from the record buffer)
-offset 35  XOR checksum = 0x67 ^ payload[0] ^ payload[1] ^ … ^ payload[31]
-           (total 36 meaningful bytes; the 64-byte transfer is zero-padded on the HID path)
+offset 0      AA       start marker
+offset 1      n        payload length + 1 (bytes that follow, checksum excluded)
+offset 2      cmd
+offset 3..    payload  n-1 bytes
+offset 2+n    xor      XOR of every preceding byte (§5.1)
 ```
 
-The transfer length is **64 bytes** (`write_port(port, 0x40, frame)`).
+`WriteCard(port, record)` is the `cmd = 0xEC` case with a 32-byte payload:
+
+```
+AA 21 EC | payload[32] | xor        = 36 meaningful bytes
+```
+
+The transfer length is **64 bytes** (`write_port(port, 0x40, frame)`). On the HID path the rest of
+the report is whatever was left in the caller's buffer — `proRFL` sends `0xCC` stack filler, the
+vendor EXE sends zeros — and the reader ignores it.
 
 ### 5.1 Checksum rule — one rule for every frame (**verified**)
 
@@ -176,6 +183,27 @@ The `0x67` seed is only the initial accumulator inside `WriteCard`, not a second
 
 Input reports are `0xFF`-padded to 65 bytes. `ReadCard` output is reproducible byte-for-byte
 across reads, so the random nonce of §7.2 is stored on the card, not regenerated at read time.
+
+### 5.3 Write payload length is variable (**verified on hardware**)
+
+`n` is not fixed at `0x21`: the reader accepts a **16-byte** payload for `cmd = 0xEC` as well.
+
+| Frame | Total | Result |
+|---|---|---|
+| `AA 21 EC` + 32-byte payload + xor | 36 | accepted (`proRFL.WriteCard`) |
+| `AA 11 EC` + 16-byte record + xor | 20 | **accepted — card read back the exact record** |
+
+Both were sent to the same TEMIC card through `d12c.writePortPro(0x40, …)` and read back with
+`ReadCard`:
+
+```
+AA21EC C9121722FF00318000B919D2C029D5FB 00×16 72   → nonce 0x29 became 0x31 on the card
+AA11EC C91224B6E3818101016265DB1565E300 B2          → guest record stored byte-for-byte
+```
+
+So a rebuild only needs the compact form (`n = 0x11`); the reader still keeps a **20-byte card
+area** (record + its own 4-byte trailer, §9 item 1), and the extra 16 bytes of the `0x21` form are
+ignored.
 
 ## 6. Card type selector — record byte 9 (**verified**)
 
@@ -290,22 +318,57 @@ record16 = C9 12 17 22 FF 00 29 80 00 B9 19 D2 C0 29 D5 FB
 confirms the last field is a minute. `D` (0 here, 2 in the row above) is still ambiguous — hour or
 minute of the start instant.
 
-### 7.3 GuestCard (**verified**)
+### 7.3 GuestCard (**verified** — builder, database and hardware round-trip)
 
-Same head, `0x3B = 0x60 + (param_3 & 0x0F)`, and:
+The EXE does **not** call `proRFL.GuestCard` (that export is not imported); it assembles the record
+itself in `FUN_006cea00` and writes it with its own frame (§7.7).
 
-| Byte | Expression |
-|---|---|
-| 4 | `L - 0x80` (only when `param_5 != 0`) |
-| 5 | `K - 0x80` |
-| 6 | `J - 0x80` |
-| 7 | `param_6 << 4 \| (I & 0x0F)` |
-| 8 | `param_4` |
-| 10–15 | same bit-packing as MasterCard, fed from `p7/p8/p9` |
+The single input string `s` (`*(AnsiString*)([0x6ed3bc] + 0x64)`) is four 2-character decimal
+fields:
 
-Because the caller subtracts `0x80` from three decimal-derived bytes, a valid guest card requires
-those inputs to be ≥ 0x80 once offset — the EXE therefore does **not** pass plain decimal digits
-here (**inferred**; the exact encoding lives in the EXE caller, see §9).
+```
+s = I I  J J  K K  L L          e.g. "01 01 01 99"
+     ││   ││   ││   └┴─ L = 99, constant sentinel (never varies in the database)
+     ││   ││   └┴─────── K = room within the floor  (room mod 100)
+     ││   └┴─────────── J = floor                    (room div 100)
+     └┴──────────────── I = card index (same value as the low nibble of byte 9)
+```
+
+| Byte | Expression | Observed |
+|---|---|---|
+| 0–1 | `site >> 16` | `C9 12` |
+| 2–3 | `site & 0x3FFF` (+`0x4000` when the cover flag is set) | `24 B6`, `31 6A`, `16 9A`, `03 3B` |
+| 4 | `L & 0x7F \| 0x80` | `E3` in **all 10** guest rows |
+| 5 | `K & 0x7F \| 0x80` | `1-101`→`81`, `1-102`→`82`, `1-205`→`85` |
+| 6 | `J & 0x7F \| 0x80` | `1-xxx`→`81`, `2-xxx`→`82` |
+| 7 | `I & 0xFF \| ((index & 3) << 6)` | `01` in all 10 rows |
+| 8 | scalar from the settings object (`[0x6ed3bc] + 0x28`) | `00`, `01`, `02` |
+| 9 | `0x60 \| (index & 0x0F)` | `62`, `69`, `6C`, `6F`, … |
+| 10–15 | start / expiry, same bit-packing as §7.2 (`YYMMDDHH` per group) | see below |
+
+**Worked example** — `CardInfo.ID = 2`, `Holder = [WalkIn]1-101`,
+`CardData = C91224B6E3818101016265DB1565E300`:
+
+```
+C9 12 | 24 B6 | E3 | 81 | 81 | 01 | 01 | 62 | 65 DB 15 | 65 E3 00
+ │  │    │      │    │    │    │    │    │    └─ expiry  2012-05-28 00:00
+ │  │    │      │    │    │    │    │    └────── start   2012-05-27 21:00
+ │  │    │      │    │    │    │    └─────────── 0x62 = GuestCard, index 2
+ │  │    │      │    │    │    └──────────────── byte 8 = 1
+ │  │    │      │    │    └───────────────────── byte 7 = I = 1
+ │  │    │      │    └────────────────────────── byte 6 = J | 0x80 → floor 1
+ │  │    │      └─────────────────────────────── byte 5 = K | 0x80 → room 101 → 1
+ │  │    └────────────────────────────────────── byte 4 = 99 | 0x80
+ │  └─────────────────────────────────────────── site & 0x3FFF
+ └────────────────────────────────────────────── site >> 16
+```
+
+Room mapping checked against **all 10** guest rows (`1-101/102/103/104`, `1-202`, `1-205`, plus
+three `wanzhou home` cards) — `J`/`K` always equal `room div 100` / `room mod 100`.
+
+This exact record was **written to the connected encoder and read back byte-for-byte** (§5.3,
+§10), so the input encoding is measured, not inferred. `L = 99` is the only field still without a
+known meaning; it is constant, so a rebuild can hard-code it.
 
 ### 7.4 RoomSetCard (**verified**)
 
@@ -331,6 +394,46 @@ byte 13 = `param_5 & 7`; bytes 14–15 = `rand()`.
 `GroupSetCard`, `RecordCard` all use the same `0xC9` + type-byte scheme; their per-field packing
 was not fully transcribed. `CardErase`, `ResetCard`, `CloseCard` and `IniCard` use a **different,
 shorter frame** (`AA …` command frames, no `0xC9` record).
+
+### 7.7 How `CardLock.Exe` writes a guest card (**verified**)
+
+`FUN_006cea00` (reached only from the writer dispatcher `FUN_006d8c44`, case `6`) ends with:
+
+```c
+local_9c = "ec" + <32 hex chars of the record>   /* Concat, literal at 0x6cf24c = "ec" */
+FUN_006ce8cc(local_9c);
+```
+
+`FUN_006ce8cc` then serialises the frame in **legacy line order** and pushes it straight to the HID
+port:
+
+```c
+n    = Length(local_9c) / 2 + 3;      /* 34/2 + 3 = 0x14 = 20 */
+hdr  = Format('%.2x', n);             /* "14" */
+body = local_9c + hdr;                /* EC, record[16], 0x14 */
+xor  = XOR of every byte of body;
+buf  = body + xor + "00" × 16;        /* 19 + 16 = 35 bytes */
+a_hex(buf, [0x6ece6c], 0x80);         /* hex → bytes, stops at the first non-hex char */
+writePortPro(0x40, [0x6ece6c]);       /* 64-byte report */
+```
+
+`[0x6ece6c]` is a zero-filled 1 KB scratch buffer (cleared by `rep movsd` / `0x401` bytes at
+`0x6cd153`), so the last 29 bytes of the report are zeros.
+
+That is the **same logical frame as `AA 11 EC` + record + xor**, only serialised for the old
+`d12.dll` line protocol: command first, *total* length last (`0x14` = 20 = the size of
+`AA 11 EC` + 16 + xor). Sent to the USB reader unchanged it is ignored — verified on hardware:
+the card did not change.
+
+The form the USB firmware accepts is the `AA` envelope of §5:
+
+```
+AA 11 EC | record[16] | xor          /* 20 bytes — verified, card read back identically */
+```
+
+Consequence for a rebuild: build the 16-byte record per §7.3 and send
+`AA 11 EC <record> <xor>` through `writePortPro(0x40, buf)` (or write report id `0x40` directly on
+the HID device). Do not reproduce the legacy ordering.
 
 ## 8. `IniCard` — lock initialisation (**verified**)
 
@@ -362,11 +465,15 @@ This is the **Reset Card** step of the commissioning sequence.
    CRC-32 (zlib / reflected / non-reflected, with and without init/xorout, over 16, 20 or 32
    bytes — see `tools/re-proUSB/trailer-crc-guess.mjs`). A rebuild using the same reader hardware
    does not need it.
-3. **Guest card input encoding** (§7.3) — needs the `CardLock.Exe` caller.
+3. **Guest card input encoding — resolved** (§7.3): `IIJJKKLL` decimal string → bytes 4–7, and the
+   card is written with `AA 11 EC` + record + xor (§5.3, §7.7), verified on hardware. The only
+   unknown left is the constant `L = 99`.
 4. **16 anomalous `CardInfo` rows** (byte 9 = `0x01,0x08,0x0A,0x0B,0x0F,0x1D,0x1E`, prefixes
    `C912033B / C912169A / C912316A`) that do not fit the type table. Probably records produced by
    an older build or a different card family.
-5. **`param_2` (24-bit site/serial)** and the exact meaning of `M`, `O` and `D`.
+5. **`param_2` (24-bit site/serial)** and the meaning of the `M` / `O` nibbles in the date groups.
+   `A/B/C/D` and `E/F/G/H` are month/day/year/hour: the guest row reads 2012‑05‑27 21:00 →
+   2012‑05‑28 00:00.
 6. **`IniCard` does not answer on a master card.** Read/init commands are silent while `ReadCard`
    and `WriteCard` work, so the reset step presumably targets a record card only. Needs a blank
    record card to confirm.
@@ -383,3 +490,17 @@ The encoder was connected for this analysis (`Reader_0000016`).
   reader always recomputes it; the card now carries `50 50 00 83`. The 16-byte record — the part
   the database and the builders use — is byte-identical to the original.
 * No lock was available, so **no card produced by this analysis has been presented to a lock**.
+
+### 10.1 Guest-record round trip (same session)
+
+| Step | Frame sent | Record on the card after |
+|---|---|---|
+| baseline | `AA 01 E4 4F` | `C9121722FF00298000B919D2C029D5FB` (master, nonce `29`) |
+| control | `AA 21 EC` + payload + xor | `C9121722FF00318000B919D2C029D5FB` (nonce `29`→`31`) |
+| legacy order (§7.7) | `EC` + record + `14` + xor + `00`×16 | **unchanged** — the firmware ignores it |
+| 16-byte guest | `AA 11 EC` + `C91224B6…E300` + `B2` | `C91224B6E3818101016265DB1565E300` |
+| restore | `AA 21 EC` + master record + `00`×16 + `6A` | `C9121722FF00298000B919D2C029D5FB` |
+
+Every write blocks the reader for ~2 s (the `readPortPro` call that follows takes 2004–2015 ms
+instead of 2 ms) and emits the audible beep sequence; `cmd = 0xEC` never returns a reply. The card
+is back to its original 16-byte master record, trailer `50 50 00 83` as in §10.

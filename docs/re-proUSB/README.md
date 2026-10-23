@@ -22,7 +22,8 @@ Nothing in this folder is needed to *use* the software; it exists to understand 
 * **Data** — Microsoft Access, Jet 4.0, password available from the EXE's own connection-string
   template. Full schema and 62 stored card records recovered.
 * **Cards** — 16-byte record (`C9 12 …`), byte 9 = `type | index` (`0x6n` guest, `0xBn` master,
-  `0x2n` room-set, `0x3n` clock, …), framed as `AA 21 EC + 32 bytes + XOR checksum`, sent as a
+  `0x2n` room-set, `0x3n` clock, …), framed as `AA <n> EC` + payload + XOR checksum (`n` = `0x11`
+  for a 16-byte record, `0x21` for a 32-byte one), sent as a
   64-byte transfer.
 * **Encoder** — USB HID (`VID 0x9915` / `PID 0x1116`, report `0x40`) through `d12c.dll`,
   or the legacy AVR device through `d12.dll` (`DeviceIoControl` IOCTL `0x22200C`).
@@ -30,7 +31,8 @@ Nothing in this folder is needed to *use* the software; it exists to understand 
 * **Live validation** — the connected encoder (`Reader_0000016`, `proUSB-TEMIC`) was driven
   directly: buzzer frames produced audible beeps, `ReadCard` returned a real master card
   (`0xB9`, 2011‑09‑26 → 2023‑09‑26), and a record written with `WriteCard` was read back from the
-  card. Frames, report IDs and checksums are no longer theoretical.
+  card. Frames, report IDs and checksums are no longer theoretical, and a guest record rebuilt from
+  the database encoding was written and read back byte-for-byte.
 
 ## Method and reproducibility
 
@@ -46,7 +48,15 @@ written for this dossier (no vendor application was needed to drive the device).
 | `tools/re-proUSB/read-json.mjs` | encoding-tolerant reader for REA CLI output |
 | `tools/re-proUSB/hid-probe.ps1` | HID probe / read / write / beep harness (SetupAPI + hid.dll) |
 | `tools/re-proUSB/vendor-dll-test.ps1` | calls the vendor `d12c.dll` directly (32-bit PowerShell) |
+| `tools/re-proUSB/card-rw.ps1` | read / write one card record with read-back verification |
 | `tools/re-proUSB/trailer-crc-guess.mjs` | tests CRC-32 hypotheses against the 4-byte card trailer |
+| `tools/re-proUSB/pe-string-refs.mjs` | finds the code that references a VA (literals, globals) |
+| `tools/re-proUSB/pe-xrefs.mjs` | call/jump xrefs to a VA, `jmp`-thunk callers included |
+| `tools/re-proUSB/pe-hexdump.mjs` | VA-based hex dump of a PE file |
+| `tools/re-proUSB/pe-pattern.mjs` | scans for a byte pattern with a `??` wildcard |
+| `tools/re-proUSB/delphi-methods.mjs` | recovers Delphi VMT method names to addresses |
+| `tools/re-proUSB/card-record-decode.mjs` | decodes 16-byte records, single or a `CardInfo` dump |
+| `tools/re-proUSB/mdb-query.ps1` | read-only Jet OLEDB query helper (32-bit, password from `local.env`) |
 
 ```powershell
 # forms + resources
@@ -74,8 +84,9 @@ The database password used for the read-only schema extraction is kept out of th
 
 See `CARD-API.md` §9. The record-length question is settled — the card area is 20 bytes: a
 16-byte record (what the builders produce and the database stores) plus a 4-byte trailer computed
-by the reader. The trailer algorithm is unknown, the guest-card input encoding still requires the
-`CardLock.Exe` call sites, and no card written by this analysis has been presented to a lock.
+by the reader. The guest-card input encoding is resolved (`IIJJKKLL` decimal string, written with
+`AA 11 EC` + record + xor), the trailer algorithm is still unknown, and no card written by this
+analysis has been presented to a lock.
 
 ## Legal / ethical scope
 

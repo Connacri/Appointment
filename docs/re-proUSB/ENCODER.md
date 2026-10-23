@@ -46,11 +46,17 @@ out by report length (`0x102`, `0x106`).
 HID report  = [0x40] [ frame bytes … ] [ 0x00 padding ]   → exactly 65 bytes
 ```
 
-`frame` for a card write:
+`frame` for a card write (`n` = payload length + 1):
 
 ```
-AA 21 EC | 32 payload bytes | XOR checksum
-                             ^ seeded with 0x67: 0x67 ^ payload[0] ^ … ^ payload[31]
+AA <n> EC | payload | XOR checksum
+```
+
+The reader accepts a **16-byte** and a **32-byte** payload:
+
+```
+AA 11 EC | record[16] | xor      ← 20 bytes, enough to store a card (verified)
+AA 21 EC | payload[32] | xor     ← 36 bytes, what proRFL.WriteCard emits
 ```
 
 `frame` for a command (buzzer, read, init):
@@ -61,6 +67,10 @@ AA <cmd> <args…> <xor of every preceding byte>
 
 **One checksum rule covers every frame**: the last byte is the XOR of all bytes before it.
 The `0x67` seed is only the initial accumulator value inside `WriteCard`, not a second scheme.
+
+Every frame **must** start with `AA`. The vendor EXE also contains a legacy serialisation of the
+write command (`EC … <total length> <xor>`, `CARD-API.md` §7.7) that the USB firmware ignores —
+verified: the card did not change. Do not copy it.
 
 Reads return one 65-byte input report:
 
@@ -89,7 +99,7 @@ Trailing bytes of the 65-byte report are `0xFF` padding.
 | `ReadRecord` | `AA 01 82 29` | none on a non-record card |
 | `Buzzer` on | `AA 02 80 01 29` | none — audible only |
 | `Buzzer` off | `AA 02 80 00 28` | none |
-| `WriteCard` | `AA 21 EC…` (§3) | **none by design** |
+| `WriteCard` | `AA <n> EC …` (§3), `n` = 0x11 or 0x21 | **none by design** |
 | `IniCard` mode 0 / 1 / 2 | `AA 01 96 3D` / `AA 01 69 C2` / `AA 01 56 FD` | none on a master card |
 
 Notes:
@@ -140,6 +150,22 @@ Notes:
 Use it as ground truth: if the vendor DLL behaves like your harness, any difference with the
 vendor application is in the caller, not in the transport.
 
+`tools/re-proUSB/card-rw.ps1` — read or write one card record, with read-back verification
+(also 32-bit PowerShell):
+
+```powershell
+# read the card currently in the reader
+… -File tools\re-proUSB\card-rw.ps1 -Action read
+
+# write a 16-byte record, then read it back and compare
+… -File tools\re-proUSB\card-rw.ps1 -Action write -RecordHex C91224B6E3818101016265DB1565E300
+
+# same with the 32-byte payload proRFL.WriteCard emits
+… -File tools\re-proUSB\card-rw.ps1 -Action write -PayloadLen 32 -RecordHex C9…
+```
+
+It prints `verify=ok` only when the card itself agrees, because `cmd 0xEC` never replies.
+
 ## 6. End-to-end write test (performed)
 
 The card left in the reader was **not blank** — it already held a master record (`byte 9 = 0xB9`).
@@ -159,6 +185,19 @@ same trailer, so it is a deterministic function of the written data, not a times
 Practical consequence for a rebuild: **the host does not compute those 4 bytes.** Supply the
 16-byte record (the value stored in `CardInfo.CardData`) and let the reader fill the trailer.
 
+### 6.1 Guest record round trip
+
+The record of `CardInfo.ID = 2` (`[WalkIn]1-101`) was rebuilt from the input encoding in
+`CARD-API.md` §7.3 and written with the compact form:
+
+```
+write : AA 11 EC C91224B6E3818101016265DB1565E300 B2
+read  : 55 15 01 C9 12 24 B6 E3 81 81 01 01 62 65 DB 15 65 E3 00 <trailer> <xor>
+```
+
+It came back byte-for-byte, which validates the record builder and the framing together. The card
+was then restored to its previous master record with `AA 21 EC` + payload + xor.
+
 ## 7. Commissioning sequence (as the vendor UI describes it)
 
 1. **Reset Card** — `IniCard(port, mode, out)`, mode `0` / `1` / `2`, frame `AA 01 96 3D`,
@@ -174,6 +213,8 @@ Only step 1 failed to answer on the card at hand (a master card), which is consi
 ## 8. Caveats
 
 * The legacy path needs the vendor's kernel driver; the HID path does not.
+* A frame that does not start with `AA` is silently ignored. `WriteFile` still succeeds, so never
+  infer acceptance from the API return value — read the card back.
 * Windows may hold the HID device exclusively while `CardLock.Exe` is running — close it first.
 * **The device re-enumerates intermittently.** Roughly one probe in three finds no matching
   interface for a few hundred milliseconds. Any automation must retry (the scripts here loop up to
