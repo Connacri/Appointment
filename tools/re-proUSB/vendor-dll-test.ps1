@@ -16,7 +16,10 @@
 param(
     [string]$FrameHex = "AA01963D",
     [int]$ReadDelayMs = 1200,
-    [switch]$FillCc
+    [switch]$FillCc,
+    # ReadRecord streams packets: dump several reads to see the sequence/stream shape.
+    [int]$ReadCount = 1,
+    [int]$IntervalMs = 60
 )
 
 $ErrorActionPreference = 'Stop'
@@ -78,10 +81,11 @@ Write-Output ("calling writePortPro(0x40, frame) at " + (Get-Date -Format 'HH:mm
 [VendorD12c]::writePortPro(0x40, $frame)
 Write-Output ("sleeping " + $ReadDelayMs + " ms before read")
 Start-Sleep -Milliseconds $ReadDelayMs
-Write-Output ("calling readPortPro(0x40, resp) at " + (Get-Date -Format 'HH:mm:ss.fff'))
-$resp = New-Object byte[] 65
-$sw = [Diagnostics.Stopwatch]::StartNew()
-[VendorD12c]::readPortPro(0x40, $resp)
-$sw.Stop()
-Write-Output ("read_elapsed_ms=" + $sw.ElapsedMilliseconds)
-Write-Output ("resp63=" + [VendorD12c]::Hex($resp))
+for ($i = 0; $i -lt $ReadCount; $i++) {
+    $resp = New-Object byte[] 65
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    [VendorD12c]::readPortPro(0x40, $resp)
+    $sw.Stop()
+    Write-Output ("read[$i] elapsed_ms=" + $sw.ElapsedMilliseconds + " resp=" + [VendorD12c]::Hex($resp))
+    if ($i -lt ($ReadCount - 1)) { Start-Sleep -Milliseconds $IntervalMs }
+}
