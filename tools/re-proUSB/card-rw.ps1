@@ -32,7 +32,12 @@ param(
     [ValidateSet(16, 32)][int]$PayloadLen = 16,
     [int]$ReportId = 0x40,
     [int]$ReadDelayMs = 500,
-    [int]$Retries = 6
+    [int]$Retries = 6,
+    # A lost write is silent (the reader re-enumerates and drops the report), so the write
+    # is replayed until the read-back matches. Idempotent: it always sends the same record.
+    [int]$WriteAttempts = 4,
+    # Writes block the reader ~2 s; wait a bit more before reading back.
+    [int]$WriteSettleMs = 1800
 )
 
 $ErrorActionPreference = 'Stop'
@@ -77,7 +82,10 @@ public static class CardRw
 
 function ConvertTo-Bytes([string]$hex) {
     $clean = ($hex -replace '[^0-9A-Fa-f]', '')
-    $out = New-Object byte[] ($clean.Length / 2)
+    if ($clean.Length -eq 0 -or ($clean.Length % 2) -ne 0) {
+        throw "Hex input must contain an even number of digits (got $($clean.Length))"
+    }
+    $out = New-Object byte[] ([int]($clean.Length / 2))
     for ($i = 0; $i -lt $out.Length; $i++) {
         $out[$i] = [Convert]::ToByte($clean.Substring($i * 2, 2), 16)
     }
@@ -131,19 +139,43 @@ if ($Action -eq 'read') {
     exit 0
 }
 
-$frame = New-CardFrame $RecordHex $PayloadLen
-Write-Output "frame=$frame"
-$before = Read-Card
-if ($before) { Write-Output "before=$before" } else { Write-Output "before=unreadable" }
-Send-Report (ConvertTo-Bytes $frame)
-Start-Sleep -Milliseconds 1500
-$after = Read-Card
-if (-not $after) { Write-Output "ERROR=no_readback"; exit 2 }
-Write-Output "after=$after"
 $expected = ($RecordHex -replace '[^0-9A-Fa-f]', '').ToUpper()
-if ($after -eq $expected) {
-    Write-Output "verify=ok"
-    exit 0
+if ($expected.Length -ne 32) {
+    Write-Output "ERROR=RecordHex_must_be_16_bytes"
+    exit 1
 }
-Write-Output "verify=MISMATCH"
-exit 3
+
+$frame = New-CardFrame $expected $PayloadLen
+$frameBytes = ConvertTo-Bytes $frame
+Write-Output "frame=$frame"
+
+$verified = $false
+for ($attempt = 1; $attempt -le $WriteAttempts; $attempt++) {
+    $before = Read-Card
+    if (-not $before) { $before = 'unreadable' }
+    Write-Output ("attempt={0} before={1}" -f $attempt, $before)
+
+    if ($before -eq $expected) {
+        Write-Output "verify=ok"
+        Write-Output "note=record_already_present_no_write_sent"
+        exit 0
+    }
+
+    Send-Report $frameBytes
+    Start-Sleep -Milliseconds $WriteSettleMs
+
+    $after = Read-Card
+    if (-not $after) { $after = 'unreadable' }
+    Write-Output ("attempt={0} after={1}" -f $attempt, $after)
+
+    if ($after -eq $expected) { $verified = $true; break }
+    Start-Sleep -Milliseconds 400
+}
+
+if (-not $verified) {
+    Write-Output "verify=MISMATCH"
+    Write-Output "hint=card_write_protected_or_reader_unstable_after_${WriteAttempts}_attempts"
+    exit 3
+}
+Write-Output "verify=ok"
+exit 0

@@ -165,6 +165,10 @@ vendor application is in the caller, not in the transport.
 ```
 
 It prints `verify=ok` only when the card itself agrees, because `cmd 0xEC` never replies.
+A write is replayed up to `-WriteAttempts` (default 4) times until the read-back matches: the reader
+re-enumerates periodically and a report sent inside that window is dropped silently, so a single-shot
+write is unreliable. When the record is already on the card the script sends nothing and reports
+`note=record_already_present_no_write_sent`, which makes re-running a write safe.
 
 ## 6. End-to-end write test (performed)
 
