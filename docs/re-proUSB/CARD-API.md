@@ -77,21 +77,63 @@ The same buffer is used for input and output.
    (also rejects HID devices whose report lengths identify a mouse `0x102` or keyboard `0x106`)
 7. second `CreateFileA(path, GENERIC_WRITE, …)` → handle used for writes
 
-### 4.2 Write (`writePortPro` → `FUN_10001a60`)
+### 4.2 Write (`writePortPro` → `FUN_10001a60`) (**verified on hardware**)
+
+The decompiled order of the two first statements is a debug-build dead store: the report ID is
+written and then zeroed.
 
 ```c
 BYTE report[65];
-report[0] = 0x40;                 /* HID report ID  */
-memset(report, 0, 65);            /* then set ID    */
-memcpy(report + 1, frame, 63);    /* 63-byte payload */
+DAT_10132d80 = 0x40;              /* HID report ID …                      */
+memset(&DAT_10132d80, 0, 0x41);   /* … immediately overwritten with 0x00  */
+memcpy(&DAT_10132d81, frame, 63); /* 63-byte payload at offset 1          */
 WriteFile(hWrite, report, OutputReportByteLength, &written, NULL);
 ```
 
-### 4.3 Read (`readPortPro` → `FUN_100018c0`)
+Report ID `0x40` is the one that actually drives the device: three buzzer frames sent with it
+produced three audible beeps (§4.4). `WriteFile` also accepts `0x00` and even `0x41`, so a
+successful write is not proof of anything — only the buzzer or a card read-back is.
 
-* overlapped `ReadFile` on the read handle
-* `WaitForSingleObject(event, 2000)` → 2 s timeout
-* on success, 63 bytes from the input report (skipping the report ID) are copied to the caller
+### 4.3 Read (`readPortPro` → `FUN_100018c0`) (**verified on hardware**)
+
+* read handle: `CreateFileA(path, GENERIC_READ, FILE_SHARE_READ|WRITE, NULL, OPEN_EXISTING,
+  FILE_FLAG_OVERLAPPED, NULL)` — opening with access `0` fails with `ERROR_ACCESS_DENIED (5)`
+* manual-reset event + overlapped `ReadFile`, then `WaitForSingleObject(event, 2000)` → 2 s timeout
+* one input report is **65 bytes**: `report[0]` is the report ID (`0x00` on this device) and the
+  useful payload starts at `report[1]`; `d12c.dll` copies from `&DAT_10132d3c + 1`, i.e. it skips
+  byte 0 and hands 63 bytes to the caller
+
+### 4.4 Hardware validation (**verified**)
+
+Measured against the installed encoder (`USB\VID_9915&PID_1116\READER_0000016`):
+
+| Property | Value |
+|---|---|
+| `HidD_GetAttributes` | VID `0x9915`, PID `0x1116`, version `0x0120` |
+| Usage Page / Usage | `0x85FF` (vendor) / `0x0000` |
+| `InputReportByteLength` | 65 |
+| `OutputReportByteLength` | 65 |
+| `FeatureReportByteLength` | 0 |
+| Manufacturer | `Card Lock TEMIC_PRAD` |
+| Product | `proUSB-TEMIC` |
+| Serial | `Reader_0000016` |
+
+Exercised commands:
+
+| Command | Frame | Observed result |
+|---|---|---|
+| `Buzzer` on / off | `AA 02 80 01 29` / `AA 02 80 00 28` | **three distinct beeps**, send path proven |
+| `ReadCard` | `AA 01 E4 4F` | `55 15 01 <20 bytes> <xor>` + `0xFF` padding, byte-for-byte reproducible |
+| `WriteCard` | `AA 21 EC …` | no reply (nominal — `WriteCard` never reads); card content confirmed by read-back |
+| `ReadRecord` | `AA 01 82 29` | no reply on a master card |
+| `IniCard` 0 / 1 / 2 | `AA 01 96 3D` / `69 C2` / `56 FD` | no reply on a master card |
+
+`IOCTL_HID_GET_REPORT_DESCRIPTOR` (`0x000B0000`) returns `ERROR_INVALID_FUNCTION (1)` on this
+device and Windows exposes no `ReportDescriptor` registry value, so the descriptor itself could not
+be dumped. Report lengths are taken from `HidP_GetCaps`.
+
+The device also **re-enumerates intermittently**: roughly one probe in three finds no matching
+interface for a few hundred milliseconds, so every hardware call needs a retry loop.
 
 ## 5. Frame format (**verified**)
 
@@ -107,6 +149,33 @@ offset 35  XOR checksum = 0x67 ^ payload[0] ^ payload[1] ^ … ^ payload[31]
 ```
 
 The transfer length is **64 bytes** (`write_port(port, 0x40, frame)`).
+
+### 5.1 Checksum rule — one rule for every frame (**verified**)
+
+In every frame observed, both request and response, the **last byte is the XOR of all the bytes
+before it**:
+
+```
+Buzzer    AA 02 80 01 29      → AA ^ 02 ^ 80 ^ 01 = 29
+IniCard   AA 01 96 3D         → AA ^ 01 ^ 96      = 3D
+ReadCard  AA 01 E4 4F         → AA ^ 01 ^ E4      = 4F
+ReadRec.  AA 01 82 29         → AA ^ 01 ^ 82      = 29
+Response  55 15 01 … 46 6D 1E → 1E
+```
+
+The `0x67` seed is only the initial accumulator inside `WriteCard`, not a second scheme.
+
+### 5.2 Response frame (**verified**)
+
+```
+55 15 01 | <20-byte card area> | <xor>
+   │  │  └ status: 0x01 observed on success
+   │  └ 0x15 = 21 = 20 data bytes + 1 checksum
+   └ start marker (the only byte `ReadRecord` tests)
+```
+
+Input reports are `0xFF`-padded to 65 bytes. `ReadCard` output is reproducible byte-for-byte
+across reads, so the random nonce of §7.2 is stored on the card, not regenerated at read time.
 
 ## 6. Card type selector — record byte 9 (**verified**)
 
@@ -196,6 +265,31 @@ Reading the two groups as timestamps gives **2015‑08‑03** and **2023‑08‑
 with a validity window (**inferred**: start / end). `M` and `O` are two extra 4-bit fields whose
 meaning is **unknown** (weekday, card counter, or part of a checksum).
 
+**Cross-check on a real card** (`ReadCard` against the connected encoder, `byte 9 = 0xB9`):
+
+```
+record16 = C9 12 17 22 FF 00 29 80 00 B9 19 D2 C0 29 D5 FB
+```
+
+| Byte | Raw | Decode |
+|---|---|---|
+| 4 | `FF` | `param_7` |
+| 5 | `00` | `I = 0`, `J < 10` |
+| 6 | `29` | random nonce (stable across reads) |
+| 7 | `80` | `param_6 = 8` |
+| 8 | `00` | `param_4` |
+| 9 | `B9` | **MasterCard, index 9** |
+| 10 | `19` | `M = 1`, `A = 9` |
+| 11 | `D2` | `B = 26`, `C >> 2 = 2` |
+| 12 | `C0` | `C & 3 = 3` ⇒ `C = 11`, `D = 0` |
+| 13 | `29` | `O = 2`, `E = 9` |
+| 14 | `D5` | `F = 26`, `G >> 2 = 5` |
+| 15 | `FB` | `G & 3 = 3` ⇒ `G = 23`, `H = 59` |
+
+→ **2011‑09‑26** → **2023‑09‑26 23:59**. Same bit layout as the database rows, and `H = 59`
+confirms the last field is a minute. `D` (0 here, 2 in the row above) is still ambiguous — hour or
+minute of the start instant.
+
 ### 7.3 GuestCard (**verified**)
 
 Same head, `0x3B = 0x60 + (param_3 & 0x0F)`, and:
@@ -257,14 +351,35 @@ This is the **Reset Card** step of the commissioning sequence.
 
 ## 9. Open items
 
-1. **Record length discrepancy.** Builders call `hex_a(record, out, 0x14)` (20 bytes → 40 hex
-   chars) while `WriteCard` transmits `0x20` (32) payload bytes, and the database stores exactly
-   16 bytes (32 hex chars). The EXE caller therefore truncates and/or owns a 32-byte struct.
-   Resolution requires decompiling `CardLock.Exe` and reading the call sites.
-2. **Guest card input encoding** (§7.3) — needs the EXE caller.
-3. **16 anomalous `CardInfo` rows** (byte 9 = `0x01,0x08,0x0A,0x0B,0x0F,0x1D,0x1E`, prefixes
+1. **Record length — resolved on hardware.** The card area returned by `ReadCard` is **20 bytes**
+   (`55 15 01` + 21 = 20 data + 1 checksum). The first 16 bytes are the record the builders
+   produce and the database stores (`CardInfo.CardData`, 32 hex chars). The last 4 bytes are
+   **computed by the reader**: `50 29 46 6D` was sent in the payload and `50 50 00 83` was stored;
+   rewriting the same payload reproduces the same trailer. `WriteCard` still transmits 32 bytes —
+   12 of them (zero padding on our harness, stack garbage in the vendor application) are ignored
+   beyond the 20-byte area.
+2. **Trailer algorithm unknown.** It is deterministic and data-dependent, but not a standard
+   CRC-32 (zlib / reflected / non-reflected, with and without init/xorout, over 16, 20 or 32
+   bytes — see `tools/re-proUSB/trailer-crc-guess.mjs`). A rebuild using the same reader hardware
+   does not need it.
+3. **Guest card input encoding** (§7.3) — needs the `CardLock.Exe` caller.
+4. **16 anomalous `CardInfo` rows** (byte 9 = `0x01,0x08,0x0A,0x0B,0x0F,0x1D,0x1E`, prefixes
    `C912033B / C912169A / C912316A`) that do not fit the type table. Probably records produced by
    an older build or a different card family.
-4. **`param_2` (24-bit site/serial)** and the numeric meaning of `A…H`, `M`, `O`.
-5. The encoder was **not connected** during this analysis (no `VID_9915` HID device present), so
-   no live handshake was observed.
+5. **`param_2` (24-bit site/serial)** and the exact meaning of `M`, `O` and `D`.
+6. **`IniCard` does not answer on a master card.** Read/init commands are silent while `ReadCard`
+   and `WriteCard` work, so the reset step presumably targets a record card only. Needs a blank
+   record card to confirm.
+
+## 10. Hardware test log (2026‑10‑23)
+
+The encoder was connected for this analysis (`Reader_0000016`).
+
+* The card left in the reader was **not blank**: it held a valid master card (`0xB9`,
+  2011‑09‑26 → 2023‑09‑26), i.e. an expired card from the previous installation.
+* Its 16-byte record was read, rewritten unchanged, read back identically, then modified
+  (nonce `29` → `2A`), observed on the card, and restored to the original value.
+* The 4-byte trailer could not be restored to its pre-test value (`50 29 46 6D`) because the
+  reader always recomputes it; the card now carries `50 50 00 83`. The 16-byte record — the part
+  the database and the builders use — is byte-identical to the original.
+* No lock was available, so **no card produced by this analysis has been presented to a lock**.
