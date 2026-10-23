@@ -36,10 +36,51 @@ concurrency:
 
 jobs:
   # ============================================================
+  # JOB 0: Quality gate (secret guard + typecheck + unit tests)
+  # Every build job depends on this one: a red typecheck or a broken
+  # protocol test must never reach an APK, an EXE or the website.
+  # ============================================================
+  quality:
+    name: Quality Gate (typecheck + unit tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Guard - no credentials tracked in git
+        run: |
+          if git ls-files | grep -Ei '\.(jks|keystore|p12|pem)$|(^|/)key\.properties$|(^|/)\.env($|\.)|service[-_]account.*\.json$'; then
+            echo "::error::Sensitive file tracked in git. Remove it and rotate the secret."
+            exit 1
+          fi
+          echo "No credential file is tracked."
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: |
+          if [ -f "package-lock.json" ]; then
+            npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          else
+            npm install --legacy-peer-deps
+          fi
+
+      - name: Typecheck (tsc --noEmit)
+        run: npm run lint
+
+      - name: Unit tests (protocol layer)
+        run: npm test
+
+  # ============================================================
   # JOB 1: Build & Update Production Website (GitHub Pages / Web)
   # ============================================================
   build-and-update-website:
     name: Build & Update Production Website
+    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -150,6 +191,7 @@ jobs:
   # ============================================================
   build-and-publish-android-release:
     name: Build & Sign Android (APK + AAB)
+    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -281,6 +323,7 @@ jobs:
   # ============================================================
   build-and-publish-windows-release:
     name: Build & Sign Windows EXE (.exe)
+    needs: quality
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
