@@ -124,52 +124,111 @@ class LockManager {
   private mdbReader = new MdbReader();
   private mdbLoaded = false;
 
-  private issuedCards: IssuedCardRecord[] = [
-    {
-      id: 'card-1',
-      rawHex: 'C91224B6E3818101016265DB1565E300',
-      type: 'guest',
-      cardIndex: 2,
-      roomNumber: '101',
-      holderName: 'Karim Mansouri',
-      operator: 'Admin',
-      issuedAt: '2026-10-23T10:00:00Z',
-      status: 'active',
-      validUntil: '2026-10-27 12:00',
-    },
-    {
-      id: 'card-2',
-      rawHex: 'C9121722FF00298000B919D2C029D5FB',
-      type: 'master',
-      cardIndex: 9,
-      holderName: 'Direction Générale (Passe)',
-      operator: 'SuperAdmin',
-      issuedAt: '2026-10-20T08:00:00Z',
-      status: 'active',
-      validUntil: '2026-12-31 23:59',
-    },
-    {
-      id: 'card-3',
-      rawHex: 'C912033BE38582010169E25BC1E26300',
-      type: 'guest',
-      cardIndex: 9,
-      roomNumber: '205',
-      holderName: 'Sophie Benali',
-      operator: 'Admin',
-      issuedAt: '2026-10-22T14:30:00Z',
-      status: 'active',
-      validUntil: '2026-10-25 12:00',
-    },
-  ];
-
-  private auditRecords: LockAuditRecord[] = [...initialSampleAuditRecords];
-  private settings: ProUsbLockSettings = { ...initialSettings };
+  private issuedCards: IssuedCardRecord[] = this.loadIssuedCards();
+  private auditRecords: LockAuditRecord[] = this.loadAuditRecords();
+  private settings: ProUsbLockSettings = this.loadSettings();
 
   constructor() {
     this.setupTransportLogging(this.webHidTransport);
     this.setupTransportLogging(this.mockTransport);
     // Attempt to load MDB data on startup (async, non-blocking)
     this.loadMdbData();
+  }
+
+  private loadIssuedCards(): IssuedCardRecord[] {
+    try {
+      const saved = localStorage.getItem('omnibook_prousb_issued_cards');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn('[LockManager] Failed to load issued cards from localStorage:', e);
+    }
+    return [
+      {
+        id: 'card-1',
+        rawHex: 'C91224B6E3818101016265DB1565E300',
+        type: 'guest',
+        cardIndex: 2,
+        roomNumber: '101',
+        holderName: 'Karim Mansouri',
+        operator: 'Admin',
+        issuedAt: '2026-10-23T10:00:00Z',
+        status: 'active',
+        validUntil: '2026-10-27 12:00',
+      },
+      {
+        id: 'card-2',
+        rawHex: 'C9121722FF00298000B919D2C029D5FB',
+        type: 'master',
+        cardIndex: 9,
+        holderName: 'Direction Générale (Passe)',
+        operator: 'SuperAdmin',
+        issuedAt: '2026-10-20T08:00:00Z',
+        status: 'active',
+        validUntil: '2026-12-31 23:59',
+      },
+      {
+        id: 'card-3',
+        rawHex: 'C912033BE38582010169E25BC1E26300',
+        type: 'guest',
+        cardIndex: 9,
+        roomNumber: '205',
+        holderName: 'Sophie Benali',
+        operator: 'Admin',
+        issuedAt: '2026-10-22T14:30:00Z',
+        status: 'active',
+        validUntil: '2026-10-25 12:00',
+      },
+    ];
+  }
+
+  private saveIssuedCards(): void {
+    try {
+      localStorage.setItem('omnibook_prousb_issued_cards', JSON.stringify(this.issuedCards));
+    } catch (e) {
+      console.warn('[LockManager] Failed to save issued cards:', e);
+    }
+  }
+
+  private loadAuditRecords(): LockAuditRecord[] {
+    try {
+      const saved = localStorage.getItem('omnibook_prousb_audit_records');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn('[LockManager] Failed to load audit records from localStorage:', e);
+    }
+    return [...initialSampleAuditRecords];
+  }
+
+  private saveAuditRecords(): void {
+    try {
+      localStorage.setItem('omnibook_prousb_audit_records', JSON.stringify(this.auditRecords));
+    } catch (e) {
+      console.warn('[LockManager] Failed to save audit records:', e);
+    }
+  }
+
+  private loadSettings(): ProUsbLockSettings {
+    try {
+      const saved = localStorage.getItem('omnibook_prousb_settings');
+      if (saved) {
+        return { ...initialSettings, ...JSON.parse(saved) };
+      }
+    } catch (e) {
+      console.warn('[LockManager] Failed to load settings from localStorage:', e);
+    }
+    return { ...initialSettings };
+  }
+
+  private saveSettings(): void {
+    try {
+      localStorage.setItem('omnibook_prousb_settings', JSON.stringify(this.settings));
+    } catch (e) {
+      console.warn('[LockManager] Failed to save settings:', e);
+    }
   }
 
   private async loadMdbData(): Promise<void> {
@@ -340,6 +399,7 @@ class LockManager {
 
   public updateSettings(partial: Partial<ProUsbLockSettings>) {
     this.settings = { ...this.settings, ...partial };
+    this.saveSettings();
     this.notifyStateListeners();
   }
 
@@ -478,6 +538,7 @@ class LockManager {
     };
 
     this.issuedCards.unshift(newRecord);
+    this.saveIssuedCards();
     this.notifyStateListeners();
     return newRecord;
   }
@@ -504,6 +565,7 @@ class LockManager {
     };
 
     this.issuedCards.unshift(newRecord);
+    this.saveIssuedCards();
     this.notifyStateListeners();
     return newRecord;
   }
@@ -544,8 +606,60 @@ class LockManager {
     };
 
     this.issuedCards.unshift(newRecord);
+    this.saveIssuedCards();
     this.notifyStateListeners();
     return newRecord;
+  }
+
+  /**
+   * Issues a Guest Card from a booking (auto-integration with planning)
+   */
+  public async issueGuestCardFromBooking(
+    booking: { id: string; guestName: string; unitName?: string; resourceName?: string; startDate: string; endDate: string },
+    operator: string = 'Admin'
+  ): Promise<IssuedCardRecord> {
+    const roomNumber = (booking.unitName || booking.resourceName || '101').replace(/\D/g, '') || '101';
+    const startParts = booking.startDate.split('-').map(Number);
+    const endParts = booking.endDate.split('-').map(Number);
+
+    return this.issueGuestCard({
+      roomNumber,
+      cardIndex: 1,
+      holderName: booking.guestName,
+      operator,
+      validity: {
+        startYear: startParts[0],
+        startMonth: startParts[1],
+        startDay: startParts[2],
+        startHour: 14,
+        endYear: endParts[0],
+        endMonth: endParts[1],
+        endDay: endParts[2],
+        endHour: 12,
+        endMinute: 0,
+      },
+      options: {
+        allowDeadbolt: true,
+        coverCardsBefore: true,
+        openPublicDoor: false,
+      },
+    });
+  }
+
+  /**
+   * Clears all persisted proUSB data (for reset)
+   */
+  public clearPersistedData(): void {
+    localStorage.removeItem('omnibook_prousb_issued_cards');
+    localStorage.removeItem('omnibook_prousb_audit_records');
+    localStorage.removeItem('omnibook_prousb_settings');
+    this.issuedCards = [];
+    this.auditRecords = [];
+    this.settings = { ...initialSettings };
+    this.saveIssuedCards();
+    this.saveAuditRecords();
+    this.saveSettings();
+    this.notifyStateListeners();
   }
 
   /**
@@ -571,6 +685,7 @@ class LockManager {
         roomNo: '101',
       };
       this.auditRecords.unshift(auditEntry);
+      this.saveAuditRecords();
       this.notifyStateListeners();
     }
 
