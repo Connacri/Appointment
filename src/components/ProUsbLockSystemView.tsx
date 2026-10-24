@@ -27,6 +27,7 @@ import {
   Calendar,
   Building,
   User,
+  Users,
   History,
   Terminal,
   Settings,
@@ -108,6 +109,8 @@ export const ProUsbLockSystemView: React.FC = () => {
   const [commissionRoom, setCommissionRoom] = useState('101');
   const [commissionFloor, setCommissionFloor] = useState(1);
   const [commissionBuilding, setCommissionBuilding] = useState(1);
+  const [commissionValidityDays, setCommissionValidityDays] = useState(365);
+  const [commissionValidityHour, setCommissionValidityHour] = useState(12);
 
   // Subscribe to LockManager state and transport logs
   useEffect(() => {
@@ -280,12 +283,12 @@ export const ProUsbLockSystemView: React.FC = () => {
     }
   };
 
-  const handleIssueCommissioning = async (step: 'reset' | 'hard_reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit') => {
+  const handleIssueCommissioning = async (step: 'reset' | 'hard_reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit' | 'group' | 'master' | 'floor' | 'building' | 'emergency') => {
     setIsWriting(true);
     try {
       const now = new Date();
       await lockManager.issueCommissioningCard({
-        type: step,
+        type: step as any,
         roomNumber: commissionRoom,
         floorNo: commissionFloor,
         buildingNo: commissionBuilding,
@@ -294,8 +297,8 @@ export const ProUsbLockSystemView: React.FC = () => {
           year: now.getFullYear(),
           month: now.getMonth() + 1,
           day: now.getDate(),
-          hour: now.getHours(),
-          minute: now.getMinutes(),
+          hour: commissionValidityHour,
+          minute: 0,
         },
       });
 
@@ -978,13 +981,15 @@ export const ProUsbLockSystemView: React.FC = () => {
                 </div>
                 <h3 className="font-bold text-xs text-slate-900 dark:text-white">Étape 2 : Affectation Chambre</h3>
                 <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={commissionRoom}
-                    onChange={(e) => setCommissionRoom(e.target.value)}
-                    placeholder="Numéro Chambre (ex: 101)"
-                    className="w-full p-2 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
-                  />
+                  <input type="text" value={commissionRoom} onChange={(e)=>setCommissionRoom(e.target.value)} placeholder="Chambre (ex: 101)" className="w-full p-2 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
+                  <div className="flex gap-2">
+                    <input type="number" min={1} max={99} value={commissionFloor} onChange={(e)=>setCommissionFloor(Math.max(1,parseInt(e.target.value)||1))} placeholder="Étage" className="w-full p-2 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
+                    <input type="number" min={1} max={99} value={commissionBuilding} onChange={(e)=>setCommissionBuilding(Math.max(1,parseInt(e.target.value)||1))} placeholder="Bâtiment" className="w-full p-2 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
+                  </div>
+                  <div className="flex gap-2">
+                    <input type="number" min={1} max={3650} value={commissionValidityDays} onChange={(e)=>setCommissionValidityDays(Math.max(1,parseInt(e.target.value)||365))} placeholder="Durée validité (jours)" className="w-full p-2 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
+                    <input type="number" min={0} max={23} value={commissionValidityHour} onChange={(e)=>setCommissionValidityHour(Math.max(0,Math.min(23,parseInt(e.target.value)||12)))} placeholder="Heure début (0-23)" className="w-full p-2 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
+                  </div>
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                   Programme le numéro physique dans la mémoire de la serrure. La serrure émet 2 bips pour confirmer l'affectation.
@@ -996,6 +1001,30 @@ export const ProUsbLockSystemView: React.FC = () => {
                 >
                   Émettre Carte N° Chambre
                 </button>
+              </div>
+
+              {/* Staff / Group Cards — Services & Personnel */}
+              <div className="p-4 rounded-xl border-2 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Users size={16} className="text-amber-600" />
+                  <h3 className="font-bold text-xs text-amber-900 dark:text-amber-200">Cartes Services & Personnel (Group / Staff / Building / Floor)</h3>
+                  <span className="ml-auto text-[9px] bg-amber-100 text-amber-800 dark:bg-amber-950 px-1.5 rounded">RÔLES + RESTRICTIONS</span>
+                </div>
+                <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                  Créez des groupes selon les étages du planning Gantt. Restrictions : groupe = seulement chambres assignées; étage = tout l'étage; bâtiment = tout le bâtiment; master = tout l'établissement.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => handleIssueCommissioning('group_set')} disabled={isWriting} className="py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs">Groupe Config (0x50)</button>
+                  <button onClick={() => handleIssueCommissioning('group')} disabled={isWriting} className="py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs">Carte Groupe (0x80)</button>
+                  <button onClick={() => handleIssueCommissioning('floor')} disabled={isWriting} className="py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg text-xs">Carte Étage (0xD0)</button>
+                  <button onClick={() => handleIssueCommissioning('building')} disabled={isWriting} className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs">Carte Bâtiment (0xC0)</button>
+                  <button onClick={() => handleIssueCommissioning('master')} disabled={isWriting} className="py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs col-span-2">Passe Général Master (0xB0)</button>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-[10px] text-amber-800 dark:text-amber-200">
+                  <div><strong>Durée</strong> <input type="number" min={1} max={3650} value={commissionValidityDays} onChange={e=>setCommissionValidityDays(Math.max(1,parseInt(e.target.value)||365))} className="w-full p-1 text-xs rounded bg-white dark:bg-slate-800" /> j</div>
+                  <div><strong>Heure début</strong> <input type="number" min={0} max={23} value={commissionValidityHour} onChange={e=>setCommissionValidityHour(Math.max(0,Math.min(23,parseInt(e.target.value)||12)))} className="w-full p-1 text-xs rounded bg-white dark:bg-slate-800" />h</div>
+                  <div><strong>Étage</strong> <input type="number" min={1} max={99} value={commissionFloor} onChange={e=>setCommissionFloor(Math.max(1,parseInt(e.target.value)||1))} className="w-full p-1 text-xs rounded bg-white dark:bg-slate-800" /></div>
+                </div>
               </div>
 
               {/* Step 3 */}
