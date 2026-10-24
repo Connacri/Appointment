@@ -182,14 +182,22 @@ export class WebHidTransport implements LockTransport {
       
       // Find the correct output report ID from collections
       let foundOutputReportId = 0x40;
+      let found = false;
       if (this.device.collections) {
         for (const collection of this.device.collections) {
           if (collection.outputReports && collection.outputReports.length > 0) {
-            foundOutputReportId = collection.outputReports[0].reportId || 0x40;
+            const reportId = collection.outputReports[0].reportId;
+            if (typeof reportId === 'number') {
+              foundOutputReportId = reportId;
+              found = true;
+            }
             this.onLog?.('info', `Using output report ID 0x${foundOutputReportId.toString(16)} from collection usagePage 0x${collection.usagePage?.toString(16)}`);
             break;
           }
         }
+      }
+      if (!found) {
+        this.onLog?.('info', 'No valid output report ID found in collections, defaulting to 0x40');
       }
       (this as any).outputReportId = foundOutputReportId;
     } catch (err: any) {
