@@ -80,6 +80,8 @@ export const ProUsbLockSystemView: React.FC = () => {
   const [currentReadCard, setCurrentReadCard] = useState<DecodedProUsbCard | null>(null);
   const [isReading, setIsReading] = useState(false);
   const [isWriting, setIsWriting] = useState(false);
+  const [readProgress, setReadProgress] = useState(0); // 0-100 pour le progress circulaire lecture
+  const [writeProgress, setWriteProgress] = useState(0); // 0-100 pour le progress circulaire écriture
 
   // Guest Card Form State
   const [selectedBookingId, setSelectedBookingId] = useState<string>('');
@@ -154,8 +156,16 @@ export const ProUsbLockSystemView: React.FC = () => {
   const handleBuzzerTest = async () => {
     setIsBuzzerTesting(true);
     try {
+      // Bip d'écriture (2 longs 300ms — distinct du bip lecture court 150ms)
+      const transport = lockManager.getTransport();
+      for (let i = 0; i < 2; i++) {
+        await transport.send(new Uint8Array([0xaa, 0x02, 0x80, 0x01, 0x29]));
+        await new Promise(r => setTimeout(r, 300));
+        await transport.send(new Uint8Array([0xaa, 0x02, 0x80, 0x00, 0x28]));
+        if (i < 1) await new Promise(r => setTimeout(r, 200));
+      }
       await lockManager.testBuzzer();
-      showToast('success', 'Signal sonore émis avec succès (3 bips de validation confirmés).');
+      showToast('success', "Bip d'écriture confirmé (2 longs 300ms) + test encoder OK.");
     } catch (err: any) {
       showToast('error', `Erreur de buzzer : ${err.message}`);
     } finally {
@@ -165,23 +175,38 @@ export const ProUsbLockSystemView: React.FC = () => {
 
   const handleReadCard = async () => {
     setIsReading(true);
+    setReadProgress(10);
     try {
+      // Bip de lecture distinct (3 courts, 150ms, 100ms écart) — distinct d'écriture (2 longs 300ms)
+      const transport = lockManager.getTransport();
+      for (let i = 0; i < 3; i++) {
+        await transport.send(new Uint8Array([0xaa, 0x02, 0x80, 0x01, 0x29]));
+        setReadProgress(10 + Math.round(((i + 1) / 3) * 40));
+        await new Promise(r => setTimeout(r, 150));
+        await transport.send(new Uint8Array([0xaa, 0x02, 0x80, 0x00, 0x28]));
+        await new Promise(r => setTimeout(r, 100));
+      }
+      setReadProgress(70);
       const decoded = await lockManager.readCurrentCard();
       if (decoded) {
         setCurrentReadCard(decoded);
-        showToast('success', `Carte lue avec succès : Type ${decoded.type.toUpperCase()}`);
+        setReadProgress(100);
+        // Afficher clairement le type de carte lu (pas confondu avec écriture)
+        showToast('success', `Lecture OK — Type: ${decoded.type}, Index: ${decoded.cardIndex}, Salle: ${decoded.roomNumber || '-'}`);
       } else {
-        showToast('info', "Aucune carte détectée dans l'encodeur ou réponse vide.");
+        showToast('error', 'Aucune carte détectée. Vérifiez qu\'elle est posée sur le lecteur et que le bouton LECTURE (pas ÉCRITURE) est utilisé.');
       }
     } catch (err: any) {
-      showToast('error', `Erreur de lecture : ${err.message}`);
+      showToast('error', `Erreur lecture : ${err.message}`);
     } finally {
       setIsReading(false);
+      setTimeout(() => setReadProgress(0), 3000);
     }
   };
 
   const handleIssueGuestCard = async () => {
     setIsWriting(true);
+    setWriteProgress(10);
     try {
       const startParts = guestStartDate.split('-').map(Number);
       const endParts = guestEndDate.split('-').map(Number);
@@ -211,10 +236,13 @@ export const ProUsbLockSystemView: React.FC = () => {
 
       showToast('success', `Carte Invité pour chambre ${guestRoomNumber} encodée et vérifiée !`);
       setCurrentReadCard(null);
+      setWriteProgress(100);
     } catch (err: any) {
       showToast('error', `Erreur d'encodage : ${err.message}`);
+      setWriteProgress(0);
     } finally {
       setIsWriting(false);
+      setTimeout(() => setWriteProgress(0), 3000);
     }
   };
 
@@ -1208,6 +1236,27 @@ export const ProUsbLockSystemView: React.FC = () => {
                   <Copy size={12} />
                   Copier les logs
                 </button>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] text-slate-400">Lecture</span>
+                  <div className="relative w-8 h-8">
+                    <svg className="w-8 h-8 rotate-[-90deg]" viewBox="0 0 36 36">
+                      <circle cx="18" cy="18" r="15.9" fill="none" stroke="#334155" strokeWidth="2.5" />
+                      <circle cx="18" cy="18" r="15.9" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round"
+                        strokeDasharray={`${(readProgress / 100) * 100}, 100`} />
+                    </svg>
+                    <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-emerald-400">{readProgress}%</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">Écriture</span>
+                  <div className="relative w-8 h-8">
+                    <svg className="w-8 h-8 rotate-[-90deg]" viewBox="0 0 36 36">
+                      <circle cx="18" cy="18" r="15.9" fill="none" stroke="#334155" strokeWidth="2.5" />
+                      <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round"
+                        strokeDasharray={`${(writeProgress / 100) * 100}, 100`} />
+                    </svg>
+                    <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-amber-400">{writeProgress}%</span>
+                  </div>
+                </div>
 
                 <button
                   onClick={() => lockManager.clearLogs()}
