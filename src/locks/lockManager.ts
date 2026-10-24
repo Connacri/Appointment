@@ -18,6 +18,7 @@ import {
   IniMode,
   toHex,
   parseResponse,
+  transact,
 } from './protocol';
 import {
   DecodedProUsbCard,
@@ -455,19 +456,18 @@ class LockManager {
       await transport.open();
     }
 
-    await transport.send(readCard());
-    const rawResp = await transport.receive(2500);
-    if (!rawResp) {
+    try {
+      const response = await transact(transport, readCard(), { timeoutMs: 5000, attempts: 3 });
+      if (response.data.length < 16) {
+        return null;
+      }
+
+      const decoded = decodeCardRecord(response.data.slice(0, 16));
+      return decoded;
+    } catch (err) {
+      transport.onLog?.('error', `Read card failed: ${err}`);
       return null;
     }
-
-    const parsed = parseResponse(rawResp);
-    if (parsed.data.length < 16) {
-      return null;
-    }
-
-    const decoded = decodeCardRecord(parsed.data.slice(0, 16));
-    return decoded;
   }
 
   /**
@@ -486,21 +486,21 @@ class LockManager {
     let decoded: DecodedProUsbCard | null = null;
 
     for (let attempt = 1; attempt <= 3; attempt += 1) {
-      await transport.send(frame);
-      await new Promise((r) => setTimeout(r, 500));
+      try {
+        await transport.send(frame);
+        await new Promise((r) => setTimeout(r, 500));
 
-      // Read back to confirm write
-      await transport.send(readCard());
-      const rawResp = await transport.receive(2500);
-      if (rawResp) {
-        const parsed = parseResponse(rawResp);
-        if (parsed.data.length >= 16) {
-          decoded = decodeCardRecord(parsed.data.slice(0, 16));
+        // Read back to confirm write
+        const response = await transact(transport, readCard(), { timeoutMs: 5000, attempts: 2 });
+        if (response.data.length >= 16) {
+          decoded = decodeCardRecord(response.data.slice(0, 16));
           if (decoded.rawHex === toHex(record16)) {
             verified = true;
             break;
           }
         }
+      } catch (err) {
+        transport.onLog?.('error', `Write/verify attempt ${attempt} failed: ${err}`);
       }
     }
 

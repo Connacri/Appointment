@@ -49,24 +49,36 @@ export async function transact(
   frame: Uint8Array,
   options: TransactOptions = {}
 ): Promise<LockResponse> {
-  const timeoutMs = options.timeoutMs ?? 2000;
+  const timeoutMs = options.timeoutMs ?? 5000;
   const attempts = Math.max(1, options.attempts ?? 3);
-  const retryDelayMs = options.retryDelayMs ?? 150;
+  const retryDelayMs = options.retryDelayMs ?? 300;
 
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    await transport.send(frame);
-    const received = await transport.receive(timeoutMs);
-
-    if (received) {
-      try {
-        return parseResponse(received);
-      } catch (err) {
-        lastError = err;
+    try {
+      // Ensure transport is open
+      if (!transport.isOpen()) {
+        await transport.open();
       }
-    } else {
-      lastError = new LockTimeoutError(timeoutMs);
+
+      await transport.send(frame);
+      const received = await transport.receive(timeoutMs);
+
+      if (received) {
+        try {
+          return parseResponse(received);
+        } catch (err) {
+          lastError = err;
+          transport.onLog?.('error', `Parse error on attempt ${attempt}: ${err}`);
+        }
+      } else {
+        lastError = new LockTimeoutError(timeoutMs);
+        transport.onLog?.('error', `Timeout on attempt ${attempt} (${timeoutMs}ms)`);
+      }
+    } catch (err) {
+      lastError = err;
+      transport.onLog?.('error', `Transport error on attempt ${attempt}: ${err}`);
     }
 
     if (attempt < attempts) {
@@ -101,9 +113,19 @@ export class WebHidTransport implements LockTransport {
 
     try {
       this.onLog?.('info', `Requesting WebHID device with VID 0x${PROUSB_VID.toString(16)} PID 0x${PROUSB_PID.toString(16)}...`);
-      const devices = await (navigator as any).hid.requestDevice({
-        filters: [{ vendorId: PROUSB_VID, productId: PROUSB_PID }],
-      });
+      
+      // Try to get already paired devices first
+      let devices = await (navigator as any).hid.getDevices();
+      const matchingDevices = devices.filter((d: any) => d.vendorId === PROUSB_VID && d.productId === PROUSB_PID);
+      
+      if (matchingDevices.length === 0) {
+        // No paired device, request new one
+        devices = await (navigator as any).hid.requestDevice({
+          filters: [{ vendorId: PROUSB_VID, productId: PROUSB_PID }],
+        });
+      } else {
+        devices = matchingDevices;
+      }
 
       if (!devices || devices.length === 0) {
         throw new TransportError('No proUSB encoder device selected.');
@@ -114,6 +136,7 @@ export class WebHidTransport implements LockTransport {
         await this.device.open();
       }
 
+      // Set up input report handler
       this.device.addEventListener('inputreport', (event: any) => {
         const { data, reportId } = event;
         const array = new Uint8Array(data.byteLength + 1);
@@ -130,7 +153,18 @@ export class WebHidTransport implements LockTransport {
         }
       });
 
-      this.onLog?.('info', `Connected to ${this.device.productName || 'proUSB-TEMIC'} (Serial: Reader_0000016)`);
+      // Handle device disconnection
+      this.device.addEventListener('disconnect', () => {
+        this.onLog?.('error', 'Device disconnected unexpectedly.');
+        this.device = null;
+        // Reject all pending resolvers
+        for (const resolver of this.pendingResolvers) {
+          resolver(null);
+        }
+        this.pendingResolvers = [];
+      });
+
+      this.onLog?.('info', `Connected to ${this.device.productName || 'proUSB-TEMIC'} (Serial: ${this.device.serialNumber || 'Reader_0000016'})`);
     } catch (err: any) {
       this.onLog?.('error', `Connection error: ${err.message}`);
       throw new TransportError(err.message, { cause: err });
@@ -157,13 +191,20 @@ export class WebHidTransport implements LockTransport {
 
       this.onLog?.('tx', `Sending report 0x40 (${payload.length + 1} bytes)`, payload);
       await this.device.sendReport(reportId, payload);
+      
+      // Small delay to let the hardware process the command
+      await new Promise(r => setTimeout(r, 50));
     } catch (err: any) {
       this.onLog?.('error', `Send error: ${err.message}`);
+      // If device disconnected, mark as closed
+      if (err.message?.includes('disconnected') || err.message?.includes('closed')) {
+        this.device = null;
+      }
       throw new TransportError(err.message, { cause: err });
     }
   }
 
-  async receive(timeoutMs = 2000): Promise<Uint8Array | null> {
+  async receive(timeoutMs = 5000): Promise<Uint8Array | null> {
     if (this.inputQueue.length > 0) {
       return this.inputQueue.shift()!;
     }
@@ -321,7 +362,7 @@ export class MockLockTransport implements LockTransport {
     }
   }
 
-  async receive(timeoutMs = 2000): Promise<Uint8Array | null> {
+  async receive(timeoutMs = 5000): Promise<Uint8Array | null> {
     if (this.inputQueue.length > 0) {
       const resp = this.inputQueue.shift()!;
       this.onLog?.('rx', `Simulated RX: ${toHex(resp)}`, resp);
