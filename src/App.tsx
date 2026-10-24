@@ -26,6 +26,7 @@ import { DynamicPricingView } from './components/DynamicPricingView';
 import { ObjectBoxInspectorModal } from './components/ObjectBoxInspectorModal';
 import { QrPassModal } from './components/QrPassModal';
 import { QrScannerModal } from './components/QrScannerModal';
+import { ProUsbLockSystemView } from './components/ProUsbLockSystemView';
 
 const MainLayout: React.FC = () => {
   const {
@@ -78,6 +79,8 @@ const MainLayout: React.FC = () => {
             {activeView === 'channels' && <ChannelManagerView />}
 
             {activeView === 'reports' && <ReportsView />}
+
+            {activeView === 'prousb' && <ProUsbLockSystemView />}
           </main>
         </div>
       </div>

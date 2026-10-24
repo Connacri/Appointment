@@ -19,6 +19,7 @@ import {
   ClipboardList,
   Boxes,
   Coins,
+  KeyRound,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
