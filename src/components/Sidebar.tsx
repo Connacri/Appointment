@@ -155,6 +155,14 @@ export const Sidebar: React.FC = () => {
       roles: ['manager'],
       domains: ['hotel', 'residence', 'clinic', 'doctor', 'restaurant', 'wellness', 'administration'] as DomainType[],
     },
+    {
+      id: 'prousb',
+      label: language === 'fr' ? 'Serrures proUSB' : language === 'ar' ? 'أقفال proUSB' : 'proUSB Locks',
+      icon: KeyRound,
+      view: 'prousb' as const,
+      roles: ['manager', 'receptionist', 'staff'],
+      domains: ['hotel', 'residence'] as DomainType[],
+    },
   ];
 
   const navItems = allNavItems.filter(
