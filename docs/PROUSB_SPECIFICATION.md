@@ -1091,3 +1091,65 @@ Dans la reconstruction React, **ce bridage est supprimé** — l'accès à l'enc
 | ErrRDN | Présent si erreur | Erreur de lecture du dongle |
 
 > Note : Dans la reconstruction React, tout le système de licence est supprimé. L'accès est libre et permanent.
+## 22. Carte Hard Reset Persistant (Securite Admin)
+
+### 22.1 Vue d'ensemble
+
+La Carte Hard Reset Persistant est une carte de securite de niveau administrateur qui permet de reinitialiser definitivement une serrure, meme si elle est deja configuree avec un autre systeme de cartes.
+
+### 22.2 Caracteristiques
+
+| Propriete | Valeur |
+|-----------|--------|
+| Type | hard_reset |
+| Famille byte | 0x00 (marqueur admin) |
+| Niveau d'acces | Administrateur uniquement (role S ou A) |
+| Persistance | Permanente |
+| Fiabilite | Double round + verification + 3 bips |
+| Securite | Double confirmation utilisateur |
+
+### 22.3 Processus
+
+1. Double confirmation utilisateur (2 popups)
+2. Round 1 : Reset standard (3 commandes IniCard)
+3. Round 2 : Reset renforce (3 commandes repeteess)
+4. Verification par lecture de la carte
+5. Confirmation sonore (3 bips longs)
+6. Enregistrement dans issuedCards + log console
+
+### 22.4 Structure de la carte
+
+Octet 0: 0xC9 (Magic)
+Octet 1: 0x12 (Site high)
+Octet 2-3: Site code
+Octet 4-8: 0xFF (marqueur reset force)
+Octet 9: 0x00 | cardIndex (famille reset)
+Octet 10: 0xAD (marqueur admin)
+Octet 11: 0xDE (marqueur device)
+Octet 12: 0xAD (verification)
+Octet 13-15: Timestamp
+
+### 22.5 Marqueurs d'authentification
+
+| Octet | Valeur | Signification |
+|-------|--------|---------------|
+| 10 | 0xAD | Admin marker |
+| 11 | 0xDE | Device marker |
+| 12 | 0xAD | Verification |
+
+### 22.6 Difference avec Reset standard
+
+| Aspect | Reset standard | Hard Reset Persistant |
+|--------|---------------|----------------------|
+| Rounds | 1 (3 commandes) | 2 (6 commandes) |
+| Verification | Aucune | Lecture carte |
+| Confirmation | 3 bips courts | 3 bips longs |
+| Niveau acces | Tout utilisateur | Admin uniquement |
+| Confirmation UI | Aucune | Double confirmation |
+
+### 22.7 Cas d'usage
+
+1. Recuperation d'urgence : serrure configuree avec systeme inconnu
+2. Changement de systeme : migration de cartes
+3. Serrure bloquee : ne repond plus aux cartes normales
+4. Audit de securite : verification etat d'usine
