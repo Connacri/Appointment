@@ -62,7 +62,7 @@ export const ProUsbLockSystemView: React.FC = () => {
   const { language, bookings, resourceGroups } = useApp();
 
   const [activeTab, setActiveTab] = useState<
-    'reception' | 'staff_cards' | 'commissioning' | 'audit_log' | 'encoder_hardware' | 'settings'
+    'reception' | 'staff_cards' | 'commissioning' | 'audit_log' | 'encoder_hardware' | 'settings' | 'security'
   >('reception');
 
   const [isSimulator, setIsSimulator] = useState(lockManager.isUsingSimulator());
@@ -412,6 +412,7 @@ export const ProUsbLockSystemView: React.FC = () => {
           { id: 'audit_log', label: "4. Journal d'Audit & Ouvertures", icon: History },
           { id: 'encoder_hardware', label: '5. Encodeur & Console Trames', icon: Terminal },
           { id: 'settings', label: '6. Options Serrures & Rôles', icon: Settings },
+          { id: 'security', label: '7. Sécurité & Reset Persistant', icon: ShieldCheck },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -1206,6 +1207,120 @@ export const ProUsbLockSystemView: React.FC = () => {
                   ))
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 7: SECURITY & HARD RESET */}
+        {activeTab === 'security' && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-red-200 dark:border-red-900 p-5 shadow-xs space-y-6">
+            <div className="border-b border-red-100 dark:border-red-900 pb-3">
+              <h2 className="text-sm font-bold text-red-900 dark:text-red-200 flex items-center gap-2">
+                <ShieldCheck size={18} className="text-red-600" />
+                Panneau de Securite - Reset Persistant et Audit
+              </h2>
+              <p className="text-xs text-red-700 dark:text-red-300 mt-0.5">
+                Fonctions de securite avancees reservees aux administrateurs. Actions irreversibles.
+              </p>
+            </div>
+
+            <div className="bg-red-50 dark:bg-red-950/30 rounded-xl p-5 border-2 border-red-300 dark:border-red-800 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-600 text-white flex items-center justify-center font-bold text-lg">
+                  !
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-red-900 dark:text-red-200">HARD RESET PERSISTANT</h3>
+                  <p className="text-xs text-red-700 dark:text-red-300">
+                    Reinitialisation definitive de la serrure. Outrepasse toute configuration existante. Double confirmation requise.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div className="space-y-2">
+                  <h4 className="font-bold text-red-900 dark:text-red-200">Caracteristiques :</h4>
+                  <ul className="space-y-1 text-red-700 dark:text-red-300">
+                    <li>- Double round de reset (6 commandes)</li>
+                    <li>- Verification par lecture de la carte</li>
+                    <li>- 3 bips longs de confirmation</li>
+                    <li>- Marqueurs admin (0xAD, 0xDE)</li>
+                    <li>- Survit aux coupures de courant</li>
+                  </ul>
+                </div>
+                <div className="space-y-2">
+                  <h4 className="font-bold text-red-900 dark:text-red-200">Securite :</h4>
+                  <ul className="space-y-1 text-red-700 dark:text-red-300">
+                    <li>- Double confirmation utilisateur</li>
+                    <li>- Niveau admin uniquement (S ou A)</li>
+                    <li>- Log d'audit avec marqueur special</li>
+                    <li>- Irreversible</li>
+                    <li>- Persistance renforcee</li>
+                  </ul>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (window.confirm('ATTENTION : Cette action reinitialisera definitivement la serrure. Toute configuration sera perdue. Confirmer ?')) {
+                    if (window.confirm('Derniere confirmation : Reset persistant irreversible. Continuer ?')) {
+                      handleIssueCommissioning('hard_reset');
+                    }
+                  }
+                }}
+                disabled={isWriting}
+                className="w-full py-3 bg-red-700 hover:bg-red-800 text-white font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+              >
+                <AlertTriangle size={18} />
+                <span>{isWriting ? 'HARD RESET EN COURS...' : 'EXECUTER HARD RESET PERSISTANT'}</span>
+              </button>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-950/30 rounded-xl p-5 border border-blue-200 dark:border-blue-800 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center">
+                  <KeyRound size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-blue-900 dark:text-blue-200">Creation automatique de cartes</h3>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    Les cartes client sont automatiquement emises lors de la creation d'une reservation hotel. La carte est liee a la reservation et au check-in.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <span className="text-blue-700 dark:text-blue-300">Cartes emises automatiquement</span>
+                  <span className="font-bold text-blue-900 dark:text-blue-200">{issuedCards.filter(c => c.operator === 'MDB Import' || c.operator === 'Admin' || c.operator === 'Reception').length}</span>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <span className="text-blue-700 dark:text-blue-300">Cartes actives</span>
+                  <span className="font-bold text-emerald-600">{issuedCards.filter(c => c.status === 'active').length}</span>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <span className="text-blue-700 dark:text-blue-300">Persistance</span>
+                  <span className="font-bold text-emerald-600">localStorage</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-850 rounded-xl p-5 border border-slate-200 dark:border-slate-700 space-y-3">
+              <h3 className="font-bold text-xs text-slate-900 dark:text-white">Gestion des donnees</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Effacer toutes les donnees persistantes (cartes emises, journal d'audit, parametres). Action irreversible.
+              </p>
+              <button
+                onClick={() => {
+                  if (window.confirm('Effacer toutes les donnees proUSB persistantes ?')) {
+                    lockManager.clearPersistedData();
+                    showToast('success', 'Donnees proUSB effacees.');
+                  }
+                }}
+                className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white font-bold rounded-lg text-xs transition-colors"
+              >
+                Effacer les donnees persistantes
+              </button>
             </div>
           </div>
         )}

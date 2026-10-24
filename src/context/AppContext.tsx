@@ -23,6 +23,7 @@ import {
   initialPmsTasks,
 } from '../data/mockData';
 import { objectBox } from '../db/objectbox';
+import { lockManager } from '../locks/lockManager';
 
 export type ActiveAppView =
   | 'planning'
@@ -439,6 +440,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `bkg_${Date.now()}`,
     };
     setBookings((prev) => [newBkg, ...prev]);
+
+    // Auto-issue proUSB guest card for hotel/residence bookings
+    if (bookingData.sector === 'hotel' || bookingData.sector === 'residence') {
+      try {
+        lockManager.issueGuestCardFromBooking(
+          {
+            id: newBkg.id,
+            guestName: bookingData.guestName,
+            resourceName: bookingData.resourceName,
+            startDate: bookingData.startDate,
+            endDate: bookingData.endDate,
+          },
+          currentRole === 'manager' ? 'Admin' : 'Reception'
+        ).then((card) => {
+          console.log('[AppContext] Auto-issued proUSB guest card for booking', newBkg.id, card.rawHex);
+        }).catch((err) => {
+          console.warn('[AppContext] Failed to auto-issue proUSB card:', err);
+        });
+      } catch (e) {
+        console.warn('[AppContext] proUSB card auto-issue error:', e);
+      }
+    }
+
     return { success: true, booking: newBkg };
   };
 
