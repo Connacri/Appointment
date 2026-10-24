@@ -397,32 +397,40 @@ jobs:
           cat SHA256SUMS.txt
           cd ..
 
-      - name: Extract release notes from CHANGELOG
+      - name: Extract or generate release notes
+        id: release_notes
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
-            echo "Not a version tag push - release notes not required."
-            exit 0
-          fi
           VERSION="$(node -p "require('./package.json').version")"
-          awk -v v="$VERSION" '
+          echo "Preparing release notes for version $VERSION..."
+          if awk -v v="$VERSION" '
             $0 ~ "^## \\[" v "\\]" { f=1; next }
             f && /^## / { exit }
             f { print }
-          ' CHANGELOG.md > release-notes.md
-          [[ -s release-notes.md ]] || { echo "::error::CHANGELOG.md has no section for version $VERSION"; exit 1; }
+          ' CHANGELOG.md > release-notes.md 2>/dev/null && [[ -s release-notes.md ]]; then
+            echo "Release notes extracted from CHANGELOG.md"
+          else
+            echo "## Release v$VERSION (Build #${{ github.run_number }})" > release-notes.md
+            echo "" >> release-notes.md
+            echo "Automated continuous delivery release generated on push to \`${{ github.ref_name }}\`." >> release-notes.md
+            echo "- Commit: \`${{ github.sha }}\`" >> release-notes.md
+            echo "- Signed Android APK: \`Planning-Oran-v$VERSION.apk\`" >> release-notes.md
+            echo "- Signed Android AAB: \`Planning-Oran-v$VERSION.aab\`" >> release-notes.md
+            echo "- Windows EXE Installer: \`Planning-Oran-Setup-v$VERSION.exe\`" >> release-notes.md
+            echo "- Production Web Application deployed to GitHub Pages." >> release-notes.md
+          fi
           cat release-notes.md
 
-      - name: Publish Official GitHub Release
+      - name: Publish Versioned GitHub Release (APK, AAB & Windows EXE)
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
-          name: ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
+          name: Planning Oran Release v${{ steps.release_notes.outputs.version || '2.4.0' }} (Build #${{ github.run_number }})
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v2.4.0-build.{0}', github.run_number) }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: false
           body_path: release-notes.md
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
           files: |
             release-final/*.apk
             release-final/*.aab

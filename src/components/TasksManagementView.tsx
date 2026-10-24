@@ -521,7 +521,7 @@ export const TasksManagementView: React.FC = () => {
 
       {/* New Task Modal */}
       {isNewTaskOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Sparkles size={18} className="text-blue-500" />
