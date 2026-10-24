@@ -320,8 +320,13 @@ export class MockLockTransport implements LockTransport {
 
     if (cmd === 0x80) {
       // Buzzer command
-      this.playWebAudioBeep();
-      this.onLog?.('info', '🔊 [Buzzer] Reader emitted audible beep confirmation.');
+      const level = frame[3];
+      if (level === 0x01) {
+        this.playWebAudioBeep();
+        this.onLog?.('info', '🔊 [Buzzer] Reader emitted audible beep confirmation.');
+      } else {
+        this.onLog?.('info', '🔇 [Buzzer] Reader buzzer off.');
+      }
       return;
     }
 

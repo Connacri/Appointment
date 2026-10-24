@@ -436,13 +436,13 @@ class LockManager {
       await transport.open();
     }
 
-    // Send 3 distinct beeps (600ms on, 200ms pause)
+    // proUSB encoder test buzzer: 3 short beeps (150ms each, 200ms gap)
     for (let i = 0; i < 3; i += 1) {
       await transport.send(buzzer(1));
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 150));
       await transport.send(buzzer(0));
       if (i < 2) {
-        await new Promise((r) => setTimeout(r, 250));
+        await new Promise((r) => setTimeout(r, 200));
       }
     }
   }
@@ -605,7 +605,7 @@ class LockManager {
         transport.onLog?.('info', 'Hard reset: verification read completed');
       }
       
-      // Step 3: Buzzer confirmation (3 long beeps)
+      // Step 3: Buzzer confirmation (3 long beeps - 300ms each)
       for (let i = 0; i < 3; i++) {
         await transport.send(buzzer(1));
         await new Promise(r => setTimeout(r, 300));
