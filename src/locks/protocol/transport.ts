@@ -178,7 +178,20 @@ export class WebHidTransport implements LockTransport {
       });
 
       this.onLog?.('info', `Connected to ${this.device.productName || 'proUSB-TEMIC'} (Serial: ${this.device.serialNumber || 'Reader_0000016'})`);
-      this.onLog?.('info', `HID collections: ${JSON.stringify(this.device.collections?.map((c: any) => ({ usagePage: '0x' + c.usagePage?.toString(16), outputReports: c.outputReports?.map((r: any) => '0x' + r.reportId?.toString(16)), inputReports: c.inputReports?.map((r: any) => '0x' + r.reportId?.toString(16)) })))}`);
+      this.onLog?.('info', `HID collections: ${JSON.stringify(this.device.collections?.map((c: any) => ({ usagePage: '0x' + c.usagePage?.toString(16), usage: '0x' + c.usage?.toString(16), outputReports: c.outputReports?.map((r: any) => ({ reportId: '0x' + r.reportId?.toString(16) })), inputReports: c.inputReports?.map((r: any) => ({ reportId: '0x' + r.reportId?.toString(16) })) })))}`);
+      
+      // Find the correct output report ID from collections
+      let foundOutputReportId = 0x40;
+      if (this.device.collections) {
+        for (const collection of this.device.collections) {
+          if (collection.outputReports && collection.outputReports.length > 0) {
+            foundOutputReportId = collection.outputReports[0].reportId || 0x40;
+            this.onLog?.('info', `Using output report ID 0x${foundOutputReportId.toString(16)} from collection usagePage 0x${collection.usagePage?.toString(16)}`);
+            break;
+          }
+        }
+      }
+      (this as any).outputReportId = foundOutputReportId;
     } catch (err: any) {
       this.onLog?.('error', `Connection error: ${err.message}`);
       throw new TransportError(err.message, { cause: err });
@@ -202,8 +215,8 @@ export class WebHidTransport implements LockTransport {
       // Log frame details
       this.onLog?.('tx', `Frame to send (${frame.length} bytes): ${Array.from(frame).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
 
-      // Try sending with report ID 0x40 (standard proUSB)
-      const reportId = 0x40;
+      // Use discovered output report ID
+      const reportId = (this as any).outputReportId || 0x40;
       const payload = new Uint8Array(64);
       payload.set(frame.slice(0, 64));
 

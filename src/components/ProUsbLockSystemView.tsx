@@ -1098,6 +1098,7 @@ export const ProUsbLockSystemView: React.FC = () => {
         {/* TAB 5: HARDWARE & LIVE TRAMES CONSOLE */}
         {activeTab === 'encoder_hardware' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column: Device Info & Controls */}
             <div className="space-y-6">
               {/* Device Identity Card */}
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3.5 text-xs">
@@ -1139,6 +1140,39 @@ export const ProUsbLockSystemView: React.FC = () => {
                     <span>{isConnecting ? 'Connexion en cours...' : "Connecter l'Encodeur USB (WebHID)"}</span>
                   </button>
                 )}
+              </div>
+
+              {/* Manual ReadCard Test */}
+              <div className="bg-purple-50 dark:bg-purple-950/30 rounded-xl p-4 border border-purple-200 dark:border-purple-800 space-y-2 text-xs">
+                <h4 className="font-bold text-purple-900 dark:text-purple-200">Test Lecture Carte (Debug)</h4>
+                <p className="text-purple-700 dark:text-purple-300 text-[11px]">
+                  Envoie la commande ReadCard (AA 01 E4 4F) et affiche la reponse brute.
+                </p>
+                <button
+                  onClick={async () => {
+                    try {
+                      const transport = lockManager.getTransport();
+                      if (!transport.isOpen()) {
+                        await transport.open();
+                      }
+                      const frame = new Uint8Array([0xaa, 0x01, 0xe4, 0x4f]);
+                      await transport.send(frame);
+                      const resp = await transport.receive(5000);
+                      if (resp) {
+                        const hex = Array.from(resp).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                        showToast('info', `Reponse (${resp.length} bytes): ${hex}`);
+                        lockManager.getTransport().onLog?.('rx', `Manual ReadCard response: ${hex}`, resp);
+                      } else {
+                        showToast('error', 'Pas de reponse du lecteur (timeout 5s). Verifiez que la carte est bien posee.');
+                      }
+                    } catch (err: any) {
+                      showToast('error', `Erreur: ${err.message}`);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs transition-colors"
+                >
+                  Tester ReadCard manuellement
+                </button>
               </div>
 
               {/* Diagnostic: List all HID devices */}
@@ -1185,7 +1219,7 @@ export const ProUsbLockSystemView: React.FC = () => {
               </div>
             </div>
 
-            {/* Right 2 Cols: Live Hex Log Console */}
+            {/* Right Column: Live Hex Log Console */}
             <div className="lg:col-span-2 bg-slate-950 text-slate-300 rounded-2xl border border-slate-800 p-4 shadow-xl flex flex-col h-[520px]">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
                 <div className="flex items-center gap-2">
