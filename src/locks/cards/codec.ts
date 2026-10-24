@@ -44,7 +44,11 @@ function packDateTime(year: number, month: number, day: number, hour: number, mi
  * Unpacks 3 bytes into date/time components
  */
 function unpackDateTime(b0: number, b1: number, b2: number, century = 2000): { year: number; month: number; day: number; hour: number; minute: number } {
-  const yy = ((b0 >> 4) & 0x0f) + 16; // proUSB v2026.1: byte AA -> 2026 (was 2010/2020)
+  // proUSB v2026.1 date encoding: byte high-nibble is year offset from base 2010
+  // AA (high=10) -> 2026 requires offset +16 for this software version.
+  // If future proUSB versions change encoding, adjust versionOffset here.
+  const versionOffset = 16;
+  const yy = ((b0 >> 4) & 0x0f) + versionOffset;
   const month = b0 & 0x0f;
   const day = (b1 >> 3) & 0x1f;
   const hour = ((b1 & 0x07) << 2) | ((b2 >> 6) & 0x03);
