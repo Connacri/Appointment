@@ -6,6 +6,22 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-24
+
+### Added
+
+- **Hard Reset Persistant** : Nouvelle carte de sécurité admin (double round, marqueurs 0xAD/0xDE, double confirmation)
+- **Panneau de sécurité** : Onglet dédié dans l'interface proUSB avec stats et gestion des données
+- **Création automatique de cartes** : Émission automatique lors de la création d'une réservation hôtel
+- **Persistance localStorage** : Cartes émises, audit, paramètres survivent au rechargement
+- **Amélioration WebHID** : Re-enumeration, timeout 5s, retry automatique, gestion déconnexion
+
+### Changed
+
+- **Transport** : Timeout par défaut augmenté à 5s, délai de 50ms après envoi
+- **LockManager** : Utilisation de transact() pour readCurrentCard et writeAndVerifyCard
+- **UI** : 7 onglets au lieu de 6 (ajout Sécurité)
+
 ## [1.1.0] - 2026-10-24
 
 ### Added
