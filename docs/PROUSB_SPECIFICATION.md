@@ -870,3 +870,105 @@ Dans la reconstruction React, **ce bridage est supprimé** — l'accès à l'enc
 
 *Document généré par reverse engineering du logiciel proUSB Hotel Lock System.*
 *Ne pas distribuer sans autorisation. Usage réservé à l'interopérabilité et la reconstruction.*
+## 20. Limites et contraintes du système
+
+### 20.1 Limites des cartes
+
+| Carte | Limite | Description |
+|-------|--------|-------------|
+| **Guest** (0x60) | 1 carte active par chambre | La nouvelle carte invalide la précédente (si Cover Cards Before) |
+| **Master** (0xB0) | Illimité | Pas de limite d'émission |
+| **Floor** (0xD0) | 1 par étage | Une carte par étage configuré |
+| **Building** (0xC0) | 1 par bâtiment | Une carte par bâtiment configuré |
+| **Emergency** (0xA0) | 1 par établissement | Une seule carte d'urgence |
+| **Group** (0x80) | 1 par groupe | Une carte par groupe configuré |
+| **Check-Out** (0x70) | Illimité | Peut être émise à tout moment |
+| **Limit** (0x40) | 1 par serrure | Configure les restrictions |
+| **Group Set** (0x50) | 1 par groupe | Programme le code groupe |
+| **Room Set** (0x20) | 1 par serrure | Affecte le numéro de chambre |
+| **Time Set** (0x30) | 1 par serrure | Synchronise l'horloge |
+| **Record** (0x10) | 1 par serrure | Relève l'audit |
+| **Reset** (0x00) | 1 par serrure | Réinitialise la serrure |
+
+### 20.2 Limites temporelles
+
+| Paramètre | Valeur | Description |
+|-----------|--------|-------------|
+| Durée max Guest Card | 365 jours | Validité maximale d'une carte client |
+| Durée max Master Card | 3650 jours | Validité maximale d'une carte maître (10 ans) |
+| Granularité horaire | 1 heure | Les heures sont encodées en heures pleines |
+| Minutes de fin | 0 ou 59 | Les minutes de fin sont soit 00 soit 59 |
+| Année | 0-9 | Encodée sur 4 bits (modulo 10, 2000-2009 puis 2010-2019...) |
+| Mois | 1-12 | Mois standard |
+| Jour | 1-31 | Jour standard |
+| Heure | 0-23 | Heure 24h |
+
+### 20.3 Limites de la mémoire d'audit
+
+| Paramètre | Valeur | Description |
+|-----------|--------|-------------|
+| Slots d'audit | 33 | Nombre maximum d'entrées dans la mémoire de la serrure |
+| Taille par slot | 37 octets | Taille d'un paquet d'audit |
+| Données par slot | 8 octets (RecData) | Données brutes de l'ouverture |
+| Capacité totale | 1221 octets | 33 x 37 octets |
+| Écrasement | FIFO | Les nouvelles entrées écrasent les plus anciennes |
+
+### 20.4 Limites de l'encodeur USB
+
+| Paramètre | Valeur | Description |
+|-----------|--------|-------------|
+| Taille rapport HID | 65 octets | 1 report ID + 64 données |
+| Taille max trame | 63 octets | Payload maximum par trame |
+| VID | 0x9915 | Vendor ID |
+| PID | 0x1116 | Product ID |
+| Report ID sortie | 0x40 | Report ID pour les commandes |
+| Timeout réponse | 2500 ms | Temps d'attente maximum pour une réponse |
+| Tentatives max | 3 | Nombre maximum de tentatives d'écriture |
+
+### 20.5 Limites de la base de données
+
+| Paramètre | Valeur | Description |
+|-----------|--------|-------------|
+| Mot de passe MDB | pradlock | Mot de passe de la base Access |
+| Provider | Jet 4.0 / ACE 12.0 | Fournisseur OLEDB |
+| Tables principales | 4 | CardInfo, RecordOpen, Dai, RegInfo |
+| Taille max carte | 16 octets | Données encodées par carte |
+| Taille max audit | 8 octets | Données brutes par entrée d'audit |
+
+### 20.6 Limites des options de carte
+
+| Option | Bit | Description |
+|--------|-----|-------------|
+| Cover Cards Before | Bit 14 de siteLow | Invalide les cartes précédentes pour cette chambre |
+| Allow Deadbolt | Octet 8 = 0x01 | Autorise le déverrouillage si pêne dormant engagé |
+| Open Public Door | Octet 8 = 0x01 | Accès aux portes publiques/ascenseurs |
+
+### 20.7 Limites des rôles opérateurs
+
+| Rôle | Code | Privilèges | Limitations |
+|------|------|-----------|-------------|
+| Super Admin | S | Tout | Aucune |
+| Admin | A | Mise en service, passes généraux | Pas de gestion des profils |
+| Manager | M | Cartes étages, check-out | Pas de mise en service |
+| Réception | G | Cartes clients uniquement | Pas de passes, pas de mise en service |
+
+### 20.8 Limites des bâtiments et étages
+
+| Paramètre | Valeur | Description |
+|-----------|--------|-------------|
+| Bâtiments max | 3 | Bâtiment 1, 2, 3 |
+| Étages max | 6 | Étages 1 à 6 |
+| Chambres par étage | 99 | Chambres 01 à 99 par étage |
+| Numérotation | BBECCC | BB = bâtiment, E = étage, CCC = chambre |
+
+### 20.9 Limites de la licence (supprimée dans React)
+
+| Paramètre | Valeur originale | Description |
+|-----------|-----------------|-------------|
+| Days | 4095 (max) | Jours de validité restants |
+| SA | 708EE4C560EDC47C | Clé de licence A |
+| SB | 231212 | Clé de licence B (date) |
+| SC | 4080 | Clé de licence C (jours) |
+| ErrRDN | Présent si erreur | Erreur de lecture du dongle |
+
+> Note : Dans la reconstruction React, tout le système de licence est supprimé. L'accès est libre et permanent.
