@@ -178,6 +178,7 @@ export class WebHidTransport implements LockTransport {
       });
 
       this.onLog?.('info', `Connected to ${this.device.productName || 'proUSB-TEMIC'} (Serial: ${this.device.serialNumber || 'Reader_0000016'})`);
+      this.onLog?.('info', `HID collections: ${JSON.stringify(this.device.collections?.map((c: any) => ({ usagePage: '0x' + c.usagePage?.toString(16), outputReports: c.outputReports?.map((r: any) => '0x' + r.reportId?.toString(16)), inputReports: c.inputReports?.map((r: any) => '0x' + r.reportId?.toString(16)) })))}`);
     } catch (err: any) {
       this.onLog?.('error', `Connection error: ${err.message}`);
       throw new TransportError(err.message, { cause: err });
@@ -198,18 +199,21 @@ export class WebHidTransport implements LockTransport {
     }
 
     try {
-      const reportId = 0x40; // Verified proUSB Output Report ID
-      const payload = new Uint8Array(64); // 64 bytes report body
+      // Log frame details
+      this.onLog?.('tx', `Frame to send (${frame.length} bytes): ${Array.from(frame).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
+
+      // Try sending with report ID 0x40 (standard proUSB)
+      const reportId = 0x40;
+      const payload = new Uint8Array(64);
       payload.set(frame.slice(0, 64));
 
-      this.onLog?.('tx', `Sending report 0x40 (${payload.length + 1} bytes)`, payload);
+      this.onLog?.('tx', `Sending report 0x${reportId.toString(16)} (${payload.length} bytes)`, payload);
       await this.device.sendReport(reportId, payload);
-      
+
       // Small delay to let the hardware process the command
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise(r => setTimeout(r, 100));
     } catch (err: any) {
       this.onLog?.('error', `Send error: ${err.message}`);
-      // If device disconnected, mark as closed
       if (err.message?.includes('disconnected') || err.message?.includes('closed')) {
         this.device = null;
       }
