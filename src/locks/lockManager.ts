@@ -19,6 +19,8 @@ import {
   toHex,
   parseResponse,
   transact,
+  PROUSB_VID,
+  PROUSB_PID,
 } from './protocol';
 import {
   DecodedProUsbCard,
@@ -41,6 +43,17 @@ import {
   MdbRecordOpen,
   CardLockDatabase,
 } from './database';
+
+// Types expected by TopBar (remote API compatibility)
+export type UsbConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'unsupported';
+
+export interface UsbDeviceInfo {
+  productName: string;
+  vendorId: number;
+  productId: number;
+  opened: boolean;
+  serialNumber?: string;
+}
 
 export interface TransportLogEntry {
   id: string;
@@ -340,6 +353,46 @@ class LockManager {
 
   public getTransport(): LockTransport {
     return this.useSimulator ? this.mockTransport : this.webHidTransport;
+  }
+
+  // Remote API compatibility methods for TopBar
+  public getStatus(): UsbConnectionStatus {
+    const transport = this.getTransport();
+    if (!transport.isOpen()) return 'disconnected';
+    return this.useSimulator ? 'connected' : 'connected';
+  }
+
+  public getDeviceInfo(): UsbDeviceInfo | null {
+    const transport = this.getTransport();
+    if (!transport.isOpen()) return null;
+    if (transport instanceof WebHidTransport) {
+      const dev = (transport as any).device;
+      if (dev) {
+        return {
+          productName: dev.productName || 'proUSB-TEMIC',
+          vendorId: dev.vendorId || PROUSB_VID,
+          productId: dev.productId || PROUSB_PID,
+          opened: dev.opened || false,
+          serialNumber: dev.serialNumber,
+        };
+      }
+    }
+    return {
+      productName: this.useSimulator ? 'proUSB Simulator' : 'proUSB-TEMIC',
+      vendorId: PROUSB_VID,
+      productId: PROUSB_PID,
+      opened: true,
+    };
+  }
+
+  public subscribeConnection(listener: (status: UsbConnectionStatus, device: UsbDeviceInfo | null) => void): () => void {
+    const wrappedListener = () => {
+      listener(this.getStatus(), this.getDeviceInfo());
+    };
+    const unsub = this.subscribeState(wrappedListener);
+    // Initial call
+    wrappedListener();
+    return unsub;
   }
 
   public isUsingSimulator(): boolean {
