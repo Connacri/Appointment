@@ -192,7 +192,7 @@ export const ProUsbLockSystemView: React.FC = () => {
         setCurrentReadCard(decoded);
         setReadProgress(100);
         // Afficher clairement le type de carte lu (pas confondu avec écriture)
-        showToast('success', `Lecture OK — Type: ${decoded.type}, Index: ${decoded.cardIndex}, Salle: ${decoded.roomNumber || '-'}, Début: ${decoded.validity ? `${String(decoded.validity.startDay).padStart(2,'0')}/${String(decoded.validity.startMonth).padStart(2,'0')}/${decoded.validity.startYear}` : 'N/A'}, Exp: ${decoded.validity ? `${String(decoded.validity.endDay).padStart(2,'0')}/${String(decoded.validity.endMonth).padStart(2,'0')}/${decoded.validity.endYear}` : 'N/A'}`);
+        showToast('success', `Lecture OK — Type: ${decoded.type.toUpperCase()}${decoded.type === 'reset' || decoded.type === 'hard_reset' || decoded.type === 'record' || decoded.type === 'room_set' || decoded.type === 'time_set' || decoded.type === 'limit' || decoded.type === 'group_set' ? ' [MISE EN SERVICE / SYSTÈME]' : ''}, Index: ${decoded.cardIndex}, Salle: ${decoded.roomNumber || '-'}, Début: ${decoded.validity ? `${String(decoded.validity.startDay).padStart(2,'0')}/${String(decoded.validity.startMonth).padStart(2,'0')}/${decoded.validity.startYear}` : 'N/A'}, Exp: ${decoded.validity ? `${String(decoded.validity.endDay).padStart(2,'0')}/${String(decoded.validity.endMonth).padStart(2,'0')}/${decoded.validity.endYear}` : 'N/A'}`);
       } else {
         showToast('error', 'Aucune carte détectée. Vérifiez qu\'elle est posée sur le lecteur et que le bouton LECTURE (pas ÉCRITURE) est utilisé.');
       }
@@ -928,7 +928,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                   </span>
                   <span className="text-[10px] font-mono text-slate-400 uppercase">IniCard / ResetCard</span>
                 </div>
-                <h3 className="font-bold text-xs text-slate-900 dark:text-white">Étape 1 : Réinitialisation Usine</h3>
+                <h3 className="font-bold text-xs text-slate-900 dark:text-white">Étape 1 : Réinitialisation Usine <span className="text-[9px] text-red-600 font-mono">(LIRE = reset, ÉCRIRE = reset card)</span></h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                   Génère la carte de réinitialisation. Présentez-la sur la serrure neuve : la serrure émet 3 bips et passe sa mémoire à zéro.
                 </p>
@@ -1202,8 +1202,10 @@ export const ProUsbLockSystemView: React.FC = () => {
 
               {/* Hardware Actions */}
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3 text-xs">
-                <h3 className="font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                  Commandes Matérielles Directes
+                <h3 className="font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  <ShieldCheck size={14} className="text-red-500" />
+                  Commandes Mise en Service / Système
+                  <span className="ml-auto text-[9px] font-mono text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 px-1.5 py-0.5 rounded">LECTURE ≠ ÉCRITURE</span>
                 </h3>
                 <button
                   onClick={handleBuzzerTest}
