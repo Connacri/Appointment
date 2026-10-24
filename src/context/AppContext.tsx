@@ -453,9 +453,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             endDate: bookingData.endDate,
           },
           currentRole === 'manager' ? 'Admin' : 'Reception'
-        ).then((card) => {
+        ).then((card: any) => {
           console.log('[AppContext] Auto-issued proUSB guest card for booking', newBkg.id, card.rawHex);
-        }).catch((err) => {
+        }).catch((err: any) => {
           console.warn('[AppContext] Failed to auto-issue proUSB card:', err);
         });
       } catch (e) {
