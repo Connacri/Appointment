@@ -831,7 +831,126 @@ card[15] = packDateTime(2026, 10, 27, 12, 0)[2] = 0x00
 
 ---
 
-## 18. Notes de sécurité et conformité
+## 21. Carte Système et Configuration du système
+
+### 21.1 Vue d'ensemble
+
+La "carte système" n'est pas un type de carte physique dans le sens traditionnel (comme les 13 familles de cartes RFID). C'est l'ensemble des **mécanismes de configuration et de maintenance du système** qui sont gérés par le logiciel `CardLock.Exe` via l'interface `frmSystemMaintenance` et `frmLockConfiguration`.
+
+### 21.2 Onglet "System Registe" (Activation/Licence)
+
+**Formulaire** : `frmSystemMaintenance` → onglet "System Registe"
+
+**Procédure** (documentée verbatim dans FORMS.md) :
+1. **Étape 1** : "Get the Device No. and tell it to the vendor" — Le numéro de lecteur (`Reader_0000016`) est affiché dans `lblReaderNo`
+2. **Étape 2** : "Input the Serial No. and Click Registe" — 4 champs `edtRegistor1..4` + bouton `cmdRegiste` + case `chkTest` ("For Test Only")
+
+**Mécanisme** :
+- Le numéro de série est un code **émis par le vendeur**, dérivé du numéro de device, portant un compteur de jours
+- Chaque enregistrement ajoute un bloc à `Reg.ini` et met à jour la ligne `RegInfo`
+- Le `SN` de la nouvelle entrée répète le `SerialNo1` précédent → les activations forment une **chaîne**
+- Quand le compteur de jours est épuisé → "Sorry, The register expired."
+
+**Données stockées** :
+- `Reg.ini` : timestamp, SN, Date, Days, SerialNo1, SerialNo2, ReaderInfo (hex avec ASCII)
+- `CardLock.mdb/RegInfo` : Registor (date), RegDate (hash 8 octets)
+
+**Dans la reconstruction React** : Ce mécanisme est **supprimé**. L'application n'a pas de gate d'activation. L'écran équivalent affiche uniquement l'identité du lecteur, le firmware et la version.
+
+### 21.3 Configuration des serrures (frmLockConfiguration)
+
+**Formulaire** : `frmLockConfiguration` (32 composants)
+
+**Paramètres configurables par serrure** :
+
+| Paramètre | Source | Description |
+|-----------|--------|-------------|
+| `GuestLLock` | System.ini | Pêne dormant autorisé pour les clients |
+| `BaoJing` | System.ini | Alarme sonore forçage (128 = activé) |
+| `TiShi` | System.ini | Rappel fermeture de porte (152 = activé) |
+| `lockAfterReleaseKnob` | Lock config | Re-verrouillage après relâchement poignée |
+| `dontDisturbMode` | Lock config | Mode ne pas déranger |
+| `ignoreCoverFunction` | Lock config | Ignorer la fonction cover |
+| `alarmForcedPin` | Lock config | Alarme forçage |
+| `remindCloseDoor` | Lock config | Rappel porte ouverte |
+| `defaultBuildingNo` | Lock config | Bâtiment par défaut |
+
+**Stockage** : Ces paramètres sont stockés dans `System.ini` (section [SYSTEM]) et dans la mémoire de la serrure (EEPROM via ReadE2/WriteE2).
+
+### 21.4 Définition des pièces (frmRoomsDefination)
+
+**Formulaire** : `frmRoomsDefination`
+
+**Données gérées** :
+- `BuildingInfo` : BldNo (Byte), BldName (text)
+- `RoomInfo` : BldNo, FlrNo, RomID, RomID2, RoomNo, sType, Status, Price, Dai, CardCount, MaxCards, PublicDoor, BeiZhu, ReservCkIn, FirstCkOut, HourRateStartup, HourRatePrice
+
+**Colonnes configurables** :
+- `WidthOfBldNo` = 140 (largeur colonne n° bâtiment)
+- `WidthOfBldName` = 370 (largeur colonne nom bâtiment)
+
+### 21.5 Gestion des opérateurs (OperatorInfo)
+
+**Table** : `OperatorInfo`
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `GongHao` | Text | Login de l'opérateur |
+| `Name` | Text | Nom complet |
+| `MiMa` | Text | Mot de passe (en clair !) |
+| `QuanXian` | Text | Permission : `A` (Admin), `S` (Super Admin), ou `proQuanXian_*` |
+| `BeiZhu` | Text | Remarques |
+
+**Hiérarchie** :
+- `S` : Super Administrateur — Gestion des profils et options serrures
+- `A` : Administrateur — Mise en service des serrures et passes généraux
+- `M` : Manager d'Étage — Attribution des cartes étages et check-out
+- `G` : Opérateur Général (Réception) — Émission quotidienne des cartes clients
+
+### 21.6 Maintenance système (frmSystemMaintenance)
+
+**Formulaire** : `frmSystemMaintenance` (49 composants)
+
+**Onglets** :
+1. **System Registe** : Activation/licence (voir 21.2)
+2. **Options** : Paramètres système (voir 21.3)
+3. **Operators** : Gestion des opérateurs (voir 21.5)
+
+**Fonctions** :
+- Enregistrement de la licence (cmdRegiste)
+- Test de la licence ("For Test Only" checkbox)
+- Gestion des opérateurs (ajout, modification, suppression)
+- Configuration des options système
+- Affichage du numéro de device (lblReaderNo)
+
+### 21.7 EEPROM de la serrure (ReadE2/WriteE2)
+
+**Commande** : `ReadE2` (0x47) — `AA 02 47 <addr> <addr ^ 0xEF>`
+
+**Fonction** : Lit 32 octets de l'EEPROM de la serrure à l'adresse spécifiée.
+
+**Utilisation** :
+- Lecture des paramètres de configuration de la serrure
+- Vérification de l'état de la serrure
+- Diagnostic matériel
+
+**Note** : `WriteE2` n'est pas documenté dans le protocole actuel. La configuration de la serrure se fait principalement via les cartes (Room Set, Time Set, Limit, Group Set).
+
+### 21.8 Résumé — Ce que le "système" fait
+
+| Fonction | Mécanisme | Stockage |
+|----------|-----------|----------|
+| Activation licence | frmSystemMaintenance → Reg.ini + RegInfo | Reg.ini (append-only) |
+| Configuration serrure | frmLockConfiguration → System.ini + EEPROM | System.ini + EEPROM |
+| Définition pièces | frmRoomsDefination → BuildingInfo + RoomInfo | CardLock.mdb |
+| Gestion opérateurs | frmSystemMaintenance → OperatorInfo | CardLock.mdb |
+| Sauvegarde DB | System.ini (DBBakPath) | D:\proUSB_DBBak |
+| Thème visuel | System.ini (Skin) | mxskin*.skn |
+| Paramètres font | System.ini (FONT) | System.ini |
+
+---
+
+## 21. Carte Système et Configuration du système
 
 ### 18.1 Suppression du bridage licence
 
