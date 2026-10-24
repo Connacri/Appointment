@@ -1141,6 +1141,35 @@ export const ProUsbLockSystemView: React.FC = () => {
                 )}
               </div>
 
+              {/* Diagnostic: List all HID devices */}
+              <div className="bg-amber-50 dark:bg-amber-950/30 rounded-xl p-4 border border-amber-200 dark:border-amber-800 space-y-2 text-xs">
+                <h4 className="font-bold text-amber-900 dark:text-amber-200">Diagnostic USB</h4>
+                <p className="text-amber-700 dark:text-amber-300 text-[11px]">
+                  Si l'encodeur n'est pas detecte, cliquez ci-dessous pour lister tous les peripheriques HID disponibles.
+                </p>
+                <button
+                  onClick={async () => {
+                    try {
+                      const devices = await (navigator as any).hid.requestDevice({ filters: [] });
+                      if (devices && devices.length > 0) {
+                        const info = devices.map((d: any) => `${d.productName || 'Unknown'} (VID 0x${d.vendorId.toString(16).toUpperCase()}, PID 0x${d.productId.toString(16).toUpperCase()})`).join('\n');
+                        showToast('info', `${devices.length} peripherique(s) trouve(s) :\n${info}`);
+                      } else {
+                        showToast('error', 'Aucun peripherique HID trouve. Verifiez que l\'encodeur est branche et reconnu par Windows.');
+                      }
+                    } catch (err: any) {
+                      showToast('error', `Erreur diagnostic: ${err.message}`);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs transition-colors"
+                >
+                  Lister tous les peripheriques HID
+                </button>
+                <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                  VID attendu: 0x9915 | PID attendu: 0x1116
+                </p>
+              </div>
+
               {/* Hardware Actions */}
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3 text-xs">
                 <h3 className="font-bold text-slate-900 dark:text-white uppercase tracking-wider">

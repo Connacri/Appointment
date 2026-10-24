@@ -106,6 +106,19 @@ export class WebHidTransport implements LockTransport {
     return this.device !== null && this.device.opened;
   }
 
+  // Add diagnostic method to list all HID devices
+  async listAllDevices(): Promise<any[]> {
+    if (typeof navigator === 'undefined' || !('hid' in navigator)) {
+      return [];
+    }
+    try {
+      const devices = await (navigator as any).hid.getDevices();
+      return devices;
+    } catch {
+      return [];
+    }
+  }
+
   async open(): Promise<void> {
     if (typeof navigator === 'undefined' || !('hid' in navigator)) {
       throw new TransportError('WebHID API is not supported in this browser. Please use Chrome or Edge.');
