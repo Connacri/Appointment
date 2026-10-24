@@ -22,6 +22,7 @@ import {
   Sliders,
   CheckCircle2,
   AlertTriangle,
+  Copy,
   Clock,
   Calendar,
   Building,
@@ -65,7 +66,6 @@ export const ProUsbLockSystemView: React.FC = () => {
     'reception' | 'staff_cards' | 'commissioning' | 'audit_log' | 'encoder_hardware' | 'settings' | 'security'
   >('reception');
 
-  const [isSimulator, setIsSimulator] = useState(lockManager.isUsingSimulator());
   const [logs, setLogs] = useState<TransportLogEntry[]>(lockManager.getLogs());
   const [issuedCards, setIssuedCards] = useState<IssuedCardRecord[]>(lockManager.getIssuedCards());
   const [auditRecords, setAuditRecords] = useState<LockAuditRecord[]>(lockManager.getAuditRecords());
@@ -111,7 +111,6 @@ export const ProUsbLockSystemView: React.FC = () => {
   useEffect(() => {
     const unsubLogs = lockManager.subscribeLogs((newLogs) => setLogs(newLogs));
     const unsubState = lockManager.subscribeState(() => {
-      setIsSimulator(lockManager.isUsingSimulator());
       setIssuedCards(lockManager.getIssuedCards());
       setAuditRecords(lockManager.getAuditRecords());
       setLockSettings(lockManager.getSettings());
@@ -143,13 +142,8 @@ export const ProUsbLockSystemView: React.FC = () => {
   const handleConnectHardware = async () => {
     setIsConnecting(true);
     try {
-      if (isSimulator) {
-        await lockManager.connect();
-        showToast('success', 'Encodeur virtuel proUSB prêt et connecté.');
-      } else {
-        await lockManager.connect();
-        showToast('success', 'Encodeur physique USB HID connecté (VID 0x9915, PID 0x1116).');
-      }
+      await lockManager.connect();
+      showToast('success', 'Encodeur physique USB HID connecté (VID 0x9915, PID 0x1116).');
     } catch (err: any) {
       showToast('error', `Erreur de connexion : ${err.message}`);
     } finally {
@@ -319,7 +313,7 @@ export const ProUsbLockSystemView: React.FC = () => {
               </h1>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                {isSimulator ? 'Simulateur Actif' : 'Encodeur USB Connecté'}
+                Encodeur USB Connecté
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -330,30 +324,6 @@ export const ProUsbLockSystemView: React.FC = () => {
 
         {/* Global Hardware Action Bar */}
         <div className="flex items-center gap-2">
-          {/* Simulator vs Physical WebHID Switch */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
-            <button
-              onClick={() => lockManager.setUseSimulator(true)}
-              className={`px-2.5 py-1 rounded-md font-medium transition-all ${
-                isSimulator
-                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Simulateur Virtuel
-            </button>
-            <button
-              onClick={() => lockManager.setUseSimulator(false)}
-              className={`px-2.5 py-1 rounded-md font-medium transition-all flex items-center gap-1 ${
-                !isSimulator
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Usb size={13} />
-              USB Physique
-            </button>
-          </div>
 
           <button
             onClick={handleBuzzerTest}
@@ -1130,8 +1100,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                   </div>
                 </div>
 
-                {!isSimulator && (
-                  <button
+                <button
                     onClick={handleConnectHardware}
                     disabled={isConnecting}
                     className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-2"
@@ -1139,8 +1108,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                     <Usb size={14} />
                     <span>{isConnecting ? 'Connexion en cours...' : "Connecter l'Encodeur USB (WebHID)"}</span>
                   </button>
-                )}
-              </div>
+                </div>
 
               {/* Manual ReadCard Test */}
               <div className="bg-purple-50 dark:bg-purple-950/30 rounded-xl p-4 border border-purple-200 dark:border-purple-800 space-y-2 text-xs">
@@ -1228,6 +1196,19 @@ export const ProUsbLockSystemView: React.FC = () => {
                     Console des Trames USB / WebHID Temps Réel
                   </span>
                 </div>
+                <button
+                  onClick={() => {
+                    const txt = lockManager.exportLogs();
+                    navigator.clipboard?.writeText(txt).catch(() => {});
+                    showToast('info', 'Tous les logs de la console copiés dans le presse-papiers (JSON).');
+                  }}
+                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center gap-1.5"
+                  title="Copier l'intégralité du journal des trames USB"
+                >
+                  <Copy size={12} />
+                  Copier les logs
+                </button>
+
                 <button
                   onClick={() => lockManager.clearLogs()}
                   className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors"

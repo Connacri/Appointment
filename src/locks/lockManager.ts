@@ -9,7 +9,6 @@
 import {
   LockTransport,
   WebHidTransport,
-  MockLockTransport,
   readCard,
   writeCard,
   buzzer,
@@ -91,45 +90,8 @@ const initialSettings: ProUsbLockSettings = {
   defaultBuildingNo: 1,
 };
 
-const initialSampleAuditRecords: LockAuditRecord[] = [
-  {
-    orderFlag: 1,
-    recDataHex: '12ED033BFCC409FF',
-    openTime: '2026-10-23T14:22:10.000Z',
-    eventType: 'guest_open',
-    cardIdentifier: 'C912-GUEST-01',
-    roomNo: '101',
-  },
-  {
-    orderFlag: 2,
-    recDataHex: 'FF8481018098FFFF',
-    openTime: '2026-10-23T11:05:40.000Z',
-    eventType: 'master_open',
-    cardIdentifier: 'C912-MASTER-01',
-    roomNo: '101',
-  },
-  {
-    orderFlag: 3,
-    recDataHex: '033B12EDFCC40900',
-    openTime: '2026-10-22T19:40:15.000Z',
-    eventType: 'guest_open',
-    cardIdentifier: 'C912-GUEST-02',
-    roomNo: '205',
-  },
-  {
-    orderFlag: 4,
-    recDataHex: 'A001991580981116',
-    openTime: '2026-10-21T08:12:00.000Z',
-    eventType: 'emergency_open',
-    cardIdentifier: 'C912-EMERGENCY',
-    roomNo: '104',
-  },
-];
-
 class LockManager {
   private webHidTransport = new WebHidTransport();
-  private mockTransport = new MockLockTransport();
-  private useSimulator = true; // default to simulator so it works everywhere out of the box
   private logs: TransportLogEntry[] = [];
   private logListeners: Array<(logs: TransportLogEntry[]) => void> = [];
   private stateListeners: Array<() => void> = [];
@@ -144,7 +106,8 @@ class LockManager {
 
   constructor() {
     this.setupTransportLogging(this.webHidTransport);
-    this.setupTransportLogging(this.mockTransport);
+    // Real hardware only: automatically connect to the proUSB encoder when plugged in via USB
+    this.webHidTransport.setAutoConnectEnabled(true);
     // Attempt to load MDB data on startup (async, non-blocking)
     this.loadMdbData();
   }
@@ -158,43 +121,7 @@ class LockManager {
     } catch (e) {
       console.warn('[LockManager] Failed to load issued cards from localStorage:', e);
     }
-    return [
-      {
-        id: 'card-1',
-        rawHex: 'C91224B6E3818101016265DB1565E300',
-        type: 'guest',
-        cardIndex: 2,
-        roomNumber: '101',
-        holderName: 'Karim Mansouri',
-        operator: 'Admin',
-        issuedAt: '2026-10-23T10:00:00Z',
-        status: 'active',
-        validUntil: '2026-10-27 12:00',
-      },
-      {
-        id: 'card-2',
-        rawHex: 'C9121722FF00298000B919D2C029D5FB',
-        type: 'master',
-        cardIndex: 9,
-        holderName: 'Direction Générale (Passe)',
-        operator: 'SuperAdmin',
-        issuedAt: '2026-10-20T08:00:00Z',
-        status: 'active',
-        validUntil: '2026-12-31 23:59',
-      },
-      {
-        id: 'card-3',
-        rawHex: 'C912033BE38582010169E25BC1E26300',
-        type: 'guest',
-        cardIndex: 9,
-        roomNumber: '205',
-        holderName: 'Sophie Benali',
-        operator: 'Admin',
-        issuedAt: '2026-10-22T14:30:00Z',
-        status: 'active',
-        validUntil: '2026-10-25 12:00',
-      },
-    ];
+    return [];
   }
 
   private saveIssuedCards(): void {
@@ -214,7 +141,7 @@ class LockManager {
     } catch (e) {
       console.warn('[LockManager] Failed to load audit records from localStorage:', e);
     }
-    return [...initialSampleAuditRecords];
+    return [];
   }
 
   private saveAuditRecords(): void {
@@ -352,33 +279,28 @@ class LockManager {
   }
 
   public getTransport(): LockTransport {
-    return this.useSimulator ? this.mockTransport : this.webHidTransport;
+    return this.webHidTransport;
   }
 
   // Remote API compatibility methods for TopBar
   public getStatus(): UsbConnectionStatus {
-    const transport = this.getTransport();
-    if (!transport.isOpen()) return 'disconnected';
-    return this.useSimulator ? 'connected' : 'connected';
+    return this.webHidTransport.isOpen() ? 'connected' : 'disconnected';
   }
 
   public getDeviceInfo(): UsbDeviceInfo | null {
-    const transport = this.getTransport();
-    if (!transport.isOpen()) return null;
-    if (transport instanceof WebHidTransport) {
-      const dev = (transport as any).device;
-      if (dev) {
-        return {
-          productName: dev.productName || 'proUSB-TEMIC',
-          vendorId: dev.vendorId || PROUSB_VID,
-          productId: dev.productId || PROUSB_PID,
-          opened: dev.opened || false,
-          serialNumber: dev.serialNumber,
-        };
-      }
+    if (!this.webHidTransport.isOpen()) return null;
+    const dev = (this.webHidTransport as any).device;
+    if (dev) {
+      return {
+        productName: dev.productName || 'proUSB-TEMIC',
+        vendorId: dev.vendorId || PROUSB_VID,
+        productId: dev.productId || PROUSB_PID,
+        opened: dev.opened || false,
+        serialNumber: dev.serialNumber,
+      };
     }
     return {
-      productName: this.useSimulator ? 'proUSB Simulator' : 'proUSB-TEMIC',
+      productName: 'proUSB-TEMIC',
       vendorId: PROUSB_VID,
       productId: PROUSB_PID,
       opened: true,
@@ -395,17 +317,18 @@ class LockManager {
     return unsub;
   }
 
-  public isUsingSimulator(): boolean {
-    return this.useSimulator;
-  }
-
-  public setUseSimulator(value: boolean) {
-    this.useSimulator = value;
-    this.notifyStateListeners();
-  }
-
   public getLogs(): TransportLogEntry[] {
     return [...this.logs];
+  }
+
+  public exportLogs(): string {
+    return JSON.stringify(this.logs.map((l) => ({
+      id: l.id,
+      timestamp: l.timestamp,
+      direction: l.direction,
+      message: l.message,
+      dataHex: l.dataHex,
+    })), null, 2);
   }
 
   public clearLogs() {
@@ -457,12 +380,8 @@ class LockManager {
     this.notifyStateListeners();
   }
 
-  public getMockTransport(): MockLockTransport {
-    return this.mockTransport;
-  }
-
   /**
-   * Connects to the active transport (WebHID or Simulator)
+   * Connects to the active transport (WebHID only)
    */
   public async connect(): Promise<void> {
     const transport = this.getTransport();
@@ -558,11 +477,7 @@ class LockManager {
     }
 
     if (!verified || !decoded) {
-      // In simulator, ensure it succeeds directly
-      if (!this.isUsingSimulator()) {
-        throw new Error("L'écriture n'a pas pu être vérifiée en relecture sur la carte.");
-      }
-      decoded = decodeCardRecord(record16);
+      throw new Error("L'écriture n'a pas pu être vérifiée en relecture sur la carte.");
     }
 
     return decoded;

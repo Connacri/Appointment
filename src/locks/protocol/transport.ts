@@ -101,6 +101,8 @@ export class WebHidTransport implements LockTransport {
   private device: any = null;
   private pendingResolvers: Array<(value: Uint8Array | null) => void> = [];
   private inputQueue: Uint8Array[] = [];
+  private autoConnectEnabled = false;
+  private autoConnectTimer: ReturnType<typeof setInterval> | null = null;
 
   isOpen(): boolean {
     return this.device !== null && this.device.opened;
@@ -181,6 +183,9 @@ export class WebHidTransport implements LockTransport {
       this.onLog?.('info', `HID collections: ${JSON.stringify(this.device.collections?.map((c: any) => ({ usagePage: '0x' + c.usagePage?.toString(16), usage: '0x' + c.usage?.toString(16), outputReports: c.outputReports?.map((r: any) => ({ reportId: '0x' + r.reportId?.toString(16) })), inputReports: c.inputReports?.map((r: any) => ({ reportId: '0x' + r.reportId?.toString(16) })) })))}`);
       
       // Find the correct output report ID from collections
+      // Note: Some proUSB devices report reportId 0x0 (no report ID), in which case we must use the HID standard
+      // with a 1-byte prefix [0x00] + 64-byte payload, NOT reportId 0x40.
+      // The original protocol (CARD-API.md) uses reportId 0x40 for output, but some hardware uses 0x00.
       let foundOutputReportId = 0x40;
       let found = false;
       if (this.device.collections) {
@@ -188,10 +193,12 @@ export class WebHidTransport implements LockTransport {
           if (collection.outputReports && collection.outputReports.length > 0) {
             const reportId = collection.outputReports[0].reportId;
             if (typeof reportId === 'number') {
-              foundOutputReportId = reportId;
+              // If reportId is 0, that means the device uses raw HID input without a report ID prefix
+              // In that case we must send with reportId 0 and include the 0x00 prefix in the payload
+              foundOutputReportId = reportId; // Could be 0
               found = true;
             }
-            this.onLog?.('info', `Using output report ID 0x${foundOutputReportId.toString(16)} from collection usagePage 0x${collection.usagePage?.toString(16)}`);
+            this.onLog?.('info', `Using output report ID 0x${foundOutputReportId.toString(16)} from collection usagePage 0x${collection.usagePage?.toString(16)} (usage 0x${collection.usage?.toString(16)})`);
             break;
           }
         }
@@ -207,10 +214,61 @@ export class WebHidTransport implements LockTransport {
   }
 
   async close(): Promise<void> {
+    this.stopAutoConnect();
     if (this.device && this.device.opened) {
       await this.device.close();
       this.device = null;
       this.onLog?.('info', 'WebHID device closed.');
+    }
+  }
+
+  /**
+   * Enables automatic connection when a proUSB encoder (VID 0x9915 / PID 0x1116) is detected via USB.
+   * Polls the WebHID device list and auto-opens the encoder when plugged in.
+   */
+  setAutoConnectEnabled(enabled: boolean): void {
+    this.autoConnectEnabled = enabled;
+    if (enabled) {
+      this.startAutoConnect();
+    } else {
+      this.stopAutoConnect();
+    }
+  }
+
+  private startAutoConnect(): void {
+    this.stopAutoConnect();
+    if (typeof navigator === 'undefined' || !('hid' in navigator)) {
+      return;
+    }
+    this.autoConnectTimer = setInterval(() => {
+      if (!this.autoConnectEnabled || this.isOpen()) {
+        return;
+      }
+      void (async () => {
+        try {
+          const devices = await (navigator as any).hid.getDevices();
+          const matching = (Array.isArray(devices) ? devices : []).filter(
+            (d: any) => d.vendorId === PROUSB_VID && d.productId === PROUSB_PID
+          );
+          if (matching.length > 0) {
+            this.onLog?.('info', `proUSB encoder detected via USB (VID 0x${PROUSB_VID.toString(16)} PID 0x${PROUSB_PID.toString(16)}) - auto-connecting...`);
+            try {
+              await this.open();
+            } catch (e) {
+              this.onLog?.('error', `Auto-connect to proUSB encoder failed: ${(e as Error).message}`);
+            }
+          }
+        } catch (e) {
+          // Polling errors are non-fatal; the next tick retries.
+        }
+      })();
+    }, 3000);
+  }
+
+  private stopAutoConnect(): void {
+    if (this.autoConnectTimer) {
+      clearInterval(this.autoConnectTimer);
+      this.autoConnectTimer = null;
     }
   }
 
@@ -223,12 +281,13 @@ export class WebHidTransport implements LockTransport {
       // Log frame details
       this.onLog?.('tx', `Frame to send (${frame.length} bytes): ${Array.from(frame).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
 
-      // Use discovered output report ID
-      const reportId = (this as any).outputReportId || 0x40;
+      // Use discovered output report ID (some proUSB units report 0x00 from HID collections)
+      const discoveredReportId = (this as any).outputReportId;
+      const reportId = discoveredReportId === undefined || discoveredReportId === null ? 0x40 : discoveredReportId;
       const payload = new Uint8Array(64);
       payload.set(frame.slice(0, 64));
 
-      this.onLog?.('tx', `Sending report 0x${reportId.toString(16)} (${payload.length} bytes)`, payload);
+      this.onLog?.('tx', `Sending report 0x${reportId.toString(16).padStart(2, '0')} (${payload.length} bytes)`, payload);
       await this.device.sendReport(reportId, payload);
 
       // Small delay to let the hardware process the command
