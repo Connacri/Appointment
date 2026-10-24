@@ -489,7 +489,21 @@ class LockManager {
   public async issueGuestCard(
     params: EncodeGuestCardParams & { holderName: string; operator: string }
   ): Promise<IssuedCardRecord> {
-    const recordBytes = encodeGuestCard(params);
+    // Business rules — expert hotelier
+  if (params.validity.endYear < params.validity.startYear ||
+      (params.validity.endYear === params.validity.startYear && params.validity.endMonth < params.validity.startMonth) ||
+      (params.validity.endYear === params.validity.startYear && params.validity.endMonth === params.validity.startMonth && params.validity.endDay < params.validity.startDay) ||
+      (params.validity.endYear === params.validity.startYear && params.validity.endMonth === params.validity.startMonth && params.validity.endDay === params.validity.startDay && params.validity.endHour < params.validity.startHour)) {
+    throw new Error('Régle hôtel : la date d\'expiration doit être après le début d\'accès.');
+  }
+  // Guest card max 365 days (hôtel expert)
+  const startMs = new Date(params.validity.startYear, params.validity.startMonth - 1, params.validity.startDay, params.validity.startHour).getTime();
+  const endMs = new Date(params.validity.endYear, params.validity.endMonth - 1, params.validity.endDay, params.validity.endHour).getTime();
+  if (endMs - startMs > 365 * 24 * 3600 * 1000) {
+    throw new Error('Régle hôtel : carte client ne peut dépasser 365 jours de validité.');
+  }
+
+  const recordBytes = encodeGuestCard(params);
     const decoded = await this.writeAndVerifyCard(recordBytes);
 
     const newRecord: IssuedCardRecord = {

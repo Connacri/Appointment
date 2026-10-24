@@ -443,6 +443,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Auto-issue proUSB guest card for hotel/residence bookings
     if (bookingData.sector === 'hotel' || bookingData.sector === 'residence') {
+      // Expert hotelier: check-in must be before check-out; max stay sanity check
+      const s = new Date(bookingData.startDate + 'T14:00');
+      const e = new Date(bookingData.endDate + 'T12:00');
+      if (e <= s) {
+        return { success: false, error: 'Régle hôtel : la date de départ doit être après la date d\'arrivée.' };
+      }
+      if ((e.getTime() - s.getTime()) > 365 * 24 * 3600 * 1000) {
+        return { success: false, error: 'Régle hôtel : séjour supérieur à 365 jours non autorisé.' };
+      }
       try {
         lockManager.issueGuestCardFromBooking(
           {

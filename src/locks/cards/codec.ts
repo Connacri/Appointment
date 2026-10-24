@@ -84,6 +84,12 @@ export interface EncodeGuestCardParams {
  * C9 12 24 B6 E3 81 81 01 01 62 65 DB 15 65 E3 00
  */
 export function encodeGuestCard(params: EncodeGuestCardParams): Uint8Array {
+  // Expert hôtelier: expiration never before creation
+  const startMs = new Date(params.validity.startYear, params.validity.startMonth - 1, params.validity.startDay, params.validity.startHour).getTime();
+  const endMs = new Date(params.validity.endYear, params.validity.endMonth - 1, params.validity.endDay, params.validity.endHour).getTime();
+  if (endMs <= startMs) throw new Error("Régle métier : expiration avant début d'accès.");
+  if ((endMs - startMs) > 365 * 24 * 3600 * 1000) throw new Error("Régle hôtel : carte client > 365 jours.");
+
   const card = new Uint8Array(16);
   const cleanRoom = params.roomNumber.replace(/^[0-9]+-/, '');
   const roomNum = parseInt(cleanRoom, 10) || 101;
