@@ -240,9 +240,24 @@ export const ProUsbLockSystemView: React.FC = () => {
       showToast('success', `Carte Invité pour chambre ${guestRoomNumber} encodée et vérifiée !`);
       setCurrentReadCard(null);
       setWriteProgress(100);
+      // Bip de succès (1 long 300ms — distinct d'échec)
+      const transport = lockManager.getTransport();
+      await transport.send(new Uint8Array([0xaa, 0x02, 0x80, 0x01, 0x29]));
+      await new Promise(r => setTimeout(r, 300));
+      await transport.send(new Uint8Array([0xaa, 0x02, 0x80, 0x00, 0x28]));
     } catch (err: any) {
       showToast('error', `Erreur d'encodage : ${err.message}`);
       setWriteProgress(0);
+      // Bip d'échec (3 courts rapides 150ms — distinct du succès long)
+      try {
+        const transport = lockManager.getTransport();
+        for (let i = 0; i < 3; i++) {
+          await transport.send(new Uint8Array([0xaa, 0x02, 0x80, 0x01, 0x29]));
+          await new Promise(r => setTimeout(r, 150));
+          await transport.send(new Uint8Array([0xaa, 0x02, 0x80, 0x00, 0x28]));
+          await new Promise(r => setTimeout(r, 50));
+        }
+      } catch {}
     } finally {
       setIsWriting(false);
       setTimeout(() => setWriteProgress(0), 3000);
@@ -303,6 +318,8 @@ export const ProUsbLockSystemView: React.FC = () => {
       });
 
       showToast('success', `Carte de mise en service (${step.toUpperCase()}) émise avec succès !`);
+      // Bip de succès (1 long 300ms)
+      try { const t = lockManager.getTransport(); await t.send(new Uint8Array([0xaa, 0x02, 0x80, 0x01, 0x29])); await new Promise(r => setTimeout(r, 300)); await t.send(new Uint8Array([0xaa, 0x02, 0x80, 0x00, 0x28])); } catch {}
     } catch (err: any) {
       showToast('error', `Erreur : ${err.message}`);
     } finally {
