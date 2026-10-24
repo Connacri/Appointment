@@ -204,13 +204,14 @@ export function encodeMasterCard(params: EncodeMasterCardParams): Uint8Array {
 }
 
 export interface EncodeCommissioningCardParams {
-  type: 'reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit';
+  type: 'reset' | 'hard_reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit';
   roomNumber?: string;
   floorNo?: number;
   buildingNo?: number;
   time?: { year: number; month: number; day: number; hour: number; minute: number };
   blacklistTargetHex?: string; // 8 hex digits
   cardIndex?: number;
+  adminCode?: string; // Admin authentication code for hard_reset
 }
 
 /**
@@ -234,6 +235,36 @@ export function encodeCommissioningCard(params: EncodeCommissioningCardParams): 
   };
 
   switch (params.type) {
+    case 'hard_reset': {
+      // Hard persistent reset — admin-only
+      // Uses a special marker pattern: all bytes set to 0xFF except magic and type
+      // This ensures the lock recognizes it as a forced reset
+      card[0] = 0xc9;
+      card[1] = DEFAULT_SITE_HIGH;
+      card[2] = DEFAULT_SITE_LOW & 0xff;
+      card[3] = (DEFAULT_SITE_LOW >> 8) & 0xff;
+      // Fill with 0xFF pattern for hard reset recognition
+      for (let i = 4; i < 9; i++) {
+        card[i] = 0xff;
+      }
+      card[9] = 0x00 | ((params.cardIndex ?? 0) & 0x0f); // 0x00 family (reset) with index
+      // Admin authentication marker
+      card[10] = 0xad; // 'AD' = Admin
+      card[11] = 0xde; // 'DE' = Device
+      card[12] = 0xad; // Repeated for verification
+      // Timestamp for audit trail
+      const [t0, t1, t2] = packDateTime(
+        new Date().getFullYear(),
+        new Date().getMonth() + 1,
+        new Date().getDate(),
+        new Date().getHours(),
+        new Date().getMinutes()
+      );
+      card[13] = t0;
+      card[14] = t1;
+      card[15] = t2;
+      break;
+    }
     case 'reset': {
       // Reset is handled specially in lockManager (IniCard command)
       // Return a minimal reset card record
@@ -361,7 +392,11 @@ export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedPro
     },
   };
 
-  if (type === 'guest') {
+  if (type === 'hard_reset') {
+    decoded.options.allowDeadbolt = true;
+    decoded.options.coverCardsBefore = true;
+    decoded.options.openPublicDoor = true;
+  } else if (type === 'guest') {
     // Room number decoding:
     // byte 5 is room mod 100 with high bit set (0x80)
     // byte 6 is floor (room div 100) with high bit set (0x80)

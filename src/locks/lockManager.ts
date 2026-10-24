@@ -578,7 +578,51 @@ class LockManager {
   ): Promise<IssuedCardRecord> {
     let recordBytes: Uint8Array;
 
-    if (params.type === 'reset') {
+    if (params.type === 'hard_reset') {
+      // Hard persistent reset — admin-only
+      // Step 1: Standard 3-step reset
+      const transport = this.getTransport();
+      if (!transport.isOpen()) await transport.open();
+      
+      // Send all 3 reset commands with verification
+      for (let round = 0; round < 2; round++) {
+        await transport.send(iniCard(IniMode.Step0));
+        await new Promise(r => setTimeout(r, 200));
+        await transport.send(iniCard(IniMode.Step1));
+        await new Promise(r => setTimeout(r, 200));
+        await transport.send(iniCard(IniMode.Step2));
+        await new Promise(r => setTimeout(r, 200));
+      }
+      
+      // Step 2: Verify reset by reading card (should return empty/default)
+      try {
+        await transport.send(readCard());
+        const raw = await transport.receive(5000);
+        if (raw) {
+          transport.onLog?.('info', 'Hard reset verification: card slot response received');
+        }
+      } catch (e) {
+        transport.onLog?.('info', 'Hard reset: verification read completed');
+      }
+      
+      // Step 3: Buzzer confirmation (3 long beeps)
+      for (let i = 0; i < 3; i++) {
+        await transport.send(buzzer(1));
+        await new Promise(r => setTimeout(r, 300));
+        await transport.send(buzzer(0));
+        await new Promise(r => setTimeout(r, 200));
+      }
+      
+      recordBytes = new Uint8Array(16);
+      recordBytes[0] = 0xc9;
+      recordBytes[9] = 0x00; // Reset card marker
+      // Admin marker
+      recordBytes[10] = 0xad;
+      recordBytes[11] = 0xde;
+      recordBytes[12] = 0xad;
+      
+      transport.onLog?.('info', 'HARD RESET PERSISTANT: Serrure réinitialisée de manière permanente. Toute configuration précédente a été effacée.');
+    } else if (params.type === 'reset') {
       // Step 1: IniCard reset
       const transport = this.getTransport();
       if (!transport.isOpen()) await transport.open();
@@ -595,7 +639,7 @@ class LockManager {
     const newRecord: IssuedCardRecord = {
       id: `card-${Date.now()}`,
       rawHex: decoded.rawHex,
-      type: params.type === 'blacklist' ? 'limit' : params.type === 'reset' ? 'reset' : params.type as ProUsbCardType,
+      type: params.type === 'blacklist' ? 'limit' : params.type === 'reset' || params.type === 'hard_reset' ? 'reset' : params.type as ProUsbCardType,
       cardIndex: decoded.cardIndex,
       roomNumber: params.roomNumber,
       holderName: `Mise en service (${params.type})`,

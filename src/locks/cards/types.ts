@@ -8,6 +8,7 @@
 
 export type ProUsbCardType =
   | 'reset'       // 0x00: Lock reset / Initialization card (IniCard / ResetCard)
+  | 'hard_reset'  // 0x00: Hard persistent reset — admin-only, overrides any existing config
   | 'record'      // 0x10: Audit readout / Record collection card
   | 'room_set'    // 0x20: Step 2: Set Room Number in Lock
   | 'time_set'    // 0x30: Step 3: Set Lock Clock & Calendar
@@ -139,6 +140,15 @@ export const PROUSB_CARD_TYPES: Record<ProUsbCardType, ProUsbCardTypeMeta> = {
     badgeColor: 'violet',
     isStaffCard: true,
     isCommissioningCard: false,
+  },
+  hard_reset: {
+    type: 'hard_reset',
+    typeFamilyByte: 0x00,
+    label: { fr: 'Reset Persistant (Hard Reset)', en: 'Persistent Hard Reset', ar: 'إعادة ضبط ثابتة' },
+    description: { fr: 'Réinitialisation persistante et irréversible de la serrure — réservé aux administrateurs. Outrepasse toute configuration existante.', en: 'Persistent and irreversible lock reset — admin only. Overrides any existing configuration.', ar: 'إعادة ضبط ثابتة لا رجعة فيها — للمسؤولين فقط. تتجاوز أي إعدادات موجودة.' },
+    badgeColor: 'red',
+    isStaffCard: true,
+    isCommissioningCard: true,
   },
   reset: {
     type: 'reset',

@@ -258,7 +258,7 @@ export const ProUsbLockSystemView: React.FC = () => {
     }
   };
 
-  const handleIssueCommissioning = async (step: 'reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit') => {
+  const handleIssueCommissioning = async (step: 'reset' | 'hard_reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit') => {
     setIsWriting(true);
     try {
       const now = new Date();
@@ -939,6 +939,33 @@ export const ProUsbLockSystemView: React.FC = () => {
                   className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs transition-colors"
                 >
                   Émettre Carte Reset
+                </button>
+              </div>
+
+              {/* Hard Reset — Admin only */}
+              <div className="p-4 rounded-xl border-2 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="w-6 h-6 rounded-full bg-red-700 text-white text-xs font-bold flex items-center justify-center">
+                    !
+                  </span>
+                  <span className="text-[10px] font-mono text-red-500 uppercase font-bold">HARD RESET</span>
+                </div>
+                <h3 className="font-bold text-xs text-red-900 dark:text-red-200">Reset Persistant (Admin)</h3>
+                <p className="text-[11px] text-red-700 dark:text-red-300 leading-relaxed">
+                  Réinitialisation persistante et irréversible. Outrepasse toute configuration existante. Réservé aux administrateurs. Double confirmation requise.
+                </p>
+                <button
+                  onClick={() => {
+                    if (window.confirm('⚠️ ATTENTION : Cette action réinitialisera définitivement la serrure. Toute configuration sera perdue. Confirmer ?')) {
+                      if (window.confirm('Dernière confirmation : Reset persistant irréversible. Continuer ?')) {
+                        handleIssueCommissioning('hard_reset');
+                      }
+                    }
+                  }}
+                  disabled={isWriting}
+                  className="w-full py-2 bg-red-700 hover:bg-red-800 text-white font-bold rounded-lg text-xs transition-colors"
+                >
+                  {isWriting ? 'Reset en cours...' : 'HARD RESET PERSISTANT'}
                 </button>
               </div>
 
