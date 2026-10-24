@@ -6,6 +6,25 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-24
+
+### Added
+
+- **proUSB Database Integration** : Module `MdbReader` pour lire la base de données `CardLock.mdb` (Access/Jet) avec types complets et données mock correspondant aux résultats du reverse engineering.
+- **proUSB Technical Specification** : Document complet `docs/PROUSB_SPECIFICATION.md` couvrant les 13 familles de cartes, le protocole HID, le schéma MDB, les limites et contraintes.
+- **Card Limits Documentation** : Tableau détaillé des limites de chaque type de carte, des contraintes temporelles, de la mémoire d'audit, de l'encodeur USB, et des rôles opérateurs.
+
+### Changed
+
+- **LockManager** : Chargement automatique des données MDB au démarrage (cartes émises, journal d'audit, paramètres système).
+- **ProUsbLockSystemView** : Correction des erreurs TypeScript (`unitName` → `resourceName`, imports `fromHex`).
+- **Codec** : Ajout du type `'reset'` dans `EncodeCommissioningCardParams`.
+
+### Fixed
+
+- **TypeScript** : Résolution de toutes les erreurs de compilation (`tsc --noEmit` passe sans erreur).
+- **CI/CD** : Vérification que le workflow construit et publie correctement les artefacts signés (APK, AAB, EXE, ZIP).
+
 ## [1.0.8] - 2026-10-12
 
 ### Fixed
