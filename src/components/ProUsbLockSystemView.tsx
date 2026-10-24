@@ -192,7 +192,7 @@ export const ProUsbLockSystemView: React.FC = () => {
         setCurrentReadCard(decoded);
         setReadProgress(100);
         // Afficher clairement le type de carte lu (pas confondu avec écriture)
-        showToast('success', `Lecture OK — Type: ${decoded.type}, Index: ${decoded.cardIndex}, Salle: ${decoded.roomNumber || '-'}`);
+        showToast('success', `Lecture OK — Type: ${decoded.type}, Index: ${decoded.cardIndex}, Salle: ${decoded.roomNumber || '-'}, Début: ${decoded.validity ? `${String(decoded.validity.startDay).padStart(2,'0')}/${String(decoded.validity.startMonth).padStart(2,'0')}/${decoded.validity.startYear}` : 'N/A'}, Exp: ${decoded.validity ? `${String(decoded.validity.endDay).padStart(2,'0')}/${String(decoded.validity.endMonth).padStart(2,'0')}/${decoded.validity.endYear}` : 'N/A'}`);
       } else {
         showToast('error', 'Aucune carte détectée. Vérifiez qu\'elle est posée sur le lecteur et que le bouton LECTURE (pas ÉCRITURE) est utilisé.');
       }

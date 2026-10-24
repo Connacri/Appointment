@@ -502,7 +502,7 @@ class LockManager {
       operator: params.operator,
       issuedAt: new Date().toISOString(),
       status: 'active',
-      validUntil: `${params.validity.endYear}-${String(params.validity.endMonth).padStart(2, '0')}-${String(params.validity.endDay).padStart(2, '0')} ${String(params.validity.endHour).padStart(2, '0')}:00`,
+      validUntil: `${String(params.validity.endDay).padStart(2,'0')}/${String(params.validity.endMonth).padStart(2,'0')}/${params.validity.endYear} ${String(params.validity.endHour).padStart(2,'0')}:00`,
     };
 
     this.issuedCards.unshift(newRecord);
@@ -529,7 +529,7 @@ class LockManager {
       operator: params.operator,
       issuedAt: new Date().toISOString(),
       status: 'active',
-      validUntil: `${params.validity.endYear}-${String(params.validity.endMonth).padStart(2, '0')}-${String(params.validity.endDay).padStart(2, '0')} 23:59`,
+      validUntil: `${String(params.validity.endDay).padStart(2,'0')}/${String(params.validity.endMonth).padStart(2,'0')}/${params.validity.endYear} 23:59`,
     };
 
     this.issuedCards.unshift(newRecord);
