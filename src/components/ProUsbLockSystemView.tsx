@@ -56,6 +56,7 @@ import {
   LockAuditRecord,
 } from '../locks/cards/types';
 import { toHexFormatted } from '../locks/protocol/frames';
+import { fromHex } from '../locks/protocol/frames';
 
 export const ProUsbLockSystemView: React.FC = () => {
   const { language, bookings, resourceGroups } = useApp();
@@ -127,7 +128,7 @@ export const ProUsbLockSystemView: React.FC = () => {
     setSelectedBookingId(bookingId);
     const b = bookings.find((item) => item.id === bookingId);
     if (b) {
-      setGuestRoomNumber(b.unitName.replace(/\D/g, '') || '101');
+      setGuestRoomNumber(b.resourceName.replace(/\D/g, '') || '101');
       setGuestHolderName(b.guestName);
       setGuestStartDate(b.startDate);
       setGuestEndDate(b.endDate);
@@ -257,7 +258,7 @@ export const ProUsbLockSystemView: React.FC = () => {
     }
   };
 
-  const handleIssueCommissioning = async (step: 'reset' | 'room_set' | 'time_set') => {
+  const handleIssueCommissioning = async (step: 'reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit') => {
     setIsWriting(true);
     try {
       const now = new Date();
@@ -467,7 +468,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                     <option value="">-- Choisir une réservation dans le planning --</option>
                     {bookings.map((b) => (
                       <option key={b.id} value={b.id}>
-                        {b.unitName} · {b.guestName} ({b.startDate} au {b.endDate}) · {b.status}
+                        {b.resourceName} · {b.guestName} ({b.startDate} au {b.endDate}) · {b.status}
                       </option>
                     ))}
                   </select>

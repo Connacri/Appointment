@@ -21,19 +21,25 @@ import {
 } from './protocol';
 import {
   DecodedProUsbCard,
-  EncodeGuestCardParams,
-  EncodeMasterCardParams,
-  EncodeCommissioningCardParams,
   LockAuditRecord,
   ProUsbLockSettings,
   ProUsbCardType,
 } from './cards/types';
 import {
+  EncodeGuestCardParams,
+  EncodeMasterCardParams,
+  EncodeCommissioningCardParams,
   encodeGuestCard,
   encodeMasterCard,
   encodeCommissioningCard,
   decodeCardRecord,
 } from './cards/codec';
+import {
+  MdbReader,
+  MdbCardInfo,
+  MdbRecordOpen,
+  CardLockDatabase,
+} from './database';
 
 export interface TransportLogEntry {
   id: string;
@@ -113,6 +119,10 @@ class LockManager {
   private logs: TransportLogEntry[] = [];
   private logListeners: Array<(logs: TransportLogEntry[]) => void> = [];
   private stateListeners: Array<() => void> = [];
+  
+  // MDB Integration
+  private mdbReader = new MdbReader();
+  private mdbLoaded = false;
 
   private issuedCards: IssuedCardRecord[] = [
     {
@@ -158,6 +168,98 @@ class LockManager {
   constructor() {
     this.setupTransportLogging(this.webHidTransport);
     this.setupTransportLogging(this.mockTransport);
+    // Attempt to load MDB data on startup (async, non-blocking)
+    this.loadMdbData();
+  }
+
+  private async loadMdbData(): Promise<void> {
+    try {
+      const connected = await this.mdbReader.connect();
+      if (!connected) {
+        console.warn('[LockManager] MDB connection not available (browser environment), using mock data');
+        return;
+      }
+
+      const db = await this.mdbReader.readAll();
+      this.mdbLoaded = true;
+
+      // Convert MDB CardInfo to IssuedCardRecord
+      this.issuedCards = db.cardInfo.map((card, idx) => ({
+        id: `mdb-card-${card.ID}`,
+        rawHex: card.CardData,
+        type: this.mapCardTypeFromDai(card.CardType),
+        cardIndex: card.CardData ? parseInt(card.CardData.slice(18, 20), 16) & 0x0f : 1,
+        roomNumber: card.RoomNo,
+        holderName: card.Holder || `Client ${card.ID}`,
+        operator: 'MDB Import',
+        issuedAt: card.IssueDate ? new Date(card.IssueDate).toISOString() : new Date().toISOString(),
+        status: card.Status === 1 ? 'active' : card.Status === 2 ? 'checked_out' : 'expired',
+        validUntil: card.ExpiryDate || 'N/A',
+      }));
+
+      // Convert MDB RecordOpen to LockAuditRecord
+      this.auditRecords = db.recordOpen.map((rec) => ({
+        orderFlag: rec.OrderFlag,
+        recDataHex: rec.RecData,
+        openTime: rec.OpenTime,
+        eventType: this.mapEventType(rec.CardType),
+        cardIdentifier: rec.CardNo || `CARD-${rec.CardType.toString(16).toUpperCase()}`,
+        roomNo: rec.RoomNo || '101',
+      }));
+
+      // Update settings from MDB SystemInfo
+      if (db.systemInfo) {
+        this.settings = {
+          ...this.settings,
+          companyName: db.systemInfo.CompanyName,
+          hotelName: db.systemInfo.HotelName,
+          skin: db.systemInfo.Skin,
+          checkoutTime: db.systemInfo.CheckoutTime,
+          vipCheckoutTime: db.systemInfo.VIPCheckoutTime,
+          guestAccessBolt: db.systemInfo.GuestLLock === 1,
+          alarmForcedPin: db.systemInfo.BaoJing === 128,
+          remindCloseDoor: db.systemInfo.TiShi === 152,
+        };
+      }
+
+      this.notifyStateListeners();
+      console.log('[LockManager] MDB data loaded successfully:', {
+        cards: this.issuedCards.length,
+        auditRecords: this.auditRecords.length,
+        settings: this.settings,
+      });
+    } catch (error) {
+      console.warn('[LockManager] Failed to load MDB data, using mock data:', error);
+    }
+  }
+
+  private mapCardTypeFromDai(cardType: number): ProUsbCardType {
+    switch (cardType) {
+      case 0x00: return 'reset';
+      case 0x10: return 'record';
+      case 0x20: return 'room_set';
+      case 0x30: return 'time_set';
+      case 0x40: return 'limit';
+      case 0x50: return 'group_set';
+      case 0x60: return 'guest';
+      case 0x70: return 'checkout';
+      case 0x80: return 'group';
+      case 0xA0: return 'emergency';
+      case 0xB0: return 'master';
+      case 0xC0: return 'building';
+      case 0xD0: return 'floor';
+      default: return 'guest';
+    }
+  }
+
+  private mapEventType(cardType: number): LockAuditRecord['eventType'] {
+    switch (cardType) {
+      case 0x60: return 'guest_open';
+      case 0xB0: return 'master_open';
+      case 0xA0: return 'emergency_open';
+      case 0x10: return 'key_open';
+      default: return 'guest_open';
+    }
   }
 
   private setupTransportLogging(transport: LockTransport) {
@@ -431,7 +533,7 @@ class LockManager {
     const newRecord: IssuedCardRecord = {
       id: `card-${Date.now()}`,
       rawHex: decoded.rawHex,
-      type: params.type,
+      type: params.type === 'blacklist' ? 'limit' : params.type === 'reset' ? 'reset' : params.type as ProUsbCardType,
       cardIndex: decoded.cardIndex,
       roomNumber: params.roomNumber,
       holderName: `Mise en service (${params.type})`,

@@ -6,3 +6,4 @@
 export * from './frames';
 export * from './commands';
 export * from './transport';
+export * from '../database';

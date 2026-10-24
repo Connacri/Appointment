@@ -204,7 +204,7 @@ export function encodeMasterCard(params: EncodeMasterCardParams): Uint8Array {
 }
 
 export interface EncodeCommissioningCardParams {
-  type: 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit';
+  type: 'reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit';
   roomNumber?: string;
   floorNo?: number;
   buildingNo?: number;
@@ -234,6 +234,13 @@ export function encodeCommissioningCard(params: EncodeCommissioningCardParams): 
   };
 
   switch (params.type) {
+    case 'reset': {
+      // Reset is handled specially in lockManager (IniCard command)
+      // Return a minimal reset card record
+      card[0] = 0xc9;
+      card[9] = 0x00;
+      break;
+    }
     case 'room_set': {
       // Step 2 of lock setup: sets building & room into lock
       const clean = (params.roomNumber || '101').replace(/^[0-9]+-/, '');
