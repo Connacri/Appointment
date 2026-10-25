@@ -281,14 +281,23 @@ export class WebHidTransport implements LockTransport {
       // Log frame details
       this.onLog?.('tx', `Frame to send (${frame.length} bytes): ${Array.from(frame).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
 
-      // Use discovered output report ID (some proUSB units report 0x00 from HID collections)
+      // Try with discovered report ID (0x00 possible from HID, but iniCard often needs 0x40)
       const discoveredReportId = (this as any).outputReportId;
-      const reportId = discoveredReportId === undefined || discoveredReportId === null ? 0x40 : discoveredReportId;
+      let reportId = (discoveredReportId === undefined || discoveredReportId === null) ? 0x40 : discoveredReportId;
       const payload = new Uint8Array(64);
       payload.set(frame.slice(0, 64));
 
-      this.onLog?.('tx', `Sending report 0x${reportId.toString(16).padStart(2, '0')} (${payload.length} bytes)`, payload);
-      await this.device.sendReport(reportId, payload);
+      this.onLog?.('tx', `Sending report 0x${reportId.toString(16).padStart(2,'0')} (${payload.length} bytes) frame=${Array.from(frame).map(b=>b.toString(16).padStart(2,'0')).join(' ')}`);
+      try {
+        await this.device.sendReport(reportId, payload);
+      } catch (firstErr: any) {
+        if (reportId === 0x00) {
+          this.onLog?.('info', 'Report 0x00 failed — retrying with forced 0x40 (proUSB commissioning)');
+          await this.device.sendReport(0x40, payload);
+        } else {
+          throw firstErr;
+        }
+      }
 
       // Small delay to let the hardware process the command
       await new Promise(r => setTimeout(r, 100));
