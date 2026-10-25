@@ -245,40 +245,46 @@ export function encodeCommissioningCard(params: EncodeCommissioningCardParams): 
 
   switch (params.type) {
     case 'hard_reset': {
-      // Hard persistent reset — admin-only
-      // Uses a special marker pattern: all bytes set to 0xFF except magic and type
-      // This ensures the lock recognizes it as a forced reset
+      // Hard persistent reset — system card, admin-only, for LOCKS ALREADY CONFIGURED
+      // Pattern: magic + site + 0xFF segments + admin 0xAD/0xDE + timestamp + checksum-like
       card[0] = 0xc9;
       card[1] = DEFAULT_SITE_HIGH;
       card[2] = DEFAULT_SITE_LOW & 0xff;
       card[3] = (DEFAULT_SITE_LOW >> 8) & 0xff;
-      // Fill with 0xFF pattern for hard reset recognition
-      for (let i = 4; i < 9; i++) {
-        card[i] = 0xff;
-      }
-      card[9] = 0x00 | ((params.cardIndex ?? 0) & 0x0f); // 0x00 family (reset) with index
-      // Admin authentication marker
-      card[10] = 0xad; // 'AD' = Admin
-      card[11] = 0xde; // 'DE' = Device
-      card[12] = 0xad; // Repeated for verification
-      // Timestamp for audit trail
+      for (let i = 4; i < 9; i++) card[i] = 0xff;
+      card[9] = 0x00 | (index & 0x0f);
+      // Admin authentication: AD / DE / AD (exact from original software)
+      card[10] = 0xad;
+      card[11] = 0xde;
+      card[12] = 0xad;
+      // Timestamp for audit / verification
       const [t0, t1, t2] = packDateTime(
-        new Date().getFullYear(),
-        new Date().getMonth() + 1,
-        new Date().getDate(),
-        new Date().getHours(),
-        new Date().getMinutes()
+        new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate(),
+        new Date().getHours(), new Date().getMinutes()
       );
-      card[13] = t0;
-      card[14] = t1;
-      card[15] = t2;
+      card[13] = t0; card[14] = t1; card[15] = t2;
       break;
     }
     case 'reset': {
-      // Reset is handled specially in lockManager (IniCard command)
-      // Return a minimal reset card record
+      // Reset / IniCard — system configuration card for configured locks
+      // Must match original proUSB: C9 + site + 0x00 family + admin marker + timestamp
       card[0] = 0xc9;
-      card[9] = 0x00;
+      card[1] = DEFAULT_SITE_HIGH;
+      card[2] = DEFAULT_SITE_LOW & 0xff;
+      card[3] = (DEFAULT_SITE_LOW >> 8) & 0xff;
+      card[4] = 0x00; // No room/building / pure reset
+      card[5] = 0x00;
+      card[6] = 0x00;
+      card[7] = 0x00;
+      card[8] = 0x00;
+      card[9] = 0x00 | (index & 0x0f); // 0x00 family (Reset)
+      // Duration / validity: reset has NO expiration (system action)
+      card[10] = 0x00; // Start = now / not applicable
+      card[11] = 0x00;
+      card[12] = 0x00;
+      card[13] = 0xc9; // Admin/system marker (matches original system card)
+      card[14] = 0x12;
+      card[15] = 0x00;
       break;
     }
     case 'room_set': {
