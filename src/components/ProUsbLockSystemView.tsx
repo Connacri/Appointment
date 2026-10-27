@@ -124,10 +124,12 @@ export const ProUsbLockSystemView: React.FC = () => {
   // CardLock.mdb (original software database)
   const [mdbStatus, setMdbStatus] = useState(lockManager.getMdbStatus());
   const [isImportingMdb, setIsImportingMdb] = useState(false);
+  const [usbStatus, setUsbStatus] = useState(lockManager.getStatus());
 
   // Subscribe to LockManager state and transport logs
   useEffect(() => {
     const unsubLogs = lockManager.subscribeLogs((newLogs) => setLogs(newLogs));
+    const unsubUsb = lockManager.subscribeConnection((st) => setUsbStatus(st));
     const unsubState = lockManager.subscribeState(() => {
       setIssuedCards(lockManager.getIssuedCards());
       setAuditRecords(lockManager.getAuditRecords());
@@ -137,6 +139,7 @@ export const ProUsbLockSystemView: React.FC = () => {
 
     return () => {
       unsubLogs();
+      unsubUsb();
       unsubState();
     };
   }, []);
@@ -214,10 +217,11 @@ export const ProUsbLockSystemView: React.FC = () => {
   const handleConnectHardware = async () => {
     setIsConnecting(true);
     try {
-      await lockManager.connect();
-      showToast('success', 'Encodeur physique USB HID connecté (VID 0x9915, PID 0x1116).');
+      await lockManager.requestPhysicalUsbDevice();
+      setUsbStatus(lockManager.getStatus());
+      showToast('success', "Encodeur physique USB connecté avec succès via l'autorisation WebHID !");
     } catch (err: any) {
-      showToast('error', `Erreur de connexion : ${err.message}`);
+      showToast('error', `Erreur d'autorisation WebHID : ${err.message || 'Demande annulée'}`);
     } finally {
       setIsConnecting(false);
     }
@@ -499,36 +503,55 @@ export const ProUsbLockSystemView: React.FC = () => {
                   v2026.1
                 </span>
               </h1>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Encodeur USB Connecté
-              </span>
+              {usbStatus === 'connected' ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Encodeur USB Connecté (WebHID)
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  Encodeur USB Déconnecté
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Contrôle d'accès serrures d'hôtels proUSB · 13 types de cartes · Encodeur HID VID 0x9915
+              Contrôle d'accès serrures d'hôtels proUSB · 13 types de cartes · Encodeur HID VID 0x9915 / 0x6868
             </p>
           </div>
         </div>
 
         {/* Global Hardware Action Bar */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={handleConnectHardware}
+            disabled={isConnecting}
+            className="min-h-[38px] px-3.5 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-all flex items-center gap-2 shadow-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
+            title="Demande au navigateur l'autorisation d'accéder à l'encodeur proUSB physique via navigator.hid.requestDevice"
+          >
+            <Usb size={16} className={isConnecting ? 'animate-pulse' : ''} />
+            <span>{isConnecting ? 'Autorisation USB...' : 'Initialize Hardware (WebHID)'}</span>
+          </button>
 
           <button
+            type="button"
             onClick={handleBuzzerTest}
             disabled={isBuzzerTesting}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 text-slate-700 dark:text-slate-200"
+            className="min-h-[38px] px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 text-slate-700 dark:text-slate-200 cursor-pointer"
             title="Tester le signal sonore physique de l'encodeur (3 bips vérifiés)"
           >
-            <Volume2 size={14} className={isBuzzerTesting ? 'animate-bounce text-amber-500' : 'text-blue-500'} />
+            <Volume2 size={15} className={isBuzzerTesting ? 'animate-bounce text-amber-500' : 'text-blue-500'} />
             <span>Test Bip</span>
           </button>
 
           <button
+            type="button"
             onClick={handleReadCard}
             disabled={isReading}
-            className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 transition-colors flex items-center gap-1.5 shadow-xs"
+            className="min-h-[38px] px-4 py-1.5 text-xs font-bold rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
-            <RefreshCw size={14} className={isReading ? 'animate-spin' : ''} />
+            <RefreshCw size={15} className={isReading ? 'animate-spin' : ''} />
             <span>Lire Carte</span>
           </button>
         </div>

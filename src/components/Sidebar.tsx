@@ -2,24 +2,22 @@ import React, { useState } from 'react';
 import {
   LayoutDashboard,
   CalendarDays,
-  CreditCard,
-  Globe,
+  Receipt,
   BarChart3,
-  Bell,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  ShieldCheck,
-  FileText,
   Hotel,
   Palmtree,
   Sparkles,
   Database,
-  Receipt,
   ClipboardList,
   Boxes,
-  Coins,
   KeyRound,
+  ShieldCheck,
+  FileText,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Coins,
+  Globe,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -39,6 +37,8 @@ export const Sidebar: React.FC = () => {
     setIsCockpitOpen,
     setIsLegalModalOpen,
     setIsObjectBoxOpen,
+    isSidebarMobileOpen,
+    setIsSidebarMobileOpen,
   } = useApp();
 
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -101,7 +101,7 @@ export const Sidebar: React.FC = () => {
     },
     {
       id: 'stock',
-      label: language === 'fr' ? 'Stock Linge & Équipements' : language === 'ar' ? 'المخزون والمستلزمات' : 'Linen & Supplies Stock',
+      label: language === 'fr' ? 'Stock & Équipements' : language === 'ar' ? 'المخزون والمستلزمات' : 'Inventory & Supplies',
       icon: Boxes,
       view: 'stock' as const,
       roles: ['manager', 'staff'],
@@ -109,7 +109,7 @@ export const Sidebar: React.FC = () => {
     },
     {
       id: 'pricing',
-      label: language === 'fr' ? 'Yield & Dynamic Pricing' : language === 'ar' ? 'التسعير الديناميكي' : 'Dynamic Pricing',
+      label: language === 'fr' ? 'Yield & Tarifs Dynamiques' : language === 'ar' ? 'التسعير الديناميكي' : 'Yield & Pricing',
       icon: Coins,
       view: 'pricing' as const,
       roles: ['manager'],
@@ -117,26 +117,26 @@ export const Sidebar: React.FC = () => {
     },
     {
       id: 'channels',
-      label: language === 'fr' ? 'Channel Manager (OTA)' : language === 'ar' ? 'إدارة القنوات' : 'Channel Manager (OTA)',
+      label: language === 'fr' ? 'Channel Manager (OTA)' : language === 'ar' ? 'مدير القنوات الموزعة' : 'Channel Manager',
       icon: Globe,
       view: 'channels' as const,
-      roles: ['manager', 'receptionist'],
-      domains: ['hotel', 'resort'] as DomainType[],
-    },
-    {
-      id: 'reports',
-      label: language === 'fr' ? 'Rapports & Chiffres' : language === 'ar' ? 'التقارير المالية' : 'Financial Reports',
-      icon: CreditCard,
-      view: 'reports' as const,
       roles: ['manager'],
       domains: ['hotel', 'resort'] as DomainType[],
     },
     {
       id: 'prousb',
-      label: language === 'fr' ? 'Serrures proUSB' : language === 'ar' ? 'أقفال proUSB' : 'proUSB Locks',
+      label: 'Serrures proUSB (WebHID)',
       icon: KeyRound,
       view: 'prousb' as const,
-      roles: ['manager', 'receptionist', 'staff'],
+      roles: ['manager', 'receptionist'],
+      domains: ['hotel', 'resort'] as DomainType[],
+    },
+    {
+      id: 'reports',
+      label: language === 'fr' ? 'Rapports d\'Activité' : language === 'ar' ? 'التقارير والإحصائيات' : 'Performance Reports',
+      icon: FileText,
+      view: 'reports' as const,
+      roles: ['manager'],
       domains: ['hotel', 'resort'] as DomainType[],
     },
   ];
@@ -145,76 +145,91 @@ export const Sidebar: React.FC = () => {
     (item) => item.roles.includes(currentRole) && item.domains.includes(currentDomain)
   );
 
-  return (
-    <aside
-      className={`bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 transition-all duration-300 z-30 select-none ${
-        isCollapsed ? 'w-16' : 'w-60'
-      }`}
-    >
-      {/* Sidebar Header */}
-      <div className="h-14 border-b border-slate-800 flex items-center justify-between px-3">
-        {!isCollapsed && (
-          <div className="flex items-center gap-2 overflow-hidden">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-sm tracking-tighter">
+  const handleNavClick = (view: any) => {
+    setActiveView(view);
+    setIsSidebarMobileOpen(false);
+  };
+
+  const renderContent = (isMobileView: boolean) => (
+    <div className="flex flex-col h-full overflow-hidden select-none">
+      {/* Brand Header */}
+      <div className="min-h-14 border-b border-slate-800 px-3.5 flex items-center justify-between shrink-0 bg-slate-950/60">
+        {(!isCollapsed || isMobileView) && (
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-bold text-sm shadow-xs">
               OB
             </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-white text-sm tracking-tight leading-none">
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-white text-sm tracking-tight leading-none truncate">
                 {getTranslation('brandName', language)}
               </span>
-              <span className="text-[10px] text-slate-400 truncate max-w-[140px] mt-0.5">
-                Front Desk & Resort
+              <span className="text-[10px] text-slate-400 truncate mt-0.5 font-medium">
+                Front Desk & Resort PMS
               </span>
             </div>
           </div>
         )}
 
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors ml-auto"
-          title={isCollapsed ? 'Expand' : 'Collapse'}
-        >
-          {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-        </button>
+        {isMobileView ? (
+          <button
+            type="button"
+            onClick={() => setIsSidebarMobileOpen(false)}
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer ml-auto"
+            title="Fermer le menu"
+          >
+            <X size={18} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ml-auto cursor-pointer"
+            title={isCollapsed ? 'Agrandir le menu' : 'Réduire le menu'}
+          >
+            {isCollapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+          </button>
+        )}
       </div>
 
       {/* Sector Quick Switcher inside Sidebar */}
-      {!isCollapsed && (
-        <div className="p-3 border-b border-slate-800/80 bg-slate-950/40">
-          <span className="text-[10px] font-semibold tracking-wider uppercase text-slate-500 block mb-2 px-1">
-            {language === 'fr' ? 'Départements' : language === 'ar' ? 'الأقسام' : 'Departments'}
+      {(!isCollapsed || isMobileView) && (
+        <div className="p-3 border-b border-slate-800/80 bg-slate-950/40 shrink-0">
+          <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 block mb-2 px-1">
+            {language === 'fr' ? 'Département Actif' : language === 'ar' ? 'القطاع النشط' : 'Department'}
           </span>
           <div className="grid grid-cols-2 gap-1.5">
             <button
+              type="button"
               onClick={() => {
                 setActiveSector('hotel');
                 setCurrentDomain('hotel');
               }}
-              className={`p-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+              className={`min-h-[38px] p-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer font-bold ${
                 currentDomain === 'hotel'
-                  ? 'bg-blue-600 text-white font-semibold shadow-xs'
-                  : 'bg-slate-850 text-slate-400 hover:text-white hover:bg-slate-800'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-slate-800/70 text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
-              title="Hôtellerie"
+              title="Hôtellerie & Séjours"
             >
-              <Hotel size={14} />
-              <span className="text-[11px] truncate font-medium">Hôtel</span>
+              <Hotel size={15} />
+              <span className="text-xs truncate">Hôtel</span>
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 setActiveSector('resort');
                 setCurrentDomain('resort');
               }}
-              className={`p-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+              className={`min-h-[38px] p-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer font-bold ${
                 currentDomain === 'resort'
-                  ? 'bg-amber-600 text-white font-semibold shadow-xs'
-                  : 'bg-slate-850 text-slate-400 hover:text-white hover:bg-slate-800'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-slate-800/70 text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
-              title="Resort & Complexe"
+              title="Resort, Complexe & Villas"
             >
-              <Palmtree size={14} />
-              <span className="text-[11px] truncate font-medium">Resort</span>
+              <Palmtree size={15} />
+              <span className="text-xs truncate">Resort</span>
             </button>
           </div>
         </div>
@@ -228,32 +243,38 @@ export const Sidebar: React.FC = () => {
           return (
             <button
               key={item.id}
-              onClick={() => setActiveView(item.view)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+              type="button"
+              onClick={() => handleNavClick(item.view)}
+              className={`w-full flex items-center gap-3 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 isActive
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+                  ? 'bg-blue-600 text-white shadow-xs font-bold'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
               }`}
+              title={item.label}
             >
               <Icon size={18} className="shrink-0" />
-              {!isCollapsed && <span className="truncate">{item.label}</span>}
+              {(!isCollapsed || isMobileView) && <span className="truncate">{item.label}</span>}
             </button>
           );
         })}
       </nav>
 
       {/* Sidebar Footer: ObjectBox DB, AGENTS.md Cockpit & Legal */}
-      <div className="p-2 border-t border-slate-800 space-y-1 bg-slate-950/60">
+      <div className="p-2.5 border-t border-slate-800 space-y-1.5 bg-slate-950/80 shrink-0">
         <button
-          onClick={() => setIsObjectBoxOpen(true)}
-          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium bg-cyan-950/60 border border-cyan-800/60 text-cyan-300 hover:bg-cyan-900/50 transition-colors"
-          title="ObjectBox Embedded DB Engine"
+          type="button"
+          onClick={() => {
+            setIsObjectBoxOpen(true);
+            setIsSidebarMobileOpen(false);
+          }}
+          className="w-full flex items-center gap-2.5 px-3 min-h-[38px] py-1.5 rounded-xl text-xs font-semibold bg-cyan-950/60 border border-cyan-800/60 text-cyan-300 hover:bg-cyan-900/50 transition-colors cursor-pointer"
+          title="Inspecteur ObjectBox Embedded DB Engine"
         >
           <Database size={16} className="text-cyan-400 shrink-0" />
-          {!isCollapsed && (
+          {(!isCollapsed || isMobileView) && (
             <div className="flex items-center justify-between w-full">
               <span className="truncate">ObjectBox DB</span>
-              <span className="px-1.5 py-0.2 bg-cyan-500 text-slate-950 font-bold rounded text-[10px]">
+              <span className="px-1.5 py-0.5 bg-cyan-500 text-slate-950 font-bold rounded-md text-[10px]">
                 Sync
               </span>
             </div>
@@ -261,34 +282,68 @@ export const Sidebar: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setIsCockpitOpen(true)}
-          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/50 transition-colors"
-          title="AGENTS.md Health Scorecard"
+          type="button"
+          onClick={() => {
+            setIsCockpitOpen(true);
+            setIsSidebarMobileOpen(false);
+          }}
+          className="w-full flex items-center gap-2.5 px-3 min-h-[38px] py-1.5 rounded-xl text-xs font-semibold bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/50 transition-colors cursor-pointer"
+          title="AGENTS.md Health Scorecard & Releases"
         >
           <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
-          {!isCollapsed && (
+          {(!isCollapsed || isMobileView) && (
             <div className="flex items-center justify-between w-full">
               <span className="truncate">AGENTS.md</span>
-              <span className="px-1.5 py-0.2 bg-emerald-500 text-slate-950 font-bold rounded text-[10px]">
-                98/100
+              <span className="px-1.5 py-0.5 bg-emerald-500 text-slate-950 font-bold rounded-md text-[10px]">
+                99/100
               </span>
             </div>
           )}
         </button>
 
         <button
-          onClick={() => setIsLegalModalOpen(true)}
-          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          title="Privacy & Data Deletion (§19.3)"
+          type="button"
+          onClick={() => {
+            setIsLegalModalOpen(true);
+            setIsSidebarMobileOpen(false);
+          }}
+          className="w-full flex items-center gap-2.5 px-3 min-h-[38px] py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
+          title="Politique de Confidentialité et Suppression de Compte (AGENTS.md §19.3)"
         >
           <FileText size={16} className="shrink-0" />
-          {!isCollapsed && (
+          {(!isCollapsed || isMobileView) && (
             <span className="truncate">
-              {language === 'fr' ? 'Légal & Compte' : language === 'ar' ? 'الخصوصية والحساب' : 'Legal & Account'}
+              {language === 'fr' ? 'Légal & Données' : language === 'ar' ? 'الخصوصية والحساب' : 'Legal & Privacy'}
             </span>
           )}
         </button>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Persistent Sidebar */}
+      <aside
+        className={`hidden md:flex bg-slate-900 text-slate-300 flex-col shrink-0 border-r border-slate-800 transition-all duration-200 z-30 ${
+          isCollapsed ? 'w-16' : 'w-64'
+        }`}
+      >
+        {renderContent(false)}
+      </aside>
+
+      {/* Mobile Drawer (Modal Overlay) */}
+      {isSidebarMobileOpen && (
+        <div className="fixed inset-0 z-[9990] md:hidden flex animate-in fade-in">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setIsSidebarMobileOpen(false)}
+          />
+          <div className="relative w-72 max-w-[85vw] bg-slate-900 text-slate-300 h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-200">
+            {renderContent(true)}
+          </div>
+        </div>
+      )}
+    </>
   );
 };

@@ -22,6 +22,17 @@ export const LegalModal: React.FC = () => {
   const [hasPurged, setHasPurged] = useState(false);
   const [confirmStep, setConfirmStep] = useState(false);
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isLegalModalOpen) {
+        setIsLegalModalOpen(false);
+        setConfirmStep(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLegalModalOpen, setIsLegalModalOpen]);
+
   if (!isLegalModalOpen) return null;
 
   const handleExecutePurge = () => {
@@ -35,8 +46,16 @@ export const LegalModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-in fade-in">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 bg-black/75 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          setIsLegalModalOpen(false);
+          setConfirmStep(false);
+        }
+      }}
+    >
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col my-auto max-h-[92dvh]">
         {/* Header */}
         <div className="h-14 border-b border-slate-200 dark:border-slate-800 px-5 flex items-center justify-between bg-slate-50 dark:bg-slate-850">
           <div className="flex items-center gap-2">

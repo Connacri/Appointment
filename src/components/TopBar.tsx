@@ -1,22 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
+  Menu,
   Search,
   ChevronLeft,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   Plus,
   Moon,
   Sun,
   Wifi,
   WifiOff,
-  Filter,
   QrCode,
   Camera,
   Usb,
   MoreVertical,
   X,
   Bell,
+  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+  Hotel,
+  Palmtree,
+  Calendar,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -54,11 +58,15 @@ export const TopBar: React.FC = () => {
     tasks,
     stockItems,
     setActiveView,
+    isSidebarMobileOpen,
+    setIsSidebarMobileOpen,
   } = useApp();
 
   const [usbStatus, setUsbStatus] = useState<UsbConnectionStatus>(lockManager.getStatus());
   const [usbDevice, setUsbDevice] = useState<UsbDeviceInfo | null>(lockManager.getDeviceInfo());
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [usbNotice, setUsbNotice] = useState<string | null>(null);
+  const [isRequestingUsb, setIsRequestingUsb] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
   // Subscribe to WebHID Hardware state
@@ -88,6 +96,38 @@ export const TopBar: React.FC = () => {
   const urgentTasksCount = tasks.filter((t) => t.priority === 'urgent' && t.status !== 'done').length;
   const lowStockCount = stockItems.filter((s) => s.quantity <= s.minThreshold).length;
 
+  // Direct USB Hardware Permission Request via WebHID
+  const handlePhysicalUsbClick = async () => {
+    if (usbStatus === 'connected') {
+      setActiveView('prousb');
+      return;
+    }
+
+    if (typeof navigator === 'undefined' || !('hid' in navigator)) {
+      setUsbNotice("Votre navigateur ne supporte pas WebHID. Utilisez Google Chrome, Microsoft Edge ou Opera sur HTTPS/localhost.");
+      setTimeout(() => setUsbNotice(null), 5000);
+      return;
+    }
+
+    setIsRequestingUsb(true);
+    try {
+      await lockManager.requestPhysicalUsbDevice();
+      setUsbNotice("Encodeur proUSB connecté avec succès via WebHID !");
+      setTimeout(() => setUsbNotice(null), 4000);
+      setActiveView('prousb');
+    } catch (err: any) {
+      console.warn('[TopBar] WebHID request cancelled or failed:', err);
+      if (err?.name === 'SecurityError' || err?.message?.includes('denied')) {
+        setUsbNotice("Autorisation USB refusée par l'utilisateur.");
+      } else {
+        setUsbNotice("Sélectionnez l'encodeur proUSB dans la boîte de dialogue du navigateur.");
+      }
+      setTimeout(() => setUsbNotice(null), 4500);
+    } finally {
+      setIsRequestingUsb(false);
+    }
+  };
+
   // Helper to format date display compactly
   const formatDateDisplay = (isoDate: string) => {
     const [y, m, d] = isoDate.split('-').map(Number);
@@ -110,350 +150,412 @@ export const TopBar: React.FC = () => {
   );
 
   return (
-    <header className="h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-2 sm:px-4 gap-1.5 sm:gap-2 z-20 shrink-0 select-none">
-      {/* ======================================================== */}
-      {/* ZONE GAUCHE : Recherche et Filtre Secteur fluide          */}
-      {/* ======================================================== */}
-      <div className="flex items-center gap-1.5 shrink min-w-0 max-w-[140px] sm:max-w-[200px] md:max-w-xs">
-        <div className="relative flex-1 min-w-0">
-          <Search
-            size={15}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-          />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={
-              language === 'fr'
-                ? 'Rechercher...'
-                : language === 'ar'
-                ? 'بحث...'
-                : 'Search...'
-            }
-            className="w-full h-8 sm:h-9 pl-8 pr-2.5 text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 truncate"
-          />
-        </div>
-
-        {/* Sector Quick Pills (Desktop XL only to avoid crowding) */}
-        <div className="hidden 2xl:flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+    <>
+      <header className="min-h-14 py-1.5 px-2.5 sm:px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 z-20 shrink-0 select-none shadow-xs">
+        {/* ======================================================== */}
+        {/* SECTION GAUCHE : Menu Mobile, Recherche, Secteur         */}
+        {/* ======================================================== */}
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          {/* Mobile Sidebar Hamburger Toggle (Touch target >= 44px) */}
           <button
-            onClick={() => setActiveSector('all')}
-            className={`px-2 py-0.5 font-medium rounded transition-colors ${
-              activeSector === 'all'
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-semibold'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
+            type="button"
+            onClick={() => setIsSidebarMobileOpen(!isSidebarMobileOpen)}
+            className="md:hidden w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-blue-500"
+            title="Ouvrir le menu de navigation"
+            aria-label="Menu"
           >
-            {getTranslation('sectorAll', language)}
-          </button>
-          <button
-            onClick={() => setActiveSector('hotel')}
-            className={`px-2 py-0.5 font-medium rounded transition-colors ${
-              activeSector === 'hotel'
-                ? 'bg-blue-600 text-white shadow-xs font-semibold'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            Hôtel
-          </button>
-          <button
-            onClick={() => setActiveSector('resort')}
-            className={`px-2 py-0.5 font-medium rounded transition-colors ${
-              activeSector === 'resort'
-                ? 'bg-amber-600 text-white shadow-xs font-semibold'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            Resort
-          </button>
-        </div>
-      </div>
-
-      {/* ======================================================== */}
-      {/* ZONE CENTRALE : Navigation Date & Échelle 14J / 1M       */}
-      {/* ======================================================== */}
-      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-        <div className="flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5">
-          <button
-            onClick={() => shiftDays(-14)}
-            className="hidden sm:inline-flex p-1 text-slate-500 hover:text-slate-900 hover:bg-white dark:hover:bg-slate-700 rounded transition-colors"
-            title="Reculer de 2 semaines"
-          >
-            <ChevronsLeft size={14} />
-          </button>
-          <button
-            onClick={() => shiftDays(-1)}
-            className="p-1 text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-white dark:hover:bg-slate-700 rounded transition-colors"
-            title="Jour précédent"
-          >
-            <ChevronLeft size={14} />
+            <Menu size={20} />
           </button>
 
-          <span className="px-1.5 sm:px-2 text-[11px] sm:text-xs font-semibold text-slate-800 dark:text-slate-200 tabular-nums whitespace-nowrap">
-            {formatDateDisplay(currentBaseDate)} - {endDateFormatted}
-          </span>
-
-          <button
-            onClick={() => shiftDays(1)}
-            className="p-1 text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-white dark:hover:bg-slate-700 rounded transition-colors"
-            title="Jour suivant"
-          >
-            <ChevronRight size={14} />
-          </button>
-          <button
-            onClick={() => shiftDays(14)}
-            className="hidden sm:inline-flex p-1 text-slate-500 hover:text-slate-900 hover:bg-white dark:hover:bg-slate-700 rounded transition-colors"
-            title="Avancer de 2 semaines"
-          >
-            <ChevronsRight size={14} />
-          </button>
-        </div>
-
-        {/* 14 Jours / 1 Mois pills */}
-        <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 text-xs">
-          <button
-            onClick={() => setDateRangeMode('two_weeks')}
-            className={`px-2 py-0.5 font-medium rounded transition-colors text-[11px] ${
-              dateRangeMode === 'two_weeks'
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-bold'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            14J
-          </button>
-          <button
-            onClick={() => setDateRangeMode('one_month')}
-            className={`px-2 py-0.5 font-medium rounded transition-colors text-[11px] ${
-              dateRangeMode === 'one_month'
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-bold'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            1M
-          </button>
-        </div>
-      </div>
-
-      {/* ======================================================== */}
-      {/* ZONE DROITE : USB Physique WebHID, CI Pipeline, Actions   */}
-      {/* ======================================================== */}
-      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-        {/* ProUSB Physical USB Hardware Visual Indicator */}
-        <button
-          onClick={() => setActiveView('prousb')}
-          className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
-            usbStatus === 'connected'
-              ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
-              : usbStatus === 'connecting'
-              ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 animate-pulse'
-              : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
-          }`}
-          title={
-            usbStatus === 'connected'
-              ? `ProUSB Encodeur : Connecté via WebHID (${usbDevice?.productName || 'USB HID'}) - Cliquez pour gérer`
-              : usbStatus === 'connecting'
-              ? 'ProUSB : Connexion WebHID en cours...'
-              : 'ProUSB : Déconnecté - Cliquez pour initialiser le matériel USB'
-          }
-        >
-          <span className="relative flex h-2 w-2">
-            {usbStatus === 'connected' && (
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            )}
-            <span
-              className={`relative inline-flex rounded-full h-2 w-2 ${
-                usbStatus === 'connected'
-                  ? 'bg-emerald-500'
-                  : usbStatus === 'connecting'
-                  ? 'bg-blue-500'
-                  : 'bg-rose-500'
-              }`}
-            ></span>
-          </span>
-
-          <Usb size={14} className={usbStatus === 'connected' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'} />
-
-          <span className="hidden lg:inline text-[11px] font-bold">
-            {usbStatus === 'connected' ? 'USB ProUSB' : 'USB Off'}
-          </span>
-        </button>
-
-        {/* CI/CD GitHub Actions Pipeline Status Indicator */}
-        <PipelineStatusIndicator />
-
-        {/* Currency Switcher (compact) */}
-        <div className="flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 text-xs font-semibold">
-          <select
-            value={currency === 'DZD' ? 'DA' : currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            className="bg-transparent text-slate-800 dark:text-slate-100 font-bold px-1 py-0.5 rounded cursor-pointer focus:outline-none text-[11px]"
-            title="Devise"
-          >
-            <option value="DA">🇩🇿 DA</option>
-            <option value="EUR">🇪🇺 €</option>
-            <option value="USD">🇺🇸 $</option>
-            <option value="RMB">🇨🇳 ¥</option>
-            <option value="GBP">🇬🇧 £</option>
-            <option value="SAR">🇸🇦 ﷼</option>
-          </select>
-        </div>
-
-        {/* Desktop Quick Icons: Alerts, Theme, Language */}
-        <div className="hidden xl:flex items-center gap-1.5">
-          {/* Alerts count */}
-          {(urgentTasksCount > 0 || lowStockCount > 0) && (
-            <button
-              onClick={() => setActiveView(urgentTasksCount > 0 ? 'tasks' : 'stock')}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold cursor-pointer"
-              title="Alertes PMS"
-            >
-              <Bell size={13} />
-              <span className="font-mono text-[11px]">{urgentTasksCount + lowStockCount}</span>
-            </button>
-          )}
-
-          {/* Theme toggle */}
-          <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors"
-            title="Thème Clair / Sombre"
-          >
-            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
-
-          {/* Language selector */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 text-xs font-semibold">
-            {(['fr', 'en', 'ar'] as const).map((lang) => (
+          {/* Search Box - Fluid & Touch Friendly */}
+          <div className="relative min-w-[120px] max-w-[240px] sm:max-w-[280px]">
+            <Search
+              size={15}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={
+                language === 'fr'
+                  ? 'Recherche...'
+                  : language === 'ar'
+                  ? 'بحث...'
+                  : 'Search...'
+              }
+              className="w-full h-9 pl-8 pr-7 text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium truncate"
+            />
+            {searchQuery && (
               <button
-                key={lang}
-                onClick={() => setLanguage(lang)}
-                className={`px-1.5 py-0.5 rounded uppercase transition-colors text-[10px] ${
-                  language === lang
-                    ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full"
+                title="Effacer la recherche"
               >
-                {lang}
+                <X size={13} />
               </button>
-            ))}
+            )}
+          </div>
+
+          {/* Sector Pill Switcher: Hotel / Resort (Hidden on small mobile to avoid crowding) */}
+          <div className="hidden lg:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700/80 text-xs shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveSector('all')}
+              className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                activeSector === 'all'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              Tous
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSector('hotel')}
+              className={`px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                activeSector === 'hotel'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Hotel size={13} />
+              <span>Hôtel</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSector('resort')}
+              className={`px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                activeSector === 'resort'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Palmtree size={13} />
+              <span>Resort</span>
+            </button>
           </div>
         </div>
 
-        {/* Primary Action Button: + Nouveau / + New Booking */}
-        <button
-          onClick={() => {
-            setNewBookingInitialSlot(null);
-            setIsNewBookingModalOpen(true);
-          }}
-          className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors whitespace-nowrap cursor-pointer"
-          title="Créer une nouvelle réservation ou rendez-vous"
-        >
-          <Plus size={15} strokeWidth={2.5} />
-          <span className="hidden sm:inline">
-            {language === 'fr'
-              ? 'Nouveau'
-              : language === 'ar'
-              ? 'حجز جديد'
-              : 'New Booking'}
-          </span>
-        </button>
+        {/* ======================================================== */}
+        {/* SECTION CENTRALE : Date & Mode 14J / 1M                   */}
+        {/* ======================================================== */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => shiftDays(-1)}
+              className="w-8 h-8 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="Jour précédent"
+              aria-label="Jour précédent"
+            >
+              <ChevronLeft size={16} />
+            </button>
 
-        {/* Responsive Overflow Dropdown Menu (for smaller screens) */}
-        <div className="relative xl:hidden" ref={moreMenuRef}>
+            <div className="px-2 sm:px-3 text-center">
+              <span className="text-[11px] sm:text-xs font-bold text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap block">
+                {formatDateDisplay(currentBaseDate)} - {endDateFormatted}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => shiftDays(1)}
+              className="w-8 h-8 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="Jour suivant"
+              aria-label="Jour suivant"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          {/* 14J / 1M Segment */}
+          <div className="hidden sm:flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setDateRangeMode('two_weeks')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-[11px] font-bold ${
+                dateRangeMode === 'two_weeks'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              14J
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateRangeMode('one_month')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-[11px] font-bold ${
+                dateRangeMode === 'one_month'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              1M
+            </button>
+          </div>
+        </div>
+
+        {/* ======================================================== */}
+        {/* SECTION DROITE : USB Physique, CI Pipeline, + Nouveau    */}
+        {/* ======================================================== */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* PROMINENT USB PHYSIQUE (WebHID) BUTTON */}
           <button
-            onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
-            className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors"
-            title="Options supplémentaires"
+            type="button"
+            onClick={handlePhysicalUsbClick}
+            disabled={isRequestingUsb}
+            className={`min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer shadow-xs focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              usbStatus === 'connected'
+                ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200'
+                : 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/70 dark:hover:bg-amber-900/70 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200'
+            }`}
+            title={
+              usbStatus === 'connected'
+                ? `Encodeur USB proUSB connecté (${usbDevice?.productName || 'USB HID'}) - Cliquez pour gérer`
+                : "Encodeur USB non connecté - Cliquez pour demander l'autorisation WebHID au navigateur"
+            }
           >
-            <MoreVertical size={16} />
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              {usbStatus === 'connected' && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              )}
+              <span
+                className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                  usbStatus === 'connected'
+                    ? 'bg-emerald-500'
+                    : 'bg-amber-500 animate-pulse'
+                }`}
+              ></span>
+            </span>
+
+            <Usb
+              size={15}
+              className={
+                usbStatus === 'connected'
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-amber-600 dark:text-amber-400'
+              }
+            />
+
+            <span className="text-[11px] sm:text-xs font-bold whitespace-nowrap">
+              {usbStatus === 'connected' ? (
+                <span>USB Physique <span className="hidden sm:inline font-normal text-emerald-700 dark:text-emerald-300">• Prêt</span></span>
+              ) : (
+                <span>USB Physique <span className="hidden md:inline font-normal text-amber-700 dark:text-amber-300">(Activer)</span></span>
+              )}
+            </span>
           </button>
 
-          {isMoreMenuOpen && (
-            <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-3 z-50 text-xs space-y-3 animate-in fade-in zoom-in-95">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                <span className="font-bold text-slate-800 dark:text-slate-200">
-                  Options & Contrôles
-                </span>
-                <button
-                  onClick={() => setIsMoreMenuOpen(false)}
-                  className="p-1 text-slate-400 hover:text-slate-600 rounded"
-                >
-                  <X size={14} />
-                </button>
-              </div>
+          {/* CI/CD Pipeline Status Badge (GitHub Actions) */}
+          <div className="hidden sm:block">
+            <PipelineStatusIndicator />
+          </div>
 
-              {/* Language selection in menu */}
-              <div>
-                <span className="text-[11px] text-slate-500 block mb-1">Langue :</span>
-                <div className="grid grid-cols-3 gap-1">
-                  {(['fr', 'en', 'ar'] as const).map((lang) => (
+          {/* Currency Dropdown */}
+          <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-1.5 py-1">
+            <select
+              value={currency === 'DZD' ? 'DA' : currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className="bg-transparent text-slate-800 dark:text-slate-100 font-bold cursor-pointer focus:outline-none text-xs"
+              title="Devise principale de facturation"
+            >
+              <option value="DA">🇩🇿 DA (DZD)</option>
+              <option value="EUR">🇪🇺 € (EUR)</option>
+              <option value="USD">🇺🇸 $ (USD)</option>
+              <option value="RMB">🇨🇳 ¥ (RMB)</option>
+              <option value="GBP">🇬🇧 £ (GBP)</option>
+              <option value="SAR">🇸🇦 ﷼ (SAR)</option>
+            </select>
+          </div>
+
+          {/* Primary Action Button: + Nouveau / + New Booking (Touch target >= 44px) */}
+          <button
+            type="button"
+            onClick={() => {
+              setNewBookingInitialSlot(null);
+              setIsNewBookingModalOpen(true);
+            }}
+            className="min-h-[38px] px-3 sm:px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+            title="Créer une nouvelle réservation ou séjour"
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            <span className="hidden sm:inline">
+              {language === 'fr'
+                ? 'Nouveau'
+                : language === 'ar'
+                ? 'حجز جديد'
+                : 'New Booking'}
+            </span>
+          </button>
+
+          {/* Quick Menu ("...") for overflow items */}
+          <div className="relative" ref={moreMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+              className="w-9 h-9 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors cursor-pointer"
+              title="Options & Paramètres rapides"
+              aria-label="Options"
+            >
+              <MoreVertical size={16} />
+            </button>
+
+            {isMoreMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3.5 z-[100] text-xs space-y-3.5 animate-in fade-in zoom-in-95">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <span className="font-bold text-slate-900 dark:text-white text-xs">
+                    Préférences & Outils
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsMoreMenuOpen(false)}
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                {/* Language Switcher */}
+                <div>
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1.5">
+                    Langue / Language / اللغة :
+                  </span>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(['fr', 'en', 'ar'] as const).map((lang) => (
+                      <button
+                        key={lang}
+                        type="button"
+                        onClick={() => setLanguage(lang)}
+                        className={`py-1.5 rounded-lg text-center font-bold text-xs transition-all cursor-pointer ${
+                          language === lang
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                        }`}
+                      >
+                        {lang.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Theme Mode Switch */}
+                <button
+                  type="button"
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                  className="w-full flex items-center justify-between py-2 px-3 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-800 dark:text-slate-200 font-semibold cursor-pointer border border-slate-200/80 dark:border-slate-700"
+                >
+                  <span className="flex items-center gap-2">
+                    {theme === 'dark' ? <Moon size={15} className="text-indigo-400" /> : <Sun size={15} className="text-amber-500" />}
+                    <span>{theme === 'dark' ? 'Mode Sombre' : 'Mode Clair'}</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 uppercase font-mono">Basculer</span>
+                </button>
+
+                {/* Offline Mode Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsOffline(!isOffline)}
+                  className={`w-full flex items-center justify-between py-2 px-3 rounded-xl font-semibold cursor-pointer border transition-colors ${
+                    isOffline
+                      ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/80 dark:text-amber-200 dark:border-amber-700'
+                      : 'bg-slate-50 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 border-slate-200/80 dark:border-slate-700'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    {isOffline ? <WifiOff size={15} className="text-amber-600" /> : <Wifi size={15} className="text-emerald-500" />}
+                    <span>Mode Hors-Ligne</span>
+                  </span>
+                  <span className="text-[10px] font-bold">{isOffline ? 'ACTIF' : 'OFF'}</span>
+                </button>
+
+                {/* Sector Switcher on mobile */}
+                <div className="lg:hidden pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <span className="text-[11px] font-semibold text-slate-500 block mb-1.5">Secteur Actif :</span>
+                  <div className="grid grid-cols-2 gap-1.5">
                     <button
-                      key={lang}
-                      onClick={() => setLanguage(lang)}
-                      className={`py-1 rounded text-center font-bold uppercase ${
-                        language === lang
+                      type="button"
+                      onClick={() => {
+                        setActiveSector('hotel');
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className={`p-1.5 rounded-lg flex items-center justify-center gap-1 font-semibold ${
+                        activeSector === 'hotel'
                           ? 'bg-blue-600 text-white'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                       }`}
                     >
-                      {lang}
+                      <Hotel size={13} /> Hôtel
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveSector('resort');
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className={`p-1.5 rounded-lg flex items-center justify-center gap-1 font-semibold ${
+                        activeSector === 'resort'
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <Palmtree size={13} /> Resort
+                    </button>
+                  </div>
+                </div>
+
+                {/* QR Pass / Scanner */}
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                  {currentRole === 'client' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const latest = bookings[0] || null;
+                        if (latest) setActiveQrPassBooking(latest);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs cursor-pointer"
+                    >
+                      <QrCode size={15} />
+                      <span>Mon Pass QR Code</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsQrScannerOpen(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs cursor-pointer"
+                    >
+                      <Camera size={15} />
+                      <span>Scanner QR Pass Client</span>
+                    </button>
+                  )}
                 </div>
               </div>
-
-              {/* Theme toggle in menu */}
-              <button
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="w-full flex items-center justify-between py-1.5 px-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-700 dark:text-slate-300 font-semibold"
-              >
-                <span>Thème d'affichage</span>
-                {theme === 'dark' ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} />}
-              </button>
-
-              {/* Offline mode toggle */}
-              <button
-                onClick={() => setIsOffline(!isOffline)}
-                className={`w-full flex items-center justify-between py-1.5 px-2 rounded-lg font-semibold ${
-                  isOffline
-                    ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
-                    : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                }`}
-              >
-                <span>Mode Hors-Ligne</span>
-                {isOffline ? <WifiOff size={15} /> : <Wifi size={15} />}
-              </button>
-
-              {/* QR action in menu */}
-              {currentRole === 'client' ? (
-                <button
-                  onClick={() => {
-                    const latest = bookings[0] || null;
-                    if (latest) setActiveQrPassBooking(latest);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 py-1.5 px-2 bg-blue-600 text-white font-bold rounded-lg"
-                >
-                  <QrCode size={15} />
-                  <span>Mon Pass QR Code</span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    setIsQrScannerOpen(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 py-1.5 px-2 bg-blue-600 text-white font-bold rounded-lg"
-                >
-                  <Camera size={15} />
-                  <span>Scanner QR Client</span>
-                </button>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {/* Ephemeral USB Banner Alert if browser permission needed */}
+      {usbNotice && (
+        <div className="bg-blue-600 text-white px-4 py-2 text-xs flex items-center justify-between animate-in slide-in-from-top z-30 shadow-md">
+          <div className="flex items-center gap-2">
+            <Usb size={16} className="shrink-0 animate-pulse" />
+            <span className="font-medium">{usbNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUsbNotice(null)}
+            className="p-1 hover:bg-white/20 rounded-lg transition-colors cursor-pointer"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+    </>
   );
 };

@@ -92,6 +92,8 @@ interface AppContextType {
   setActiveQrPassBooking: (booking: TimelineBooking | null) => void;
   isOffline: boolean;
   setIsOffline: (offline: boolean) => void;
+  isSidebarMobileOpen: boolean;
+  setIsSidebarMobileOpen: (open: boolean) => void;
   purgeAllUserData: () => void;
   activeView: ActiveAppView;
   setActiveView: (view: ActiveAppView) => void;
@@ -304,6 +306,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [activeQrPassBooking, setActiveQrPassBooking] = useState<TimelineBooking | null>(null);
   const [isOffline, setIsOffline] = useState(false);
+  const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
 
   // Sync language with HTML dir and lang
   const setLanguage = (lang: Language) => {
@@ -831,6 +834,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveQrPassBooking,
         isOffline,
         setIsOffline,
+        isSidebarMobileOpen,
+        setIsSidebarMobileOpen,
         purgeAllUserData,
         activeView,
         setActiveView,

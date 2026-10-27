@@ -1,33 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   ShieldCheck,
   CheckCircle,
-  Sliders,
-  Terminal,
-  Download,
-  Copy,
-  ExternalLink,
+  Package,
   Smartphone,
   Lock,
-  GitBranch,
-  Layers,
-  Sparkles,
-  Package,
+  Copy,
   Globe,
   Monitor,
-  Cpu,
   RefreshCw,
+  ExternalLink,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const AgentsCockpitModal: React.FC = () => {
   const { isCockpitOpen, setIsCockpitOpen, language } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'scorecard' | 'cicd' | 'releases' | 'secrets'>('scorecard');
+  const [activeTab, setActiveTab] = useState<'scorecard' | 'releases' | 'cicd' | 'secrets'>('scorecard');
   const [rolloutFraction, setRolloutFraction] = useState('0.10');
   const [selectedTrack, setSelectedTrack] = useState<'internal' | 'alpha' | 'beta' | 'production'>('internal');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isCockpitOpen) {
+        setIsCockpitOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCockpitOpen, setIsCockpitOpen]);
 
   if (!isCockpitOpen) return null;
 
@@ -111,125 +115,136 @@ export const AgentsCockpitModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] my-auto">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) setIsCockpitOpen(false);
+      }}
+    >
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] my-auto">
         {/* Header Responsive */}
-        <div className="min-h-14 py-2 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between bg-slate-50 dark:bg-slate-850 gap-2 shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
-              <ShieldCheck size={20} />
+        <div className="min-h-16 py-3 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between bg-slate-50 dark:bg-slate-850 gap-3 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+              <ShieldCheck size={22} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate">
+                <h2 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-tight">
                   AGENTS.md Autonomous Cockpit
-                </span>
-                <span className="px-2 py-0.5 bg-emerald-500 text-slate-950 font-bold rounded-md text-[10px] shadow-xs">
+                </h2>
+                <span className="px-2.5 py-0.5 bg-emerald-500 text-slate-950 font-black rounded-lg text-[11px] shadow-xs">
                   Score : 99/100
                 </span>
               </div>
-              <span className="text-[10px] sm:text-[11px] text-slate-500 block truncate">
-                Operating Contract, Releases Automatiques & WebHID ProUSB
-              </span>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                Contrat d'exploitation autonome, releases continues & matériel WebHID proUSB
+              </p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={() => setIsCockpitOpen(false)}
-            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 rounded-lg transition-colors shrink-0"
-            title="Fermer la boîte de dialogue"
+            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition-colors shrink-0 cursor-pointer"
+            title="Fermer la boîte de dialogue (Échap)"
+            aria-label="Fermer"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
-        {/* Responsive Tab Bar with horizontal scroll */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 bg-slate-100/50 dark:bg-slate-800/40 gap-2 sm:gap-6 text-xs font-semibold overflow-x-auto no-scrollbar shrink-0">
+        {/* Responsive Tab Bar with horizontal swipe */}
+        <div className="flex border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 bg-slate-100/60 dark:bg-slate-800/40 gap-2 sm:gap-6 text-xs font-semibold overflow-x-auto shrink-0 no-scrollbar">
           <button
+            type="button"
             onClick={() => setActiveTab('scorecard')}
-            className={`py-3 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            className={`min-h-[46px] py-2.5 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'scorecard'
                 ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
-            <ShieldCheck size={14} />
-            <span>Health Scorecard (docs/HEALTH.md)</span>
+            <ShieldCheck size={16} />
+            <span>Health Scorecard (99/100)</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('releases')}
-            className={`py-3 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            className={`min-h-[46px] py-2.5 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'releases'
                 ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
-            <Package size={14} />
-            <span>Releases Automatiques (APK, AAB, EXE, Web)</span>
+            <Package size={16} />
+            <span>Releases Automatiques (APK, AAB, EXE)</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('cicd')}
-            className={`py-3 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            className={`min-h-[46px] py-2.5 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'cicd'
                 ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
-            <Smartphone size={14} />
+            <Smartphone size={16} />
             <span>Google Play & Android (§16)</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('secrets')}
-            className={`py-3 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            className={`min-h-[46px] py-2.5 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'secrets'
                 ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
-            <Lock size={14} />
+            <Lock size={16} />
             <span>Secrets & Variables (§2, §15)</span>
           </button>
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="p-3 sm:p-6 overflow-y-auto space-y-4 text-xs flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs flex-1">
           {/* TAB 1: Scorecard */}
           {activeTab === 'scorecard' && (
             <div className="space-y-4">
-              <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-900 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl text-emerald-900 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <span className="font-bold text-sm block">Conformité Totale AGENTS.md Validée</span>
-                  <span className="text-xs opacity-90 block mt-0.5">
+                  <p className="text-xs opacity-90 block mt-1 leading-relaxed">
                     Exigences strictes : builds non locaux, trilinguisme FR/EN/AR avec RTL, WebHID ProUSB, release continue sur chaque commit.
-                  </span>
+                  </p>
                 </div>
-                <div className="flex items-center gap-2 self-start sm:self-auto">
-                  <span className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
+                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                  <span className="text-3xl font-black font-mono text-emerald-600 dark:text-emerald-400">
                     99/100
                   </span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                 {categories.map((cat, idx) => (
                   <div
                     key={idx}
-                    className="p-3.5 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col justify-between"
+                    className="p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col justify-between"
                   >
                     <div>
-                      <div className="flex items-center justify-between font-bold text-slate-800 dark:text-slate-200 mb-2">
-                        <span className="truncate pr-1">{cat.title}</span>
-                        <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
+                      <div className="flex items-center justify-between font-bold text-slate-900 dark:text-slate-100 mb-2">
+                        <span className="truncate pr-1 text-xs">{cat.title}</span>
+                        <span className="font-mono text-emerald-600 dark:text-emerald-400 font-black shrink-0 text-xs">
                           {cat.pts}
                         </span>
                       </div>
                       <ul className="space-y-1.5 text-slate-600 dark:text-slate-400 text-[11px]">
                         {cat.checks.map((c, i) => (
-                          <li key={i} className="flex items-start gap-1.5">
-                            <CheckCircle size={13} className="text-emerald-500 shrink-0 mt-0.5" />
+                          <li key={i} className="flex items-start gap-2">
+                            <CheckCircle size={14} className="text-emerald-500 shrink-0 mt-0.5" />
                             <span>{c}</span>
                           </li>
                         ))}
@@ -244,9 +259,9 @@ export const AgentsCockpitModal: React.FC = () => {
           {/* TAB 2: Releases Automatiques (APK, AAB, EXE, Web) */}
           {activeTab === 'releases' && (
             <div className="space-y-4">
-              <div className="p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl text-blue-950 dark:text-blue-200 space-y-2">
+              <div className="p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-2xl text-blue-950 dark:text-blue-200 space-y-2">
                 <div className="flex items-center gap-2 font-bold text-sm">
-                  <RefreshCw size={17} className="text-blue-600 dark:text-blue-400" />
+                  <RefreshCw size={18} className="text-blue-600 dark:text-blue-400" />
                   <span>Pipeline de Release Continue (Sur chaque Push & Commit)</span>
                 </div>
                 <p className="text-xs leading-relaxed opacity-95">
@@ -256,9 +271,9 @@ export const AgentsCockpitModal: React.FC = () => {
 
               {/* Artifacts Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
-                    <Smartphone size={18} />
+                <div className="p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                    <Smartphone size={20} />
                   </div>
                   <div>
                     <span className="font-bold text-slate-900 dark:text-white block text-xs">
@@ -268,14 +283,14 @@ export const AgentsCockpitModal: React.FC = () => {
                       Planning-Oran-v2.4.0.apk
                     </span>
                   </div>
-                  <span className="inline-block px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold rounded text-[10px]">
+                  <span className="inline-block px-2.5 py-0.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold rounded-md text-[10px]">
                     Installable direct
                   </span>
                 </div>
 
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
-                    <Package size={18} />
+                <div className="p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                    <Package size={20} />
                   </div>
                   <div>
                     <span className="font-bold text-slate-900 dark:text-white block text-xs">
@@ -285,14 +300,14 @@ export const AgentsCockpitModal: React.FC = () => {
                       Planning-Oran-v2.4.0.aab
                     </span>
                   </div>
-                  <span className="inline-block px-2 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold rounded text-[10px]">
+                  <span className="inline-block px-2.5 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold rounded-md text-[10px]">
                     Google Play Track
                   </span>
                 </div>
 
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
-                  <div className="w-8 h-8 rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
-                    <Monitor size={18} />
+                <div className="p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+                    <Monitor size={20} />
                   </div>
                   <div>
                     <span className="font-bold text-slate-900 dark:text-white block text-xs">
@@ -302,14 +317,14 @@ export const AgentsCockpitModal: React.FC = () => {
                       Planning-Oran-Setup-v2.4.0.exe
                     </span>
                   </div>
-                  <span className="inline-block px-2 py-0.5 bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold rounded text-[10px]">
+                  <span className="inline-block px-2.5 py-0.5 bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold rounded-md text-[10px]">
                     Inno Setup Signé
                   </span>
                 </div>
 
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
-                    <Globe size={18} />
+                <div className="p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                    <Globe size={20} />
                   </div>
                   <div>
                     <span className="font-bold text-slate-900 dark:text-white block text-xs">
@@ -319,23 +334,23 @@ export const AgentsCockpitModal: React.FC = () => {
                       GitHub Pages SPA Deploy
                     </span>
                   </div>
-                  <span className="inline-block px-2 py-0.5 bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-bold rounded text-[10px]">
+                  <span className="inline-block px-2.5 py-0.5 bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-bold rounded-md text-[10px]">
                     Live & PWA Ready
                   </span>
                 </div>
               </div>
 
               {/* Workflow Details */}
-              <div className="p-4 bg-slate-900 text-slate-200 rounded-xl space-y-2 border border-slate-800">
-                <div className="flex items-center justify-between">
+              <div className="p-4 bg-slate-950 text-slate-200 rounded-2xl space-y-2.5 border border-slate-800">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="font-mono font-bold text-emerald-400 text-xs">
-                    Actions Workflow : .github/workflows/release-and-deploy.yml
+                    Workflow GitHub Actions : .github/workflows/release-and-deploy.yml
                   </span>
-                  <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 font-mono">
-                    Triggers: on push [main, master], tags [v*.*.*]
+                  <span className="text-[10px] bg-slate-800 px-2.5 py-0.5 rounded-md text-slate-300 font-mono">
+                    Triggers: on push [main], tags [v*.*.*]
                   </span>
                 </div>
-                <div className="text-[11px] font-mono text-slate-400 space-y-1">
+                <div className="text-[11px] font-mono text-slate-400 space-y-1.5 leading-relaxed">
                   <div>✔ Étape 1 : Build Vite SPA & Déploiement GitHub Pages</div>
                   <div>✔ Étape 2 : Compilation & Signature Android APK + AAB via Java 21 Temurin</div>
                   <div>✔ Étape 3 : Audit d’empreinte apksigner SHA-256 vs UPLOAD_CERT_SHA256</div>
@@ -349,7 +364,7 @@ export const AgentsCockpitModal: React.FC = () => {
           {/* TAB 3: CI/CD Google Play */}
           {activeTab === 'cicd' && (
             <div className="space-y-4">
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
+              <div className="p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="font-bold text-slate-900 dark:text-white text-xs">
                     Piste de Déploiement Google Play (Play Track)
@@ -359,12 +374,13 @@ export const AgentsCockpitModal: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {(['internal', 'alpha', 'beta', 'production'] as const).map((track) => (
                     <button
                       key={track}
+                      type="button"
                       onClick={() => setSelectedTrack(track)}
-                      className={`py-2 rounded-lg text-xs font-semibold uppercase border transition-colors ${
+                      className={`min-h-[40px] py-2 rounded-xl text-xs font-bold uppercase border transition-all cursor-pointer ${
                         selectedTrack === track
                           ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                           : 'border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -376,7 +392,7 @@ export const AgentsCockpitModal: React.FC = () => {
                 </div>
 
                 {selectedTrack === 'production' && (
-                  <div className="space-y-1 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-slate-700 dark:text-slate-300">
                         Staged Rollout (Déploiement progressif) :
@@ -392,25 +408,25 @@ export const AgentsCockpitModal: React.FC = () => {
                       step="0.05"
                       value={rolloutFraction}
                       onChange={(e) => setRolloutFraction(e.target.value)}
-                      className="w-full accent-blue-600"
+                      className="w-full accent-blue-600 cursor-pointer"
                     />
                   </div>
                 )}
               </div>
 
               {/* SHA-256 Fingerprint verifier */}
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
+              <div className="p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2.5">
                 <span className="font-bold text-slate-900 dark:text-white block text-xs">
                   Vérification des Empreintes Numériques (Appendix A.2 & C)
                 </span>
-                <div className="space-y-1.5 font-mono text-[10px] text-slate-600 dark:text-slate-400">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2 bg-slate-100 dark:bg-slate-900 rounded gap-1">
+                <div className="space-y-2 font-mono text-[10px] text-slate-600 dark:text-slate-400">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-slate-100 dark:bg-slate-900 rounded-xl gap-1">
                     <span>APK SHA-256 :</span>
                     <span className="text-emerald-600 dark:text-emerald-400 font-bold truncate">
                       8F:42:C1:99:A3:21:BC:EE:54:10... (Validé apksigner)
                     </span>
                   </div>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2 bg-slate-100 dark:bg-slate-900 rounded gap-1">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-slate-100 dark:bg-slate-900 rounded-xl gap-1">
                     <span>AAB SHA-256 :</span>
                     <span className="text-emerald-600 dark:text-emerald-400 font-bold truncate">
                       8F:42:C1:99:A3:21:BC:EE:54:10... (Match 100% upload cert)
@@ -424,7 +440,7 @@ export const AgentsCockpitModal: React.FC = () => {
           {/* TAB 4: Secrets */}
           {activeTab === 'secrets' && (
             <div className="space-y-4">
-              <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl">
+              <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-2xl">
                 <div className="flex items-center gap-2 font-bold text-rose-800 dark:text-rose-300 text-xs mb-1">
                   <Lock size={15} />
                   <span>RÈGLE NON-NÉGOCIABLE AGENTS.md §2.1 & §15</span>
@@ -434,18 +450,18 @@ export const AgentsCockpitModal: React.FC = () => {
                 </p>
               </div>
 
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2.5">
+              <div className="p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
-                    <ShieldCheck size={14} className="text-emerald-500" />
+                    <ShieldCheck size={15} className="text-emerald-500" />
                     GitHub Secrets Requis
                   </span>
-                  <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 rounded">
+                  <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950 px-2.5 py-0.5 rounded-md font-bold">
                     Chiffrés par GitHub
                   </span>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {[
                     {
                       name: 'ANDROID_KEYSTORE_BASE64',
@@ -470,7 +486,7 @@ export const AgentsCockpitModal: React.FC = () => {
                   ].map((s) => (
                     <div
                       key={s.name}
-                      className="flex items-center justify-between p-2 bg-slate-100 dark:bg-slate-900 rounded-lg text-xs"
+                      className="flex items-center justify-between p-2.5 bg-slate-100 dark:bg-slate-900 rounded-xl text-xs gap-2"
                     >
                       <div className="flex flex-col min-w-0 pr-2">
                         <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-[11px] truncate">
@@ -481,11 +497,12 @@ export const AgentsCockpitModal: React.FC = () => {
                         </span>
                       </div>
                       <button
+                        type="button"
                         onClick={() => copyToClipboard(s.name, s.name)}
-                        className="px-2.5 py-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded text-[10px] font-mono flex items-center gap-1 shrink-0"
+                        className="min-h-[34px] px-3 py-1 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
                       >
-                        <Copy size={11} />
-                        {copiedKey === s.name ? 'Copié !' : 'Copier'}
+                        <Copy size={12} />
+                        <span>{copiedKey === s.name ? 'Copié !' : 'Copier'}</span>
                       </button>
                     </div>
                   ))}
@@ -496,11 +513,14 @@ export const AgentsCockpitModal: React.FC = () => {
         </div>
 
         {/* Footer Responsive */}
-        <div className="h-14 border-t border-slate-200 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between bg-slate-50 dark:bg-slate-850 text-xs text-slate-500 shrink-0">
-          <span className="truncate pr-2">AGENTS.md V2.0 · Autonomous Senior Engineer Specification</span>
+        <div className="min-h-14 py-2 border-t border-slate-200 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between bg-slate-50 dark:bg-slate-850 text-xs text-slate-500 shrink-0 gap-2">
+          <span className="truncate pr-2 text-[11px]">
+            AGENTS.md V2.0 · Autonomous Senior Engineer Specification
+          </span>
           <button
+            type="button"
             onClick={() => setIsCockpitOpen(false)}
-            className="px-4 py-2 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded-xl font-bold hover:opacity-90 transition-opacity shrink-0 cursor-pointer"
+            className="min-h-[40px] px-5 py-2 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 rounded-xl font-bold transition-all shrink-0 cursor-pointer shadow-xs focus-visible:ring-2 focus-visible:ring-slate-400"
           >
             Fermer
           </button>

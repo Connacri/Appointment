@@ -493,11 +493,26 @@ export const BookingModal: React.FC = () => {
 
   const sheetTitle = getSheetTitle();
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        closeModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-in fade-in overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh] my-auto">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) closeModal();
+      }}
+    >
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[94dvh] my-auto">
         {/* Modal Dedicated Domain Header */}
-        <div className="border-b border-slate-200 dark:border-slate-800 px-5 py-3.5 flex items-center justify-between bg-slate-50 dark:bg-slate-850">
+        <div className="border-b border-slate-200 dark:border-slate-800 px-5 py-4 flex items-center justify-between bg-slate-50 dark:bg-slate-850 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400">
               <DomainHeaderIcon size={20} />
@@ -1271,8 +1286,13 @@ export const BookingModal: React.FC = () => {
 
       {/* ALGERIAN POLICE REGISTRATION SHEET MODAL (Fiche Individuelle de Police) */}
       {showPoliceSheetModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 bg-black/75 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowPoliceSheetModal(false);
+          }}
+        >
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] my-auto">
             {/* Header */}
             <div className="p-4 bg-emerald-700 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">

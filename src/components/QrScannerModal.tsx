@@ -74,9 +74,24 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
     setSelectedScannedBooking(null);
   };
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 bg-black/70 backdrop-blur-xs animate-in fade-in overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col my-auto max-h-[95vh]">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 bg-black/75 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col my-auto max-h-[94dvh]">
         {/* Header */}
         <div className="border-b border-slate-200 dark:border-slate-800 px-5 py-4 flex items-center justify-between bg-slate-50 dark:bg-slate-850">
           <div className="flex items-center gap-2.5">

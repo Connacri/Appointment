@@ -148,7 +148,14 @@ export class WebHidTransport implements LockTransport {
       if (matchingDevices.length === 0) {
         // No paired device, request new one
         devices = await (navigator as any).hid.requestDevice({
-          filters: [{ vendorId: PROUSB_VID, productId: PROUSB_PID }],
+          filters: [
+            { vendorId: PROUSB_VID, productId: PROUSB_PID },
+            { vendorId: PROUSB_VID },
+            { vendorId: 0x10c4 }, // Silicon Labs HID
+            { vendorId: 0x0483 }, // STMicroelectronics
+            { vendorId: 0x1a86 }, // WCH CH340 / CH9329
+            {}, // fallback for all HID encoders
+          ],
         });
       } else {
         devices = matchingDevices;

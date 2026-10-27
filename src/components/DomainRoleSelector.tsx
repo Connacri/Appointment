@@ -19,82 +19,93 @@ export const DomainRoleSelector: React.FC = () => {
     resort: Palmtree,
   };
 
-  const roles: { id: UserRole; label: { fr: string; en: string; ar: string }; icon: any }[] = [
+  const roles: { id: UserRole; label: { fr: string; en: string; ar: string }; shortLabel: string; icon: any }[] = [
     {
       id: 'manager',
       label: { fr: 'Directeur / Gérant', en: 'General Manager', ar: 'المدير العام' },
+      shortLabel: 'Gérant',
       icon: Shield,
     },
     {
       id: 'receptionist',
-      label: { fr: 'Réception / Accueil', en: 'Front Desk Reception', ar: 'الاستقبال ومكتب الدخول' },
+      label: { fr: 'Réception / Accueil', en: 'Front Desk Reception', ar: 'الاستقبال' },
+      shortLabel: 'Réception',
       icon: Briefcase,
     },
     {
       id: 'staff',
-      label: { fr: 'Personnel / Étage / Praticien', en: 'Staff & Operations', ar: 'فريق العمل والخدمة' },
+      label: { fr: 'Personnel / Étage / Maintenance', en: 'Staff & Operations', ar: 'الخدمة' },
+      shortLabel: 'Étage',
       icon: UserCheck,
     },
     {
       id: 'client',
-      label: { fr: 'Client / Guest (Pass QR Code)', en: 'Client / Guest (QR Pass)', ar: 'العميل / النزيل (رمز QR)' },
+      label: { fr: 'Client / Guest (Pass QR Code)', en: 'Guest (QR Pass)', ar: 'النزيل' },
+      shortLabel: 'Client',
       icon: Users,
     },
   ];
 
   return (
-    <div className="bg-slate-900 border-b border-slate-800 px-3 py-2 flex flex-col md:flex-row items-start md:items-center justify-between gap-2 text-xs select-none z-30">
+    <div className="bg-slate-950 border-b border-slate-800/80 px-2.5 sm:px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs select-none z-30">
       {/* Domains Strip */}
-      <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 shrink-0">
-          {language === 'fr' ? 'Domaine :' : language === 'ar' ? 'القطاع:' : 'Domain:'}
+      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
+          {language === 'fr' ? 'Secteur :' : language === 'ar' ? 'القطاع:' : 'Sector:'}
         </span>
 
-        {(Object.keys(domainConfigs) as DomainType[]).map((dom) => {
-          const cfg = domainConfigs[dom];
-          const Icon = domainIcons[dom] || Hotel;
-          const isActive = currentDomain === dom;
+        <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-xl border border-slate-800">
+          {(Object.keys(domainConfigs) as DomainType[]).map((dom) => {
+            const cfg = domainConfigs[dom];
+            const Icon = domainIcons[dom] || Hotel;
+            const isActive = currentDomain === dom;
 
-          return (
-            <button
-              key={dom}
-              onClick={() => setCurrentDomain(dom)}
-              className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 font-semibold shrink-0 transition-all ${
-                isActive
-                  ? 'bg-blue-600 text-white shadow-xs scale-102 ring-1 ring-blue-400'
-                  : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Icon size={14} className={isActive ? 'text-white' : 'text-slate-400'} />
-              <span>{cfg.label[language] || cfg.label.en}</span>
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={dom}
+                type="button"
+                onClick={() => setCurrentDomain(dom)}
+                className={`min-h-[32px] px-3 py-1 rounded-lg flex items-center gap-1.5 font-bold text-xs transition-all cursor-pointer ${
+                  isActive
+                    ? dom === 'resort'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <Icon size={14} />
+                <span>{cfg.label[language] || cfg.label.en}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Role Strip */}
-      <div className="flex items-center gap-1.5 shrink-0 self-end md:self-auto">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 shrink-0">
+      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0 hidden sm:inline">
           {language === 'fr' ? 'Rôle Actif :' : language === 'ar' ? 'الدور:' : 'Role:'}
         </span>
 
-        <div className="flex items-center bg-slate-800 p-0.5 rounded-lg border border-slate-700">
+        <div className="flex items-center bg-slate-900 p-0.5 rounded-xl border border-slate-800 gap-0.5">
           {roles.map((r) => {
             const Icon = r.icon;
             const isRoleActive = currentRole === r.id;
             return (
               <button
                 key={r.id}
+                type="button"
                 onClick={() => setCurrentRole(r.id)}
-                className={`px-2 py-1 rounded text-[11px] font-medium flex items-center gap-1 transition-colors ${
+                className={`min-h-[32px] px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                   isRoleActive
-                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-2xs'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-xs'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
                 }`}
                 title={r.label[language] || r.label.en}
               >
-                <Icon size={12} />
-                <span className="hidden lg:inline">{r.label[language] || r.label.en}</span>
+                <Icon size={13} />
+                <span className="hidden md:inline">{r.label[language] || r.label.en}</span>
+                <span className="md:hidden">{r.shortLabel}</span>
               </button>
             );
           })}

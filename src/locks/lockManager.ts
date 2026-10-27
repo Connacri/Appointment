@@ -374,6 +374,31 @@ class LockManager {
     };
   }
 
+  /**
+   * Prompts user via WebHID navigator.hid.requestDevice to grant USB permission for the encoder
+   */
+  public async requestPhysicalUsbDevice(): Promise<boolean> {
+    try {
+      await this.webHidTransport.open();
+      this.notifyStateListeners();
+      return true;
+    } catch (err) {
+      console.error('[LockManager] WebHID open error:', err);
+      this.notifyStateListeners();
+      throw err;
+    }
+  }
+
+  public async disconnectPhysicalUsbDevice(): Promise<void> {
+    try {
+      await this.webHidTransport.close();
+      this.notifyStateListeners();
+    } catch (err) {
+      console.error('[LockManager] WebHID close error:', err);
+      this.notifyStateListeners();
+    }
+  }
+
   public subscribeConnection(listener: (status: UsbConnectionStatus, device: UsbDeviceInfo | null) => void): () => void {
     const wrappedListener = () => {
       listener(this.getStatus(), this.getDeviceInfo());
