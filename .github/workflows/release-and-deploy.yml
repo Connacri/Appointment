@@ -57,6 +57,10 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # package-lock.json is intentionally NOT committed: a lockfile created
+          # on Windows omits the optional native bindings (vite/rolldown) that
+          # Linux runners need, and `npm ci` then "succeeds" while producing a
+          # tree that crashes with "Cannot find native binding".
           if [ -f "package-lock.json" ]; then
             npm ci --legacy-peer-deps || npm install --legacy-peer-deps
           else

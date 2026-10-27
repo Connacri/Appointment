@@ -1,4 +1,9 @@
 node_modules/
+# Not committed on purpose: a lockfile generated on Windows omits the optional
+# native bindings that Linux CI needs (vite/rolldown, @rolldown/binding-*).
+# npm ci then succeeds but vite crashes with "Cannot find native binding".
+# CI resolves dependencies fresh with `npm install --legacy-peer-deps`.
+package-lock.json
 build/
 dist/
 coverage/
