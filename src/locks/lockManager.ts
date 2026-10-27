@@ -172,7 +172,7 @@ class LockManager {
     }
   }
 
-  private async loadMdbData(): Promise<void> {
+  public async loadMdbData(): Promise<void> {
     try {
       const connected = await this.mdbReader.connect();
       if (!connected) {
@@ -220,6 +220,10 @@ class LockManager {
           alarmForcedPin: db.systemInfo.BaoJing === 128,
           remindCloseDoor: db.systemInfo.TiShi === 152,
         };
+        (this.settings as any).systemInfo = db.systemInfo;
+      }
+      if (db.regInfo && db.regInfo.length > 0) {
+        (this.settings as any).regInfo = db.regInfo[0];
       }
 
       this.notifyStateListeners();
@@ -378,6 +382,10 @@ class LockManager {
     this.settings = { ...this.settings, ...partial };
     this.saveSettings();
     this.notifyStateListeners();
+  }
+
+  public getMdbStatus(): { connected: boolean; source: string } {
+    return { connected: this.mdbLoaded, source: this.mdbReader ? (this.mdbReader as any).mdbPath || 'C:\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb' : 'none' };
   }
 
   /**
