@@ -488,6 +488,17 @@ class LockManager {
       }
 
       const decoded = decodeCardRecord(response.data.slice(0, 16));
+
+      // Trace exacte : octets bruts + contrôles de cohérence.
+      transport.onLog?.('info', `Carte lue : ${decoded.rawHex}`);
+      if (decoded.siteComplementOk !== undefined) {
+        transport.onLog?.(
+          decoded.siteComplementOk ? 'info' : 'error',
+          `Site ${decoded.siteCode}${decoded.isUniversalSite ? ' (UNIVERSELLE)' : ''} — ` +
+            `contrôle ~site : ${decoded.siteComplementOk ? 'OK' : 'INVALIDE (carte altérée)'}`,
+        );
+      }
+
       return decoded;
     } catch (err) {
       transport.onLog?.('error', `Read card failed: ${err}`);
@@ -608,19 +619,24 @@ class LockManager {
   /**
    * Writes a genuine proUSB system (configuration) card.
    *
-   * The site code, family marker/header, trailer and the next serial are the
-   * ones read from the imported CardLock.mdb, so the record is structurally
-   * identical to the one CardLock.exe produces.
+   * Bytes [2..3] (site), [4..5] (~site), [6..8] (header) and [10..12] (issue
+   * date) follow `ResetCard` from `proRFL.dll` exactly; [13..15] are fresh
+   * random padding on every card, like the original software.
+   *
+   * @param universal when true the card is written with site `0x0000`, the
+   *   same wildcard the original software uses for master cards, so a lock of
+   *   **any** system accepts it.
    */
-  private async writeSystemCard(typeIndex: number): Promise<Uint8Array> {
+  private async writeSystemCard(typeIndex: number, universal = false): Promise<Uint8Array> {
     const template = this.getSystemTemplate();
     const issuedAt = new Date();
-    const record = encodeSystemCard({ typeIndex, template, issuedAt });
+    const record = encodeSystemCard({ typeIndex, template, issuedAt, universal });
 
     this.getTransport().onLog?.(
       'info',
       `Carte système 0x${typeIndex.toString(16).toUpperCase().padStart(2, '0')} — ` +
-        `site=${toHex(new Uint8Array(template.site))} ` +
+        `site=${toHex(record.slice(2, 4))}${universal ? ' (UNIVERSELLE)' : ''} ` +
+        `complément=${toHex(record.slice(4, 6))} ` +
         `émise=${issuedAt.toLocaleString('fr-FR')} ` +
         `(modèle DB #${template.sampleId || 'défaut'})`,
     );
@@ -665,7 +681,7 @@ class LockManager {
       }
 
       // Step 3: write the genuine system card (same bytes layout as CardLock.exe)
-      recordBytes = await this.writeSystemCard(SYSTEM_CARD_TYPE.hard_reset);
+      recordBytes = await this.writeSystemCard(SYSTEM_CARD_TYPE.hard_reset, params.universal);
     } else if (params.type === 'reset') {
       // Step 1: IniCard reset
       const transport = this.getTransport();
@@ -673,7 +689,7 @@ class LockManager {
       await transport.send(iniCard(IniMode.Step0));
 
       // Step 2: write the genuine system card (site/serial read from CardLock.mdb)
-      recordBytes = await this.writeSystemCard(SYSTEM_CARD_TYPE.reset);
+      recordBytes = await this.writeSystemCard(SYSTEM_CARD_TYPE.reset, params.universal);
     } else {
       recordBytes = encodeCommissioningCard({ ...params, template: this.getSystemTemplate() });
       await this.writeAndVerifyCard(recordBytes);

@@ -47,43 +47,67 @@ function packDateTime(year: number, month: number, day: number, hour: number, mi
   return [b0, b1, b2];
 }
 
+/** First year representable in the 4-bit year field (`(year - 2009) & 0x0F`). */
+const YEAR_BASE = 2009;
+/** The year field repeats every 16 years. */
+const YEAR_SPAN = 16;
+
 /**
- * Unpacks 3 bytes into date/time components.
+ * Resolves the 4-bit year nibble around a reference year.
  *
- * The year is a 4-bit field with a 16-year window: base 2009. The window is
- * rolled forward to the present so a card written in 2026 (nibble 1) is not
- * decoded as 2010, while a genuine 2015 card (nibble 6) still reads 2015.
+ * The format only stores `(year - 2009) & 0x0F`, so every 16 years the same
+ * nibble comes back (2026 and 2042 are both `1`). We pick the latest candidate
+ * that is not more than one year in the future of `refYear`: a card read in
+ * 2026 decodes as 2026 (not 2010), a genuine 2015 card still decodes as 2015,
+ * and as long as clocks keep moving forward the resolution keeps working.
  */
-function unpackDateTime(b0: number, b1: number, b2: number): { year: number; month: number; day: number; hour: number; minute: number } {
-  const nibble = (b0 >> 4) & 0x0f;
-  let year = 2009 + nibble;
-  const currentYear = new Date().getFullYear();
-  while (year + 16 <= currentYear + 1) year += 16;
-
-  const month = b0 & 0x0f;
-  const day = (b1 >> 3) & 0x1f;
-  const hour = ((b1 & 0x07) << 2) | ((b2 >> 6) & 0x03);
-  const minute = b2 & 0x3f;
-
-  return {
-    year,
-    month: month || 1,
-    day: day || 1,
-    hour,
-    minute,
-  };
+function resolveYear(nibble: number, refYear: number): number {
+  const base = YEAR_BASE + (nibble & 0x0f);
+  let best = base;
+  for (let k = -1; k <= 3; k += 1) {
+    const candidate = base + k * YEAR_SPAN;
+    if (candidate <= refYear + 1 && candidate > best - 1) best = candidate;
+  }
+  return best;
 }
 
 /**
- * Like `unpackDateTime`, but returns null when the 3 bytes cannot be a real
- * date/time. Used for optional fields (system-card trailer, which is a family
- * marker instead of an expiry date).
+ * Resolves the 4-bit year nibble of an **expiry** field: the first candidate
+ * that is not before the start year, so a stay never ends before it begins.
  */
-function tryUnpackDateTime(
+function resolveYearAtLeast(nibble: number, notBeforeYear: number): number {
+  const base = YEAR_BASE + (nibble & 0x0f);
+  let year = base;
+  while (year < notBeforeYear) year += YEAR_SPAN;
+  return year;
+}
+
+export interface DecodedStamp {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+}
+
+/**
+ * Unpacks the 3 date/time bytes into components, exactly as `proRFL.dll` writes
+ * them (`packDateTime` above).
+ *
+ * Returns `null` instead of inventing `1` when the field cannot be a real date
+ * (`month = 0`, `day = 0`, `minute = 62`…). This is what makes the reading
+ * honest: a random system-card trailer is reported as "no date", never as
+ * "2025/0/1 0:0:0" or "30 décembre 1899".
+ *
+ * @param opts.notBeforeYear when set, the year is resolved at or after that
+ *   year (used for expiry fields, resolved relative to the start date).
+ */
+function unpackStamp(
   b0: number,
   b1: number,
   b2: number,
-): { year: number; month: number; day: number; hour: number; minute: number } | null {
+  opts: { refYear: number; notBeforeYear?: number },
+): DecodedStamp | null {
   const month = b0 & 0x0f;
   const day = (b1 >> 3) & 0x1f;
   const hour = ((b1 & 0x07) << 2) | ((b2 >> 6) & 0x03);
@@ -91,11 +115,52 @@ function tryUnpackDateTime(
   if (month < 1 || month > 12) return null;
   if (day < 1 || day > 31) return null;
   if (hour > 23 || minute > 59) return null;
-  return unpackDateTime(b0, b1, b2);
+
+  const nibble = (b0 >> 4) & 0x0f;
+  const year = opts.notBeforeYear !== undefined
+    ? resolveYearAtLeast(nibble, opts.notBeforeYear)
+    : resolveYear(nibble, opts.refYear);
+
+  return { year, month, day, hour, minute };
+}
+
+function stampToValidity(start: DecodedStamp, end: DecodedStamp | null): CardValidityWindow {
+  const tail = end ?? start;
+  return {
+    startYear: start.year,
+    startMonth: start.month,
+    startDay: start.day,
+    startHour: start.hour,
+    startMinute: start.minute,
+    endYear: tail.year,
+    endMonth: tail.month,
+    endDay: tail.day,
+    endHour: tail.hour,
+    endMinute: tail.minute,
+  };
 }
 
 function pseudoRand(seed: number): number {
   return ((seed * 1103515245 + 12345) & 0x7fffffff) & 0xff;
+}
+
+/**
+ * Three random bytes for the system-card trailer.
+ *
+ * `ResetCard` in `proRFL.dll` fills bytes [13..15] with three `rand() & 0xFF`
+ * calls. It is pure padding: the reader/lock never interprets it as a date or
+ * a checksum. The `29 23 BE` seen on old cards is simply the first three values
+ * of the unseeded libc sequence, which is why several cards share it.
+ */
+function randomTail(): [number, number, number] {
+  const bytes = new Uint8Array(3);
+  const cryptoRef = (globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => void } }).crypto;
+  if (cryptoRef?.getRandomValues) {
+    cryptoRef.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return [bytes[0], bytes[1], bytes[2]];
 }
 
 export interface EncodeGuestCardParams {
@@ -254,10 +319,23 @@ export function encodeMasterCard(params: EncodeMasterCardParams): Uint8Array {
 }
 
 export interface SystemCardTemplate {
+  /** Bytes [2..3] — 16-bit site code, big-endian. `[0, 0]` means "universal". */
   site: [number, number];
-  marker: [number, number];
+  /** Bytes [6..8] — ResetCard parameters p5, p6, p4 (reader / model code). */
   header: [number, number, number];
-  tail: [number, number, number];
+  /**
+   * Bytes [4..5] as found in the database.
+   * @deprecated NOT written anymore: `ResetCard` derives [4..5] as the bitwise
+   * complement of the site (`~site`), which is the real integrity check. Kept
+   * only for traceability of the imported record.
+   */
+  marker?: [number, number];
+  /**
+   * Bytes [13..15] as found in the database.
+   * @deprecated NOT written anymore: `ResetCard` fills [13..15] with `rand()`.
+   * Kept only for traceability of the imported record.
+   */
+  tail?: [number, number, number];
 }
 
 /**
@@ -282,34 +360,59 @@ export const SYSTEM_CARD_TYPE = {
   hard_reset: 0x0e,
 } as const;
 
+/** Site value that makes a card acceptable by any lock (wildcard). */
+export const UNIVERSAL_SITE = 0x0000;
+
+/** True when the record is a system (configuration) card — family 0x00. */
+export function isSystemCardByte(byte9: number): boolean {
+  return (byte9 & 0xf0) === 0x00;
+}
+
 /**
  * Encodes a genuine proUSB system (configuration) card.
  *
- * Layout recovered from 62 records of the shipped CardLock.mdb:
- *   C9 12 | site(2) | marker(2) | header(3) | type(1) | issued(3) | tail(3)
+ * Layout taken from the **original source**, `proRFL.dll` → exported
+ * `ResetCard(char port, uint site, byte typeIndex, byte p4, byte p5, byte p6,
+ * char *datetime "YYMMDDHHmm", int outHex)` (real body at `0x10001d50`):
  *
- * [10..12] is the issue date/time (same packing as every other family), not a
- * serial: CardInfo #61 = EC 63 1B → 2023-12-12 12:27, one minute before the
- * guest card #62 (EC 63 1C → 12:28). The 2026 card read from the real encoder
- * (1A CA 58) decodes to 2026-10-25 09:24.
+ *   [0]      0xC9
+ *   [1..3]   site, big-endian 24-bit (bits 16-23 are the constant 0x12)
+ *   [4..5]   bitwise complement of the 16-bit site  →  the integrity check
+ *   [6]      p5      ┐
+ *   [7]      p6      ├ reader / model header, read from CardLock.mdb
+ *   [8]      p4      ┘
+ *   [9]      typeIndex & 0x0F
+ *   [10..12] date of issue (same packing as every other family)
+ *   [13..15] three random bytes (rand() ×3) — pure padding
  *
- * Site, marker, header and tail are read **from the database**, so the record
- * is structurally identical to the one produced by CardLock.exe.
+ * Because [4..5] is *derived* from the site, a site of `0x0000` produces the
+ * self-consistent `00 00 FF FF`, which is how a **universal** reset card is
+ * built: the same wildcard convention the original software uses for master
+ * cards (written with site `0000`).
  */
 export function encodeSystemCard(params: {
   typeIndex: number;
   template?: SystemCardTemplate | null;
   issuedAt?: Date;
+  /** 16-bit site code to write. Ignored when `universal` is true. */
+  site?: number;
+  /** Write site 0x0000 so the card is accepted by a lock of any system. */
+  universal?: boolean;
 }): Uint8Array {
   const tpl = params.template;
   const card = new Uint8Array(16);
 
+  const templateSite = tpl ? ((tpl.site[0] << 8) | tpl.site[1]) & 0x3fff : DEFAULT_SITE_LOW & 0x3fff;
+  const site = params.universal ? UNIVERSAL_SITE : (params.site ?? templateSite) & 0x3fff;
+
   card[0] = 0xc9;
   card[1] = DEFAULT_SITE_HIGH;
-  card[2] = tpl ? tpl.site[0] : (DEFAULT_SITE_LOW >> 8) & 0xff;
-  card[3] = tpl ? tpl.site[1] : DEFAULT_SITE_LOW & 0xff;
-  card[4] = tpl ? tpl.marker[0] : 0xfc;
-  card[5] = tpl ? tpl.marker[1] : 0xc4;
+  card[2] = (site >> 8) & 0xff;
+  card[3] = site & 0xff;
+  // Complement of the site — verified on all six genuine system cards of
+  // CardLock.mdb: 033B→FCC4, 316A→CE95, 24B6→DB49, 0000→FFFF.
+  card[4] = (~card[2]) & 0xff;
+  card[5] = (~card[3]) & 0xff;
   card[6] = tpl ? tpl.header[0] : 0x80;
   card[7] = tpl ? tpl.header[1] : 0x98;
   card[8] = tpl ? tpl.header[2] : 0x00;
@@ -327,9 +430,10 @@ export function encodeSystemCard(params: {
   card[11] = t1;
   card[12] = t2;
 
-  card[13] = tpl ? tpl.tail[0] : 0x29;
-  card[14] = tpl ? tpl.tail[1] : 0x23;
-  card[15] = tpl ? tpl.tail[2] : 0xbe;
+  const [r0, r1, r2] = randomTail();
+  card[13] = r0;
+  card[14] = r1;
+  card[15] = r2;
 
   return card;
 }
@@ -347,6 +451,8 @@ export interface EncodeCommissioningCardParams {
   template?: SystemCardTemplate | null;
   /** Overrides the issue timestamp written at bytes [10..12]. */
   issuedAt?: Date;
+  /** Write site 0x0000 so the card resets a lock of **any** system. */
+  universal?: boolean;
 }
 
 /**
@@ -358,6 +464,7 @@ export function encodeCommissioningCard(params: EncodeCommissioningCardParams): 
       typeIndex: SYSTEM_CARD_TYPE[params.type],
       template: params.template ?? null,
       issuedAt: params.issuedAt,
+      universal: params.universal,
     });
   }
 
@@ -461,7 +568,40 @@ export function encodeCommissioningCard(params: EncodeCommissioningCardParams): 
 }
 
 /**
- * Decodes any raw 16-byte proUSB card record into structured details
+ * Resolves the card family from byte [9].
+ *
+ * Families 0x10..0xD0 use the high nibble as the family marker. Family 0x00
+ * (system / configuration cards) uses the **low** nibble as the type index:
+ * 0x01 = reset, 0x0E = hard reset. There is no 0x00 "family" collision, so the
+ * old first-match loop wrongly reported every reset card as a hard reset.
+ */
+function resolveCardType(byte9: number): ProUsbCardType {
+  const family = byte9 & 0xf0;
+  if (family === 0x00) {
+    return (byte9 & 0x0f) === SYSTEM_CARD_TYPE.hard_reset ? 'hard_reset' : 'reset';
+  }
+  for (const [type, meta] of Object.entries(PROUSB_CARD_TYPES)) {
+    if (meta.typeFamilyByte === family) return type as ProUsbCardType;
+  }
+  return 'guest';
+}
+
+/**
+ * Decodes any raw 16-byte proUSB card record into structured details.
+ *
+ * The field layout is taken from the original `proRFL.dll` builders, not from
+ * guesswork:
+ *   ResetCard   → [4..5] = ~site, [13..15] = random padding
+ *   GuestCard   → [4] sentinel, [5] room, [6] floor, [7] building, [13..15] end
+ *   MasterCard  → [4] level, [6] nonce, [7] p6<<4, [13..15] end
+ *
+ * Consequences for reading:
+ *   • a system card has **no expiry date** — [13..15] is random, so it is
+ *     never decoded as a date;
+ *   • invalid date fields return `null` (reported as "unknown") instead of a
+ *     fabricated 1st January or a 1899 placeholder;
+ *   • the site-complement integrity check of system cards is exposed through
+ *     `siteComplementOk`, and `isUniversalSite` flags a wildcard `0000` card.
  */
 export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedProUsbCard {
   const bytes = typeof rawBytesOrHex === 'string' ? fromHex(rawBytesOrHex) : rawBytesOrHex;
@@ -470,103 +610,79 @@ export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedPro
   }
 
   const rawHex = toHex(bytes.slice(0, 16));
-  const byte9 = bytes[9];
-  const typeFamily = byte9 & 0xf0;
-  const cardIndex = byte9 & 0x0f;
-
-  let type: ProUsbCardType = 'guest';
-  for (const [t, meta] of Object.entries(PROUSB_CARD_TYPES)) {
-    if (meta.typeFamilyByte === typeFamily) {
-      type = t as ProUsbCardType;
-      break;
-    }
-  }
+  const rawTypeIndex = bytes[9];
+  const cardIndex = rawTypeIndex & 0x0f;
+  const type = resolveCardType(rawTypeIndex);
+  const isSystem = isSystemCardByte(rawTypeIndex);
 
   // Site code is stored big-endian: [2]=high, [3]=low (C9 12 24 B6 ...)
-  const siteLow = (bytes[2] << 8) | bytes[3];
-  const siteCode = `${toHex([bytes[0], bytes[1]])}-${(siteLow & 0x3fff).toString(16).padStart(4, '0').toUpperCase()}`;
+  const siteLow = ((bytes[2] << 8) | bytes[3]) & 0x3fff;
+  const siteCode = `${toHex([bytes[0], bytes[1]])}-${siteLow.toString(16).padStart(4, '0').toUpperCase()}`;
 
   const decoded: DecodedProUsbCard = {
     rawHex,
     type,
     cardIndex,
+    rawTypeIndex,
     siteCode,
+    siteValue: siteLow,
+    isUniversalSite: siteLow === UNIVERSAL_SITE,
     options: {
       allowDeadbolt: false,
-      // Not encoded in bytes [2..3]: the whole 16-bit field is the site code
-      // the lock compares. The flag is kept for API compatibility only.
-      coverCardsBefore: false,
+      coverCardsBefore: type === 'hard_reset',
       openPublicDoor: false,
     },
   };
 
-  if (type === 'hard_reset') {
-    decoded.options.allowDeadbolt = true;
-    decoded.options.coverCardsBefore = true;
-    decoded.options.openPublicDoor = true;
+  if (isSystem) {
+    // [4..5] must be the bitwise complement of [2..3]: that is the integrity
+    // check ResetCard creates and the reader verifies.
+    decoded.siteComplementOk = bytes[4] === ((~bytes[2]) & 0xff) && bytes[5] === ((~bytes[3]) & 0xff);
 
-    // System cards: [10..12] = issue date/time, [13..15] = family trailer
-    // (29 23 BE), which is not a date. End = start when the trailer is opaque.
-    const start = unpackDateTime(bytes[10], bytes[11], bytes[12]);
-    const end = tryUnpackDateTime(bytes[13], bytes[14], bytes[15]) ?? start;
-    decoded.validity = {
-      startYear: start.year,
-      startMonth: start.month,
-      startDay: start.day,
-      startHour: start.hour,
-      startMinute: start.minute,
-      endYear: end.year,
-      endMonth: end.month,
-      endDay: end.day,
-      endHour: end.hour,
-      endMinute: end.minute,
-    };
+    // [10..12] = date of issue. [13..15] = random padding, never a date.
+    const issued = unpackStamp(bytes[10], bytes[11], bytes[12], {
+      refYear: new Date().getFullYear(),
+    });
+    if (issued) {
+      decoded.validity = stampToValidity(issued, null);
+      decoded.endIsUnknown = true;
+      decoded.issuedAt = formatIso(issued);
+    }
   } else if (type === 'guest') {
-    // Room number decoding:
-    // byte 5 is room mod 100 with high bit set (0x80)
-    // byte 6 is floor (room div 100) with high bit set (0x80)
+    // GuestCard: [5] = room (low 7 bits), [6] = floor, [7] = building.
     const roomMod = bytes[5] & 0x7f;
     const floor = bytes[6] & 0x7f;
-    const roomNum = floor * 100 + roomMod;
+    decoded.buildingNo = bytes[7] & 0x0f;
     decoded.floorNo = floor;
     decoded.roomMod100 = roomMod;
     decoded.roomDiv100 = floor;
-    decoded.roomNumber = `${roomNum}`;
+    decoded.roomNumber = `${floor * 100 + roomMod}`;
     decoded.options.openPublicDoor = bytes[8] === 0x01;
 
-    // Unpack dates
-    const start = unpackDateTime(bytes[10], bytes[11], bytes[12]);
-    const end = unpackDateTime(bytes[13], bytes[14], bytes[15]);
-    decoded.validity = {
-      startYear: start.year,
-      startMonth: start.month,
-      startDay: start.day,
-      startHour: start.hour,
-      startMinute: start.minute,
-      endYear: end.year,
-      endMonth: end.month,
-      endDay: end.day,
-      endHour: end.hour,
-      endMinute: end.minute,
-    };
+    const start = unpackStamp(bytes[10], bytes[11], bytes[12], {
+      refYear: new Date().getFullYear(),
+    });
+    const end = start
+      ? unpackStamp(bytes[13], bytes[14], bytes[15], {
+          refYear: start.year,
+          notBeforeYear: start.year,
+        })
+      : null;
+    if (start) decoded.validity = stampToValidity(start, end);
   } else if (type === 'master' || type === 'floor' || type === 'building' || type === 'emergency') {
     if (type === 'floor') decoded.floorNo = bytes[4];
     if (type === 'building') decoded.buildingNo = bytes[4];
 
-    const start = unpackDateTime(bytes[10], bytes[11], bytes[12]);
-    const end = unpackDateTime(bytes[13], bytes[14], bytes[15]);
-    decoded.validity = {
-      startYear: start.year,
-      startMonth: start.month,
-      startDay: start.day,
-      startHour: start.hour,
-      startMinute: start.minute,
-      endYear: end.year,
-      endMonth: end.month,
-      endDay: end.day,
-      endHour: end.hour,
-      endMinute: end.minute,
-    };
+    const start = unpackStamp(bytes[10], bytes[11], bytes[12], {
+      refYear: new Date().getFullYear(),
+    });
+    const end = start
+      ? unpackStamp(bytes[13], bytes[14], bytes[15], {
+          refYear: start.year,
+          notBeforeYear: start.year,
+        })
+      : null;
+    if (start) decoded.validity = stampToValidity(start, end);
   } else if (type === 'room_set') {
     decoded.buildingNo = bytes[4];
     decoded.floorNo = bytes[5];
@@ -575,4 +691,9 @@ export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedPro
   }
 
   return decoded;
+}
+
+function formatIso(stamp: DecodedStamp): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${stamp.year}-${p(stamp.month)}-${p(stamp.day)}T${p(stamp.hour)}:${p(stamp.minute)}`;
 }

@@ -18,16 +18,20 @@
  *   tables = BuildingInfo, CaoZuoInfo, CardInfo, Dai, GuestInfo, LogInfo,
  *            OperatorInfo, RecordOpen, RegInfo, RoomInfo
  *
- * Card record layout recovered from 62 real records (CardInfo.CardData):
+ * Card record layout, taken from the original `proRFL.dll` builders
+ * (`ResetCard`, `GuestCard`, `MasterCard`) and confirmed on 62 real records
+ * (CardInfo.CardData):
  *
  *   [0]      0xC9                      magic
  *   [1]      0x12                      site high (constant)
  *   [2..3]   site code                 e.g. 03 3B  (was 24 B6 in 2015)
- *   [4..5]   family marker             FF00 master, E3xx room, FCC4 system
- *   [6..8]   family header
- *   [9]      card type / index         0x01..0x0F system, 0x60+ guest, 0xB0+ master
- *   [10..12] card serial (24 bit, big endian, monotonic)
- *   [13..15] family trailer            system cards always end 29 23 BE
+ *   [4..5]   family field              FF00 master, E3xx guest, ~site system
+ *   [6..8]   family header             (system cards: p5 p6 p4)
+ *   [9]      family + index            high nibble = family, low = type
+ *                                      0x00-family: 0x01 reset, 0x0E hard reset
+ *   [10..12] date/time                issue date (system) or stay start
+ *   [13..15] trailer                  stay end (guest/master) or rand() padding
+ *                                     (system cards — never a date)
  */
 
 import { DEFAULT_SYSTEM_CARD_TEMPLATE as DEFAULT_TEMPLATE } from '../cards/codec';
@@ -37,7 +41,10 @@ import { DEFAULT_SYSTEM_CARD_TEMPLATE as DEFAULT_TEMPLATE } from '../cards/codec
  * (Extends the codec template with traceability fields.)
  */
 export const DEFAULT_SYSTEM_CARD_TEMPLATE: SystemCardProfile = {
-  ...DEFAULT_TEMPLATE,
+  site: DEFAULT_TEMPLATE.site,
+  marker: DEFAULT_TEMPLATE.marker ?? [0xfc, 0xc4],
+  header: DEFAULT_TEMPLATE.header,
+  tail: DEFAULT_TEMPLATE.tail ?? [0x29, 0x23, 0xbe],
   sampleHex: '',
   sampleId: 0,
 };
@@ -45,11 +52,11 @@ export const DEFAULT_SYSTEM_CARD_TEMPLATE: SystemCardProfile = {
 export interface SystemCardProfile {
   /** Bytes [2..3] — site / system code shared by every card of this installation. */
   site: [number, number];
-  /** Bytes [4..5] — family marker used by system (configuration) cards. */
+  /** Bytes [4..5] — always the bitwise complement of `site` (`ResetCard`). */
   marker: [number, number];
-  /** Bytes [6..8] — family header used by system cards. */
+  /** Bytes [6..8] — family header used by system cards (p5, p6, p4). */
   header: [number, number, number];
-  /** Bytes [13..15] — family trailer (constant for system cards). */
+  /** Bytes [13..15] of the sample record — `rand()` padding, not written back. */
   tail: [number, number, number];
   /** A genuine record from the database, kept for traceability. */
   sampleHex: string;
@@ -142,8 +149,12 @@ function str(value: unknown): string {
  * The site code is not stored explicitly anywhere: it only exists inside the
  * card records. We take it from the most recent card that carries a real site
  * (never the universal `00 00` master images), then read the system-card
- * family marker / header / trailer from the most recent system card of that
- * same site.
+ * header (bytes [6..8]) from the most recent system card of that same site.
+ *
+ * Bytes [4..5] are **not** copied from the record: `ResetCard` always writes
+ * the bitwise complement of the site there, so we recompute them. That way an
+ * imported card that was corrupted (or hand-edited) can never poison the
+ * template we use to write new cards.
  */
 export function deriveSystemProfile(cards: ImportedCard[]): SystemCardProfile | null {
   const parsed = cards
@@ -168,7 +179,7 @@ export function deriveSystemProfile(cards: ImportedCard[]): SystemCardProfile | 
 
   return {
     site: [site, siteLow],
-    marker: systemRef ? [ref.b[4], ref.b[5]] : DEFAULT_SYSTEM_CARD_TEMPLATE.marker,
+    marker: [(~site) & 0xff, (~siteLow) & 0xff],
     header: systemRef
       ? [ref.b[6], ref.b[7], ref.b[8]]
       : DEFAULT_SYSTEM_CARD_TEMPLATE.header,

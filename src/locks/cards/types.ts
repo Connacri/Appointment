@@ -178,7 +178,24 @@ export interface DecodedProUsbCard {
   rawHex: string;
   type: ProUsbCardType;
   cardIndex: number;
+  /** Raw byte [9] — family nibble plus type/index nibble. */
+  rawTypeIndex?: number;
   siteCode: string; // 24-bit site/serial e.g. "C912" + low 14 bits
+  /** 16-bit site code (bytes [2..3], big-endian) — the value locks compare. */
+  siteValue?: number;
+  /** True when the card carries the wildcard site `0000` (universal card). */
+  isUniversalSite?: boolean;
+  /**
+   * System cards only: bytes [4..5] equal the bitwise complement of the site
+   * (the integrity check `ResetCard` writes). `false` means a corrupted or
+   * hand-edited record.
+   */
+  siteComplementOk?: boolean;
+  /**
+   * System cards only: the record has **no expiry date**. Bytes [13..15] are
+   * random padding, so `validity.end*` mirrors the issue date.
+   */
+  endIsUnknown?: boolean;
   buildingNo?: number;
   floorNo?: number;
   roomNumber?: string;

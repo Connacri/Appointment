@@ -111,6 +111,9 @@ export const ProUsbLockSystemView: React.FC = () => {
   const [commissionBuilding, setCommissionBuilding] = useState(1);
   const [commissionValidityDays, setCommissionValidityDays] = useState(365);
   const [commissionValidityHour, setCommissionValidityHour] = useState(12);
+  // Carte système universelle : site 0000 → acceptée par une serrure de
+  // n'importe quel système (même convention que les cartes maîtresses).
+  const [universalSystemCard, setUniversalSystemCard] = useState(false);
 
   // CardLock.mdb (original software database)
   const [mdbStatus, setMdbStatus] = useState(lockManager.getMdbStatus());
@@ -199,8 +202,25 @@ export const ProUsbLockSystemView: React.FC = () => {
       if (decoded) {
         setCurrentReadCard(decoded);
         setReadProgress(100);
-        // Afficher clairement le type de carte lu (pas confondu avec écriture)
-        showToast('success', `Lecture OK — Type: ${decoded.type.toUpperCase()}${decoded.type === 'reset' || decoded.type === 'hard_reset' || decoded.type === 'record' || decoded.type === 'room_set' || decoded.type === 'time_set' || decoded.type === 'limit' || decoded.type === 'group_set' ? ' [MISE EN SERVICE / SYSTÈME]' : ''}, Index: ${decoded.cardIndex}, Salle: ${decoded.roomNumber || '-'}, Début: ${decoded.validity ? `${String(decoded.validity.startDay).padStart(2,'0')}/${String(decoded.validity.startMonth).padStart(2,'0')}/${decoded.validity.startYear}` : 'N/A'}, Exp: ${decoded.validity ? `${String(decoded.validity.endDay).padStart(2,'0')}/${String(decoded.validity.endMonth).padStart(2,'0')}/${decoded.validity.endYear}` : 'N/A'}`);
+        // Rapport exact : type réel, site, contrôle d'intégrité, dates réelles.
+        const p2 = (n: number) => String(n).padStart(2, '0');
+        const fmt = (y: number, mo: number, d: number, h: number, mi: number) =>
+          `${p2(d)}/${p2(mo)}/${y} ${p2(h)}:${p2(mi)}`;
+        const v = decoded.validity;
+        const details: string[] = [
+          `Type: ${decoded.type.toUpperCase()} (0x${(decoded.rawTypeIndex ?? 0).toString(16).toUpperCase().padStart(2, '0')})`,
+          `Site: ${decoded.siteCode}${decoded.isUniversalSite ? ' UNIVERSELLE' : ''}`,
+        ];
+        if (decoded.siteComplementOk !== undefined) {
+          details.push(`Intégrité: ${decoded.siteComplementOk ? 'OK' : 'INVALIDE (~site attendu)'}`);
+        }
+        if (decoded.roomNumber) details.push(`Chambre: ${decoded.roomNumber}`);
+        if (v) {
+          details.push(`${decoded.endIsUnknown ? 'Émise le' : 'Début'}: ${fmt(v.startYear, v.startMonth, v.startDay, v.startHour, v.startMinute ?? 0)}`);
+          if (decoded.endIsUnknown) details.push('Expiration: aucune (carte système)');
+          else details.push(`Expiration: ${fmt(v.endYear, v.endMonth, v.endDay, v.endHour, v.endMinute ?? 0)}`);
+        }
+        showToast('success', `Lecture OK — ${details.join(' · ')}`);
       } else {
         showToast('error', 'Aucune carte détectée. Vérifiez qu\'elle est posée sur le lecteur et que le bouton LECTURE (pas ÉCRITURE) est utilisé.');
       }
@@ -330,6 +350,7 @@ export const ProUsbLockSystemView: React.FC = () => {
         floorNo: commissionFloor,
         buildingNo: commissionBuilding,
         operator: 'Admin',
+        universal: (step === 'reset' || step === 'hard_reset') ? universalSystemCard : undefined,
         time: {
           year: now.getFullYear(),
           month: now.getMonth() + 1,
@@ -1067,6 +1088,20 @@ export const ProUsbLockSystemView: React.FC = () => {
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                   Génère la carte de réinitialisation. Présentez-la sur la serrure neuve : la serrure émet 3 bips et passe sa mémoire à zéro.
                 </p>
+                <label className="flex items-start gap-2 p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={universalSystemCard}
+                    onChange={(e) => setUniversalSystemCard(e.target.checked)}
+                    className="mt-0.5 accent-rose-600"
+                  />
+                  <span className="text-[10px] leading-snug text-slate-600 dark:text-slate-300">
+                    <strong className="text-slate-900 dark:text-white">Carte universelle (site 0000)</strong>
+                    <br />
+                    Réinitialise une serrure d'un <em>autre</em> système. Décochez pour n'écrire que pour le site importé
+                    {mdbStatus.systemIdHex ? ` (${mdbStatus.systemIdHex})` : ''}.
+                  </span>
+                </label>
                 <button
                   onClick={() => handleIssueCommissioning('reset')}
                   disabled={isWriting}
@@ -1088,6 +1123,11 @@ export const ProUsbLockSystemView: React.FC = () => {
                 <p className="text-[11px] text-red-700 dark:text-red-300 leading-relaxed">
                   Réinitialisation persistante et irréversible. Outrepasse toute configuration existante. Réservé aux administrateurs. Double confirmation requise.
                 </p>
+                {universalSystemCard && (
+                  <p className="text-[10px] font-bold text-red-700 dark:text-red-300">
+                    Mode universel actif : la carte sera écrite avec le site 0000.
+                  </p>
+                )}
                 <button
                   onClick={() => {
                     if (window.confirm('⚠️ ATTENTION : Cette action réinitialisera définitivement la serrure. Toute configuration sera perdue. Confirmer ?')) {
