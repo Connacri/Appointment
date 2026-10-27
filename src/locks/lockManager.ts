@@ -209,19 +209,27 @@ class LockManager {
     this.mdbSnapshot = snapshot;
     this.saveMdbSnapshot();
 
-    // Reflect the imported data in the app model
+    // Reflect the imported data in the app model. Cards written by this app do
+    // not exist in CardLock.mdb, so they must survive the import: keep the
+    // local ones, replace only the previously imported rows, and de-duplicate
+    // on the 32-hex image.
     if (snapshot.cards.length > 0) {
-      this.issuedCards = snapshot.cards.map((card) => ({
-        id: `mdb-card-${card.id}`,
-        rawHex: card.hex,
-        type: this.mapCardTypeFromDai(card.typeIndex & 0xf0),
-        cardIndex: card.typeIndex & 0x0f,
-        holderName: card.holder || `Carte ${card.id}`,
-        operator: card.operator || 'MDB',
-        issuedAt: snapshot.importedAt,
-        status: card.status && /erase/i.test(card.status) ? 'revoked' : 'active',
-        validUntil: 'N/A',
-      }));
+      const localCards = this.issuedCards.filter((card) => !card.id.startsWith('mdb-card-'));
+      const knownHex = new Set(localCards.map((card) => card.rawHex.toUpperCase()));
+      const importedCards = snapshot.cards
+        .map((card) => ({
+          id: `mdb-card-${card.id}`,
+          rawHex: card.hex,
+          type: this.mapCardTypeFromDai(card.typeIndex & 0xf0),
+          cardIndex: card.typeIndex & 0x0f,
+          holderName: card.holder || `Carte ${card.id}`,
+          operator: card.operator || 'MDB',
+          issuedAt: snapshot.importedAt,
+          status: (card.status && /erase/i.test(card.status) ? 'revoked' : 'active') as IssuedCardRecord['status'],
+          validUntil: 'N/A',
+        }))
+        .filter((card) => !knownHex.has(card.rawHex.toUpperCase()));
+      this.issuedCards = [...localCards, ...importedCards];
       this.saveIssuedCards();
     }
 

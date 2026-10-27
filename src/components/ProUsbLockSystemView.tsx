@@ -44,6 +44,7 @@ import {
   ArrowRight,
   Flame,
   UserCheck,
+  FileDown,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -59,6 +60,11 @@ import {
 } from '../locks/cards/types';
 import { toHexFormatted } from '../locks/protocol/frames';
 import { fromHex } from '../locks/protocol/frames';
+import {
+  buildCardInfoSyncScript,
+  cardInfoId,
+  cardInfoSyncFileName,
+} from '../locks/database/cardInfoSync';
 
 export const ProUsbLockSystemView: React.FC = () => {
   const { language, bookings, resourceGroups } = useApp();
@@ -152,6 +158,47 @@ export const ProUsbLockSystemView: React.FC = () => {
     setTimeout(() => setStatusMessage(null), 5000);
   };
 
+  // Cartes déjà présentes dans la table CardInfo de CardLock.mdb (elles seules
+  // possèdent un ID visible et un « Operator Code » dans le logiciel d'origine).
+  const mdbSnapshotCards = lockManager.getMdbSnapshot()?.cards ?? [];
+  const mdbCardIds = new Set(mdbSnapshotCards.map((c) => cardInfoId(c.hex)));
+  const mdbOperatorById = new Map(
+    mdbSnapshotCards.map((c) => [cardInfoId(c.hex), c.operator || 'Admin'] as const)
+  );
+
+  /**
+   * L'ID et l'Operator Code affichés par CardLock.exe ne sont pas dans la carte :
+   * ce sont les colonnes `CardInfo.ID` (AutoNumber) et `CardInfo.GongHao`.
+   * On génère un script Windows autonome qui ajoute les lignes manquantes.
+   */
+  const handleExportCardInfoSync = () => {
+    if (issuedCards.length === 0) {
+      showToast('error', "Aucune carte émise à synchroniser.");
+      return;
+    }
+    const rows = issuedCards.map((card) => ({
+      cardData: card.rawHex,
+      holder: card.holderName,
+      operator: card.operator || 'Admin',
+    }));
+    const script = buildCardInfoSyncScript(rows);
+    const fileName = cardInfoSyncFileName();
+    const blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast(
+      'info',
+      `${issuedCards.length} carte(s) exportée(s) dans ${fileName} — double-cliquez sur le fichier (CardLock.exe fermé) pour insérer les lignes manquantes, puis ré-importez CardLock.mdb pour voir les badges passer à « MDB ».`
+    );
+  };
+
   const handleConnectHardware = async () => {
     setIsConnecting(true);
     try {
@@ -209,6 +256,7 @@ export const ProUsbLockSystemView: React.FC = () => {
         const v = decoded.validity;
         const details: string[] = [
           `Type: ${decoded.type.toUpperCase()} (0x${(decoded.rawTypeIndex ?? 0).toString(16).toUpperCase().padStart(2, '0')})`,
+          `ID: ${cardInfoId(decoded.rawHex) || '—'}`,
           `Site: ${decoded.siteCode}${decoded.isUniversalSite ? ' UNIVERSELLE' : ''}`,
         ];
         if (decoded.siteComplementOk !== undefined) {
@@ -688,20 +736,40 @@ export const ProUsbLockSystemView: React.FC = () => {
 
               {/* Table of Issued Cards */}
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
                     Dernières Cartes Clés Émises ({issuedCards.length})
                   </h3>
-                  <span className="text-[11px] font-mono text-slate-400">Synchronisé avec CardLock.mdb</span>
+                  <button
+                    type="button"
+                    onClick={handleExportCardInfoSync}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white transition-colors"
+                    title="Génère un script Windows (.vbs) qui ajoute les cartes manquantes dans la table CardInfo de CardLock.mdb"
+                  >
+                    <FileDown size={13} />
+                    Synchroniser CardLock.mdb
+                  </button>
                 </div>
+
+                <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                  L'<strong>ID</strong> et l'<strong>Operator Code</strong> ne sont pas gravés sur la carte : ce sont les
+                  colonnes <code className="font-mono">CardInfo.ID</code> (AutoNumber) et{' '}
+                  <code className="font-mono">CardInfo.GongHao</code> de{' '}
+                  <code className="font-mono">CardLock.mdb</code>. Le logiciel d'origine retrouve une carte avec{' '}
+                  <code className="font-mono">Mid(CardData,19,8)</code> (= octets 9 à 12) ; sans ligne en base, le
+                  dialogue reste vide. Le bouton ci-dessus génère un script autonome qui insère les cartes absentes
+                  (<code className="font-mono">GongHao = Admin</code>), avec sauvegarde et restauration automatiques.
+                </p>
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs text-left">
                     <thead className="bg-slate-50 dark:bg-slate-850 text-slate-500 border-y border-slate-200 dark:border-slate-800">
                       <tr>
                         <th className="py-2.5 px-3">Type</th>
+                        <th className="py-2.5 px-3 font-mono">ID (CardInfo)</th>
                         <th className="py-2.5 px-3">Chambre</th>
                         <th className="py-2.5 px-3">Titulaire</th>
+                        <th className="py-2.5 px-3">Opérateur</th>
                         <th className="py-2.5 px-3">Validité</th>
                         <th className="py-2.5 px-3 font-mono">Trame Hex</th>
                         <th className="py-2.5 px-3">Statut</th>
@@ -710,6 +778,8 @@ export const ProUsbLockSystemView: React.FC = () => {
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono text-[11px]">
                       {issuedCards.map((card) => {
                         const meta = PROUSB_CARD_TYPES[card.type] || PROUSB_CARD_TYPES.guest;
+                        const cardId = cardInfoId(card.rawHex);
+                        const inDb = !!cardId && mdbCardIds.has(cardId);
                         return (
                           <tr key={card.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                             <td className="py-2.5 px-3 font-sans font-semibold">
@@ -719,10 +789,31 @@ export const ProUsbLockSystemView: React.FC = () => {
                                 {meta.label[language] || meta.label.fr}
                               </span>
                             </td>
+                            <td className="py-2.5 px-3">
+                              <span className="flex items-center gap-1.5">
+                                <span className="font-bold text-slate-800 dark:text-slate-100">{cardId || '—'}</span>
+                                {inDb ? (
+                                  <span
+                                    className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                                    title="Présente dans CardInfo : ID et Operator Code visibles dans CardLock.exe"
+                                  >
+                                    MDB
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                                    title="Absente de CardInfo : lancez « Synchroniser CardLock.mdb » pour que CardLock.exe affiche son ID et son Operator Code"
+                                  >
+                                    à sync
+                                  </span>
+                                )}
+                              </span>
+                            </td>
                             <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-slate-200 font-sans">
                               {card.roomNumber ? `Chambre ${card.roomNumber}` : 'Toutes'}
                             </td>
                             <td className="py-2.5 px-3 font-sans">{card.holderName}</td>
+                            <td className="py-2.5 px-3 font-sans text-slate-500">{card.operator || 'Admin'}</td>
                             <td className="py-2.5 px-3 text-slate-500 font-sans">{card.validUntil}</td>
                             <td className="py-2.5 px-3 text-slate-400 truncate max-w-[150px]" title={card.rawHex}>
                               {card.rawHex.substring(0, 16)}...
@@ -780,6 +871,34 @@ export const ProUsbLockSystemView: React.FC = () => {
                           </span>
                         </div>
                       )}
+
+                      {(() => {
+                        const readId = cardInfoId(currentReadCard.rawHex);
+                        const operator = mdbOperatorById.get(readId);
+                        return (
+                          <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-slate-400">ID (CardInfo) :</span>
+                              <span className="font-mono font-bold text-slate-900 dark:text-white">
+                                {readId || '—'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-slate-400">Operator Code :</span>
+                              {operator ? (
+                                <span className="font-mono font-bold text-emerald-600">{operator}</span>
+                              ) : (
+                                <span
+                                  className="font-sans font-bold text-amber-600"
+                                  title="CardLock.exe lit l'Operator Code dans CardInfo.GongHao — lancez « Synchroniser CardLock.mdb »"
+                                >
+                                  — (absent de CardInfo)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {currentReadCard.validity && (
                         <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1">

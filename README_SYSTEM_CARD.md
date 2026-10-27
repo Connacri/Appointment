@@ -271,7 +271,73 @@ Erreurs associées et leur cause réelle :
 Sans base importée, l'application reste autonome : elle utilise le modèle par
 défaut (`site 03 3B`, `header 80 98 00`).
 
-## 11. Règles métier appliquées
+## 11. ID et Operator Code — ils ne sont pas sur la carte
+
+C'est le point le plus contre-intuitif du système d'origine.
+
+| Ce que montre `CardLock.exe` | D'où ça vient |
+|---|---|
+| **ID** | colonne `CardInfo.ID` (AutoNumber) de `CardLock.mdb` |
+| **Operator Code** (`Admin`) | colonne `CardInfo.GongHao` |
+| **Holder** | colonne `CardInfo.Holder` |
+| **Card Data** | colonne `CardInfo.CardData` (la trame 32 caractères hex) |
+
+La carte physique ne contient que 16 octets, sans nom ni opérateur. À la
+lecture, `CardLock.exe` calcule la clé :
+
+```sql
+SELECT * FROM CardInfo WHERE Mid(CardData,19,8)=:a
+```
+
+soit les **caractères 19 à 26** de la trame hexadécimale = **octets `[9..12]`**
+(type + date d'émission). Si aucune ligne ne correspond, le dialogue affiche des
+champs vides — la carte reste parfaitement valide pour la serrure, mais le
+logiciel d'origine n'a rien à afficher.
+
+Une carte écrite par cette application n'existe donc **pas** dans `CardInfo` :
+l'app n'écrit jamais dans le fichier JET4 (impossible depuis un navigateur,
+`mdb-reader` est en lecture seule).
+
+### Solution intégrée : « Synchroniser CardLock.mdb »
+
+Dans l'onglet **Réception**, le tableau *Dernières Cartes Clés Émises* affiche
+pour chaque carte :
+
+- son **ID** calculé (`Mid(CardData,19,8)`), identique à celui du logiciel ;
+- un badge **MDB** (déjà dans la base) ou **à sync** (absente) ;
+- l'**Opérateur** enregistré.
+
+Le bouton **Synchroniser CardLock.mdb** télécharge un fichier
+`CardLock-CardInfo-AAAAMMJJ-HHMM.vbs` qui, en un double-clic :
+
+1. se relance en **32 bits** (`SysWOW64\wscript.exe`) — Jet 4.0 n'existe qu'en
+   32 bits ;
+2. demande l'**élévation** si la base est sous `Program Files` ;
+3. **sauvegarde** `CardLock.mdb` en `.backup-AAAAMMJJ-HHMMSS.bak` ;
+4. insère les cartes absentes
+   (`INSERT INTO CardInfo (CardData, Holder, GongHao, BeiZhu, Status) …`,
+   `GongHao = Admin`) ;
+5. vérifie chaque insertion et propose une **restauration** en cas d'échec.
+
+Le script est idempotent : une carte déjà présente (même `Mid(CardData,19,8)`)
+est ignorée. `ID` est un AutoNumber, il est attribué par Jet (par exemple
+`1353`), exactement comme lorsque le logiciel d'origine émet une carte.
+
+### Mot de passe de la base
+
+`CardLock.mdb` est protégé par un mot de passe **Jet** :
+`pradlock`. Il figure en clair dans `CardLock.Exe`, juste à côté de sa chaîne de
+connexion :
+
+```text
+Provider=Microsoft.Jet.OLEDB.4.0;Data Source=%s;Persist Security Info=False; Jet OLEDB:DataBase Password=%s
+```
+
+Ce mot de passe n'empêche pas la lecture des pages (l'app et `mdb-reader`
+lisent déjà la base sans lui) : ce n'est pas un secret, seulement une protection
+contre l'ouverture accidentelle dans Access.
+
+## 12. Règles métier appliquées
 
 - `encodeGuestCard` : `end > start` ; durée ≤ 365 jours
 - `encodeMasterCard` : site `00 00` (une master ouvre toutes les serrures du
@@ -280,11 +346,12 @@ défaut (`site 03 3B`, `header 80 98 00`).
   glissante de 16 ans, expiration résolue après le début
 - Lecture = 3 bips courts, écriture = 2 bips longs, succès/échec distincts
 
-## 12. Vérification reproductible
+## 13. Vérification reproductible
 
 ```bash
 npx tsx scripts/verify-mdb.ts   "<...>\CardLock.mdb"
 npx tsx scripts/verify-codec.ts
+npx tsx scripts/verify-cardinfo.ts
 ```
 
 `verify-codec.ts` contrôle :
@@ -299,14 +366,20 @@ npx tsx scripts/verify-codec.ts
   inventée sur les cartes système ;
 - la détection d'une carte système dont le complément a été altéré.
 
+`verify-cardinfo.ts` contrôle la synchronisation `CardInfo` : calcul de l'ID
+(`Mid(CardData,19,8)`) sur trois cartes réelles, mot de passe Jet, relance
+32 bits, auto-élévation, sauvegarde, `INSERT` avec colonnes explicites,
+dédoublonnage par ID, encodage Unicode ASCII et fins de ligne Windows.
+
 Sortie attendue : `TOUT EST VERT`.
 
-## 13. Liens utiles
+## 14. Liens utiles
 
 - `docs/PROUSB_SPECIFICATION.md` — spécification RE du protocole
 - `README_CARDS.md` — différences Master / Groupe / 13 familles
 - `src/locks/cards/codec.ts` — encodage / décodage
 - `src/locks/database/mdbImport.ts` — import réel de `CardLock.mdb`
+- `src/locks/database/cardInfoSync.ts` — génération du script `CardInfo`
 - `src/locks/lockManager.ts` — écriture vérifiée des cartes système
 - `src/components/ProUsbLockSystemView.tsx` — onglet Mise en Service
 

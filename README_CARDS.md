@@ -30,6 +30,13 @@ Détail complet du format : [`README_SYSTEM_CARD.md`](./README_SYSTEM_CARD.md).
   réinitialise une serrure de n'importe quel système. Voir
   `README_SYSTEM_CARD.md` §6.
 
+> **ID / Operator Code** : ces deux champs affichés par `CardLock.exe` **ne sont
+> pas dans les 16 octets**. Ils viennent de la table `CardInfo` de
+> `CardLock.mdb` (`ID` AutoNumber, `GongHao` = Operator Code), retrouvée par
+> `Mid(CardData,19,8)`. Le bouton **Synchroniser CardLock.mdb** (onglet
+> *Réception*) génère le script qui insère les cartes manquantes. Voir
+> `README_SYSTEM_CARD.md` §11.
+
 ## Difference: Master (0xB0) vs Group (0x80)
 
 | | **Master (Passe Générale)** | **Group (Groupe)** |

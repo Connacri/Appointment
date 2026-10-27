@@ -97,24 +97,57 @@ Data Source: C:\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLo
 Jet OLEDB:Database Password: pradlock
 ```
 
+Le mot de passe apparaît en clair dans `CardLock.Exe`, à côté du format de
+connexion (`0x5b84ac`) :
+
+```text
+Provider=Microsoft.Jet.OLEDB.4.0;Data Source=%s;Persist Security Info=False; Jet OLEDB:DataBase Password=%s
+```
+
+Jet 4.0 n'existe qu'en **32 bits** : toute écriture doit passer par
+`C:\Windows\SysWOW64\wscript.exe` (ou `cscript.exe`). Sans le mot de passe, Jet
+répond `Mot de passe non valide` ; `mdb-reader` (lecture des pages) n'en a pas
+besoin.
+
 ### 3.2 Schéma des tables
 
 #### Table `CardInfo` — Cartes émises
 
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `ID` | AutoNumber | Identifiant unique de la carte |
-| `CardData` | Text (16 hex) | Données encodées de la carte (16 octets en hex) |
-| `Status` | Number | 0=Inactive, 1=Active, 2=Checked Out, 3=Expired |
-| `Holder` | Text | Nom du titulaire de la carte |
-| `CardType` | Number | Code famille (0x60, 0xB0, etc.) |
-| `IssueDate` | Date | Date d'émission |
-| `ExpiryDate` | Date | Date d'expiration |
-| `RoomNo` | Text | Numéro de chambre affectée |
-| `BuildingNo` | Number | Numéro de bâtiment |
-| `FloorNo` | Number | Numéro d'étage |
-| `Operator` | Text | Opérateur qui a émis la carte |
-| `CardIndex` | Number | Index de la carte (0-15) |
+Schéma réel (vérifié avec `mdb-reader` sur `CardLock.mdb`, 62 lignes) :
+
+| Colonne | Type | Rôle |
+|---------|------|------|
+| `ID` | AutoNumber (long) | Identifiant unique attribué par Jet — c'est l'**ID** affiché par `CardLock.exe` |
+| `CardData` | Text(100) | Trame complète de la carte, 32 caractères hexadécimaux |
+| `Holder` | Text(100) | Nom du titulaire (vide pour les cartes système) |
+| `GongHao` | Text(40) | **Operator Code** — `Admin` pour toutes les cartes de cette base |
+| `BeiZhu` | Text(200) | Commentaire libre |
+| `Status` | Text(100) | `""`, `Erased Card Successfully`, `New Check-In && Cover Cards Before` |
+
+Il n'existe **aucune** colonne `CardType`, `IssueDate`, `ExpiryDate`, `RoomNo`,
+`Operator` ni `CardIndex` : le type, les dates et la chambre sont lus dans les
+16 octets de `CardData`.
+
+Recherche utilisée par `CardLock.exe` pour retrouver une carte lue :
+
+```sql
+SELECT * FROM CardInfo WHERE Mid(CardData,19,8)=:a
+```
+
+soit les caractères 19 à 26 = octets `[9..12]` (type + date d'émission). Si la
+ligne n'existe pas, l'ID et l'Operator Code restent vides même si la carte est
+valide pour la serrure.
+
+Insertion faite par le logiciel d'origine à l'émission
+(`FUN_006d4dd0`, chaîne à `0x6d51c8`) :
+
+```sql
+INSERT INTO CardInfo VALUES(:ID,:CardData,:Holder,:Operator,:BeiZhu,:Status)
+```
+
+Notre application reproduit l'insertion avec une liste de colonnes explicites
+(`INSERT INTO CardInfo (CardData, Holder, GongHao, BeiZhu, Status) …`) afin de
+laisser Jet attribuer l'`ID` — voir `README_SYSTEM_CARD.md` §11.
 
 #### Table `RecordOpen` — Journal d'audit des serrures
 
