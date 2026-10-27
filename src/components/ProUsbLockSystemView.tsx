@@ -160,12 +160,23 @@ export const ProUsbLockSystemView: React.FC = () => {
 
   // Cartes déjà présentes dans la table CardInfo de CardLock.mdb (elles seules
   // possèdent un ID visible et un « Operator Code » dans le logiciel d'origine).
-  const mdbSnapshotCards = lockManager.getMdbSnapshot()?.cards ?? [];
+  const mdbSnapshot = lockManager.getMdbSnapshot();
+  const mdbSnapshotCards = mdbSnapshot?.cards ?? [];
   const mdbCardIds = new Set(mdbSnapshotCards.map((c) => cardInfoId(c.hex)));
   // Clé de recherche -> ligne réelle de CardInfo (ID AutoNumber + Operator Code).
   const mdbCardByKey = new Map(
     mdbSnapshotCards.map((c) => [cardInfoId(c.hex), c] as const)
   );
+  // Un instantané est une photo : une carte créée après l'import est forcément
+  // « absente », ce qui ne veut pas dire qu'elle n'existe pas dans la base.
+  const mdbImportedLabel = mdbSnapshot?.importedAt
+    ? new Date(mdbSnapshot.importedAt).toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
 
   /**
    * L'ID et l'Operator Code affichés par CardLock.exe ne sont pas dans la carte :
@@ -280,7 +291,13 @@ export const ProUsbLockSystemView: React.FC = () => {
           if (decoded.endIsUnknown) details.push('Expiration: aucune (carte système)');
           else details.push(`Expiration: ${fmt(v.endYear, v.endMonth, v.endDay, v.endHour, v.endMinute ?? 0)}`);
         }
-        details.push(row ? `CardInfo: #${row.id} / ${row.operator || 'Admin'}` : `CardInfo: absente (clé ${key})`);
+        details.push(
+          row
+            ? `CardInfo: #${row.id} / ${row.operator || 'Admin'}`
+            : mdbImportedLabel
+              ? `CardInfo: absente de l'instantané du ${mdbImportedLabel} — réimportez CardLock.mdb`
+              : 'CardInfo: base non importée',
+        );
         showToast('success', `Lecture OK — ${details.join(' · ')}`);
       } else {
         showToast('error', 'Aucune carte détectée. Vérifiez qu\'elle est posée sur le lecteur et que le bouton LECTURE (pas ÉCRITURE) est utilisé.');
@@ -979,7 +996,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                               ) : (
                                 <span
                                   className="font-sans font-bold text-amber-600"
-                                  title="Cette carte n'existe pas encore dans CardInfo : lancez « Synchroniser CardLock.mdb »"
+                                  title="Clé absente de l'instantané CardLock.mdb importé : réimportez la base vivante"
                                 >
                                   absent
                                 </span>
@@ -998,6 +1015,13 @@ export const ProUsbLockSystemView: React.FC = () => {
                                 </span>
                               )}
                             </div>
+                            {!row && (
+                              <p className="text-[10px] leading-snug font-sans text-amber-600 dark:text-amber-400">
+                                {mdbImportedLabel
+                                  ? `Instantané CardLock.mdb importé le ${mdbImportedLabel} : si cette carte est plus récente, réimportez la base vivante du VirtualStore pour afficher son ID et son Operator Code.`
+                                  : "Aucune base CardLock.mdb importée : importez la copie vivante du VirtualStore pour afficher l'ID et l'Operator Code."}
+                              </p>
+                            )}
                           </div>
                         );
                       })()}
@@ -1005,16 +1029,24 @@ export const ProUsbLockSystemView: React.FC = () => {
                       {currentReadCard.validity && (
                         <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1">
                           <div className="flex items-center justify-between text-[11px]">
-                            <span className="text-slate-400">Début :</span>
+                            <span className="text-slate-400">
+                              {currentReadCard.endIsUnknown ? 'Émise le :' : 'Début :'}
+                            </span>
                             <span className="font-mono">
                               {currentReadCard.validity.startDay}/{currentReadCard.validity.startMonth}/{currentReadCard.validity.startYear} à {currentReadCard.validity.startHour}:00
                             </span>
                           </div>
                           <div className="flex items-center justify-between text-[11px]">
                             <span className="text-slate-400">Expiration :</span>
-                            <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
-                              {currentReadCard.validity.endDay}/{currentReadCard.validity.endMonth}/{currentReadCard.validity.endYear} à {currentReadCard.validity.endHour}:00
-                            </span>
+                            {currentReadCard.endIsUnknown ? (
+                              <span className="font-sans font-bold text-slate-500 dark:text-slate-400">
+                                aucune (carte système)
+                              </span>
+                            ) : (
+                              <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
+                                {currentReadCard.validity.endDay}/{currentReadCard.validity.endMonth}/{currentReadCard.validity.endYear} à {currentReadCard.validity.endHour}:00
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}

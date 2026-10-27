@@ -341,6 +341,14 @@ Une carte écrite par cette application n'existe donc **pas** dans `CardInfo` :
 l'app n'écrit jamais dans le fichier JET4 (impossible depuis un navigateur,
 `mdb-reader` est en lecture seule).
 
+> **Instantané d'import ≠ base vivante.** L'application ne lit jamais le
+> fichier JET en direct : elle travaille sur la photo prise au moment de
+> l'import. Une carte créée après cet import est donc « absente de
+> l'instantané » alors qu'elle existe parfaitement dans la base (cas observé :
+> carte `061ADC83` créée par le logiciel d'origine, ligne `ID 1366` /
+> `GongHao = Admin`). L'inspecteur affiche désormais la date de l'instantané et
+> invite à réimporter la base vivante.
+
 ### 11.1 La base réellement utilisée n'est pas dans `Program Files`
 
 `CardLock.exe` est une application 32 bits **sans manifeste**, installée sous
