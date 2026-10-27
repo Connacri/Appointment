@@ -378,6 +378,25 @@ export const ProUsbLockSystemView: React.FC = () => {
       const snapshot = await lockManager.importMdb(file);
       setMdbStatus(lockManager.getMdbStatus());
       const warn = snapshot.warnings.length > 0 ? ` — ${snapshot.warnings.length} avertissement(s)` : '';
+
+      // Windows virtualise les écritures de CardLock.exe : la copie de
+      // Program Files reste figée alors que celle du VirtualStore est vivante.
+      // Un fichier très ancien signale donc presque toujours le mauvais choix.
+      const lastModified = snapshot.fileLastModified ? new Date(snapshot.fileLastModified) : null;
+      const ageDays =
+        lastModified && !Number.isNaN(lastModified.getTime())
+          ? Math.floor((Date.now() - lastModified.getTime()) / 86_400_000)
+          : 0;
+      if (lastModified && ageDays > 90) {
+        showToast(
+          'error',
+          `Copie figée : ce fichier n'a pas été modifié depuis le ${lastModified.toLocaleDateString(
+            'fr-FR'
+          )}. C'est très probablement la copie de Program Files — importez la base vivante du VirtualStore (AppData\\Local\\VirtualStore\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb).`,
+        );
+        return;
+      }
+
       showToast(
         'success',
         `CardLock.mdb importée : ${snapshot.counts.cards} cartes, ${snapshot.counts.rooms} chambres, ${snapshot.counts.guests} séjours${warn}`,

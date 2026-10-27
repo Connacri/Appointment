@@ -98,6 +98,12 @@ export interface ImportedBuilding {
 
 export interface MdbSnapshot {
   fileName: string;
+  /**
+   * `File.lastModified` of the imported file, ISO-8601. `null` when unknown
+   * (e.g. snapshot restored from storage). Used to warn when the user picked
+   * the frozen `Program Files` copy instead of the live VirtualStore one.
+   */
+  fileLastModified: string | null;
   importedAt: string;
   buildings: ImportedBuilding[];
   rooms: ImportedRoom[];
@@ -289,6 +295,7 @@ export async function parseCardLockMdb(
 
   return {
     fileName,
+    fileLastModified: null,
     importedAt: new Date().toISOString(),
     buildings,
     rooms,

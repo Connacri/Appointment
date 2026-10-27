@@ -205,6 +205,12 @@ class LockManager {
   public async importMdb(file: File): Promise<MdbSnapshot> {
     const data = await file.arrayBuffer();
     const snapshot = await parseCardLockMdb(data, file.name);
+    // Kept so the UI can flag a frozen `Program Files` copy (Windows writes the
+    // VirtualStore one) without reading the file again.
+    snapshot.fileLastModified =
+      typeof file.lastModified === 'number' && file.lastModified > 0
+        ? new Date(file.lastModified).toISOString()
+        : null;
 
     this.mdbSnapshot = snapshot;
     this.saveMdbSnapshot();

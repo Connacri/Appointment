@@ -324,7 +324,9 @@ Le script généré résout donc la base **à l'exécution** :
    n'importe quel compte.
 
 Pour lire la base vivante dans l'application, il faut donc importer le fichier
-du VirtualStore (§10).
+du VirtualStore (§10). Si vous importez par erreur la copie figée, l'app le
+signale immédiatement : un fichier non modifié depuis plus de 90 jours déclenche
+l'avertissement « Copie figée … importez la base vivante du VirtualStore ».
 
 ### Solution intégrée : « Synchroniser CardLock.mdb »
 
