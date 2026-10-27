@@ -39,6 +39,9 @@ const rows = [
   { cardData: 'C912033BE38181010162EC631CEC6B00', holder: "Réception O'Neil — غرفة", operator: 'Admin' },
   // doublon volontaire : même Mid(CardData,19,8) que la première carte
   { cardData: 'C912033BFCC4809C000E1ACA58999999', holder: 'Doublon', operator: 'Admin' },
+  // enregistrements fabriqués par les anciennes versions : jamais de vraie carte
+  { cardData: 'C9000000000000000000ADDEAD000000', holder: 'Mise en service', operator: 'Admin' },
+  { cardData: 'C9000000000000000000000000000000', holder: 'Mise en service', operator: 'Admin' },
 ];
 const script = buildCardInfoSyncScript(rows, { generatedAt: '2026-10-27T00:00:00.000Z' });
 
@@ -52,6 +55,11 @@ check('INSERT avec colonnes explicites (ID = AutoNumber)', script.includes('INSE
 check('lookup identique à CardLock.exe', script.includes("SELECT COUNT(*) AS n FROM CardInfo WHERE Mid(CardData,19,8)='"));
 check('dédoublonnage par ID', (script.match(/INSERT INTO CardInfo/g) ?? []).length === 1);
 check('2 cartes uniques (doublon écarté)', (script.match(/^ {2}Array\(/gm) ?? []).length === 2, `${(script.match(/^ {2}Array\(/gm) ?? []).length} entrée(s)`);
+check(
+  'trames fabriquées (C9 00 …) jamais synchronisées',
+  !script.includes('ADDEAD') && !script.includes('C9000000000000000000000000000000'),
+  'magic C912 obligatoire',
+);
 check('texte Unicode encodé (aucun accent dans le fichier)', /^[\x09\x0A\x0D\x20-\x7E]*$/.test(script), 'ASCII seulement');
 check('apostrophe échappée en SQL', script.includes('Function Q(value)') && script.includes('Replace(value, "\'", "\'\'")'));
 check('CRLF (Windows)', script.includes('\r\n') && !/[^\r]\n/.test(script));

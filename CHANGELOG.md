@@ -13,6 +13,7 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ### Fixed
 
+- **Lignes mortes dans `CardInfo`** : le script de synchronisation n'insère plus les enregistrements fabriqués par les anciennes versions (`C9 00 … AD DE AD`, tout à zéro) qui ne correspondent à aucune carte physique. Seules les trames réelles (`C9 12 …`) sont écrites. Deux lignes de ce type existaient dans la base vivante (ID 1363 et 1364).
 - **Carte système affichée avec une expiration** : l'inspecteur affichait la date de fin (= date d'émission) sur une carte système, alors que ces cartes n'expirent pas. Il affiche maintenant « Émise le » et « Expiration : aucune (carte système) ».
 - **ID / Operator Code « absent » alors que la carte existe** : l'instantané `CardLock.mdb` est une photo prise à l'import ; une carte créée ensuite est forcément introuvable. L'inspecteur indique désormais la date de l'instantané et invite à réimporter la base vivante, au lieu d'un « absent » ambigu.
 - **Écriture qui ne fonctionnait qu'une seule fois jusqu'au rafraîchissement de la page** : les accusés de réception HID restaient dans la file d'entrée et la lecture de vérification consommait celui de l'écriture précédente. Le transport expose maintenant `drain()`, appelé avant chaque écriture et chaque lecture, et `transact()` ignore les trames plus courtes que 16 octets au lieu de les prendre pour la carte.

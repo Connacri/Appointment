@@ -149,6 +149,11 @@ export function buildCardInfoSyncScript(
   for (const row of rows) {
     const cardData = normalizeCardHex(row.cardData);
     if (cardData.length !== 32) continue;
+    // Une carte physique commence toujours par le magic proUSB `C9 12`. Les
+    // enregistrements fabriqués par les anciennes versions (`C9 00 … AD DE AD`
+    // ou tout à zéro) n'ont jamais existé : les insérer créait des lignes
+    // mortes dans `CardInfo` (observé : ID 1363/1364 de la base vivante).
+    if (!cardData.startsWith('C912')) continue;
     const id = cardInfoId(cardData);
     if (!id || seen.has(id)) continue;
     seen.add(id);
