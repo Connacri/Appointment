@@ -189,5 +189,27 @@ ok('complément corrompu détecté', corrupted.siteComplementOk === false);
 const brokenDate = decodeCardRecord('C912033BFCC4809800010000002923BE');
 ok('date impossible → pas de date inventée', brokenDate.validity === undefined);
 
+// ── Carte d'un autre système : lecture totale, aucune interprétation inventée
+const foreign = decodeCardRecord('00112233445566778899AABBCCDDEEFF');
+ok('carte étrangère → format non proUSB détecté', foreign.isProUsbFormat === false);
+ok('carte étrangère → octets bruts conservés', foreign.rawHex.toLowerCase() === '00112233445566778899aabbccddeeff' && foreign.bytes?.length === 16);
+ok('carte étrangère → aucun champ interprété', foreign.validity === undefined && foreign.roomNumber === undefined);
+ok('carte étrangère → anomalie signalée', (foreign.notes ?? []).some((n) => n.includes('non proUSB')));
+
+// ── Trame courte : complétée, jamais rejetée
+const short = decodeCardRecord('C912033BFCC4809C0009');
+ok('trame courte → acceptée et complétée', short.bytesReceived === 10 && short.bytes?.length === 16);
+ok('trame courte → anomalie signalée', (short.notes ?? []).some((n) => n.includes('incomplète')));
+ok('trame courte → en-tête proUSB conservé', short.isProUsbFormat === true && short.siteCode === 'C912-033B');
+
+// ── Carte proUSB : tous les octets exposés (rien n'est perdu à la lecture)
+const full = decodeCardRecord('C912033BFCC4809C000E1ACA582923BE');
+ok('lecture complète → magic + header + marker + tail exposés',
+  full.isProUsbFormat === true &&
+    full.bytes?.length === 16 &&
+    full.marker?.[0] === 0xfc && full.marker?.[1] === 0xc4 &&
+    full.header?.[0] === 0x80 && full.header?.[1] === 0x9c && full.header?.[2] === 0x00 &&
+    full.tail?.[0] === 0x29 && full.tail?.[1] === 0x23 && full.tail?.[2] === 0xbe);
+
 console.log(failures === 0 ? '\nTOUT EST VERT' : `\n${failures} échec(s)`);
 process.exitCode = failures === 0 ? 0 : 1;

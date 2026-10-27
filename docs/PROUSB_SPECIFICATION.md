@@ -85,6 +85,31 @@ AA <length> <command> <payload...> <checksum>
 - **Report ID entrée** : variable (0x00-0xFF)
 - **Taille totale** : 65 octets (1 report ID + 64 données)
 
+### 2.5 File d'entrée : purger avant chaque échange
+
+Le lecteur émet un rapport HID pour **chaque** commande, y compris pour
+`WriteCard`. Ces accusés de réception n'ont pas de consommateur : ils
+s'accumulent dans la file d'entrée et la lecture suivante les prend pour la
+carte.
+
+Conséquences observées sur matériel réel :
+
+- écriture réussie **une seule fois**, puis « L'écriture n'a pas pu être
+  vérifiée en relecture » sur toutes les tentatives suivantes ;
+- retour au fonctionnement normal après rafraîchissement de la page (la file
+  est vidée avec la session HID).
+
+Correctif implémenté :
+
+1. `LockTransport.drain()` vide la file avant chaque écriture **et** avant
+   chaque lecture de vérification (`lockManager.writeAndVerifyCard`,
+   `readCurrentCard`) ;
+2. `transact()` accepte `minDataLength` : une réponse plus courte que 16 octets
+   est ignorée et la commande est réessayée, au lieu d'être renvoyée comme
+   contenu de carte ;
+3. en cas d'échec, l'erreur contient la trame écrite, la trame relue et la cause
+   exacte (timeout, erreur transport, contenu différent).
+
 ---
 
 ## 3. Base de données CardLock.mdb

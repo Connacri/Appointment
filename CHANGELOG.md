@@ -6,7 +6,15 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ## [Unreleased]
 
+### Added
+
+- **Lecture totale de n'importe quelle carte** : le décodeur ne rejette plus rien. Une carte d'un autre système (en-tête `C9 12` absent) est affichée avec ses octets bruts, sans qu'aucun champ ne soit inventé ; une trame courte est complétée et signalée ; les octets `[4..5]`, `[6..8]` et `[13..15]` sont désormais exposés. L'interface affiche un bandeau « autre système », le site, le contrôle `~site`, la liste des anomalies et une table octet par octet.
+- **Distinction clé de recherche / ID `CardInfo`** : l'application affichait `Mid(CardData,19,8)` sous l'étiquette « ID », alors que l'ID du logiciel d'origine est l'AutoNumber de `CardInfo`. Les deux valeurs sont maintenant affichées séparément (`Clé de recherche` et `ID dans CardInfo` / `Operator Code`), avec « absent » si la ligne n'existe pas encore.
+
 ### Fixed
+
+- **Écriture qui ne fonctionnait qu'une seule fois jusqu'au rafraîchissement de la page** : les accusés de réception HID restaient dans la file d'entrée et la lecture de vérification consommait celui de l'écriture précédente. Le transport expose maintenant `drain()`, appelé avant chaque écriture et chaque lecture, et `transact()` ignore les trames plus courtes que 16 octets au lieu de les prendre pour la carte.
+- **Message d'écriture inexploitable** : l'erreur « L'écriture n'a pas pu être vérifiée en relecture » indique désormais la trame écrite, la trame relue et la cause réelle (timeout, erreur transport, contenu différent) avec la vérification à effectuer.
 
 - **ID et Operator Code absents dans `CardLock.exe`** : la base réellement utilisée par le logiciel d'origine est celle du **VirtualStore** (`%LOCALAPPDATA%\VirtualStore\Program Files (x86)\…\CardLock.mdb`), car Windows virtualise les écritures des applications 32 bits installées sous `Program Files (x86)`. La copie de `Program Files` était figée depuis 2023 (62 cartes) alors que la copie vivante en contenait 88. Le script **Synchroniser CardLock.mdb** détecte maintenant la base vivante à l'exécution (copie la plus récente, option `--mdb` pour forcer), ne demande plus d'élévation pour le VirtualStore, avertit si `CardLock.exe` est encore ouvert, **relit chaque ligne** et affiche l'`ID` et l'`Operator Code` obtenus. L'écran d'import et la documentation pointent vers la base vivante.
 

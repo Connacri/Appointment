@@ -35,6 +35,12 @@ export interface LockTransport {
   close(): Promise<void>;
   send(frame: Uint8Array): Promise<void>;
   receive(timeoutMs?: number): Promise<Uint8Array | null>;
+  /**
+   * Drops buffered input reports that no caller is waiting for (command
+   * acknowledgements). Without it a `ReadCard` can consume the acknowledgement
+   * of the previous `WriteCard` and return it as card data.
+   */
+  drain?(): void;
   onLog?: (direction: 'tx' | 'rx' | 'info' | 'error', message: string, data?: Uint8Array) => void;
 }
 
@@ -42,6 +48,12 @@ export interface TransactOptions {
   timeoutMs?: number;
   attempts?: number;
   retryDelayMs?: number;
+  /**
+   * Minimum payload length expected. Short responses (command
+   * acknowledgements) are discarded and the command retried instead of being
+   * returned as if they were card data.
+   */
+  minDataLength?: number;
 }
 
 export async function transact(
@@ -332,6 +344,17 @@ export class WebHidTransport implements LockTransport {
       this.pendingResolvers.push(resolver);
     });
   }
+
+  /**
+   * Drops stale reports (write acknowledgements) so the next read cannot
+   * mistake them for card data. Never called while a read is awaited.
+   */
+  drain(): void {
+    if (this.inputQueue.length > 0) {
+      this.onLog?.('info', `Flush ${this.inputQueue.length} trame(s) en attente (accusés de réception).`);
+      this.inputQueue.length = 0;
+    }
+  }
 }
 
 /**
@@ -490,5 +513,9 @@ export class MockLockTransport implements LockTransport {
     }
 
     return null;
+  }
+
+  drain(): void {
+    this.inputQueue.length = 0;
   }
 }

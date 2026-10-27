@@ -162,8 +162,9 @@ export const ProUsbLockSystemView: React.FC = () => {
   // possèdent un ID visible et un « Operator Code » dans le logiciel d'origine).
   const mdbSnapshotCards = lockManager.getMdbSnapshot()?.cards ?? [];
   const mdbCardIds = new Set(mdbSnapshotCards.map((c) => cardInfoId(c.hex)));
-  const mdbOperatorById = new Map(
-    mdbSnapshotCards.map((c) => [cardInfoId(c.hex), c.operator || 'Admin'] as const)
+  // Clé de recherche -> ligne réelle de CardInfo (ID AutoNumber + Operator Code).
+  const mdbCardByKey = new Map(
+    mdbSnapshotCards.map((c) => [cardInfoId(c.hex), c] as const)
   );
 
   /**
@@ -249,14 +250,25 @@ export const ProUsbLockSystemView: React.FC = () => {
       if (decoded) {
         setCurrentReadCard(decoded);
         setReadProgress(100);
+
+        // Carte d'un autre système : on rend les octets, on n'invente rien.
+        if (decoded.isProUsbFormat === false) {
+          showToast(
+            'error',
+            `Carte d'un autre système (non proUSB) — ${decoded.bytesReceived ?? 16} octet(s) lus, aucun champ interprété. Trame : ${decoded.rawHex.toUpperCase()}`,
+          );
+          return;
+        }
+
         // Rapport exact : type réel, site, contrôle d'intégrité, dates réelles.
         const p2 = (n: number) => String(n).padStart(2, '0');
         const fmt = (y: number, mo: number, d: number, h: number, mi: number) =>
           `${p2(d)}/${p2(mo)}/${y} ${p2(h)}:${p2(mi)}`;
         const v = decoded.validity;
+        const key = cardInfoId(decoded.rawHex);
+        const row = mdbCardByKey.get(key);
         const details: string[] = [
           `Type: ${decoded.type.toUpperCase()} (0x${(decoded.rawTypeIndex ?? 0).toString(16).toUpperCase().padStart(2, '0')})`,
-          `ID: ${cardInfoId(decoded.rawHex) || '—'}`,
           `Site: ${decoded.siteCode}${decoded.isUniversalSite ? ' UNIVERSELLE' : ''}`,
         ];
         if (decoded.siteComplementOk !== undefined) {
@@ -268,6 +280,7 @@ export const ProUsbLockSystemView: React.FC = () => {
           if (decoded.endIsUnknown) details.push('Expiration: aucune (carte système)');
           else details.push(`Expiration: ${fmt(v.endYear, v.endMonth, v.endDay, v.endHour, v.endMinute ?? 0)}`);
         }
+        details.push(row ? `CardInfo: #${row.id} / ${row.operator || 'Admin'}` : `CardInfo: absente (clé ${key})`);
         showToast('success', `Lecture OK — ${details.join(' · ')}`);
       } else {
         showToast('error', 'Aucune carte détectée. Vérifiez qu\'elle est posée sur le lecteur et que le bouton LECTURE (pas ÉCRITURE) est utilisé.');
@@ -885,15 +898,59 @@ export const ProUsbLockSystemView: React.FC = () => {
 
                 {currentReadCard ? (
                   <div className="space-y-3.5 text-xs">
+                    {currentReadCard.isProUsbFormat === false && (
+                      <div className="p-2.5 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 flex items-start gap-2">
+                        <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                        <div className="space-y-0.5">
+                          <p className="font-bold">Carte d'un autre système</p>
+                          <p className="text-[11px] leading-snug">
+                            En-tête proUSB <code className="font-mono">C9 12</code> absent : aucun champ n'est interprété.
+                            Les {currentReadCard.bytesReceived ?? 16} octet(s) lus sont affichés tels quels ci-dessous.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] uppercase font-bold text-slate-400">Type de Carte :</span>
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                          {currentReadCard.type.toUpperCase()} (Index {currentReadCard.cardIndex})
+                          {currentReadCard.isProUsbFormat === false
+                            ? 'NON PROUSB'
+                            : `${currentReadCard.type.toUpperCase()} (Index ${currentReadCard.cardIndex})`}
                         </span>
                       </div>
 
-                      {currentReadCard.roomNumber && (
+                      {currentReadCard.isProUsbFormat !== false && (
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400">Site :</span>
+                          <span className="font-mono font-bold text-slate-900 dark:text-white">
+                            {currentReadCard.siteCode}
+                            {currentReadCard.isUniversalSite && (
+                              <span className="ml-1.5 px-1.5 py-0.5 rounded bg-fuchsia-100 dark:bg-fuchsia-950 text-fuchsia-700 dark:text-fuchsia-300 text-[9px] font-bold align-middle">
+                                UNIVERSELLE
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+
+                      {currentReadCard.siteComplementOk !== undefined && (
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400">Intégrité (~site) :</span>
+                          <span
+                            className={
+                              currentReadCard.siteComplementOk
+                                ? 'font-mono font-bold text-emerald-600 dark:text-emerald-400'
+                                : 'font-mono font-bold text-rose-600 dark:text-rose-400'
+                            }
+                          >
+                            {currentReadCard.siteComplementOk ? 'OK' : 'INVALIDE'}
+                          </span>
+                        </div>
+                      )}
+
+                      {currentReadCard.isProUsbFormat !== false && currentReadCard.roomNumber && (
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] uppercase font-bold text-slate-400">Chambre Affectée :</span>
                           <span className="font-bold text-slate-900 dark:text-white text-sm">
@@ -902,27 +959,42 @@ export const ProUsbLockSystemView: React.FC = () => {
                         </div>
                       )}
 
-                      {(() => {
-                        const readId = cardInfoId(currentReadCard.rawHex);
-                        const operator = mdbOperatorById.get(readId);
+                      {currentReadCard.isProUsbFormat !== false && (() => {
+                        const key = cardInfoId(currentReadCard.rawHex);
+                        const row = mdbCardByKey.get(key);
                         return (
                           <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1">
                             <div className="flex items-center justify-between text-[11px]">
-                              <span className="text-slate-400">ID (CardInfo) :</span>
-                              <span className="font-mono font-bold text-slate-900 dark:text-white">
-                                {readId || '—'}
+                              <span className="text-slate-400" title="Mid(CardData,19,8) — octets [9..12] de la carte">
+                                Clé de recherche :
                               </span>
+                              <span className="font-mono text-slate-600 dark:text-slate-300">{key || '—'}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-slate-400" title="CardInfo.ID (AutoNumber) du logiciel d'origine">
+                                ID dans CardInfo :
+                              </span>
+                              {row ? (
+                                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">#{row.id}</span>
+                              ) : (
+                                <span
+                                  className="font-sans font-bold text-amber-600"
+                                  title="Cette carte n'existe pas encore dans CardInfo : lancez « Synchroniser CardLock.mdb »"
+                                >
+                                  absent
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center justify-between text-[11px]">
                               <span className="text-slate-400">Operator Code :</span>
-                              {operator ? (
-                                <span className="font-mono font-bold text-emerald-600">{operator}</span>
+                              {row ? (
+                                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{row.operator || 'Admin'}</span>
                               ) : (
                                 <span
                                   className="font-sans font-bold text-amber-600"
                                   title="CardLock.exe lit l'Operator Code dans CardInfo.GongHao — lancez « Synchroniser CardLock.mdb »"
                                 >
-                                  — (absent de CardInfo)
+                                  absent
                                 </span>
                               )}
                             </div>
@@ -946,6 +1018,17 @@ export const ProUsbLockSystemView: React.FC = () => {
                           </div>
                         </div>
                       )}
+
+                      {(currentReadCard.notes?.length ?? 0) > 0 && (
+                        <ul className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1 text-[10px] leading-snug text-amber-700 dark:text-amber-400">
+                          {currentReadCard.notes!.map((note, i) => (
+                            <li key={i} className="flex items-start gap-1">
+                              <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+                              <span>{note}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
 
                     <div className="space-y-1">
@@ -956,6 +1039,35 @@ export const ProUsbLockSystemView: React.FC = () => {
                         {toHexFormatted(fromHex(currentReadCard.rawHex))}
                       </pre>
                     </div>
+
+                    <details className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                      <summary className="cursor-pointer select-none px-2.5 py-1.5 text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">
+                        Détail octet par octet
+                      </summary>
+                      <table className="w-full font-mono text-[10px] text-slate-600 dark:text-slate-300">
+                        <thead>
+                          <tr className="text-[9px] uppercase text-slate-400">
+                            <th className="text-start px-2 py-1 font-bold">#</th>
+                            <th className="text-start px-2 py-1 font-bold">Hex</th>
+                            <th className="text-start px-2 py-1 font-bold">Déc</th>
+                            <th className="text-start px-2 py-1 font-bold">ASCII</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Array.from({ length: 16 }).map((_, i) => {
+                            const b = currentReadCard.bytes?.[i] ?? 0;
+                            return (
+                              <tr key={i} className={i % 2 === 0 ? 'bg-slate-50 dark:bg-slate-950/40' : ''}>
+                                <td className="px-2 py-0.5 text-slate-400">{String(i).padStart(2, '0')}</td>
+                                <td className="px-2 py-0.5 font-bold">0x{b.toString(16).padStart(2, '0').toUpperCase()}</td>
+                                <td className="px-2 py-0.5 text-slate-500">{b}</td>
+                                <td className="px-2 py-0.5 text-slate-500">{b >= 32 && b < 127 ? String.fromCharCode(b) : '·'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </details>
                   </div>
                 ) : (
                   <div className="text-center py-8 space-y-2 text-slate-400">

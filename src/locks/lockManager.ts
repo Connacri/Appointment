@@ -496,15 +496,33 @@ class LockManager {
     }
 
     try {
-      const response = await transact(transport, readCard(), { timeoutMs: 5000, attempts: 3 });
-      if (response.data.length < 16) {
+      // Ne jamais relire un accusé de réception laissé par une commande précédente.
+      transport.drain?.();
+      const response = await transact(transport, readCard(), {
+        timeoutMs: 5000,
+        attempts: 3,
+        minDataLength: 16,
+      });
+      if (response.data.length === 0) {
         return null;
       }
 
-      const decoded = decodeCardRecord(response.data.slice(0, 16));
+      const decoded = decodeCardRecord(response.data);
 
       // Trace exacte : octets bruts + contrôles de cohérence.
-      transport.onLog?.('info', `Carte lue : ${decoded.rawHex}`);
+      transport.onLog?.(
+        decoded.isProUsbFormat ? 'info' : 'error',
+        `Carte lue (${decoded.bytesReceived ?? decoded.bytes?.length ?? 0} octet(s)) : ${decoded.rawHex}`,
+      );
+      if (decoded.isProUsbFormat === false) {
+        transport.onLog?.(
+          'error',
+          "Format non proUSB : en-tête C9 12 absent — carte d'un autre système, octets bruts conservés sans interprétation.",
+        );
+      }
+      for (const note of decoded.notes ?? []) {
+        transport.onLog?.('error', note);
+      }
       if (decoded.siteComplementOk !== undefined) {
         transport.onLog?.(
           decoded.siteComplementOk ? 'info' : 'error',
@@ -522,6 +540,13 @@ class LockManager {
 
   /**
    * Writes a verified 16-byte proUSB record to the card and verifies by reading it back
+   *
+   * The encoder acknowledges commands with HID reports. Those acknowledgements
+   * are flushed before each write/read pair so a `ReadCard` never returns the
+   * acknowledgement of the preceding `WriteCard` instead of the card content.
+   * When the read-back still differs the error carries the written frame, the
+   * frame actually read and the real cause (timeout, transport error, content
+   * mismatch) so the operator can act instead of guessing.
    */
   public async writeAndVerifyCard(record16: Uint8Array): Promise<DecodedProUsbCard> {
     const transport = this.getTransport();
@@ -529,33 +554,62 @@ class LockManager {
       await transport.open();
     }
 
+    const expected = toHex(record16);
     const frame = writeCard(record16);
 
     // Replay write up to 3 times with verification (idempotent protection against USB jitter)
     let verified = false;
     let decoded: DecodedProUsbCard | null = null;
+    let lastRead: string | null = null;
+    let lastCause = '';
+    let sawResponse = false;
 
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
+        transport.drain?.();
         await transport.send(frame);
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 600));
 
+        transport.drain?.();
         // Read back to confirm write
-        const response = await transact(transport, readCard(), { timeoutMs: 5000, attempts: 2 });
+        const response = await transact(transport, readCard(), {
+          timeoutMs: 5000,
+          attempts: 2,
+          minDataLength: 16,
+        });
         if (response.data.length >= 16) {
+          sawResponse = true;
           decoded = decodeCardRecord(response.data.slice(0, 16));
-          if (decoded.rawHex === toHex(record16)) {
+          lastRead = decoded.rawHex;
+          if (decoded.rawHex === expected) {
             verified = true;
             break;
           }
+          lastCause = 'contenu relu différent';
+          transport.onLog?.(
+            'error',
+            `Relecture différente (essai ${attempt}) — écrit : ${expected} / relu : ${lastRead}`,
+          );
+        } else {
+          lastCause = `réponse trop courte (${response.data.length} octet(s))`;
+          transport.onLog?.('error', `Relecture trop courte (essai ${attempt}) : ${response.data.length} octet(s)`);
         }
       } catch (err) {
-        transport.onLog?.('error', `Write/verify attempt ${attempt} failed: ${err}`);
+        lastCause = err instanceof Error ? err.message : String(err);
+        transport.onLog?.('error', `Write/verify attempt ${attempt} failed: ${lastCause}`);
       }
     }
 
     if (!verified || !decoded) {
-      throw new Error("L'écriture n'a pas pu être vérifiée en relecture sur la carte.");
+      const detail = lastRead
+        ? `Écrit : ${expected} — relu : ${lastRead} (${lastCause}).`
+        : `Écrit : ${expected} — aucune trame de 16 octets relue (${lastCause || 'aucune réponse'}).`;
+      const hint = sawResponse
+        ? "Retirez puis réinsérez la carte à fond dans l'encodeur et vérifiez qu'elle n'est pas verrouillée."
+        : "Vérifiez le câble USB, débranchez puis rebranchez l'encodeur, et fermez CardLock.exe qui peut monopoliser le lecteur.";
+      const message = `L'écriture n'a pas pu être vérifiée en relecture sur la carte. ${detail} ${hint}`;
+      transport.onLog?.('error', message);
+      throw new Error(message);
     }
 
     return decoded;

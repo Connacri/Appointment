@@ -231,6 +231,24 @@ Garanties :
   `isUniversalSite` ;
 - le type affiché vient du nibble bas, avec l'octet brut dans `rawTypeIndex`.
 
+### 8.1 Lecture totale — aucune carte n'est rejetée
+
+La lecture est **exhaustive par construction** : elle rend toujours la trame
+brute, même quand la carte n'appartient pas au système proUSB.
+
+| Situation | Comportement |
+|---|---|
+| Carte proUSB (`C9 12`) | tous les champs sont décodés : type, index, site, `~site`, en-tête `[6..8]`, date, queue `[13..15]` |
+| Carte d'un **autre système** (`C9 12` absent) | `isProUsbFormat: false` → bandeau « Carte d'un autre système », octets bruts + table octet par octet, **aucun champ interprété** |
+| Trame **courte** (< 16 octets) | complétée à 16 pour l'affichage, `bytesReceived` conserve la taille réelle, anomalie signalée |
+| Complément `~site` incohérent | `siteComplementOk: false` + anomalie explicite |
+| Date impossible | `validity` absent + anomalie, jamais de date inventée |
+
+Chaque carte expose désormais `bytes[]` (16 octets), `marker` (`[4..5]`),
+`header` (`[6..8]`), `tail` (`[13..15]`) et `notes[]` (liste des anomalies), en
+plus des champs déjà décodés. L'interface affiche ces informations dans la carte
+« Lecture » et dans le journal du transport.
+
 ## 9. Pourquoi les anciennes cartes étaient refusées
 
 Trois bugs cumulés, tous corrigés :
@@ -294,6 +312,30 @@ soit les **caractères 19 à 26** de la trame hexadécimale = **octets `[9..12]`
 (type + date d'émission). Si aucune ligne ne correspond, le dialogue affiche des
 champs vides — la carte reste parfaitement valide pour la serrure, mais le
 logiciel d'origine n'a rien à afficher.
+
+> **Ne pas confondre les deux valeurs.** `Mid(CardData,19,8)` (`0E1ADC73` par
+> exemple) est une **clé de recherche**, pas l'`ID`. L'`ID` affiché par
+> `CardLock.exe` est l'AutoNumber de `CardInfo` (`#89`). L'application affiche
+> désormais les deux lignes séparément : « Clé de recherche » et « ID dans
+> CardInfo » — cette dernière indiquant `absent` tant que la carte n'a pas été
+> enregistrée.
+
+**Le logiciel enregistre lui-même la carte qu'il lit.** Preuve observée sur
+l'installation réelle : une carte inconnue lue par `CardLock.exe` a créé la ligne
+`ID 89` (`C912033BFCC4809C00091ADC702923BE`, `GongHao = Admin`) dans la base
+vivante, à la seconde de la lecture. Comme l'insertion a lieu **après** la
+requête de recherche, le dialogue de cette première lecture peut rester vide :
+la carte est enregistrée, mais l'affichage ne l'a pas encore relu.
+
+Trois moyens d'obtenir l'`ID` et l'`Operator Code` :
+
+1. **Synchroniser `CardLock.mdb`** (recommandé) : ajoute les lignes *avant* la
+   lecture, donc le premier affichage est déjà complet.
+2. Lire la carte une première fois avec `CardLock.exe` (crée la ligne), puis la
+   relire — ou fermer/rouvrir le logiciel pour qu'il recharge son jeu de
+   données.
+3. Vérifier dans notre application : la carte affiche `ID dans CardInfo #89` et
+   `Operator Code Admin` dès que la base vivante est importée.
 
 Une carte écrite par cette application n'existe donc **pas** dans `CardInfo` :
 l'app n'écrit jamais dans le fichier JET4 (impossible depuis un navigateur,

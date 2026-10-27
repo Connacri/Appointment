@@ -180,6 +180,24 @@ export interface DecodedProUsbCard {
   cardIndex: number;
   /** Raw byte [9] — family nibble plus type/index nibble. */
   rawTypeIndex?: number;
+  /**
+   * True when bytes [0..1] are the proUSB record magic `C9 12`. When false the
+   * card belongs to another system: only the raw bytes are meaningful and no
+   * field is interpreted (nothing is invented).
+   */
+  isProUsbFormat?: boolean;
+  /** Raw bytes exactly as read (padded to 16 when the frame was shorter). */
+  bytes?: number[];
+  /** Number of bytes actually returned by the encoder before padding. */
+  bytesReceived?: number;
+  /** Bytes [4..5] — site complement (system) / access marker (guest). */
+  marker?: [number, number];
+  /** Bytes [6..8] — family header (system) or floor/building/options. */
+  header?: [number, number, number];
+  /** Bytes [13..15] — random padding (system) or end-of-stay stamp. */
+  tail?: [number, number, number];
+  /** Anomalies found while decoding (unknown format, bad complement, bad date…). */
+  notes?: string[];
   siteCode: string; // 24-bit site/serial e.g. "C912" + low 14 bits
   /** 16-bit site code (bytes [2..3], big-endian) — the value locks compare. */
   siteValue?: number;

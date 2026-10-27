@@ -604,12 +604,30 @@ function resolveCardType(byte9: number): ProUsbCardType {
  *     `siteComplementOk`, and `isUniversalSite` flags a wildcard `0000` card.
  */
 export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedProUsbCard {
-  const bytes = typeof rawBytesOrHex === 'string' ? fromHex(rawBytesOrHex) : rawBytesOrHex;
-  if (bytes.length < 16) {
-    throw new Error(`Record too short: need 16 bytes, got ${bytes.length}`);
+  const input = typeof rawBytesOrHex === 'string' ? fromHex(rawBytesOrHex) : rawBytesOrHex;
+  if (input.length === 0) {
+    throw new Error('Empty record: nothing to decode');
   }
 
-  const rawHex = toHex(bytes.slice(0, 16));
+  // Une lecture ne perd jamais de donnée : une trame courte est complétée et
+  // signalée, jamais rejetée.
+  const bytesReceived = input.length;
+  const bytes = new Uint8Array(16);
+  bytes.set(input.slice(0, 16));
+
+  const notes: string[] = [];
+  const isProUsbFormat = bytes[0] === 0xc9 && bytes[1] === 0x12;
+
+  if (bytesReceived < 16) {
+    notes.push(`Trame incomplète : ${bytesReceived} octet(s) reçu(s), complétée à 16 pour l'affichage.`);
+  }
+  if (!isProUsbFormat) {
+    notes.push(
+      "Format non proUSB : l'en-tête C9 12 est absent. Carte d'un autre système — octets bruts conservés, aucun champ interprété.",
+    );
+  }
+
+  const rawHex = toHex(bytes);
   const rawTypeIndex = bytes[9];
   const cardIndex = rawTypeIndex & 0x0f;
   const type = resolveCardType(rawTypeIndex);
@@ -624,9 +642,16 @@ export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedPro
     type,
     cardIndex,
     rawTypeIndex,
+    isProUsbFormat,
+    bytes: Array.from(bytes),
+    bytesReceived,
+    marker: [bytes[4], bytes[5]],
+    header: [bytes[6], bytes[7], bytes[8]],
+    tail: [bytes[13], bytes[14], bytes[15]],
     siteCode,
     siteValue: siteLow,
     isUniversalSite: siteLow === UNIVERSAL_SITE,
+    notes,
     options: {
       allowDeadbolt: false,
       coverCardsBefore: type === 'hard_reset',
@@ -634,10 +659,18 @@ export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedPro
     },
   };
 
+  // Carte d'un autre système : on ne devine rien, on rend les octets bruts.
+  if (!isProUsbFormat) {
+    return decoded;
+  }
+
   if (isSystem) {
     // [4..5] must be the bitwise complement of [2..3]: that is the integrity
     // check ResetCard creates and the reader verifies.
     decoded.siteComplementOk = bytes[4] === ((~bytes[2]) & 0xff) && bytes[5] === ((~bytes[3]) & 0xff);
+    if (!decoded.siteComplementOk) {
+      notes.push('Complément de site incohérent : [4..5] ≠ ~[2..3] (carte altérée ou écrite par un autre outil).');
+    }
 
     // [10..12] = date of issue. [13..15] = random padding, never a date.
     const issued = unpackStamp(bytes[10], bytes[11], bytes[12], {
@@ -647,6 +680,8 @@ export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedPro
       decoded.validity = stampToValidity(issued, null);
       decoded.endIsUnknown = true;
       decoded.issuedAt = formatIso(issued);
+    } else {
+      notes.push("Date d'émission illisible (octets [10..12]) : aucune date n'est affichée.");
     }
   } else if (type === 'guest') {
     // GuestCard: [5] = room (low 7 bits), [6] = floor, [7] = building.
@@ -669,6 +704,8 @@ export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedPro
         })
       : null;
     if (start) decoded.validity = stampToValidity(start, end);
+    if (!start) notes.push('Début de validité illisible (octets [10..12]) : aucune date affichée.');
+    else if (!end) notes.push('Fin de validité illisible (octets [13..15]) : seule la date de début est affichée.');
   } else if (type === 'master' || type === 'floor' || type === 'building' || type === 'emergency') {
     if (type === 'floor') decoded.floorNo = bytes[4];
     if (type === 'building') decoded.buildingNo = bytes[4];
@@ -683,6 +720,8 @@ export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedPro
         })
       : null;
     if (start) decoded.validity = stampToValidity(start, end);
+    if (!start) notes.push('Début de validité illisible (octets [10..12]) : aucune date affichée.');
+    else if (!end) notes.push('Fin de validité illisible (octets [13..15]) : seule la date de début est affichée.');
   } else if (type === 'room_set') {
     decoded.buildingNo = bytes[4];
     decoded.floorNo = bytes[5];
