@@ -255,8 +255,9 @@ Erreurs associées et leur cause réelle :
 ## 10. Procédure dans l'application
 
 1. Onglet **Mise en service**.
-2. Section **Base de données CardLock.mdb** → sélectionner
-   `C:\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb`.
+2. Section **Base de données CardLock.mdb** → sélectionner la base **vivante**
+   `%LOCALAPPDATA%\VirtualStore\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb`
+   (voir §11.1 : c'est le seul fichier que `CardLock.exe` modifie réellement).
    Le badge passe à **CONNECTÉE** et affiche le code site réel
    (ex. `033B`), le nombre de cartes / chambres / séjours.
 3. Cocher ou non **Carte universelle (site 0000)**.
@@ -298,6 +299,33 @@ Une carte écrite par cette application n'existe donc **pas** dans `CardInfo` :
 l'app n'écrit jamais dans le fichier JET4 (impossible depuis un navigateur,
 `mdb-reader` est en lecture seule).
 
+### 11.1 La base réellement utilisée n'est pas dans `Program Files`
+
+`CardLock.exe` est une application 32 bits **sans manifeste**, installée sous
+`Program Files (x86)`. Windows applique donc la **virtualisation UAC** : toutes
+ses écritures sont redirigées vers le *VirtualStore* du compte utilisateur.
+
+| Fichier | État observé sur l'installation réelle |
+|---|---|
+| `C:\Program Files (x86)\...\CardLock.mdb` | **figé** — horodatage `12/12/2023`, 62 cartes |
+| `%LOCALAPPDATA%\VirtualStore\Program Files (x86)\...\CardLock.mdb` | **vivant** — modifié à chaque lecture, 88 cartes |
+
+Conséquence : une synchronisation écrite dans `Program Files` est **invisible**
+pour le logiciel. C'était la cause du symptôme « aucun ID, aucun Operator Code »
+malgré des lignes correctement insérées.
+
+Le script généré résout donc la base **à l'exécution** :
+
+1. `--mdb "chemin"` s'il est fourni (prioritaire) ;
+2. sinon la copie **la plus récemment modifiée** entre VirtualStore et
+   `Program Files` — ce qui suit le logiciel qu'il soit lancé normalement
+   (VirtualStore) ou « en tant qu'administrateur » (`Program Files`) ;
+3. `%LOCALAPPDATA%` est étendu par Windows, donc le chemin reste valable pour
+   n'importe quel compte.
+
+Pour lire la base vivante dans l'application, il faut donc importer le fichier
+du VirtualStore (§10).
+
 ### Solution intégrée : « Synchroniser CardLock.mdb »
 
 Dans l'onglet **Réception**, le tableau *Dernières Cartes Clés Émises* affiche
@@ -312,12 +340,24 @@ Le bouton **Synchroniser CardLock.mdb** télécharge un fichier
 
 1. se relance en **32 bits** (`SysWOW64\wscript.exe`) — Jet 4.0 n'existe qu'en
    32 bits ;
-2. demande l'**élévation** si la base est sous `Program Files` ;
-3. **sauvegarde** `CardLock.mdb` en `.backup-AAAAMMJJ-HHMMSS.bak` ;
-4. insère les cartes absentes
+2. **choisit la base vivante** (VirtualStore, cf. §11.1) — aucun droit
+   administrateur n'est alors nécessaire ;
+3. prévient si `CardLock.exe` est encore ouvert (les lignes seraient écrites
+   mais pas relues tant que le logiciel tourne) ;
+4. **sauvegarde** la base en `.backup-AAAAMMJJ-HHMMSS.bak` ;
+5. insère les cartes absentes
    (`INSERT INTO CardInfo (CardData, Holder, GongHao, BeiZhu, Status) …`,
    `GongHao = Admin`) ;
-5. vérifie chaque insertion et propose une **restauration** en cas d'échec.
+6. **relit chaque ligne** (`SELECT ID, GongHao … WHERE Mid(CardData,19,8)=…`) et
+   affiche le résultat, par exemple :
+
+   ```text
+   Verification (ID / Operator Code) :
+     01EC631B  ->  ID 61  /  Admin
+     AAEC631B  ->  ID 1353  /  Admin
+   ```
+
+7. propose une **restauration** en cas d'échec.
 
 Le script est idempotent : une carte déjà présente (même `Mid(CardData,19,8)`)
 est ignorée. `ID` est un AutoNumber, il est attribué par Jet (par exemple

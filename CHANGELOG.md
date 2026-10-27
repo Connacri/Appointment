@@ -6,6 +6,10 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ## [Unreleased]
 
+### Fixed
+
+- **ID et Operator Code absents dans `CardLock.exe`** : la base réellement utilisée par le logiciel d'origine est celle du **VirtualStore** (`%LOCALAPPDATA%\VirtualStore\Program Files (x86)\…\CardLock.mdb`), car Windows virtualise les écritures des applications 32 bits installées sous `Program Files (x86)`. La copie de `Program Files` était figée depuis 2023 (62 cartes) alors que la copie vivante en contenait 88. Le script **Synchroniser CardLock.mdb** détecte maintenant la base vivante à l'exécution (copie la plus récente, option `--mdb` pour forcer), ne demande plus d'élévation pour le VirtualStore, avertit si `CardLock.exe` est encore ouvert, **relit chaque ligne** et affiche l'`ID` et l'`Operator Code` obtenus. L'écran d'import et la documentation pointent vers la base vivante.
+
 ## [1.2.0] - 2026-10-24
 
 ### Added

@@ -97,6 +97,16 @@ Data Source: C:\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLo
 Jet OLEDB:Database Password: pradlock
 ```
 
+> **Attention — virtualisation UAC.** `CardLock.exe` est un binaire 32 bits sans
+> manifeste installé sous `Program Files (x86)` : Windows redirige donc ses
+> **écritures** vers
+> `%LOCALAPPDATA%\VirtualStore\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb`.
+> Sur une installation réelle, le fichier de `Program Files` était resté figé au
+> `12/12/2023` (62 cartes) alors que la copie VirtualStore contenait 88 cartes,
+> modifiées le jour même. **La copie VirtualStore est la base vivante** : c'est
+> elle qu'il faut lire et modifier. Le script de synchronisation de l'app la
+> détecte à l'exécution (copie la plus récemment modifiée).
+
 Le mot de passe apparaît en clair dans `CardLock.Exe`, à côté du format de
 connexion (`0x5b84ac`) :
 

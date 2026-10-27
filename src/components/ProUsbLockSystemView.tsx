@@ -195,7 +195,7 @@ export const ProUsbLockSystemView: React.FC = () => {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
     showToast(
       'info',
-      `${issuedCards.length} carte(s) exportée(s) dans ${fileName} — double-cliquez sur le fichier (CardLock.exe fermé) pour insérer les lignes manquantes, puis ré-importez CardLock.mdb pour voir les badges passer à « MDB ».`
+      `${issuedCards.length} carte(s) exportée(s) dans ${fileName} — fermez CardLock.exe, double-cliquez sur le fichier (aucun droit administrateur requis), puis ré-importez CardLock.mdb : le script affiche l'ID et l'Operator Code obtenus pour chaque carte.`
     );
   };
 
@@ -744,7 +744,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                     type="button"
                     onClick={handleExportCardInfoSync}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white transition-colors"
-                    title="Génère un script Windows (.vbs) qui ajoute les cartes manquantes dans la table CardInfo de CardLock.mdb"
+                    title="Génère un script Windows (.vbs) qui insère les cartes manquantes dans CardInfo, en détectant la base réellement utilisée (VirtualStore) puis en vérifiant l'ID et l'Operator Code de chaque carte"
                   >
                     <FileDown size={13} />
                     Synchroniser CardLock.mdb
@@ -759,6 +759,17 @@ export const ProUsbLockSystemView: React.FC = () => {
                   <code className="font-mono">Mid(CardData,19,8)</code> (= octets 9 à 12) ; sans ligne en base, le
                   dialogue reste vide. Le bouton ci-dessus génère un script autonome qui insère les cartes absentes
                   (<code className="font-mono">GongHao = Admin</code>), avec sauvegarde et restauration automatiques.
+                </p>
+
+                <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-lg px-3 py-2">
+                  <strong>Windows redirige les écritures de CardLock.exe vers VirtualStore.</strong> La base réellement
+                  utilisée est{' '}
+                  <code className="font-mono break-all">
+                    %LOCALAPPDATA%\VirtualStore\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb
+                  </code>{' '}
+                  — pas celle de <code className="font-mono">Program Files (x86)</code>, qui reste figée. Le script
+                  détecte tout seul la copie vivante (la plus récente), ne demande aucun droit administrateur, puis
+                  relit chaque ligne et affiche l'<strong>ID</strong> et l'<strong>Operator Code</strong> obtenus.
                 </p>
 
                 <div className="overflow-x-auto">
@@ -1125,11 +1136,15 @@ export const ProUsbLockSystemView: React.FC = () => {
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                Importez le fichier <code className="font-mono">CardLock.mdb</code> situé dans{' '}
-                <code className="font-mono">C:\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\</code>.
-                L'app réutilise alors les mêmes chambres, clients et cartes que le logiciel d'origine et écrit les
-                cartes système avec le <strong>vrai code site</strong> lu dans la base (plus de{' '}
-                <code className="font-mono">N9067</code>). Sans base importée, l'app reste autonome.
+                Importez la base <strong>vivante</strong> :{' '}
+                <code className="font-mono break-all">
+                  %LOCALAPPDATA%\VirtualStore\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb
+                </code>{' '}
+                — Windows y redirige les écritures de CardLock.exe. La copie de{' '}
+                <code className="font-mono">C:\Program Files (x86)\…</code> n'est plus mise à jour par le logiciel (elle
+                ne contient que les cartes d'origine). L'app réutilise alors les mêmes chambres, clients et cartes que
+                le logiciel d'origine et écrit les cartes système avec le <strong>vrai code site</strong> lu dans la
+                base (plus de <code className="font-mono">N9067</code>). Sans base importée, l'app reste autonome.
               </p>
               {mdbStatus.connected && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-slate-700 dark:text-slate-200">

@@ -26,12 +26,42 @@
  *
  * This app never writes into the JET4 file (browsers cannot). Instead it
  * produces a small, reviewable, self-contained Windows script that inserts the
- * missing rows (with a backup + rollback) into a local `CardLock.mdb`.
+ * missing rows (with a backup + rollback) into the live `CardLock.mdb`.
+ *
+ * ## Which `CardLock.mdb` is the live one? (UAC file virtualisation)
+ *
+ * `CardLock.exe` is a legacy 32-bit application with no manifest, and it is
+ * installed under `Program Files (x86)`. Windows therefore **redirects every
+ * write** it performs to the per-user *VirtualStore*:
+ *
+ *   C:\Program Files (x86)\...\CardLock.mdb            ← never written (frozen)
+ *   %LOCALAPPDATA%\VirtualStore\Program Files (x86)\...\CardLock.mdb  ← live
+ *
+ * Observed on a real installation: the install-folder copy still carried its
+ * 2023 timestamp while the VirtualStore copy held 26 additional cards written
+ * this year. A synchronisation that targets the install folder is therefore
+ * invisible to the software — that was the root cause of the "no ID, no
+ * Operator Code" symptom.
+ *
+ * The generated script resolves the real file **at run time**: it keeps the
+ * most recently modified of the two candidates. That follows the software
+ * whether it runs normally (VirtualStore) or elevated (install folder).
  */
 
-/** Default install location of the original software on Windows. */
-export const CARD_LOCK_MDB_DEFAULT_PATH =
+/** Install location shipped by the vendor. */
+export const CARD_LOCK_MDB_INSTALL_PATH =
   'C:\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb';
+
+/**
+ * Live copy written by `CardLock.exe` when it runs without elevation.
+ * `%LOCALAPPDATA%` is expanded by the generated script, so the path stays valid
+ * for every Windows account.
+ */
+export const CARD_LOCK_MDB_VIRTUALSTORE_PATH =
+  '%LOCALAPPDATA%\\VirtualStore\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb';
+
+/** Default location (kept for compatibility — the install folder). */
+export const CARD_LOCK_MDB_DEFAULT_PATH = CARD_LOCK_MDB_INSTALL_PATH;
 
 /**
  * The vendor ships `CardLock.mdb` with a Jet *database password*: Jet refuses
@@ -57,6 +87,10 @@ export interface CardInfoSyncRow {
 }
 
 export interface CardInfoSyncOptions {
+  /**
+   * Forces one exact database file. Leave empty (recommended) to let the script
+   * pick the live file at run time (VirtualStore vs. install folder).
+   */
   mdbPath?: string;
   /** Jet database password — defaults to the vendor one. */
   mdbPassword?: string;
@@ -106,7 +140,7 @@ export function buildCardInfoSyncScript(
   rows: CardInfoSyncRow[],
   options: CardInfoSyncOptions = {}
 ): string {
-  const mdbPath = options.mdbPath || CARD_LOCK_MDB_DEFAULT_PATH;
+  const forcedPath = options.mdbPath ?? '';
   const mdbPassword = options.mdbPassword ?? CARD_LOCK_MDB_PASSWORD;
   const generatedAt = options.generatedAt ?? new Date().toISOString();
 
@@ -144,18 +178,28 @@ export function buildCardInfoSyncScript(
     "' ----------------------------------------------------------------------------",
     `'  Genere le ${generatedAt}`,
     `'  Cartes a inserer : ${cleaned.length}`,
-    `'  Base visee       : ${mdbPath}`,
+    `'  Base visee       : ${
+      forcedPath || "detection automatique de la base reellement utilisee"
+    }`,
     "'",
     "'  ID et Operator Code ne sont pas graves sur la carte : CardLock.exe les lit",
     "'  dans la table CardInfo. Ce script ajoute les lignes manquantes",
     "'  (GongHao = Admin) apres avoir sauvegarde la base.",
     "'",
+    "'  Windows redirige les ecritures de CardLock.exe vers VirtualStore : la base",
+    "'  vivante est donc %LOCALAPPDATA%\\VirtualStore\\Program Files (x86)\\...",
+    "'  Le script choisit tout seul la copie la plus recente, puis verifie chaque",
+    "'  ligne ecrite (ID + Operator) avant de rendre la main.",
+    "'",
     "'  Fermez CardLock.exe puis double-cliquez sur ce fichier.",
+    "'  Aucun droit administrateur n'est necessaire pour la base VirtualStore.",
     "' ============================================================================",
     'Option Explicit',
     '',
     'Const APP_TITLE = "Planning Oran - CardLock.mdb"',
-    `Const MDB_PATH = "${mdbPath.replace(/"/g, '""')}"`,
+    `Const FORCED_PATH = "${forcedPath.replace(/"/g, '""')}"`,
+    `Const INSTALL_PATH = "${CARD_LOCK_MDB_INSTALL_PATH.replace(/"/g, '""')}"`,
+    `Const VIRTUAL_PATH = "${CARD_LOCK_MDB_VIRTUALSTORE_PATH.replace(/"/g, '""')}"`,
     `Const MDB_PASSWORD = "${mdbPassword.replace(/"/g, '""')}"`,
   ].join('\r\n');
 
@@ -173,11 +217,26 @@ If InStr(1, LCase(WScript.FullName), "syswow64", vbTextCompare) = 0 Then
   End If
 End If
 
+' --- Base reellement utilisee (VirtualStore si CardLock.exe est non eleve) --
+Dim MDB_PATH
+MDB_PATH = ResolveMdb()
+
 If Not fso.FileExists(MDB_PATH) Then
   MsgBox "Base introuvable :" & vbCrLf & vbCrLf & MDB_PATH & vbCrLf & vbCrLf & _
-         "Ouvrez ce script avec le Bloc-notes et adaptez la constante MDB_PATH.", _
+         "Verifiez que proUSB Hotel Lock System est installe, ou indiquez" & vbCrLf & _
+         "le fichier avec :  wscript ""ce-script.vbs"" --mdb ""C:\\chemin\\CardLock.mdb""", _
          vbCritical, APP_TITLE
   WScript.Quit 1
+End If
+
+' --- CardLock.exe ouvert : Jet partage le fichier, mais l'app garde un cache -
+If IsProcessRunning("CardLock.exe") Then
+  If MsgBox("CardLock.exe est ouvert." & vbCrLf & vbCrLf & _
+            "Les lignes seront bien ecrites, mais le logiciel ne les verra" & vbCrLf & _
+            "qu'apres avoir ete ferme puis rouvert." & vbCrLf & vbCrLf & _
+            "Continuer ?", vbExclamation + vbYesNo, APP_TITLE) = vbNo Then
+    WScript.Quit 0
+  End If
 End If
 
 ' --- Droits d'ecriture (Program Files exige l'elevation) --------------------
@@ -216,17 +275,20 @@ On Error GoTo 0
 ' --- Cartes a synchroniser --------------------------------------------------
 ${rowsBlock}
 ' --- Insertion --------------------------------------------------------------
-Dim cn, rs, inserted, skipped, failed, detail, i, key, cur, sql, n
+Dim cn, rs, inserted, skipped, failed, detail, report, i, key, cur, sql, n
+Dim newId, newOp, found
 inserted = 0
 skipped = 0
 failed = 0
 detail = ""
+report = ""
 
 Set cn = CreateObject("ADODB.Connection")
 On Error Resume Next
 cn.Open "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & MDB_PATH & ";Persist Security Info=False; Jet OLEDB:DataBase Password=" & MDB_PASSWORD & ";"
 If Err.Number <> 0 Then
   MsgBox "Connexion Jet 4.0 impossible :" & vbCrLf & vbCrLf & Err.Description & vbCrLf & vbCrLf & _
+         "Base : " & MDB_PATH & vbCrLf & vbCrLf & _
          "Le moteur Microsoft Jet 4.0 (composant Windows) est requis.", _
          vbCritical, APP_TITLE
   WScript.Quit 1
@@ -246,18 +308,41 @@ For i = 0 To UBound(rows)
     failed = failed + 1
     detail = detail & vbCrLf & "  " & key & " : " & Err.Description
     Err.Clear
-  ElseIf n > 0 Then
-    skipped = skipped + 1
   Else
-    sql = "INSERT INTO CardInfo (CardData, Holder, GongHao, BeiZhu, Status) VALUES ('" & _
-          Q(cur(0)) & "','" & Q(cur(1)) & "','" & Q(cur(2)) & "','','" & Q(cur(3)) & "')"
-    cn.Execute sql
-    If Err.Number <> 0 Then
-      failed = failed + 1
-      detail = detail & vbCrLf & "  " & key & " : " & Err.Description
-      Err.Clear
+    If n > 0 Then
+      skipped = skipped + 1
     Else
-      inserted = inserted + 1
+      sql = "INSERT INTO CardInfo (CardData, Holder, GongHao, BeiZhu, Status) VALUES ('" & _
+            Q(cur(0)) & "','" & Q(cur(1)) & "','" & Q(cur(2)) & "','','" & Q(cur(3)) & "')"
+      cn.Execute sql
+      If Err.Number <> 0 Then
+        failed = failed + 1
+        detail = detail & vbCrLf & "  " & key & " : " & Err.Description
+        Err.Clear
+      Else
+        inserted = inserted + 1
+      End If
+    End If
+
+    ' --- Verification : on relit la ligne exactement comme CardLock.exe ------
+    newId = ""
+    newOp = ""
+    found = False
+    Set rs = cn.Execute("SELECT ID, GongHao FROM CardInfo WHERE Mid(CardData,19,8)='" & key & "'")
+    If Err.Number = 0 Then
+      If Not rs.EOF Then
+        newId = rs.Fields(0).Value
+        newOp = rs.Fields(1).Value & ""
+        found = True
+      End If
+      rs.Close
+    End If
+    Set rs = Nothing
+    Err.Clear
+    If found Then
+      report = report & vbCrLf & "  " & key & "  ->  ID " & newId & "  /  " & newOp
+    Else
+      report = report & vbCrLf & "  " & key & "  ->  introuvable apres ecriture"
     End If
   End If
   On Error GoTo 0
@@ -268,14 +353,19 @@ Set cn = Nothing
 
 If failed = 0 Then
   MsgBox "Synchronisation terminee." & vbCrLf & vbCrLf & _
+         "Base           : " & MDB_PATH & vbCrLf & _
          "Ajoutees       : " & inserted & vbCrLf & _
          "Deja presentes : " & skipped & vbCrLf & vbCrLf & _
-         "Sauvegarde :" & vbCrLf & backup, vbInformation, APP_TITLE
+         "Verification (ID / Operator Code) :" & report & vbCrLf & vbCrLf & _
+         "Sauvegarde :" & vbCrLf & backup & vbCrLf & vbCrLf & _
+         "Rouvrez CardLock.exe puis relisez la carte.", vbInformation, APP_TITLE
 Else
   MsgBox "Synchronisation partielle." & vbCrLf & vbCrLf & _
+         "Base           : " & MDB_PATH & vbCrLf & _
          "Ajoutees       : " & inserted & vbCrLf & _
          "Deja presentes : " & skipped & vbCrLf & _
          "Echecs         : " & failed & vbCrLf & vbCrLf & _
+         "Verification (ID / Operator Code) :" & report & vbCrLf & vbCrLf & _
          "Details :" & detail & vbCrLf & vbCrLf & _
          "Sauvegarde :" & vbCrLf & backup, vbExclamation, APP_TITLE
   If inserted > 0 Then
@@ -300,6 +390,48 @@ Else
 End If
 
 ' --- Helpers ----------------------------------------------------------------
+' Base vivante : la copie VirtualStore si elle existe et est plus recente.
+Function ResolveMdb()
+  Dim forced, install, virtual
+  forced = FORCED_PATH
+  If Len(forced) > 0 Then
+    ResolveMdb = forced
+    Exit Function
+  End If
+  install = INSTALL_PATH
+  virtual = sh.ExpandEnvironmentStrings(VIRTUAL_PATH)
+  If fso.FileExists(install) And fso.FileExists(virtual) Then
+    If fso.GetFile(virtual).DateLastModified >= fso.GetFile(install).DateLastModified Then
+      ResolveMdb = virtual
+    Else
+      ResolveMdb = install
+    End If
+  ElseIf fso.FileExists(virtual) Then
+    ResolveMdb = virtual
+  Else
+    ResolveMdb = install
+  End If
+End Function
+
+' CardLock.exe tourne-t-il deja ?
+Function IsProcessRunning(exeName)
+  Dim wmi, list, p
+  IsProcessRunning = False
+  On Error Resume Next
+  Set wmi = GetObject("winmgmts:\\\\.\\root\\cimv2")
+  If Err.Number = 0 Then
+    Set list = wmi.ExecQuery("SELECT Name FROM Win32_Process WHERE Name='" & exeName & "'")
+    If Err.Number = 0 Then
+      For Each p In list
+        IsProcessRunning = True
+        Exit For
+      Next
+    End If
+  End If
+  Err.Clear
+  On Error GoTo 0
+End Function
+
 Function HasArg(name)
   Dim k
   HasArg = False

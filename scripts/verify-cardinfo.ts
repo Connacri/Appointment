@@ -8,7 +8,9 @@ import {
   cardInfoId,
   cardInfoSyncFileName,
   CARD_LOCK_MDB_DEFAULT_PATH,
+  CARD_LOCK_MDB_INSTALL_PATH,
   CARD_LOCK_MDB_PASSWORD,
+  CARD_LOCK_MDB_VIRTUALSTORE_PATH,
 } from '../src/locks/database/cardInfoSync';
 
 let ok = 0;
@@ -54,6 +56,28 @@ check('texte Unicode encodé (aucun accent dans le fichier)', /^[\x09\x0A\x0D\x2
 check('apostrophe échappée en SQL', script.includes('Function Q(value)') && script.includes('Replace(value, "\'", "\'\'")'));
 check('CRLF (Windows)', script.includes('\r\n') && !/[^\r]\n/.test(script));
 check('nom de fichier horodaté', /^CardLock-CardInfo-\d{8}-\d{4}\.vbs$/.test(cardInfoSyncFileName(new Date(2026, 9, 27, 14, 5))), cardInfoSyncFileName(new Date(2026, 9, 27, 14, 5)));
+
+console.log('3. Base réellement utilisée (virtualisation UAC)');
+check('chemin d’installation exporté', CARD_LOCK_MDB_INSTALL_PATH.includes('Program Files (x86)'));
+check('chemin par défaut = installation', CARD_LOCK_MDB_DEFAULT_PATH === CARD_LOCK_MDB_INSTALL_PATH);
+check(
+  'chemin VirtualStore = %LOCALAPPDATA%',
+  CARD_LOCK_MDB_VIRTUALSTORE_PATH.startsWith('%LOCALAPPDATA%\\VirtualStore\\') &&
+    CARD_LOCK_MDB_VIRTUALSTORE_PATH.endsWith('CardLock.mdb'),
+  CARD_LOCK_MDB_VIRTUALSTORE_PATH
+);
+check('les deux chemins sont dans le script', script.includes('Const INSTALL_PATH =') && script.includes('Const VIRTUAL_PATH ='));
+check('VirtualStore présent dans le script', script.includes('VirtualStore'));
+check('détection à l’exécution (ResolveMdb)', script.includes('Function ResolveMdb()') && script.includes('MDB_PATH = ResolveMdb()'));
+check('copie la plus récente retenue', script.includes('DateLastModified'));
+check('%LOCALAPPDATA% étendu par Windows', script.includes('ExpandEnvironmentStrings(VIRTUAL_PATH)'));
+check('avertissement CardLock.exe ouvert', script.includes('IsProcessRunning("CardLock.exe")'));
+check('vérification ID + GongHao après écriture', script.includes('SELECT ID, GongHao FROM CardInfo WHERE Mid(CardData,19,8)'));
+check('rapport ID / Operator affiché', script.includes('->  ID ') && script.includes(' / '));
+check(
+  'chemin forcé (--mdb) respecté',
+  buildCardInfoSyncScript(rows, { mdbPath: 'D:\\sauvegarde\\CardLock.mdb' }).includes('Const FORCED_PATH = "D:\\sauvegarde\\CardLock.mdb"')
+);
 
 console.log('');
 if (ko === 0) {
