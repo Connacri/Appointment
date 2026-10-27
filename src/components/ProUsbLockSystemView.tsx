@@ -302,6 +302,8 @@ export const ProUsbLockSystemView: React.FC = () => {
     setIsWriting(true);
     try {
       const now = new Date();
+      const systemInfo = (lockManager.getSettings() as any)?.systemInfo || null;
+      const regInfo = null;
       await lockManager.issueCommissioningCard({
         type: step as any,
         roomNumber: commissionRoom,

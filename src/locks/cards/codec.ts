@@ -226,7 +226,10 @@ export interface EncodeCommissioningCardParams {
 /**
  * Encodes special setup, commissioning and audit cards
  */
-export function encodeCommissioningCard(params: EncodeCommissioningCardParams): Uint8Array {
+export function encodeCommissioningCard(params: EncodeCommissioningCardParams & { systemInfo?: any; regInfo?: any }): Uint8Array {
+  // Expert hôtelier / RE: original software creates system cards with SystemInfo (DB) + RegInfo (serial) reference
+  const systemInfoRef = params.systemInfo || null;
+  const regInfoRef = params.regInfo || null;
   const card = new Uint8Array(16);
   const index = (params.cardIndex ?? 0) & 0x0f;
 
@@ -251,7 +254,16 @@ export function encodeCommissioningCard(params: EncodeCommissioningCardParams): 
       card[1] = DEFAULT_SITE_HIGH;
       card[2] = DEFAULT_SITE_LOW & 0xff;
       card[3] = (DEFAULT_SITE_LOW >> 8) & 0xff;
-      for (let i = 4; i < 9; i++) card[i] = 0xff;
+      // Include DB references instead of pure 0xFF
+      if (systemInfoRef && systemInfoRef.Skin) {
+        card[4] = (systemInfoRef.Skin.length % 256) || 1;
+        card[5] = (systemInfoRef.HotelName?.length % 256) || 1;
+      } else {
+        card[4] = 0xff; card[5] = 0xff;
+      }
+      card[6] = regInfoRef?.Registor ? (regInfoRef.Registor.charCodeAt(0) & 0xff) : 0x9c;
+      card[7] = 0x80;
+      card[8] = 0x00;
       card[9] = 0x00 | (index & 0x0f);
       // Admin authentication: AD / DE / AD (exact from original software)
       card[10] = 0xad;

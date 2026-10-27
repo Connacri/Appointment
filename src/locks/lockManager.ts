@@ -613,7 +613,7 @@ class LockManager {
       recordBytes[0] = 0xc9;
       recordBytes[9] = 0x00; // Reset card marker
     } else {
-      recordBytes = encodeCommissioningCard(params);
+      recordBytes = encodeCommissioningCard({ ...params, systemInfo: (params as any).systemInfo, regInfo: (params as any).regInfo });
       await this.writeAndVerifyCard(recordBytes);
     }
 
