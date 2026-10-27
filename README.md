@@ -48,6 +48,14 @@
   - Connexion de nouveaux canaux et configuration du mappage unité par unité.
   - Journal temps réel des requêtes et webhooks XML/iCal entrants et sortants.
 
+- **Système de Serrures proUSB (encodage de cartes & import du logiciel d'origine)** :
+  - Connexion automatique de l'encodeur **proUSB-TEMIC** en USB (WebHID, PC et Android USB-C), sans passerelle ni pilote.
+  - **Import du vrai `CardLock.mdb`** : l'app lit directement la base Access du logiciel d'origine (chambres, clients, cartes, journal des ouvertures) et réutilise le **code site réel** de l'installation.
+  - **Format de carte vérifié octet par octet** sur 62 enregistrements réels : site big-endian, dates avec fenêtre glissante de 16 ans (plus de `2010` au lieu de `2026`), queue de famille `29 23 BE`.
+  - Cartes système (`Reset`, `Hard Reset`) **réellement écrites** puis relues pour vérification — acceptées par `CardLock.exe` et par les serrures.
+  - Cartes client / personnel / groupe générées depuis le planning Gantt, avec durée de validité et règles métier hôtelières.
+  - Documentation : [`README_SYSTEM_CARD.md`](./README_SYSTEM_CARD.md) (carte système) et [`README_CARDS.md`](./README_CARDS.md) (différences entre tous les rôles).
+
 - **Pipeline CI/CD Automatisé Multi-Plateforme (`.github/workflows/release-and-deploy.yml`)** :
   - **Android** : Génération et signature cryptographique de l'**APK** et de l'**AAB** pour le package `com.planning.oran`.
   - **Windows** : Compilation et signature Authenticode de l'exécutable desktop Windows (`Planning-Oran-Setup.exe`).

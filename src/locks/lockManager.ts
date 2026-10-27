@@ -34,14 +34,16 @@ import {
   encodeGuestCard,
   encodeMasterCard,
   encodeCommissioningCard,
+  encodeSystemCard,
+  SYSTEM_CARD_TYPE,
   decodeCardRecord,
 } from './cards/codec';
 import {
-  MdbReader,
-  MdbCardInfo,
-  MdbRecordOpen,
-  CardLockDatabase,
-} from './database';
+  parseCardLockMdb,
+  DEFAULT_SYSTEM_CARD_TEMPLATE,
+  type MdbSnapshot,
+  type SystemCardProfile,
+} from './database/mdbImport';
 
 // Types expected by TopBar (remote API compatibility)
 export type UsbConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'unsupported';
@@ -96,9 +98,8 @@ class LockManager {
   private logListeners: Array<(logs: TransportLogEntry[]) => void> = [];
   private stateListeners: Array<() => void> = [];
   
-  // MDB Integration
-  private mdbReader = new MdbReader();
-  private mdbLoaded = false;
+  // MDB Integration — real CardLock.mdb imported by the user
+  private mdbSnapshot: MdbSnapshot | null = this.loadMdbSnapshot();
 
   private issuedCards: IssuedCardRecord[] = this.loadIssuedCards();
   private auditRecords: LockAuditRecord[] = this.loadAuditRecords();
@@ -108,8 +109,6 @@ class LockManager {
     this.setupTransportLogging(this.webHidTransport);
     // Real hardware only: automatically connect to the proUSB encoder when plugged in via USB
     this.webHidTransport.setAutoConnectEnabled(true);
-    // Attempt to load MDB data on startup (async, non-blocking)
-    this.loadMdbData();
   }
 
   private loadIssuedCards(): IssuedCardRecord[] {
@@ -172,69 +171,119 @@ class LockManager {
     }
   }
 
-  public async loadMdbData(): Promise<void> {
+  // ─── CardLock.mdb (real file import) ─────────────────────────────────────
+
+  private loadMdbSnapshot(): MdbSnapshot | null {
     try {
-      const connected = await this.mdbReader.connect();
-      if (!connected) {
-        console.warn('[LockManager] MDB connection not available (browser environment), using mock data');
-        return;
-      }
-
-      const db = await this.mdbReader.readAll();
-      this.mdbLoaded = true;
-
-      // Convert MDB CardInfo to IssuedCardRecord
-      this.issuedCards = db.cardInfo.map((card, idx) => ({
-        id: `mdb-card-${card.ID}`,
-        rawHex: card.CardData,
-        type: this.mapCardTypeFromDai(card.CardType),
-        cardIndex: card.CardData ? parseInt(card.CardData.slice(18, 20), 16) & 0x0f : 1,
-        roomNumber: card.RoomNo,
-        holderName: card.Holder || `Client ${card.ID}`,
-        operator: 'MDB Import',
-        issuedAt: card.IssueDate ? new Date(card.IssueDate).toISOString() : new Date().toISOString(),
-        status: card.Status === 1 ? 'active' : card.Status === 2 ? 'checked_out' : 'expired',
-        validUntil: card.ExpiryDate || 'N/A',
-      }));
-
-      // Convert MDB RecordOpen to LockAuditRecord
-      this.auditRecords = db.recordOpen.map((rec) => ({
-        orderFlag: rec.OrderFlag,
-        recDataHex: rec.RecData,
-        openTime: rec.OpenTime,
-        eventType: this.mapEventType(rec.CardType),
-        cardIdentifier: rec.CardNo || `CARD-${rec.CardType.toString(16).toUpperCase()}`,
-        roomNo: rec.RoomNo || '101',
-      }));
-
-      // Update settings from MDB SystemInfo
-      if (db.systemInfo) {
-        this.settings = {
-          ...this.settings,
-          companyName: db.systemInfo.CompanyName,
-          hotelName: db.systemInfo.HotelName,
-          skin: db.systemInfo.Skin,
-          checkoutTime: db.systemInfo.CheckoutTime,
-          vipCheckoutTime: db.systemInfo.VIPCheckoutTime,
-          guestAccessBolt: db.systemInfo.GuestLLock === 1,
-          alarmForcedPin: db.systemInfo.BaoJing === 128,
-          remindCloseDoor: db.systemInfo.TiShi === 152,
-        };
-        (this.settings as any).systemInfo = db.systemInfo;
-      }
-      if (db.regInfo && db.regInfo.length > 0) {
-        (this.settings as any).regInfo = db.regInfo[0];
-      }
-
-      this.notifyStateListeners();
-      console.log('[LockManager] MDB data loaded successfully:', {
-        cards: this.issuedCards.length,
-        auditRecords: this.auditRecords.length,
-        settings: this.settings,
-      });
-    } catch (error) {
-      console.warn('[LockManager] Failed to load MDB data, using mock data:', error);
+      const saved = localStorage.getItem('omnibook_prousb_mdb_snapshot');
+      if (!saved) return null;
+      const parsed = JSON.parse(saved) as MdbSnapshot;
+      return parsed && Array.isArray(parsed.cards) ? parsed : null;
+    } catch (e) {
+      console.warn('[LockManager] Failed to load MDB snapshot:', e);
+      return null;
     }
+  }
+
+  private saveMdbSnapshot(): void {
+    try {
+      if (this.mdbSnapshot) {
+        localStorage.setItem('omnibook_prousb_mdb_snapshot', JSON.stringify(this.mdbSnapshot));
+      } else {
+        localStorage.removeItem('omnibook_prousb_mdb_snapshot');
+      }
+    } catch (e) {
+      console.warn('[LockManager] Failed to save MDB snapshot:', e);
+    }
+  }
+
+  /**
+   * Imports the original software database (`CardLock.mdb`).
+   * Once imported the app works on the very same rooms, guests and cards as
+   * CardLock.exe — including byte-for-byte reuse of existing card records.
+   */
+  public async importMdb(file: File): Promise<MdbSnapshot> {
+    const data = await file.arrayBuffer();
+    const snapshot = await parseCardLockMdb(data, file.name);
+
+    this.mdbSnapshot = snapshot;
+    this.saveMdbSnapshot();
+
+    // Reflect the imported data in the app model
+    if (snapshot.cards.length > 0) {
+      this.issuedCards = snapshot.cards.map((card) => ({
+        id: `mdb-card-${card.id}`,
+        rawHex: card.hex,
+        type: this.mapCardTypeFromDai(card.typeIndex & 0xf0),
+        cardIndex: card.typeIndex & 0x0f,
+        holderName: card.holder || `Carte ${card.id}`,
+        operator: card.operator || 'MDB',
+        issuedAt: snapshot.importedAt,
+        status: card.status && /erase/i.test(card.status) ? 'revoked' : 'active',
+        validUntil: 'N/A',
+      }));
+      this.saveIssuedCards();
+    }
+
+    if (snapshot.buildings.length > 0) {
+      this.settings = {
+        ...this.settings,
+        hotelName: snapshot.buildings[0].name || this.settings.hotelName,
+        defaultBuildingNo: snapshot.buildings[0].no || this.settings.defaultBuildingNo,
+      };
+      this.saveSettings();
+    }
+
+    this.notifyStateListeners();
+    console.log('[LockManager] CardLock.mdb imported:', snapshot.counts, snapshot.systemProfile);
+    return snapshot;
+  }
+
+  public getMdbSnapshot(): MdbSnapshot | null {
+    return this.mdbSnapshot;
+  }
+
+  public getMdbStatus(): {
+    connected: boolean;
+    source: string;
+    importedAt: string | null;
+    cards: number;
+    rooms: number;
+    guests: number;
+    systemIdHex: string | null;
+  } {
+    const s = this.mdbSnapshot;
+    return {
+      connected: !!s,
+      source: s ? s.fileName : 'none',
+      importedAt: s ? s.importedAt : null,
+      cards: s ? s.counts.cards : 0,
+      rooms: s ? s.counts.rooms : 0,
+      guests: s ? s.counts.guests : 0,
+      systemIdHex: s?.systemProfile ? toHex(new Uint8Array(s.systemProfile.site)) : null,
+    };
+  }
+
+  /** Site / marker / header / tail / serial read from the imported database. */
+  public getSystemTemplate(): SystemCardProfile {
+    return this.mdbSnapshot?.systemProfile ?? DEFAULT_SYSTEM_CARD_TEMPLATE;
+  }
+
+  /**
+   * 16-bit site code used by every card family, as stored in CardLock.mdb
+   * (bytes [2..3], big-endian). Returns undefined when no database is loaded
+   * so the codec keeps its generic default.
+   */
+  public getSiteCode(): number | undefined {
+    const profile = this.mdbSnapshot?.systemProfile;
+    if (!profile) return undefined;
+    return ((profile.site[0] << 8) | profile.site[1]) & 0x3fff;
+  }
+
+  public clearMdb(): void {
+    this.mdbSnapshot = null;
+    this.saveMdbSnapshot();
+    this.notifyStateListeners();
   }
 
   private mapCardTypeFromDai(cardType: number): ProUsbCardType {
@@ -384,10 +433,6 @@ class LockManager {
     this.notifyStateListeners();
   }
 
-  public getMdbStatus(): { connected: boolean; source: string } {
-    return { connected: this.mdbLoaded, source: this.mdbReader ? (this.mdbReader as any).mdbPath || 'C:\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb' : 'none' };
-  }
-
   /**
    * Connects to the active transport (WebHID only)
    */
@@ -511,7 +556,7 @@ class LockManager {
     throw new Error('Régle hôtel : carte client ne peut dépasser 365 jours de validité.');
   }
 
-  const recordBytes = encodeGuestCard(params);
+  const recordBytes = encodeGuestCard({ ...params, siteCodeLow: this.getSiteCode() });
     const decoded = await this.writeAndVerifyCard(recordBytes);
 
     const newRecord: IssuedCardRecord = {
@@ -539,7 +584,7 @@ class LockManager {
   public async issueMasterCard(
     params: EncodeMasterCardParams & { holderName: string; operator: string }
   ): Promise<IssuedCardRecord> {
-    const recordBytes = encodeMasterCard(params);
+    const recordBytes = encodeMasterCard({ ...params, siteCodeLow: this.getSiteCode() });
     const decoded = await this.writeAndVerifyCard(recordBytes);
 
     const newRecord: IssuedCardRecord = {
@@ -558,6 +603,30 @@ class LockManager {
     this.saveIssuedCards();
     this.notifyStateListeners();
     return newRecord;
+  }
+
+  /**
+   * Writes a genuine proUSB system (configuration) card.
+   *
+   * The site code, family marker/header, trailer and the next serial are the
+   * ones read from the imported CardLock.mdb, so the record is structurally
+   * identical to the one CardLock.exe produces.
+   */
+  private async writeSystemCard(typeIndex: number): Promise<Uint8Array> {
+    const template = this.getSystemTemplate();
+    const issuedAt = new Date();
+    const record = encodeSystemCard({ typeIndex, template, issuedAt });
+
+    this.getTransport().onLog?.(
+      'info',
+      `Carte système 0x${typeIndex.toString(16).toUpperCase().padStart(2, '0')} — ` +
+        `site=${toHex(new Uint8Array(template.site))} ` +
+        `émise=${issuedAt.toLocaleString('fr-FR')} ` +
+        `(modèle DB #${template.sampleId || 'défaut'})`,
+    );
+
+    await this.writeAndVerifyCard(record);
+    return record;
   }
 
   /**
@@ -584,7 +653,7 @@ class LockManager {
         await new Promise(r => setTimeout(r, 200));
       }
       
-      // Step 2: Verify reset by reading card (should return empty/default)
+      // Step 2: read the card so the encoder starts from a clean slot
       try {
         await transport.send(readCard());
         const raw = await transport.receive(5000);
@@ -594,34 +663,19 @@ class LockManager {
       } catch (e) {
         transport.onLog?.('info', 'Hard reset: verification read completed');
       }
-      
-      // Step 3: Buzzer confirmation (3 long beeps - 300ms each)
-      for (let i = 0; i < 3; i++) {
-        await transport.send(buzzer(1));
-        await new Promise(r => setTimeout(r, 300));
-        await transport.send(buzzer(0));
-        await new Promise(r => setTimeout(r, 200));
-      }
-      
-      recordBytes = new Uint8Array(16);
-      recordBytes[0] = 0xc9;
-      recordBytes[9] = 0x00; // Reset card marker
-      // Admin marker
-      recordBytes[10] = 0xad;
-      recordBytes[11] = 0xde;
-      recordBytes[12] = 0xad;
-      
-      transport.onLog?.('info', 'HARD RESET PERSISTANT: Serrure réinitialisée de manière permanente. Toute configuration précédente a été effacée.');
+
+      // Step 3: write the genuine system card (same bytes layout as CardLock.exe)
+      recordBytes = await this.writeSystemCard(SYSTEM_CARD_TYPE.hard_reset);
     } else if (params.type === 'reset') {
       // Step 1: IniCard reset
       const transport = this.getTransport();
       if (!transport.isOpen()) await transport.open();
       await transport.send(iniCard(IniMode.Step0));
-      recordBytes = new Uint8Array(16);
-      recordBytes[0] = 0xc9;
-      recordBytes[9] = 0x00; // Reset card marker
+
+      // Step 2: write the genuine system card (site/serial read from CardLock.mdb)
+      recordBytes = await this.writeSystemCard(SYSTEM_CARD_TYPE.reset);
     } else {
-      recordBytes = encodeCommissioningCard({ ...params, systemInfo: (params as any).systemInfo, regInfo: (params as any).regInfo });
+      recordBytes = encodeCommissioningCard({ ...params, template: this.getSystemTemplate() });
       await this.writeAndVerifyCard(recordBytes);
     }
 

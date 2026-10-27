@@ -112,6 +112,10 @@ export const ProUsbLockSystemView: React.FC = () => {
   const [commissionValidityDays, setCommissionValidityDays] = useState(365);
   const [commissionValidityHour, setCommissionValidityHour] = useState(12);
 
+  // CardLock.mdb (original software database)
+  const [mdbStatus, setMdbStatus] = useState(lockManager.getMdbStatus());
+  const [isImportingMdb, setIsImportingMdb] = useState(false);
+
   // Subscribe to LockManager state and transport logs
   useEffect(() => {
     const unsubLogs = lockManager.subscribeLogs((newLogs) => setLogs(newLogs));
@@ -119,6 +123,7 @@ export const ProUsbLockSystemView: React.FC = () => {
       setIssuedCards(lockManager.getIssuedCards());
       setAuditRecords(lockManager.getAuditRecords());
       setLockSettings(lockManager.getSettings());
+      setMdbStatus(lockManager.getMdbStatus());
     });
 
     return () => {
@@ -298,12 +303,27 @@ export const ProUsbLockSystemView: React.FC = () => {
     }
   };
 
-  const handleIssueCommissioning = async (step: 'reset' | 'hard_reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit' | 'group' | 'master' | 'floor' | 'building' | 'emergency') => {
-    setIsWriting(true);
+  const handleImportMdb = async (file: File | null) => {
+    if (!file) return;
+    setIsImportingMdb(true);
+    try {
+      const snapshot = await lockManager.importMdb(file);
+      setMdbStatus(lockManager.getMdbStatus());
+      const warn = snapshot.warnings.length > 0 ? ` — ${snapshot.warnings.length} avertissement(s)` : '';
+      showToast(
+        'success',
+        `CardLock.mdb importée : ${snapshot.counts.cards} cartes, ${snapshot.counts.rooms} chambres, ${snapshot.counts.guests} séjours${warn}`,
+      );
+    } catch (err: any) {
+      showToast('error', `Import CardLock.mdb impossible : ${err.message}`);
+    } finally {
+      setIsImportingMdb(false);
+    }
+  };
+
+  const handleIssueCommissioning = async (step: 'reset' | 'hard_reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit' | 'group' | 'master' | 'floor' | 'building' | 'emergency') => {    setIsWriting(true);
     try {
       const now = new Date();
-      const systemInfo = (lockManager.getSettings() as any)?.systemInfo || null;
-      const regInfo = null;
       await lockManager.issueCommissioningCard({
         type: step as any,
         roomNumber: commissionRoom,
@@ -939,6 +959,99 @@ export const ProUsbLockSystemView: React.FC = () => {
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Chaque serrure physique doit obligatoirement être configurée en suivant ces 3 étapes ordonnées.
               </p>
+            </div>
+
+            {/* CardLock.mdb — original software database */}
+            <div
+              className={`p-4 rounded-xl border space-y-3 ${
+                mdbStatus.connected
+                  ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30'
+                  : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850'
+              }`}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <FileSpreadsheet size={16} className={mdbStatus.connected ? 'text-emerald-600' : 'text-slate-400'} />
+                <h3 className="font-bold text-xs text-slate-900 dark:text-white">
+                  Base de données CardLock.mdb (logiciel d'origine)
+                </h3>
+                <span
+                  className={`ml-auto text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                    mdbStatus.connected
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                >
+                  {mdbStatus.connected ? 'CONNECTÉE' : 'NON IMPORTÉE'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                Importez le fichier <code className="font-mono">CardLock.mdb</code> situé dans{' '}
+                <code className="font-mono">C:\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\</code>.
+                L'app réutilise alors les mêmes chambres, clients et cartes que le logiciel d'origine et écrit les
+                cartes système avec le <strong>vrai code site</strong> lu dans la base (plus de{' '}
+                <code className="font-mono">N9067</code>). Sans base importée, l'app reste autonome.
+              </p>
+              {mdbStatus.connected && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-slate-700 dark:text-slate-200">
+                  <div>
+                    <strong className="block text-slate-500 dark:text-slate-400">Cartes</strong>
+                    {mdbStatus.cards}
+                  </div>
+                  <div>
+                    <strong className="block text-slate-500 dark:text-slate-400">Chambres</strong>
+                    {mdbStatus.rooms}
+                  </div>
+                  <div>
+                    <strong className="block text-slate-500 dark:text-slate-400">Séjours</strong>
+                    {mdbStatus.guests}
+                  </div>
+                  <div>
+                    <strong className="block text-slate-500 dark:text-slate-400">Code site</strong>
+                    <span className="font-mono">{mdbStatus.systemIdHex ?? '—'}</span>
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <label
+                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                    isImportingMdb
+                      ? 'bg-slate-300 text-slate-600 cursor-wait'
+                      : 'bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white'
+                  }`}
+                >
+                  <Download size={14} />
+                  {isImportingMdb
+                    ? 'Import en cours…'
+                    : mdbStatus.connected
+                      ? 'Remplacer le fichier'
+                      : 'Choisir CardLock.mdb'}
+                  <input
+                    type="file"
+                    accept=".mdb,.accdb"
+                    className="hidden"
+                    disabled={isImportingMdb}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      e.target.value = '';
+                      void handleImportMdb(file);
+                    }}
+                  />
+                </label>
+                {mdbStatus.connected && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      lockManager.clearMdb();
+                      setMdbStatus(lockManager.getMdbStatus());
+                      showToast('info', 'Base CardLock.mdb déconnectée — mode autonome.');
+                    }}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <Trash2 size={14} />
+                    Déconnecter
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">

@@ -166,6 +166,7 @@ export interface CardValidityWindow {
   startMonth: number; // 1-12
   startDay: number;   // 1-31
   startHour: number;  // 0-23
+  startMinute?: number; // 0-59 (real issue time, e.g. 12:21 on CardInfo records)
   endYear: number;    // 2026
   endMonth: number;   // 1-12
   endDay: number;     // 1-31
