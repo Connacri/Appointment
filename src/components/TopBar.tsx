@@ -158,14 +158,14 @@ export const TopBar: React.FC = () => {
             Hôtel
           </button>
           <button
-            onClick={() => setActiveSector('clinic')}
+            onClick={() => setActiveSector('resort')}
             className={`px-2 py-0.5 font-medium rounded transition-colors ${
-              activeSector === 'clinic'
-                ? 'bg-emerald-600 text-white shadow-xs font-semibold'
+              activeSector === 'resort'
+                ? 'bg-amber-600 text-white shadow-xs font-semibold'
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            Clinique
+            Resort
           </button>
         </div>
       </div>

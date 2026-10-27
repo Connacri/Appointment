@@ -13,15 +13,11 @@ import {
   Trash2,
   Bed,
   Hotel,
-  Stethoscope,
-  Building2,
-  UtensilsCrossed,
-  Landmark,
+  Palmtree,
   Sparkles,
   ShieldCheck,
   AlertCircle,
   FileCheck2,
-  HeartPulse,
   Coffee,
   Car,
   Baby,
@@ -119,45 +115,14 @@ export const BookingModal: React.FC = () => {
   const [hotelOptionPet, setHotelOptionPet] = useState(false);
   const [hotelOptionWelcomeGift, setHotelOptionWelcomeGift] = useState(false);
 
-  // 2. RESIDENCE Specific
-  const [residenceOccupants, setResidenceOccupants] = useState(2);
-  const [residenceDepositType, setResidenceDepositType] = useState('cb_preauth');
-  const [residenceCleaningIncluded, setResidenceCleaningIncluded] = useState(true);
-  const [residenceLinenPack, setResidenceLinenPack] = useState(true);
-  const [residenceParkingOption, setResidenceParkingOption] = useState(false);
-  const [residenceKeyPickupTime, setResidenceKeyPickupTime] = useState('16:00');
-
-  // 3. RESTAURANT Specific
-  const [restaurantCovers, setRestaurantCovers] = useState(2);
-  const [restaurantService, setRestaurantService] = useState<'lunch' | 'dinner_1' | 'dinner_2'>('dinner_1');
-  const [restaurantTime, setRestaurantTime] = useState('20:00');
-  const [restaurantDietary, setRestaurantDietary] = useState('none');
-  const [restaurantOccasion, setRestaurantOccasion] = useState('standard');
-  const [restaurantMenuFormula, setRestaurantMenuFormula] = useState('a_la_carte');
-
-  // 4. CLINIC Specific
-  const [clinicPatientBirthDate, setClinicPatientBirthDate] = useState('');
-  const [clinicSocialSecurity, setClinicSocialSecurity] = useState('');
-  const [clinicConsultationMotif, setClinicConsultationMotif] = useState('first_visit');
-  const [clinicCareCoverage, setClinicCareCoverage] = useState('secteur1');
-  const [clinicReferringDoctor, setClinicReferringDoctor] = useState('');
-  const [clinicAppointmentTime, setClinicAppointmentTime] = useState('10:30');
-
-  // 5. ADMINISTRATION Specific
-  const [adminProcedureType, setAdminProcedureType] = useState('passport_cni');
-  const [adminPreDemandeNumber, setAdminPreDemandeNumber] = useState('');
-  const [adminAppointmentTime, setAdminAppointmentTime] = useState('09:40');
-  const [adminCheckIdentityDoc, setAdminCheckIdentityDoc] = useState(true);
-  const [adminCheckProofOfAddress, setAdminCheckProofOfAddress] = useState(true);
-  const [adminCheckPhoto, setAdminCheckPhoto] = useState(true);
-  const [adminCheckTaxStamp, setAdminCheckTaxStamp] = useState(false);
-
-  // 6. WELLNESS Specific
-  const [wellnessRitual, setWellnessRitual] = useState('californian_massage');
-  const [wellnessTherapistPref, setWellnessTherapistPref] = useState('any');
-  const [wellnessSessionTime, setWellnessSessionTime] = useState('14:00');
-  const [wellnessHealthCheck, setWellnessHealthCheck] = useState('none');
-  const [wellnessPackLuxe, setWellnessPackLuxe] = useState(false);
+  // 2. RESORT Specific
+  const [resortOccupants, setResortOccupants] = useState(4);
+  const [resortFormula, setResortFormula] = useState<'all_inclusive' | 'half_board' | 'spa_package'>('all_inclusive');
+  const [resortCheckinTime, setResortCheckinTime] = useState('14:00');
+  const [resortOptionPrivatePool, setResortOptionPrivatePool] = useState(true);
+  const [resortOptionBeachCabana, setResortOptionBeachCabana] = useState(true);
+  const [resortOptionVipTransfer, setResortOptionVipTransfer] = useState(false);
+  const [resortOptionGolfBuggy, setResortOptionGolfBuggy] = useState(false);
 
   // Synchronization effect when opening modal or changing selected booking
   useEffect(() => {
@@ -213,41 +178,14 @@ export const BookingModal: React.FC = () => {
         if (meta.hotelOptionHighFloor !== undefined) setHotelOptionHighFloor(meta.hotelOptionHighFloor);
         if (meta.hotelOptionPet !== undefined) setHotelOptionPet(meta.hotelOptionPet);
         if (meta.hotelOptionWelcomeGift !== undefined) setHotelOptionWelcomeGift(meta.hotelOptionWelcomeGift);
-      } else if (selectedBooking.sector === 'residence') {
-        if (meta.residenceOccupants) setResidenceOccupants(meta.residenceOccupants);
-        if (meta.residenceDepositType) setResidenceDepositType(meta.residenceDepositType);
-        if (meta.residenceCleaningIncluded !== undefined) setResidenceCleaningIncluded(meta.residenceCleaningIncluded);
-        if (meta.residenceLinenPack !== undefined) setResidenceLinenPack(meta.residenceLinenPack);
-        if (meta.residenceParkingOption !== undefined) setResidenceParkingOption(meta.residenceParkingOption);
-        if (meta.residenceKeyPickupTime) setResidenceKeyPickupTime(meta.residenceKeyPickupTime);
-      } else if (selectedBooking.sector === 'restaurant') {
-        if (meta.restaurantCovers) setRestaurantCovers(meta.restaurantCovers);
-        if (meta.restaurantService) setRestaurantService(meta.restaurantService);
-        if (meta.restaurantTime) setRestaurantTime(meta.restaurantTime);
-        if (meta.restaurantDietary) setRestaurantDietary(meta.restaurantDietary);
-        if (meta.restaurantOccasion) setRestaurantOccasion(meta.restaurantOccasion);
-        if (meta.restaurantMenuFormula) setRestaurantMenuFormula(meta.restaurantMenuFormula);
-      } else if (selectedBooking.sector === 'clinic') {
-        if (meta.clinicPatientBirthDate) setClinicPatientBirthDate(meta.clinicPatientBirthDate);
-        if (meta.clinicSocialSecurity) setClinicSocialSecurity(meta.clinicSocialSecurity);
-        if (meta.clinicConsultationMotif) setClinicConsultationMotif(meta.clinicConsultationMotif);
-        if (meta.clinicCareCoverage) setClinicCareCoverage(meta.clinicCareCoverage);
-        if (meta.clinicReferringDoctor) setClinicReferringDoctor(meta.clinicReferringDoctor);
-        if (meta.clinicAppointmentTime) setClinicAppointmentTime(meta.clinicAppointmentTime);
-      } else if (selectedBooking.sector === 'administration') {
-        if (meta.adminProcedureType) setAdminProcedureType(meta.adminProcedureType);
-        if (meta.adminPreDemandeNumber) setAdminPreDemandeNumber(meta.adminPreDemandeNumber);
-        if (meta.adminAppointmentTime) setAdminAppointmentTime(meta.adminAppointmentTime);
-        if (meta.adminCheckIdentityDoc !== undefined) setAdminCheckIdentityDoc(meta.adminCheckIdentityDoc);
-        if (meta.adminCheckProofOfAddress !== undefined) setAdminCheckProofOfAddress(meta.adminCheckProofOfAddress);
-        if (meta.adminCheckPhoto !== undefined) setAdminCheckPhoto(meta.adminCheckPhoto);
-        if (meta.adminCheckTaxStamp !== undefined) setAdminCheckTaxStamp(meta.adminCheckTaxStamp);
-      } else if (selectedBooking.sector === 'wellness') {
-        if (meta.wellnessRitual) setWellnessRitual(meta.wellnessRitual);
-        if (meta.wellnessTherapistPref) setWellnessTherapistPref(meta.wellnessTherapistPref);
-        if (meta.wellnessSessionTime) setWellnessSessionTime(meta.wellnessSessionTime);
-        if (meta.wellnessHealthCheck) setWellnessHealthCheck(meta.wellnessHealthCheck);
-        if (meta.wellnessPackLuxe !== undefined) setWellnessPackLuxe(meta.wellnessPackLuxe);
+      } else if (selectedBooking.sector === 'resort') {
+        if (meta.resortOccupants) setResortOccupants(meta.resortOccupants);
+        if (meta.resortFormula) setResortFormula(meta.resortFormula);
+        if (meta.resortCheckinTime) setResortCheckinTime(meta.resortCheckinTime);
+        if (meta.resortOptionPrivatePool !== undefined) setResortOptionPrivatePool(meta.resortOptionPrivatePool);
+        if (meta.resortOptionBeachCabana !== undefined) setResortOptionBeachCabana(meta.resortOptionBeachCabana);
+        if (meta.resortOptionVipTransfer !== undefined) setResortOptionVipTransfer(meta.resortOptionVipTransfer);
+        if (meta.resortOptionGolfBuggy !== undefined) setResortOptionGolfBuggy(meta.resortOptionGolfBuggy);
       }
     } else {
       // New booking initialization strictly scoped to active domain
@@ -263,30 +201,21 @@ export const BookingModal: React.FC = () => {
       if (newBookingInitialSlot?.date) {
         setStartDate(newBookingInitialSlot.date);
         const [y, m, d] = newBookingInitialSlot.date.split('-').map(Number);
-        // For single-day services (clinic, restaurant, admin, wellness) default to same day; for stays (hotel, residence) default +3 days
-        if (activeDomain === 'clinic' || activeDomain === 'restaurant' || activeDomain === 'administration' || activeDomain === 'wellness') {
-          setEndDate(newBookingInitialSlot.date);
-        } else {
-          const next = new Date(y, m - 1, d + 3);
-          setEndDate(
-            `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(
-              next.getDate()
-            ).padStart(2, '0')}`
-          );
-        }
+        const next = new Date(y, m - 1, d + 3);
+        setEndDate(
+          `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(
+            next.getDate()
+          ).padStart(2, '0')}`
+        );
       } else {
         setStartDate(currentBaseDate);
         const [y, m, d] = currentBaseDate.split('-').map(Number);
-        if (activeDomain === 'clinic' || activeDomain === 'restaurant' || activeDomain === 'administration' || activeDomain === 'wellness') {
-          setEndDate(currentBaseDate);
-        } else {
-          const next = new Date(y, m - 1, d + 3);
-          setEndDate(
-            `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(
-              next.getDate()
-            ).padStart(2, '0')}`
-          );
-        }
+        const next = new Date(y, m - 1, d + 3);
+        setEndDate(
+          `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(
+            next.getDate()
+          ).padStart(2, '0')}`
+        );
       }
 
       if (currentRole === 'client') {
@@ -300,7 +229,7 @@ export const BookingModal: React.FC = () => {
       }
       setStatus('confirmed');
       setNotes('');
-      setPaymentStatus(activeDomain === 'administration' ? 'paid' : 'paid');
+      setPaymentStatus('paid');
       setConflictError(null);
       setGuestType('algerian');
       setAlgerianIdNumber('');
@@ -346,63 +275,26 @@ export const BookingModal: React.FC = () => {
       };
     }
 
-    if (activeDomain === 'residence') {
-      const rentalBase = calculatedDays * (baseDaily || 110);
-      const cleaning = residenceCleaningIncluded ? 65 : 0;
-      const linen = residenceLinenPack ? 25 : 0;
-      const parking = residenceParkingOption ? 12 * calculatedDays : 0;
-      const total = rentalBase + cleaning + linen + parking;
+    if (activeDomain === 'resort') {
+      const villaBase = calculatedDays * (baseDaily || 280);
+      const formulaPrice =
+        resortFormula === 'all_inclusive' ? 95 : resortFormula === 'half_board' ? 55 : 75;
+      const formulaTotal = formulaPrice * resortOccupants * calculatedDays;
+      const poolTotal = resortOptionPrivatePool ? 40 * calculatedDays : 0;
+      const cabanaTotal = resortOptionBeachCabana ? 30 * calculatedDays : 0;
+      const transferTotal = resortOptionVipTransfer ? 85 : 0;
+      const buggyTotal = resortOptionGolfBuggy ? 25 * calculatedDays : 0;
+      const total = villaBase + formulaTotal + poolTotal + cabanaTotal + transferTotal + buggyTotal;
       return {
         totalPrice: Math.round(total),
-        priceBreakdown: `${calculatedDays} jour(s) × ${baseDaily || 110}€ + forfait ménage/linge (${cleaning + linen}€) + parking (${parking}€)`,
+        priceBreakdown: `${calculatedDays} nuit(s) × ${baseDaily || 280}€ + formule (${formulaTotal}€) + services VIP (${poolTotal + cabanaTotal + transferTotal + buggyTotal}€)`,
       };
     }
 
-    if (activeDomain === 'restaurant') {
-      const formulaPrice = restaurantMenuFormula === 'accord_mets_vins' ? 75 : restaurantMenuFormula === 'formule_affaires' ? 45 : 35;
-      const total = formulaPrice * restaurantCovers;
-      return {
-        totalPrice: total,
-        priceBreakdown: `${restaurantCovers} couvert(s) × ${formulaPrice}€ (${restaurantMenuFormula === 'accord_mets_vins' ? 'Menu Mets & Vins' : 'Menu Carte'})`,
-      };
-    }
-
-    if (activeDomain === 'clinic' || activeDomain === 'doctor') {
-      const actRate = baseDaily || 75;
-      return {
-        totalPrice: actRate,
-        priceBreakdown: `Acte médical consultation : ${actRate}€ (Prise en charge ${clinicCareCoverage === 'secteur1' ? '100% Base Sécu' : 'Secteur 2'})`,
-      };
-    }
-
-    if (activeDomain === 'administration') {
-      return {
-        totalPrice: 0,
-        priceBreakdown: 'Service Public Gratuit (0.00 €)',
-      };
-    }
-
-    if (activeDomain === 'wellness') {
-      const baseRitual =
-        wellnessRitual === 'rituel_balneo'
-          ? 110
-          : wellnessRitual === 'deep_tissue'
-          ? 90
-          : wellnessRitual === 'soin_visage'
-          ? 65
-          : 80;
-      const luxe = wellnessPackLuxe ? 25 : 0;
-      const total = baseRitual + luxe;
-      return {
-        totalPrice: total,
-        priceBreakdown: `Soin bien-être (${baseRitual}€) ${wellnessPackLuxe ? '+ Pack Serviette & Peignoir Luxe (25€)' : ''}`,
-      };
-    }
-
-    const fallbackTotal = calculatedDays * (baseDaily || 85);
+    const fallbackTotal = calculatedDays * (baseDaily || 95);
     return {
       totalPrice: fallbackTotal,
-      priceBreakdown: `${calculatedDays} jour(s) × ${baseDaily || 85}€`,
+      priceBreakdown: `${calculatedDays} jour(s) × ${baseDaily || 95}€`,
     };
   }, [
     activeDomain,
@@ -413,14 +305,12 @@ export const BookingModal: React.FC = () => {
     hotelOptionBabyBed,
     hotelOptionPet,
     hotelOptionWelcomeGift,
-    residenceCleaningIncluded,
-    residenceLinenPack,
-    residenceParkingOption,
-    restaurantCovers,
-    restaurantMenuFormula,
-    clinicCareCoverage,
-    wellnessRitual,
-    wellnessPackLuxe,
+    resortOccupants,
+    resortFormula,
+    resortOptionPrivatePool,
+    resortOptionBeachCabana,
+    resortOptionVipTransfer,
+    resortOptionGolfBuggy,
   ]);
 
   // Currency Conversion Rates (Base: EUR = 1)
@@ -465,61 +355,19 @@ export const BookingModal: React.FC = () => {
         hotelOptionPet,
         hotelOptionWelcomeGift,
       };
-    } else if (activeDomain === 'residence') {
+    } else if (activeDomain === 'resort') {
       customMetadata = {
-        residenceOccupants,
-        residenceDepositType,
-        residenceCleaningIncluded,
-        residenceLinenPack,
-        residenceParkingOption,
-        residenceKeyPickupTime,
-      };
-    } else if (activeDomain === 'restaurant') {
-      customMetadata = {
-        restaurantCovers,
-        restaurantService,
-        restaurantTime,
-        restaurantDietary,
-        restaurantOccasion,
-        restaurantMenuFormula,
-      };
-    } else if (activeDomain === 'clinic') {
-      customMetadata = {
-        clinicPatientBirthDate,
-        clinicSocialSecurity,
-        clinicConsultationMotif,
-        clinicCareCoverage,
-        clinicReferringDoctor,
-        clinicAppointmentTime,
-      };
-    } else if (activeDomain === 'administration') {
-      customMetadata = {
-        adminProcedureType,
-        adminPreDemandeNumber,
-        adminAppointmentTime,
-        adminCheckIdentityDoc,
-        adminCheckProofOfAddress,
-        adminCheckPhoto,
-        adminCheckTaxStamp,
-      };
-    } else if (activeDomain === 'wellness') {
-      customMetadata = {
-        wellnessRitual,
-        wellnessTherapistPref,
-        wellnessSessionTime,
-        wellnessHealthCheck,
-        wellnessPackLuxe,
+        resortOccupants,
+        resortFormula,
+        resortCheckinTime,
+        resortOptionPrivatePool,
+        resortOptionBeachCabana,
+        resortOptionVipTransfer,
+        resortOptionGolfBuggy,
       };
     }
 
-    const totalAdults =
-      activeDomain === 'hotel'
-        ? hotelAdults
-        : activeDomain === 'residence'
-        ? residenceOccupants
-        : activeDomain === 'restaurant'
-        ? restaurantCovers
-        : 1;
+    const totalAdults = activeDomain === 'hotel' ? hotelAdults : resortOccupants;
     const totalChildren = activeDomain === 'hotel' ? hotelChildren : 0;
     const computedOriginalAmount = Math.round(totalPrice * (ratesFromEur[paymentCurrency] || 1));
     const computedRateToDzd = ratesFromEur['DA'] / (ratesFromEur[paymentCurrency] || 1);
@@ -608,20 +456,10 @@ export const BookingModal: React.FC = () => {
 
   const getDomainIcon = () => {
     switch (activeDomain) {
-      case 'doctor':
-        return Stethoscope;
-      case 'clinic':
-        return HeartPulse;
       case 'hotel':
         return Bed;
-      case 'residence':
-        return Building2;
-      case 'restaurant':
-        return UtensilsCrossed;
-      case 'administration':
-        return Landmark;
-      case 'wellness':
-        return Sparkles;
+      case 'resort':
+        return Palmtree;
       default:
         return Hotel;
     }
@@ -632,53 +470,17 @@ export const BookingModal: React.FC = () => {
   // Localized Sheet Titles
   const getSheetTitle = () => {
     switch (activeDomain) {
-      case 'doctor':
-        return {
-          fr: 'Fiche de Consultation Médicale (Médecin)',
-          en: 'Doctor Medical Appointment Sheet',
-          ar: 'استمارة استشارة طبية وفحص',
-        };
-      case 'clinic':
-        return {
-          fr: 'Fiche d\'Admission & Plateau Clinique',
-          en: 'Clinic Care & Admission Sheet',
-          ar: 'استمارة فحص وعلاج بالمصحة',
-        };
       case 'hotel':
         return {
           fr: 'Fiche de Réservation Hôtelière',
           en: 'Hotel Reservation Sheet',
           ar: 'استمارة الحجز الفندقي',
         };
-      case 'residence':
+      case 'resort':
         return {
-          fr: 'Contrat & Fiche de Location Saisonnière',
-          en: 'Vacation Rental & Lease Sheet',
-          ar: 'استمارة الإيجار السياحي والعقد',
-        };
-      case 'restaurant':
-        return {
-          fr: 'Fiche de Réservation Table & Banquet',
-          en: 'Table Booking & Dining Sheet',
-          ar: 'استمارة حجز طاولة وخدمة مطعم',
-        };
-      case 'clinic':
-        return {
-          fr: 'Fiche de Rendez-Vous Médical & Consultation',
-          en: 'Medical Consultation & Appointment Sheet',
-          ar: 'استمارة موعد فحص واستشارة طبية',
-        };
-      case 'administration':
-        return {
-          fr: 'Fiche de Rendez-Vous Démarche Administrative',
-          en: 'Public Service Appointment Voucher',
-          ar: 'استمارة موعد إداري وخدمة عمومية',
-        };
-      case 'wellness':
-        return {
-          fr: 'Fiche de Réservation Séance Bien-être & Spa',
-          en: 'Spa & Wellness Care Sheet',
-          ar: 'استمارة حجز جلسة استجمام وسبا',
+          fr: 'Fiche de Réservation Resort & Complexe',
+          en: 'Resort & Villa Booking Sheet',
+          ar: 'استمارة حجز المنتجع والفلل',
         };
       default:
         return {
@@ -785,12 +587,8 @@ export const BookingModal: React.FC = () => {
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
                   placeholder={
-                    activeDomain === 'clinic'
-                      ? 'Ex: Jean-Marc Dumont'
-                      : activeDomain === 'administration'
-                      ? 'Ex: Fatima Benali'
-                      : activeDomain === 'restaurant'
-                      ? 'Ex: Cabinet Laurent & Associés (10 pers)'
+                    activeDomain === 'resort'
+                      ? 'Ex: Famille Delacroix (Villa 01)'
                       : 'Ex: Alexander Kaufmann'
                   }
                   className="w-full h-9 pl-8 pr-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -834,7 +632,7 @@ export const BookingModal: React.FC = () => {
           </div>
 
           {/* 2.b TENANT NATIONALITY & POLICE REGULATION (Algérien vs Étranger) */}
-          {(activeDomain === 'hotel' || activeDomain === 'residence') && (
+          {(activeDomain === 'hotel' || activeDomain === 'resort') && (
             <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200 text-xs">
@@ -1104,252 +902,50 @@ export const BookingModal: React.FC = () => {
             </div>
           )}
 
-          {/* === B. RESIDENCE PREDEFINED SHEET === */}
-          {activeDomain === 'residence' && (
+          {/* === B. RESORT & COMPLEXE PREDEFINED SHEET === */}
+          {activeDomain === 'resort' && (
             <div className="p-3 bg-amber-50/60 dark:bg-amber-950/20 rounded-xl border border-amber-200/70 dark:border-amber-900/40 space-y-3">
               <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-bold text-xs uppercase tracking-wider">
-                <Building2 size={14} />
-                <span>Modalités du Contrat de Location Saisonnière</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Nombre d'Occupants</label>
-                  <select
-                    value={residenceOccupants}
-                    onChange={(e) => setResidenceOccupants(Number(e.target.value))}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  >
-                    {[1, 2, 3, 4, 6, 8].map((n) => (
-                      <option key={n} value={n}>
-                        {n} occupant{n > 1 ? 's' : ''} (Capacité max)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Dépôt de Garantie (Caution)</label>
-                  <select
-                    value={residenceDepositType}
-                    onChange={(e) => setResidenceDepositType(e.target.value)}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="cb_preauth">Pré-autorisation CB (500 € bloqués)</option>
-                    <option value="cheque">Chèque de caution (800 €)</option>
-                    <option value="cash">Caution espèces à l'état des lieux (300 €)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 pt-1 text-[11px]">
-                <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={residenceCleaningIncluded}
-                    onChange={(e) => setResidenceCleaningIncluded(e.target.checked)}
-                    className="rounded text-amber-600"
-                  />
-                  <span>Ménage départ (+65€)</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={residenceLinenPack}
-                    onChange={(e) => setResidenceLinenPack(e.target.checked)}
-                    className="rounded text-amber-600"
-                  />
-                  <span>Draps & Serviettes (+25€)</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={residenceParkingOption}
-                    onChange={(e) => setResidenceParkingOption(e.target.checked)}
-                    className="rounded text-amber-600"
-                  />
-                  <span>Place parking (+12€/j)</span>
-                </label>
-              </div>
-            </div>
-          )}
-
-          {/* === C. RESTAURANT PREDEFINED SHEET === */}
-          {activeDomain === 'restaurant' && (
-            <div className="p-3 bg-orange-50/60 dark:bg-orange-950/20 rounded-xl border border-orange-200/70 dark:border-orange-900/40 space-y-3">
-              <div className="flex items-center gap-1.5 text-orange-800 dark:text-orange-300 font-bold text-xs uppercase tracking-wider">
-                <UtensilsCrossed size={14} />
-                <span>Paramètres de la Table & Service Culinaire</span>
+                <Palmtree size={14} />
+                <span>Paramètres Resort, Villas & Bungalows</span>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Nombre de Couverts</label>
+                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Capacité / Occupants</label>
                   <select
-                    value={restaurantCovers}
-                    onChange={(e) => setRestaurantCovers(Number(e.target.value))}
+                    value={resortOccupants}
+                    onChange={(e) => setResortOccupants(Number(e.target.value))}
                     className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   >
-                    {[1, 2, 3, 4, 5, 6, 8, 10, 12, 16].map((n) => (
+                    {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => (
                       <option key={n} value={n}>
-                        {n} couvert{n > 1 ? 's' : ''}
+                        {n} personne{n > 1 ? 's' : ''}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Service</label>
+                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Formule Resort</label>
                   <select
-                    value={restaurantService}
-                    onChange={(e) => setRestaurantService(e.target.value as any)}
+                    value={resortFormula}
+                    onChange={(e) => setResortFormula(e.target.value as any)}
                     className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   >
-                    <option value="lunch">Déjeuner (12h - 14h30)</option>
-                    <option value="dinner_1">Dîner 1er serv. (19h - 21h)</option>
-                    <option value="dinner_2">Dîner 2nd serv. (21h15 - 23h30)</option>
+                    <option value="all_inclusive">All-Inclusive Resort VIP (+60€ / pers / jour)</option>
+                    <option value="half_board">Demi-Pension Gourmande (+35€ / pers / jour)</option>
+                    <option value="spa_package">Formule Séjour & Soins Spa (+50€ / pers / jour)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Heure Arrivée</label>
+                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Heure Arrivée Souhaitée</label>
                   <input
                     type="time"
-                    value={restaurantTime}
-                    onChange={(e) => setRestaurantTime(e.target.value)}
+                    value={resortCheckinTime}
+                    onChange={(e) => setResortCheckinTime(e.target.value)}
                     className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Régime / Allergies</label>
-                  <select
-                    value={restaurantDietary}
-                    onChange={(e) => setRestaurantDietary(e.target.value)}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="none">Aucune restriction alimentaire</option>
-                    <option value="vegetarian">Végétarien / Végan</option>
-                    <option value="gluten_free">Sans gluten / Maladie cœliaque</option>
-                    <option value="halal">Sans porc / Halal</option>
-                    <option value="seafood_allergy">Allergie fruits de mer / Arachides</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Formule Menu</label>
-                  <select
-                    value={restaurantMenuFormula}
-                    onChange={(e) => setRestaurantMenuFormula(e.target.value)}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="a_la_carte">Menu Carte Gourmande (35€ / pers)</option>
-                    <option value="formule_affaires">Formule Affaires Midi (45€ / pers)</option>
-                    <option value="accord_mets_vins">Menu Accord Mets & Vins (75€ / pers)</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* === D. CLINIC & DOCTOR PREDEFINED SHEET === */}
-          {(activeDomain === 'clinic' || activeDomain === 'doctor') && (
-            <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/70 dark:border-emerald-900/40 space-y-3">
-              <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-bold text-xs uppercase tracking-wider">
-                <Stethoscope size={14} />
-                <span>Dossier Médical & Prise en Charge</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Motif de la Consultation</label>
-                  <select
-                    value={clinicConsultationMotif}
-                    onChange={(e) => setClinicConsultationMotif(e.target.value)}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="first_visit">Première consultation médicale</option>
-                    <option value="followup">Consultation de suivi / Contrôle</option>
-                    <option value="urgent">Urgence relative / Douleur aiguë</option>
-                    <option value="prescription">Renouvellement ordonnance & bilan</option>
-                    <option value="exam">Examen spécialisé (Écho / ECG / Prélèvement)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Régime de Sécurité Sociale</label>
-                  <select
-                    value={clinicCareCoverage}
-                    onChange={(e) => setClinicCareCoverage(e.target.value)}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="secteur1">Secteur 1 (Tarif conventionné)</option>
-                    <option value="secteur2">Secteur 2 avec OPTAM (Complémentaire)</option>
-                    <option value="ald100">Prise en charge ALD 100%</option>
-                    <option value="cmu">C2S / Complémentaire Solidaire (Tiers-payant)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">N° Sécurité Sociale / NIR (optionnel)</label>
-                  <input
-                    type="text"
-                    value={clinicSocialSecurity}
-                    onChange={(e) => setClinicSocialSecurity(e.target.value)}
-                    placeholder="1 85 06 75 ..."
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Heure du Rendez-Vous</label>
-                  <input
-                    type="time"
-                    value={clinicAppointmentTime}
-                    onChange={(e) => setClinicAppointmentTime(e.target.value)}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* === E. ADMINISTRATION PREDEFINED SHEET === */}
-          {activeDomain === 'administration' && (
-            <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/20 rounded-xl border border-indigo-200/70 dark:border-indigo-900/40 space-y-3">
-              <div className="flex items-center gap-1.5 text-indigo-800 dark:text-indigo-300 font-bold text-xs uppercase tracking-wider">
-                <Landmark size={14} />
-                <span>Instruction de la Démarche Administrative</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Type de Formalité Publique</label>
-                  <select
-                    value={adminProcedureType}
-                    onChange={(e) => setAdminProcedureType(e.target.value)}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="passport_cni">Dépôt Passeport biométrique & CNI</option>
-                    <option value="urbanisme">Dépôt Permis de construire & Urbanisme</option>
-                    <option value="social">Dossier CCAS / Aides sociales & Logement</option>
-                    <option value="etat_civil">Acte d'état civil & Mariage / Pacs</option>
-                    <option value="elu">Audience citoyenne avec l'élu référent</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">N° Pré-demande ANTS / Récépissé</label>
-                  <input
-                    type="text"
-                    value={adminPreDemandeNumber}
-                    onChange={(e) => setAdminPreDemandeNumber(e.target.value)}
-                    placeholder="ANTS-8937402"
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono"
                   />
                 </div>
               </div>
@@ -1358,103 +954,39 @@ export const BookingModal: React.FC = () => {
                 <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"
-                    checked={adminCheckIdentityDoc}
-                    onChange={(e) => setAdminCheckIdentityDoc(e.target.checked)}
-                    className="rounded text-indigo-600"
+                    checked={resortOptionPrivatePool}
+                    onChange={(e) => setResortOptionPrivatePool(e.target.checked)}
+                    className="rounded text-amber-600"
                   />
-                  <span>Pièce identité</span>
+                  <span>Piscine privée chauffée</span>
                 </label>
                 <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"
-                    checked={adminCheckProofOfAddress}
-                    onChange={(e) => setAdminCheckProofOfAddress(e.target.checked)}
-                    className="rounded text-indigo-600"
+                    checked={resortOptionBeachCabana}
+                    onChange={(e) => setResortOptionBeachCabana(e.target.checked)}
+                    className="rounded text-amber-600"
                   />
-                  <span>Justificatif dom.</span>
+                  <span>Cabana Plage Privée</span>
                 </label>
                 <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"
-                    checked={adminCheckPhoto}
-                    onChange={(e) => setAdminCheckPhoto(e.target.checked)}
-                    className="rounded text-indigo-600"
+                    checked={resortOptionVipTransfer}
+                    onChange={(e) => setResortOptionVipTransfer(e.target.checked)}
+                    className="rounded text-amber-600"
                   />
-                  <span>Photo ANTS</span>
+                  <span>Navette VIP Aéroport (+80€)</span>
                 </label>
                 <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"
-                    checked={adminCheckTaxStamp}
-                    onChange={(e) => setAdminCheckTaxStamp(e.target.checked)}
-                    className="rounded text-indigo-600"
+                    checked={resortOptionGolfBuggy}
+                    onChange={(e) => setResortOptionGolfBuggy(e.target.checked)}
+                    className="rounded text-amber-600"
                   />
-                  <span>Timbre fiscal</span>
+                  <span>Voiturette Resort (+30€/j)</span>
                 </label>
-              </div>
-            </div>
-          )}
-
-          {/* === F. WELLNESS PREDEFINED SHEET === */}
-          {activeDomain === 'wellness' && (
-            <div className="p-3 bg-purple-50/60 dark:bg-purple-950/20 rounded-xl border border-purple-200/70 dark:border-purple-900/40 space-y-3">
-              <div className="flex items-center gap-1.5 text-purple-800 dark:text-purple-300 font-bold text-xs uppercase tracking-wider">
-                <Sparkles size={14} />
-                <span>Protocole du Soin & Séance Bien-être</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Rituel / Soin Choisi</label>
-                  <select
-                    value={wellnessRitual}
-                    onChange={(e) => setWellnessRitual(e.target.value)}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="californian_massage">Massage Californien Relaxant (60 min - 80€)</option>
-                    <option value="rituel_balneo">Balnéo Privative Aromatique (90 min - 110€)</option>
-                    <option value="deep_tissue">Massage Deep Tissue Décontracturant (60 min - 90€)</option>
-                    <option value="soin_visage">Soin Visage Éclat Hydratant Bio (45 min - 65€)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Heure de la Séance</label>
-                  <input
-                    type="time"
-                    value={wellnessSessionTime}
-                    onChange={(e) => setWellnessSessionTime(e.target.value)}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Bilan Santé & Précautions</label>
-                  <select
-                    value={wellnessHealthCheck}
-                    onChange={(e) => setWellnessHealthCheck(e.target.value)}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="none">Aucune contre-indication médicale</option>
-                    <option value="pregnant">Grossesse en cours (&gt; 3 mois)</option>
-                    <option value="circulation">Problèmes circulatoires / Jambes lourdes</option>
-                    <option value="allergy">Allergie cutanée / Peau réactive</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center pt-5">
-                  <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300 text-[11px]">
-                    <input
-                      type="checkbox"
-                      checked={wellnessPackLuxe}
-                      onChange={(e) => setWellnessPackLuxe(e.target.checked)}
-                      className="rounded text-purple-600"
-                    />
-                    <span>Pack Peignoir & Huile Essentielle Luxe (+25€)</span>
-                  </label>
-                </div>
               </div>
             </div>
           )}
@@ -1463,13 +995,7 @@ export const BookingModal: React.FC = () => {
           <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                {activeDomain === 'clinic' || activeDomain === 'administration' || activeDomain === 'restaurant'
-                  ? language === 'fr'
-                    ? 'Date du Rendez-vous / Séance'
-                    : 'Date of Appointment'
-                  : language === 'fr'
-                  ? "Date d'arrivée / Début"
-                  : 'Start / Check-in Date'}
+                {language === 'fr' ? "Date d'arrivée / Début" : 'Start / Check-in Date'}
               </label>
               <input
                 type="date"
@@ -1482,11 +1008,7 @@ export const BookingModal: React.FC = () => {
 
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                {activeDomain === 'clinic' || activeDomain === 'administration' || activeDomain === 'restaurant'
-                  ? language === 'fr'
-                    ? 'Date de Fin (Idem si 1 jour)'
-                    : 'End Date'
-                  : language === 'fr'
+                {language === 'fr'
                   ? 'Date de départ / Fin'
                   : 'End / Check-out Date'}
               </label>
@@ -1850,7 +1372,7 @@ export const BookingModal: React.FC = () => {
                       <span className="font-bold text-slate-900 dark:text-white">
                         {activeDomain === 'hotel'
                           ? `${hotelAdults} adulte(s) ${hotelChildren > 0 ? `+ ${hotelChildren} enfant(s)` : ''}`
-                          : `${residenceOccupants} occupant(s)`}
+                          : `${resortOccupants} occupant(s)`}
                       </span>
                     </div>
                     <div>

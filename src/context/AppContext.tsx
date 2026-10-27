@@ -130,23 +130,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [currentDomain, setCurrentDomainState] = useState<DomainType>(() => {
-    return (localStorage.getItem('omnibook_domain') as DomainType) || 'hotel';
+    const saved = localStorage.getItem('omnibook_domain') as DomainType;
+    if (saved === 'hotel' || saved === 'resort') {
+      return saved;
+    }
+    return 'hotel';
   });
 
   const [currentRole, setCurrentRoleState] = useState<UserRole>(() => {
     return (localStorage.getItem('omnibook_role') as UserRole) || 'manager';
   });
 
-  const isViewAllowedForDomain = (view: ActiveAppView, domain: DomainType) => {
-    switch (view) {
-      case 'channels':
-      case 'housekeeping':
-        return domain === 'hotel' || domain === 'residence';
-      case 'pricing':
-        return domain === 'hotel' || domain === 'residence' || domain === 'wellness';
-      default:
-        return true;
-    }
+  const isViewAllowedForDomain = (_view: ActiveAppView, domain: DomainType) => {
+    return domain === 'hotel' || domain === 'resort';
   };
 
   const setCurrentDomain = (d: DomainType) => {
@@ -441,8 +437,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setBookings((prev) => [newBkg, ...prev]);
 
-    // Auto-issue proUSB guest card for hotel/residence bookings
-    if (bookingData.sector === 'hotel' || bookingData.sector === 'residence') {
+    // Auto-issue proUSB guest card for hotel/resort bookings
+    if (bookingData.sector === 'hotel' || bookingData.sector === 'resort') {
       // Expert hotelier: check-in must be before check-out; max stay sanity check
       const s = new Date(bookingData.startDate + 'T14:00');
       const e = new Date(bookingData.endDate + 'T12:00');

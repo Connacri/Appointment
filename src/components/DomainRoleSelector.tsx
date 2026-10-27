@@ -1,12 +1,7 @@
 import React from 'react';
 import {
   Hotel,
-  Building2,
-  UtensilsCrossed,
-  Stethoscope,
-  HeartPulse,
-  Landmark,
-  Sparkles,
+  Palmtree,
   UserCheck,
   Shield,
   Briefcase,
@@ -20,14 +15,8 @@ export const DomainRoleSelector: React.FC = () => {
   const { currentDomain, setCurrentDomain, currentRole, setCurrentRole, language } = useApp();
 
   const domainIcons: Record<DomainType, any> = {
-    doctor: Stethoscope,
-    clinic: HeartPulse,
     hotel: Hotel,
-    residence: Building2,
-    restaurant: UtensilsCrossed,
-    administration: Landmark,
-    wellness: Sparkles,
-    other: Sparkles,
+    resort: Palmtree,
   };
 
   const roles: { id: UserRole; label: { fr: string; en: string; ar: string }; icon: any }[] = [

@@ -53,21 +53,13 @@ export const BillingInvoicingView: React.FC = () => {
     {
       id: '1',
       description:
-        currentDomain === 'clinic'
-          ? 'Consultation médicale spécialisée'
-          : currentDomain === 'restaurant'
-          ? 'Menu dégustation & accords mets-vins'
-          : currentDomain === 'residence'
-          ? 'Location meublée avec services'
-          : currentDomain === 'administration'
-          ? 'Frais de dossier et timbres administratifs'
-          : currentDomain === 'wellness'
-          ? 'Soin thermal, massage & hydrothérapie'
-          : 'Prestation principale / Séjour hôtelier',
+        currentDomain === 'resort'
+          ? 'Séjour Villa Resort & Expérience Premium'
+          : 'Prestation d\'Hébergement / Séjour hôtelier',
       quantity: 1,
-      unitPrice: currentDomain === 'clinic' ? 75 : 120,
-      vatRate: currentDomain === 'clinic' || currentDomain === 'administration' ? 0 : 10,
-      total: currentDomain === 'clinic' ? 75 : 120,
+      unitPrice: currentDomain === 'resort' ? 320 : 120,
+      vatRate: 10,
+      total: currentDomain === 'resort' ? 320 : 120,
     },
   ]);
   const [newDeposit, setNewDeposit] = useState<number>(0);

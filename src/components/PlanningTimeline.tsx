@@ -428,15 +428,11 @@ export const PlanningTimeline: React.FC = () => {
             <span className="text-[11px] md:text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider truncate">
               {leftBarMode === 'mini'
                 ? 'Ress.'
-                : currentDomain === 'doctor'
-                ? (language === 'fr' ? 'Médecins & Cabinets' : language === 'ar' ? 'الأطباء والعيادات' : 'Doctors & Practices')
-                : currentDomain === 'clinic'
-                ? (language === 'fr' ? 'Plateau Clinique & Soins' : language === 'ar' ? 'أقسام المصحة' : 'Clinic Units')
                 : currentDomain === 'hotel'
                 ? (language === 'fr' ? 'Chambres & Suites' : language === 'ar' ? 'الغرف والأجنحة' : 'Rooms & Suites')
-                : currentDomain === 'restaurant'
-                ? (language === 'fr' ? 'Plan de Salle & Tables' : language === 'ar' ? 'مخطط الصالة والطاولات' : 'Dining Tables')
-                : (language === 'fr' ? 'Ressources' : 'Resources')}
+                : currentDomain === 'resort'
+                ? (language === 'fr' ? 'Villas, Bungalows & Suites' : language === 'ar' ? 'فلل وشاليهات المنتجع' : 'Resort Villas & Bungalows')
+                : (language === 'fr' ? 'Hébergements' : 'Accommodations')}
             </span>
             <span className="text-[9px] md:text-[10px] text-blue-600 dark:text-blue-400 font-medium truncate mt-0.5">
               {currentDomain.toUpperCase()}

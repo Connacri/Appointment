@@ -450,7 +450,7 @@ export const ProUsbLockSystemView: React.FC = () => {
   };
 
   const hotelRooms = resourceGroups
-    .filter((g) => g.sector === 'hotel' || g.sector === 'residence')
+    .filter((g) => g.sector === 'hotel' || g.sector === 'resort')
     .flatMap((g) => g.resources);
 
   return (

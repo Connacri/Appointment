@@ -1,12 +1,6 @@
 export type DomainType =
   | 'hotel'
-  | 'residence'
-  | 'restaurant'
-  | 'clinic'
-  | 'doctor'
-  | 'administration'
-  | 'wellness'
-  | 'other';
+  | 'resort';
 
 export type UserRole = 'manager' | 'receptionist' | 'staff' | 'client';
 
@@ -228,10 +222,10 @@ export interface AnalyticsTrendPoint {
   displayDate: string;
   totalBookings: number;
   hotelOccupancy: number; // in %
-  clinicAppointments: number;
+  resortOccupancy: number; // in %
   revenue: number;
   revPar: number;
-  teleconsultCount: number;
+  revPac: number;
 }
 
 export interface InternationalKpis {
@@ -239,10 +233,9 @@ export interface InternationalKpis {
   adr: number; // Average Daily Rate (EUR / DA)
   hotelOccupancyRate: number; // %
   alos: number; // Average Length of Stay (days)
-  clinicAppointmentsTotal: number;
-  clinicUtilizationRate: number; // % of capacity booked
-  clinicTeleconsultRatio: number; // %
-  wellnessBookingsTotal: number;
+  resortBookingsTotal: number;
+  resortOccupancyRate: number; // %
+  resortRevPac: number; // EUR / DA
   totalRevenue: number;
   taxCityCollected: number; // Taxe de séjour / tourist tax
 }

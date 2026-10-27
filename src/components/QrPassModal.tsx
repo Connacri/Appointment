@@ -14,13 +14,8 @@ import {
   AlertCircle,
   Share2,
   Printer,
-  Sparkles,
-  Building2,
   Bed,
-  Stethoscope,
-  HeartPulse,
-  UtensilsCrossed,
-  Landmark,
+  Palmtree,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { TimelineBooking, DomainType } from '../types/booking';
@@ -112,18 +107,8 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
 
   const getDomainIcon = () => {
     switch (booking.sector) {
-      case 'doctor':
-        return Stethoscope;
-      case 'clinic':
-        return HeartPulse;
-      case 'residence':
-        return Building2;
-      case 'restaurant':
-        return UtensilsCrossed;
-      case 'administration':
-        return Landmark;
-      case 'wellness':
-        return Sparkles;
+      case 'resort':
+        return Palmtree;
       default:
         return Bed;
     }

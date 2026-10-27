@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   FileText,
   Hotel,
-  Stethoscope,
+  Palmtree,
   Sparkles,
   Database,
   Receipt,
@@ -43,7 +43,7 @@ export const Sidebar: React.FC = () => {
 
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // Strictly filter navigation items by Role AND Domain to NEVER mix establishment screens
+  // Strictly filter navigation items by Role AND Domain for Hotel & Resort
   const allNavItems = [
     {
       id: 'planning',
@@ -51,93 +51,69 @@ export const Sidebar: React.FC = () => {
       icon: CalendarDays,
       view: 'planning' as const,
       roles: ['manager', 'receptionist', 'staff', 'client'],
-      domains: ['hotel', 'residence', 'restaurant', 'clinic', 'doctor', 'administration', 'wellness', 'other'] as DomainType[],
+      domains: ['hotel', 'resort'] as DomainType[],
     },
     {
       id: 'analytics',
-      label:
-        currentDomain === 'clinic' || currentDomain === 'doctor'
-          ? (language === 'fr' ? 'Analytique Médicale (D3)' : 'Clinical Analytics (D3)')
-          : currentDomain === 'restaurant'
-          ? (language === 'fr' ? 'Analytique Restauration (D3)' : 'Restaurant Analytics (D3)')
-          : (language === 'fr' ? 'Booking Analytics (D3)' : 'Booking Analytics (D3)'),
+      label: currentDomain === 'resort'
+        ? (language === 'fr' ? 'Analytics Resort & Villas (D3)' : 'Resort Analytics (D3)')
+        : (language === 'fr' ? 'Booking Analytics (D3)' : 'Booking Analytics (D3)'),
       icon: BarChart3,
       view: 'analytics' as const,
       roles: ['manager'],
-      domains: ['hotel', 'residence', 'restaurant', 'clinic', 'doctor', 'wellness'] as DomainType[],
+      domains: ['hotel', 'resort'] as DomainType[],
     },
     {
       id: 'billing',
-      label:
-        currentDomain === 'clinic' || currentDomain === 'doctor'
-          ? (language === 'fr' ? 'Honoraires & Factures' : 'Medical Billing')
-          : currentDomain === 'restaurant'
-          ? (language === 'fr' ? 'Additions & Encaissement' : 'Dining Checks & Billing')
-          : (language === 'fr' ? 'Facturation & Devis' : 'Billing & Quotes'),
+      label: language === 'fr' ? 'Facturation & Devis' : language === 'ar' ? 'الفواتير وعروض الأسعار' : 'Billing & Quotes',
       icon: Receipt,
       view: 'billing' as const,
       roles: ['manager', 'receptionist', 'client'],
-      domains: ['hotel', 'residence', 'restaurant', 'clinic', 'doctor', 'wellness', 'administration', 'other'] as DomainType[],
+      domains: ['hotel', 'resort'] as DomainType[],
     },
     {
       id: 'my_bookings',
-      label:
-        currentDomain === 'clinic' || currentDomain === 'doctor'
-          ? (language === 'fr' ? 'Dossiers Patients & RDV' : 'Patient Appointments')
-          : currentDomain === 'restaurant'
-          ? (language === 'fr' ? 'Réservations de Tables' : 'Table Reservations')
-          : currentDomain === 'administration'
-          ? (language === 'fr' ? 'Rendez-vous Usagers' : 'Public Appointments')
-          : (language === 'fr' ? 'Séjours & Réservations' : 'My Bookings'),
+      label: currentDomain === 'resort'
+        ? (language === 'fr' ? 'Séjours & Villas Resort' : 'Resort Bookings')
+        : (language === 'fr' ? 'Séjours & Réservations' : 'My Bookings'),
       icon: LayoutDashboard,
       view: 'my_bookings' as const,
       roles: ['manager', 'receptionist', 'client'],
-      domains: ['hotel', 'residence', 'restaurant', 'clinic', 'doctor', 'wellness', 'administration', 'other'] as DomainType[],
+      domains: ['hotel', 'resort'] as DomainType[],
     },
     {
       id: 'housekeeping',
-      label: language === 'fr' ? 'Housekeeping & Étages' : 'Housekeeping & Rooms',
+      label: currentDomain === 'resort'
+        ? (language === 'fr' ? 'Gouvernance & Entretien Villas' : 'Resort Housekeeping')
+        : (language === 'fr' ? 'Housekeeping & Étages' : 'Housekeeping & Rooms'),
       icon: Sparkles,
       view: 'housekeeping' as const,
       roles: ['manager', 'staff'],
-      domains: ['hotel', 'residence'] as DomainType[], // Strictly for hotel & residence!
+      domains: ['hotel', 'resort'] as DomainType[],
     },
     {
       id: 'tasks',
-      label:
-        currentDomain === 'clinic' || currentDomain === 'doctor'
-          ? (language === 'fr' ? 'Protocoles & Stérilisation' : 'Clinical Protocols')
-          : currentDomain === 'restaurant'
-          ? (language === 'fr' ? 'Mise en Place & Salle' : 'Mise en Place')
-          : (language === 'fr' ? 'Tâches PMS & Remise en État' : 'PMS Tasks'),
+      label: language === 'fr' ? 'Tâches PMS & Remise en État' : language === 'ar' ? 'مهام التشغيل والصيانة' : 'PMS Tasks',
       icon: ClipboardList,
       view: 'tasks' as const,
       roles: ['manager', 'receptionist', 'staff'],
-      domains: ['hotel', 'residence', 'clinic', 'doctor', 'restaurant', 'wellness'] as DomainType[],
+      domains: ['hotel', 'resort'] as DomainType[],
     },
     {
       id: 'stock',
-      label:
-        currentDomain === 'clinic' || currentDomain === 'doctor'
-          ? (language === 'fr' ? 'Pharmacie & Matériel' : 'Medical Supplies')
-          : currentDomain === 'restaurant'
-          ? (language === 'fr' ? 'Économat & Ingrédients' : 'F&B Inventory')
-          : (language === 'fr' ? 'Stock Linge & Minibar' : 'Linen & Minibar Stock'),
+      label: language === 'fr' ? 'Stock Linge & Équipements' : language === 'ar' ? 'المخزون والمستلزمات' : 'Linen & Supplies Stock',
       icon: Boxes,
       view: 'stock' as const,
       roles: ['manager', 'staff'],
-      domains: ['hotel', 'residence', 'clinic', 'doctor', 'restaurant', 'wellness'] as DomainType[],
+      domains: ['hotel', 'resort'] as DomainType[],
     },
     {
       id: 'pricing',
-      label:
-        currentDomain === 'wellness'
-          ? (language === 'fr' ? 'Tarifs Spa & Forfaits' : 'Spa Dynamic Rates')
-          : (language === 'fr' ? 'Yield & Dynamic Pricing' : 'Dynamic Pricing'),
+      label: language === 'fr' ? 'Yield & Dynamic Pricing' : language === 'ar' ? 'التسعير الديناميكي' : 'Dynamic Pricing',
       icon: Coins,
       view: 'pricing' as const,
       roles: ['manager'],
-      domains: ['hotel', 'residence', 'wellness'] as DomainType[], // Strictly hotel, residence, wellness!
+      domains: ['hotel', 'resort'] as DomainType[],
     },
     {
       id: 'channels',
@@ -145,7 +121,7 @@ export const Sidebar: React.FC = () => {
       icon: Globe,
       view: 'channels' as const,
       roles: ['manager', 'receptionist'],
-      domains: ['hotel', 'residence'] as DomainType[], // Strictly hotel & residence!
+      domains: ['hotel', 'resort'] as DomainType[],
     },
     {
       id: 'reports',
@@ -153,7 +129,7 @@ export const Sidebar: React.FC = () => {
       icon: CreditCard,
       view: 'reports' as const,
       roles: ['manager'],
-      domains: ['hotel', 'residence', 'clinic', 'doctor', 'restaurant', 'wellness', 'administration'] as DomainType[],
+      domains: ['hotel', 'resort'] as DomainType[],
     },
     {
       id: 'prousb',
@@ -161,7 +137,7 @@ export const Sidebar: React.FC = () => {
       icon: KeyRound,
       view: 'prousb' as const,
       roles: ['manager', 'receptionist', 'staff'],
-      domains: ['hotel', 'residence'] as DomainType[],
+      domains: ['hotel', 'resort'] as DomainType[],
     },
   ];
 
@@ -187,7 +163,7 @@ export const Sidebar: React.FC = () => {
                 {getTranslation('brandName', language)}
               </span>
               <span className="text-[10px] text-slate-400 truncate max-w-[140px] mt-0.5">
-                Front Desk & Clinic
+                Front Desk & Resort
               </span>
             </div>
           </div>
@@ -208,53 +184,37 @@ export const Sidebar: React.FC = () => {
           <span className="text-[10px] font-semibold tracking-wider uppercase text-slate-500 block mb-2 px-1">
             {language === 'fr' ? 'Départements' : language === 'ar' ? 'الأقسام' : 'Departments'}
           </span>
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-2 gap-1.5">
             <button
               onClick={() => {
                 setActiveSector('hotel');
                 setCurrentDomain('hotel');
               }}
-              className={`p-1.5 rounded text-xs flex flex-col items-center gap-1 transition-colors ${
+              className={`p-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
                 currentDomain === 'hotel'
-                  ? 'bg-blue-600 text-white font-medium'
-                  : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
+                  ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                  : 'bg-slate-850 text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
               title="Hôtellerie"
             >
               <Hotel size={14} />
-              <span className="text-[9px] truncate">Hôtel</span>
+              <span className="text-[11px] truncate font-medium">Hôtel</span>
             </button>
 
             <button
               onClick={() => {
-                setActiveSector('clinic');
-                setCurrentDomain('clinic');
+                setActiveSector('resort');
+                setCurrentDomain('resort');
               }}
-              className={`p-1.5 rounded text-xs flex flex-col items-center gap-1 transition-colors ${
-                currentDomain === 'clinic'
-                  ? 'bg-emerald-600 text-white font-medium'
-                  : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
+              className={`p-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                currentDomain === 'resort'
+                  ? 'bg-amber-600 text-white font-semibold shadow-xs'
+                  : 'bg-slate-850 text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
-              title="Clinique"
+              title="Resort & Complexe"
             >
-              <Stethoscope size={14} />
-              <span className="text-[9px] truncate">Clinique</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveSector('wellness');
-                setCurrentDomain('wellness');
-              }}
-              className={`p-1.5 rounded text-xs flex flex-col items-center gap-1 transition-colors ${
-                currentDomain === 'wellness'
-                  ? 'bg-purple-600 text-white font-medium'
-                  : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-              title="Spa & Wellness"
-            >
-              <Sparkles size={14} />
-              <span className="text-[9px] truncate">Spa / RDV</span>
+              <Palmtree size={14} />
+              <span className="text-[11px] truncate font-medium">Resort</span>
             </button>
           </div>
         </div>

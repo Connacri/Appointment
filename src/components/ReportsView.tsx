@@ -3,7 +3,7 @@ import {
   TrendingUp,
   CreditCard,
   Bed,
-  Stethoscope,
+  Palmtree,
   Sparkles,
   Users,
   CalendarCheck,
@@ -17,8 +17,7 @@ export const ReportsView: React.FC = () => {
   const totalBookings = bookings.length;
   const confirmedCount = bookings.filter((b) => b.status === 'confirmed' || b.status === 'checked_in').length;
   const hotelRevenue = bookings.filter((b) => b.sector === 'hotel').reduce((acc, b) => acc + b.totalPrice, 0);
-  const clinicRevenue = bookings.filter((b) => b.sector === 'clinic').reduce((acc, b) => acc + b.totalPrice, 0);
-  const otherRevenue = bookings.filter((b) => b.sector === 'wellness' || b.sector === 'other').reduce((acc, b) => acc + b.totalPrice, 0);
+  const resortRevenue = bookings.filter((b) => b.sector === 'resort').reduce((acc, b) => acc + b.totalPrice, 0);
 
   return (
     <div className="flex-1 p-4 md:p-6 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-6">
@@ -28,8 +27,8 @@ export const ReportsView: React.FC = () => {
         </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
           {language === 'fr'
-            ? 'Vue analytique des revenus, du taux d\'occupation et des réservations par secteur'
-            : 'Revenue analytics, occupancy rates, and multi-sector booking distribution'}
+            ? 'Vue analytique des revenus, du taux d\'occupation et des réservations Hôtel & Resort'
+            : 'Revenue analytics, occupancy rates, and booking distribution for Hotel & Resort'}
         </p>
       </div>
 
@@ -70,20 +69,20 @@ export const ReportsView: React.FC = () => {
             84.2 %
           </div>
           <span className="text-[11px] text-emerald-600 font-medium mt-1 block">
-            Optimal (Chambres 101-303)
+            Optimal (Chambres & Suites)
           </span>
         </div>
 
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase">Patients & Praticiens</span>
-            <Stethoscope size={18} className="text-teal-500" />
+            <span className="text-xs font-semibold uppercase">Taux d'Occupation Resort</span>
+            <Palmtree size={18} className="text-amber-500" />
           </div>
           <div className="text-2xl font-bold font-mono text-slate-900 dark:text-white">
-            92.0 %
+            91.5 %
           </div>
-          <span className="text-[11px] text-slate-400 mt-1 block">
-            Cabinets occupés sur la période
+          <span className="text-[11px] text-emerald-600 font-medium mt-1 block">
+            Villas & Bungalows Plage
           </span>
         </div>
       </div>
@@ -100,7 +99,7 @@ export const ReportsView: React.FC = () => {
               <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
                 <Bed size={14} /> Hôtellerie & Séjours
               </span>
-              <span className="font-mono">{hotelRevenue} €</span>
+              <span className="font-mono">{hotelRevenue.toLocaleString()} €</span>
             </div>
             <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
               <div
@@ -112,30 +111,15 @@ export const ReportsView: React.FC = () => {
 
           <div>
             <div className="flex items-center justify-between text-xs font-medium mb-1">
-              <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                <Stethoscope size={14} /> Clinique Médicale & Consultations
+              <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                <Palmtree size={14} /> Resort, Complexe & Villas
               </span>
-              <span className="font-mono">{clinicRevenue} €</span>
+              <span className="font-mono">{resortRevenue.toLocaleString()} €</span>
             </div>
             <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
               <div
-                className="h-full bg-emerald-500 rounded-full"
-                style={{ width: `${totalRevenue ? (clinicRevenue / totalRevenue) * 100 : 0}%` }}
-              />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between text-xs font-medium mb-1">
-              <span className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400">
-                <Sparkles size={14} /> Espace Bien-être, Spa & Autres RDV
-              </span>
-              <span className="font-mono">{otherRevenue} €</span>
-            </div>
-            <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-purple-500 rounded-full"
-                style={{ width: `${totalRevenue ? (otherRevenue / totalRevenue) * 100 : 0}%` }}
+                className="h-full bg-amber-500 rounded-full"
+                style={{ width: `${totalRevenue ? (resortRevenue / totalRevenue) * 100 : 0}%` }}
               />
             </div>
           </div>

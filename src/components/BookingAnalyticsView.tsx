@@ -3,7 +3,7 @@ import * as d3 from 'd3';
 import {
   TrendingUp,
   Bed,
-  Stethoscope,
+  Palmtree,
   Sparkles,
   Calendar,
   DollarSign,
@@ -28,7 +28,7 @@ export const BookingAnalyticsView: React.FC = () => {
   const { bookings, resourceGroups, language } = useApp();
   const [activeAnalyticsTab, setActiveAnalyticsTab] = useState<'resources' | 'business' | 'all'>('resources');
   const [timeRange, setTimeRange] = useState<'7d' | '14d' | '30d'>('14d');
-  const [activeMetricFilter, setActiveMetricFilter] = useState<'all' | 'occupancy' | 'clinic' | 'revenue'>('all');
+  const [activeMetricFilter, setActiveMetricFilter] = useState<'all' | 'occupancy' | 'resort' | 'revenue'>('all');
 
   const chartRef = useRef<SVGSVGElement | null>(null);
   const barChartRef = useRef<SVGSVGElement | null>(null);
@@ -38,9 +38,12 @@ export const BookingAnalyticsView: React.FC = () => {
     const days = timeRange === '7d' ? 7 : timeRange === '14d' ? 14 : 30;
     const points: AnalyticsTrendPoint[] = [];
 
-    const totalRooms = resourceGroups
+    const totalHotelRooms = resourceGroups
       .filter((g) => g.sector === 'hotel')
       .reduce((sum, g) => sum + g.resources.length, 0) || 10;
+    const totalResortUnits = resourceGroups
+      .filter((g) => g.sector === 'resort')
+      .reduce((sum, g) => sum + g.resources.length, 0) || 8;
 
     for (let i = 0; i < days; i++) {
       const d = new Date(2026, 9, 26); // Base Oct 26
@@ -56,43 +59,47 @@ export const BookingAnalyticsView: React.FC = () => {
       const activeHotelBookings = bookings.filter(
         (b) => b.sector === 'hotel' && b.status !== 'cancelled' && b.startDate <= iso && b.endDate > iso
       );
-      const activeClinicBookings = bookings.filter(
-        (b) => b.sector === 'clinic' && b.status !== 'cancelled' && b.startDate <= iso && b.endDate >= iso
+      const activeResortBookings = bookings.filter(
+        (b) => b.sector === 'resort' && b.status !== 'cancelled' && b.startDate <= iso && b.endDate > iso
       );
 
-      const occRate = Math.min(100, Math.round((activeHotelBookings.length / totalRooms) * 100));
-      const clinicCount = activeClinicBookings.length;
-      const dayRev = activeHotelBookings.reduce((acc, b) => acc + (b.totalPrice / 3), 0) + clinicCount * 75;
-      const revPar = Math.round(dayRev / totalRooms);
+      const hotelOcc = Math.min(100, Math.round((activeHotelBookings.length / totalHotelRooms) * 100));
+      const resortOcc = Math.min(100, Math.round((activeResortBookings.length / totalResortUnits) * 100));
+      const dayRev =
+        activeHotelBookings.reduce((acc, b) => acc + b.totalPrice / 3, 0) +
+        activeResortBookings.reduce((acc, b) => acc + b.totalPrice / 4, 0);
+      const revPar = Math.round(dayRev / totalHotelRooms);
+      const revPac = Math.round(dayRev / Math.max(1, activeHotelBookings.length + activeResortBookings.length));
 
       points.push({
         date: iso,
         displayDate: display,
-        totalBookings: activeHotelBookings.length + clinicCount,
-        hotelOccupancy: occRate,
-        clinicAppointments: clinicCount,
+        totalBookings: activeHotelBookings.length + activeResortBookings.length,
+        hotelOccupancy: hotelOcc,
+        resortOccupancy: resortOcc,
         revenue: Math.round(dayRev),
         revPar,
-        teleconsultCount: Math.round(clinicCount * 0.3),
+        revPac,
       });
     }
     return points;
   }, [bookings, resourceGroups, timeRange, language]);
 
-  // Compute USALI and International Healthcare KPIs
+  // Compute USALI and International Hospitality KPIs
   const kpis: InternationalKpis = useMemo(() => {
     const totalRooms = resourceGroups
       .filter((g) => g.sector === 'hotel')
       .reduce((sum, g) => sum + g.resources.length, 0) || 10;
+    const totalResort = resourceGroups
+      .filter((g) => g.sector === 'resort')
+      .reduce((sum, g) => sum + g.resources.length, 0) || 8;
 
     const hotelBookings = bookings.filter((b) => b.sector === 'hotel' && b.status !== 'cancelled');
-    const clinicBookings = bookings.filter((b) => b.sector === 'clinic' && b.status !== 'cancelled');
-    const wellnessBookings = bookings.filter((b) => (b.sector === 'wellness' || b.sector === 'other') && b.status !== 'cancelled');
+    const resortBookings = bookings.filter((b) => b.sector === 'resort' && b.status !== 'cancelled');
 
     const hotelRevenue = hotelBookings.reduce((sum, b) => sum + b.totalPrice, 0);
-    const clinicRevenue = clinicBookings.reduce((sum, b) => sum + b.totalPrice, 0);
-    const wellnessRevenue = wellnessBookings.reduce((sum, b) => sum + b.totalPrice, 0);
-    const totalRev = hotelRevenue + clinicRevenue + wellnessRevenue;
+    const resortRevenue = resortBookings.reduce((sum, b) => sum + b.totalPrice, 0);
+    const totalRev = hotelRevenue + resortRevenue;
 
     // ALOS (Average Length of Stay)
     let totalNights = 0;
@@ -104,15 +111,14 @@ export const BookingAnalyticsView: React.FC = () => {
 
     // ADR & RevPAR (USALI standard)
     const adr = totalNights > 0 ? Math.round(hotelRevenue / totalNights) : 110;
-    const averageOcc = Math.round(
+    const averageHotelOcc = Math.round(
       trendData.reduce((acc, p) => acc + p.hotelOccupancy, 0) / (trendData.length || 1)
     );
-    const revPar = Math.round(adr * (averageOcc / 100));
-
-    // Clinic KPIs
-    const clinicTotal = clinicBookings.length;
-    const clinicUtilization = Math.min(100, Math.round((clinicTotal / (4 * 7)) * 100)); // 4 doctors over period
-    const teleconsultRatio = 32;
+    const averageResortOcc = Math.round(
+      trendData.reduce((acc, p) => acc + p.resortOccupancy, 0) / (trendData.length || 1)
+    );
+    const revPar = Math.round(adr * (averageHotelOcc / 100));
+    const resortRevPac = resortBookings.length > 0 ? Math.round(resortRevenue / resortBookings.length) : 320;
 
     // Tourist city tax (2.80€ per guest night standard)
     const cityTax = Math.round(totalNights * 2.8);
@@ -120,12 +126,11 @@ export const BookingAnalyticsView: React.FC = () => {
     return {
       revPar,
       adr,
-      hotelOccupancyRate: averageOcc,
+      hotelOccupancyRate: averageHotelOcc,
       alos,
-      clinicAppointmentsTotal: clinicTotal,
-      clinicUtilizationRate: clinicUtilization,
-      clinicTeleconsultRatio: teleconsultRatio,
-      wellnessBookingsTotal: wellnessBookings.length,
+      resortBookingsTotal: resortBookings.length,
+      resortOccupancyRate: averageResortOcc,
+      resortRevPac,
       totalRevenue: totalRev,
       taxCityCollected: cityTax,
     };
@@ -136,25 +141,25 @@ export const BookingAnalyticsView: React.FC = () => {
     {
       id: 'ins_1',
       type: 'capacity',
-      sector: 'clinic',
+      sector: 'resort',
       priority: 'high',
       title: {
-        fr: 'Saturation des créneaux Dr. Alexander (Cardiologie)',
-        en: 'Dr. Alexander (Cardiology) Slot Saturation',
-        ar: 'تشبع مواعيد د. ألكسندر (أمراض القلب)',
+        fr: 'Forte demande sur les Villas avec Piscine Privée',
+        en: 'High Demand on Private Pool Resort Villas',
+        ar: 'طلب مرتفع على فيلات المنتجع مع مسبح خاص',
       },
       description: {
-        fr: 'Le taux d\'occupation atteint 94% sur les consultations du matin. 3 patients sont en liste d\'attente.',
-        en: 'Morning consultation occupancy has reached 94%. 3 patients are currently waitlisted.',
-        ar: 'نسبة الإشغال بلغت 94% في الفترات الصباحية، مع وجود 3 مرضى في قائمة الانتظار.',
+        fr: 'Le taux d\'occupation atteint 95% sur les villas Resort. 4 demandes de séjours en attente.',
+        en: 'Occupancy rate has reached 95% on Resort villas. 4 stay requests currently waitlisted.',
+        ar: 'نسبة الإشغال بلغت 95% في فيلات المنتجع مع 4 طلبات قيد الانتظار.',
       },
-      metric: '94% OCC',
+      metric: '95% OCC',
       recommendedAction: {
-        fr: 'Ouvrir 2 créneaux de téléconsultation supplémentaires en fin d\'après-midi (17h00 - 18h30).',
-        en: 'Open 2 additional late afternoon teleconsultation slots (5:00 PM - 6:30 PM).',
-        ar: 'فتح موعدين إضافيين للاستشارة عن بُعد في المساء (5:00 - 6:30 مساءً).',
+        fr: 'Proposer l\'upgrade vers la Villa Royale ou un bungalow front de mer avec formule VIP.',
+        en: 'Offer upgrade to the Royal Villa or beachfront bungalow with VIP package.',
+        ar: 'اقتراح ترقية الحجز إلى الفيلا الملكية أو بنغلو شاطئي مع باقة VIP.',
       },
-      potentialGain: '+180 € / sem',
+      potentialGain: '+420 € / séjour',
     },
     {
       id: 'ins_2',
@@ -230,8 +235,7 @@ export const BookingAnalyticsView: React.FC = () => {
 
     // Y scales
     const yOcc = d3.scaleLinear().domain([0, 100]).range([height, 0]);
-    const maxAppointments = d3.max(trendData, (d) => d.clinicAppointments) || 5;
-    const yClinic = d3.scaleLinear().domain([0, Math.max(8, maxAppointments)]).range([height, 0]);
+    const yResort = d3.scaleLinear().domain([0, 100]).range([height, 0]);
 
     // Grid lines
     g.append('g')
@@ -251,18 +255,18 @@ export const BookingAnalyticsView: React.FC = () => {
       .call((axis) => axis.select('.domain').attr('stroke', '#94a3b8'))
       .call((axis) => axis.selectAll('text').attr('fill', '#94a3b8').attr('font-size', '10px'));
 
-    // Y Axis Left (Occupancy %)
+    // Y Axis Left (Hotel Occupancy %)
     g.append('g')
       .call(d3.axisLeft(yOcc).ticks(5).tickFormat((d) => `${d}%`))
       .call((axis) => axis.select('.domain').remove())
       .call((axis) => axis.selectAll('text').attr('fill', '#0284c7').attr('font-size', '10px'));
 
-    // Y Axis Right (Clinic Appointments)
+    // Y Axis Right (Resort Occupancy %)
     g.append('g')
       .attr('transform', `translate(${width},0)`)
-      .call(d3.axisRight(yClinic).ticks(4))
+      .call(d3.axisRight(yResort).ticks(5).tickFormat((d) => `${d}%`))
       .call((axis) => axis.select('.domain').remove())
-      .call((axis) => axis.selectAll('text').attr('fill', '#10b981').attr('font-size', '10px'));
+      .call((axis) => axis.selectAll('text').attr('fill', '#f59e0b').attr('font-size', '10px'));
 
     // D3 Area Generator for Hotel Occupancy
     const areaGenerator = d3
@@ -307,31 +311,31 @@ export const BookingAnalyticsView: React.FC = () => {
         .attr('d', lineOcc);
     }
 
-    // Clinic Appointments Line
-    if (activeMetricFilter === 'all' || activeMetricFilter === 'clinic') {
-      const lineClinic = d3
+    // Resort Occupancy Line
+    if (activeMetricFilter === 'all' || activeMetricFilter === 'resort') {
+      const lineResort = d3
         .line<AnalyticsTrendPoint>()
         .x((d) => x(d.displayDate) || 0)
-        .y((d) => yClinic(d.clinicAppointments))
+        .y((d) => yResort(d.resortOccupancy))
         .curve(d3.curveMonotoneX);
 
       g.append('path')
         .datum(trendData)
         .attr('fill', 'none')
-        .attr('stroke', '#10b981')
+        .attr('stroke', '#f59e0b')
         .attr('stroke-width', 2.5)
         .attr('stroke-dasharray', '4 2')
-        .attr('d', lineClinic);
+        .attr('d', lineResort);
 
-      // Clinic Data points
-      g.selectAll('.clinic-dot')
+      // Resort Data points
+      g.selectAll('.resort-dot')
         .data(trendData)
         .enter()
         .append('circle')
         .attr('cx', (d) => x(d.displayDate) || 0)
-        .attr('cy', (d) => yClinic(d.clinicAppointments))
+        .attr('cy', (d) => yResort(d.resortOccupancy))
         .attr('r', 3.5)
-        .attr('fill', '#10b981')
+        .attr('fill', '#f59e0b')
         .attr('stroke', '#fff')
         .attr('stroke-width', 1.5);
     }
@@ -374,17 +378,18 @@ export const BookingAnalyticsView: React.FC = () => {
           .html(
             `<div class="font-bold border-b border-slate-700 pb-1 mb-1 text-slate-200">${d.displayDate} (${d.date})</div>` +
             `<div class="text-sky-400 font-medium">🏨 Occ. Hôtel : ${d.hotelOccupancy}%</div>` +
-            `<div class="text-emerald-400 font-medium">🩺 RDV Clinique : ${d.clinicAppointments} consultations</div>` +
-            `<div class="text-amber-400 font-mono">💶 Recette estimée : ${d.revenue} € (RevPAR : ${d.revPar}€)</div>`
+            `<div class="text-amber-400 font-medium">🌴 Occ. Resort & Villas : ${d.resortOccupancy}%</div>` +
+            `<div class="text-emerald-400 font-mono">💶 Recette estimée : ${d.revenue} € (RevPAR : ${d.revPar}€)</div>`
           );
       });
   }, [trendData, activeMetricFilter, timeRange]);
 
   // Export CSV
+  // Export CSV
   const handleExportCSV = () => {
-    let csv = 'Date,DisplayDate,HotelOccupancy_Pct,ClinicAppointments,EstimatedRevenue_EUR,RevPAR_EUR\n';
+    let csv = 'Date,DisplayDate,HotelOccupancy_Pct,ResortOccupancy_Pct,EstimatedRevenue_EUR,RevPAR_EUR\n';
     trendData.forEach((row) => {
-      csv += `${row.date},${row.displayDate},${row.hotelOccupancy},${row.clinicAppointments},${row.revenue},${row.revPar}\n`;
+      csv += `${row.date},${row.displayDate},${row.hotelOccupancy},${row.resortOccupancy},${row.revenue},${row.revPar}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -422,7 +427,7 @@ export const BookingAnalyticsView: React.FC = () => {
             }`}
           >
             <TrendingUp size={15} />
-            <span>🏨 Plannings & KPIs Métier (Hôtel / Clinique)</span>
+            <span>🏨 Plannings & KPIs Métier (Hôtel / Resort)</span>
           </button>
 
           <button
@@ -450,7 +455,7 @@ export const BookingAnalyticsView: React.FC = () => {
         <ResourceUsageDashboard />
       )}
 
-      {/* 2. BUSINESS HOSPITALITY & CLINIC ANALYTICS */}
+      {/* 2. BUSINESS HOSPITALITY & RESORT ANALYTICS */}
       {(activeAnalyticsTab === 'business' || activeAnalyticsTab === 'all') && (
         <div className="space-y-6 pt-2">
           {/* Header with Title & Action Controls */}
@@ -470,8 +475,8 @@ export const BookingAnalyticsView: React.FC = () => {
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {language === 'fr'
-                  ? 'Indicateurs USALI (RevPAR, ADR), taux d\'occupation hôtelier et flux de consultations cliniques'
-                  : 'USALI hospital metrics (RevPAR, ADR), lodging occupancy curves and healthcare consultation flows'}
+                  ? "Indicateurs USALI (RevPAR, ADR), taux d'occupation hôtelier et performances du Resort"
+                  : 'USALI metrics (RevPAR, ADR), lodging occupancy curves and Resort performance'}
               </p>
             </div>
 
@@ -504,7 +509,7 @@ export const BookingAnalyticsView: React.FC = () => {
             </div>
           </div>
 
-      {/* International Hospitality & Clinic KPI Cards */}
+      {/* International Hospitality & Resort KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {/* RevPAR */}
         <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
@@ -562,31 +567,31 @@ export const BookingAnalyticsView: React.FC = () => {
           </span>
         </div>
 
-        {/* Clinic Volume */}
+        {/* Resort Volume */}
         <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-1">
-            <span className="text-[11px] font-semibold uppercase">Volume Clinique</span>
-            <Stethoscope size={15} className="text-emerald-500" />
+            <span className="text-[11px] font-semibold uppercase">Activité Resort</span>
+            <Palmtree size={15} className="text-amber-500" />
           </div>
           <div className="text-xl font-bold font-mono text-slate-900 dark:text-white">
-            {kpis.clinicAppointmentsTotal} actes
+            {kpis.resortBookingsTotal} séjours
           </div>
-          <span className="text-[10px] text-emerald-600 font-semibold block mt-0.5">
-            {kpis.clinicUtilizationRate}% utilisation
+          <span className="text-[10px] text-amber-600 font-semibold block mt-0.5">
+            {kpis.resortOccupancyRate}% occupation
           </span>
         </div>
 
-        {/* Teleconsultation */}
+        {/* Resort RevPAC */}
         <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-1">
-            <span className="text-[11px] font-semibold uppercase">Téléconsultations</span>
+            <span className="text-[11px] font-semibold uppercase">RevPAC Resort</span>
             <Sparkles size={15} className="text-purple-500" />
           </div>
           <div className="text-xl font-bold font-mono text-slate-900 dark:text-white">
-            {kpis.clinicTeleconsultRatio} %
+            {kpis.resortRevPac} €
           </div>
           <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold block mt-0.5">
-            Conforme télémédecine
+            Villas & Bungalows VIP
           </span>
         </div>
       </div>
@@ -625,18 +630,18 @@ export const BookingAnalyticsView: React.FC = () => {
               }`}
             >
               <span className="w-2 h-2 rounded-full bg-sky-500 inline-block" />
-              Taux d'Occ. (%)
+              Occ. Hôtel (%)
             </button>
             <button
-              onClick={() => setActiveMetricFilter('clinic')}
+              onClick={() => setActiveMetricFilter('resort')}
               className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-colors flex items-center gap-1 ${
-                activeMetricFilter === 'clinic'
-                  ? 'bg-emerald-500 text-white'
-                  : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                activeMetricFilter === 'resort'
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
               }`}
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-              RDV Clinique
+              <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+              Occ. Resort (%)
             </button>
           </div>
         </div>

@@ -8,9 +8,9 @@ export const translations = {
     ar: 'أومني بوك',
   },
   tagline: {
-    fr: 'Hôtellerie, Clinique Médicale & Services',
-    en: 'Hospitality, Medical Clinic & Services',
-    ar: 'الفنادق، العيادات الطبية والخدمات',
+    fr: 'Hôtellerie, Resort & Gestion PMS',
+    en: 'Hospitality, Resort & PMS Management',
+    ar: 'الفنادق، المنتجعات وإدارة المنشآت',
   },
   navExplore: {
     fr: 'Découvrir',
@@ -35,31 +35,26 @@ export const translations = {
 
   // Sectors & Filters
   sectorAll: {
-    fr: 'Tous les services',
-    en: 'All Services',
-    ar: 'جميع الخدمات',
+    fr: 'Tous les établissements',
+    en: 'All Establishments',
+    ar: 'جميع المنشآت',
   },
   sectorHotel: {
     fr: 'Hôtellerie & Séjours',
     en: 'Hotels & Stays',
     ar: 'الفنادق والإقامة',
   },
-  sectorClinic: {
-    fr: 'Clinique & Médecins',
-    en: 'Clinics & Doctors',
-    ar: 'العيادات والأطباء',
-  },
-  sectorWellness: {
-    fr: 'Bien-être & Autres RDV',
-    en: 'Wellness & Appointments',
-    ar: 'العافية ومواعيد أخرى',
+  sectorResort: {
+    fr: 'Resort & Villas',
+    en: 'Resort & Villas',
+    ar: 'المنتجعات والفيلات',
   },
 
   // Search & Sorting
   searchPlaceholder: {
-    fr: 'Rechercher une chambre, un médecin, une spécialité ou un soin...',
-    en: 'Search a room, doctor, medical specialty, or wellness service...',
-    ar: 'ابحث عن غرفة، طبيب، تخصص طبي، أو خدمة استرخاء...',
+    fr: 'Rechercher une chambre, une villa, un bungalow ou un client...',
+    en: 'Search a room, villa, bungalow, or guest...',
+    ar: 'ابحث عن غرفة، فيلا، بنغلو، أو نزيل...',
   },
   filterBy: {
     fr: 'Filtrer',
