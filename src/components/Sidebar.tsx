@@ -267,16 +267,14 @@ export const Sidebar: React.FC = () => {
             setIsObjectBoxOpen(true);
             setIsSidebarMobileOpen(false);
           }}
-          className="w-full flex items-center gap-2.5 px-3 min-h-[38px] py-1.5 rounded-xl text-xs font-semibold bg-cyan-950/60 border border-cyan-800/60 text-cyan-300 hover:bg-cyan-900/50 transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-850 transition-colors cursor-pointer"
           title="Inspecteur ObjectBox Embedded DB Engine"
         >
           <Database size={16} className="text-cyan-400 shrink-0" />
           {(!isCollapsed || isMobileView) && (
             <div className="flex items-center justify-between w-full">
-              <span className="truncate">ObjectBox DB</span>
-              <span className="px-1.5 py-0.5 bg-cyan-500 text-slate-950 font-bold rounded-md text-[10px]">
-                Sync
-              </span>
+              <span className="truncate">Base ObjectBox</span>
+              <span className="text-[10px] text-slate-400 font-mono">Embarquée</span>
             </div>
           )}
         </button>
@@ -287,16 +285,14 @@ export const Sidebar: React.FC = () => {
             setIsCockpitOpen(true);
             setIsSidebarMobileOpen(false);
           }}
-          className="w-full flex items-center gap-2.5 px-3 min-h-[38px] py-1.5 rounded-xl text-xs font-semibold bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/50 transition-colors cursor-pointer"
-          title="AGENTS.md Health Scorecard & Releases"
+          className="w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-850 transition-colors cursor-pointer"
+          title="Contrat de développement & Spécifications AGENTS.md"
         >
           <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
           {(!isCollapsed || isMobileView) && (
             <div className="flex items-center justify-between w-full">
-              <span className="truncate">AGENTS.md</span>
-              <span className="px-1.5 py-0.5 bg-emerald-500 text-slate-950 font-bold rounded-md text-[10px]">
-                99/100
-              </span>
+              <span className="truncate">Spécifications CI/CD</span>
+              <span className="text-[10px] text-emerald-400 font-mono">AGENTS.md</span>
             </div>
           )}
         </button>
@@ -307,13 +303,13 @@ export const Sidebar: React.FC = () => {
             setIsLegalModalOpen(true);
             setIsSidebarMobileOpen(false);
           }}
-          className="w-full flex items-center gap-2.5 px-3 min-h-[38px] py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-850 transition-colors cursor-pointer"
           title="Politique de Confidentialité et Suppression de Compte (AGENTS.md §19.3)"
         >
           <FileText size={16} className="shrink-0" />
           {(!isCollapsed || isMobileView) && (
             <span className="truncate">
-              {language === 'fr' ? 'Légal & Données' : language === 'ar' ? 'الخصوصية والحساب' : 'Legal & Privacy'}
+              {language === 'fr' ? 'Légal & Confidentialité' : language === 'ar' ? 'الخصوصية والحساب' : 'Legal & Privacy'}
             </span>
           )}
         </button>

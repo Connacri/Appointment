@@ -12,15 +12,20 @@ import {
 import { useApp } from '../context/AppContext';
 
 export const HousekeepingView: React.FC = () => {
-  const { resourceGroups, updateHousekeepingStatus, language } = useApp();
+  const { resourceGroups, updateHousekeepingStatus, language, currentDomain } = useApp();
 
-  const hotelGroups = resourceGroups.filter((g) => g.sector === 'hotel');
-  const allRooms = hotelGroups.flatMap((g) => g.resources);
+  const activeGroups = resourceGroups.filter((g) => g.sector === currentDomain);
+  const allRooms = activeGroups.flatMap((g) => g.resources);
 
   const cleanCount = allRooms.filter((r) => r.housekeepingStatus === 'clean').length;
   const cleaningCount = allRooms.filter((r) => r.housekeepingStatus === 'cleaning').length;
   const dirtyCount = allRooms.filter((r) => r.housekeepingStatus === 'dirty').length;
   const oooCount = allRooms.filter((r) => r.housekeepingStatus === 'out_of_order').length;
+
+  const isResort = currentDomain === 'resort';
+  const unitLabel = isResort
+    ? (language === 'fr' ? 'Villas & Bungalows' : language === 'ar' ? 'الفلل والشاليهات' : 'Villas & Bungalows')
+    : (language === 'fr' ? 'Chambres & Étages' : language === 'ar' ? 'الغرف والطوابق' : 'Rooms & Floors');
 
   return (
     <div className="flex-1 p-4 md:p-6 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-6">
@@ -29,16 +34,20 @@ export const HousekeepingView: React.FC = () => {
           <Sparkles size={20} className="text-emerald-500" />
           <span>
             {language === 'fr'
-              ? 'Gouvernance & Statuts d\'Entretien (Housekeeping)'
+              ? `Gouvernance & Entretien (${unitLabel})`
               : language === 'ar'
-              ? 'إدارة نظافة وتجهيز الغرف'
-              : 'Housekeeping & Turnaround Management'}
+              ? `إدارة نظافة وتجهيز (${unitLabel})`
+              : `Housekeeping & Turnover (${unitLabel})`}
           </span>
         </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-          {language === 'fr'
-            ? 'Gestion des rotations de chambres, fenêtres de désinfection et contrôle qualité'
-            : 'Room turnover control, sanitation windows, and housekeeping quality assurance'}
+          {isResort
+            ? (language === 'fr'
+                ? 'Gestion des rotations de villas, contrôle des piscines privées et certification propreté'
+                : 'Villa turnaround control, private pool checks, and luxury cleanliness certification')
+            : (language === 'fr'
+                ? 'Gestion des rotations de chambres, fenêtres de désinfection et contrôle qualité'
+                : 'Room turnover control, sanitation windows, and housekeeping quality assurance')}
         </p>
       </div>
 
@@ -87,7 +96,7 @@ export const HousekeepingView: React.FC = () => {
 
       {/* Room Turnover Matrix */}
       <div className="space-y-4">
-        {hotelGroups.map((grp) => (
+        {activeGroups.map((grp) => (
           <div
             key={grp.id}
             className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3"
@@ -98,7 +107,7 @@ export const HousekeepingView: React.FC = () => {
                 <span>{grp.name[language] || grp.name.en}</span>
               </span>
               <span className="text-xs text-slate-400 font-mono">
-                {grp.resources.length} chambres
+                {grp.resources.length} {isResort ? 'unités' : 'chambres'}
               </span>
             </div>
 

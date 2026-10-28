@@ -35,6 +35,7 @@ export const TasksManagementView: React.FC = () => {
     language,
     currentRole,
     resourceGroups,
+    currentDomain,
   } = useApp();
 
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'done'>('open');
@@ -44,17 +45,19 @@ export const TasksManagementView: React.FC = () => {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(tasks[0]?.id || null);
 
   // New task modal state
+  const activeRooms = resourceGroups
+    .filter((g) => g.sector === currentDomain)
+    .flatMap((g) => g.resources);
+
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
-  const [newRoom, setNewRoom] = useState('CV-101');
+  const [newRoom, setNewRoom] = useState(activeRooms[0]?.name || (currentDomain === 'resort' ? 'Villa Emeraude' : 'CV-101'));
   const [newTypeName, setNewTypeName] = useState('Nettoyage départ à fond');
   const [newCategory, setNewCategory] = useState<PmsTask['category']>('Ménage');
   const [newAssignee, setNewAssignee] = useState('Amina');
   const [newPriority, setNewPriority] = useState<'normal' | 'urgent'>('normal');
   const [newNote, setNewNote] = useState('');
 
-  const hotelRooms = resourceGroups
-    .filter((g) => g.sector === 'hotel')
-    .flatMap((g) => g.resources);
+  const hotelRooms = activeRooms;
 
   // Filter tasks
   const filteredTasks = tasks.filter((t) => {

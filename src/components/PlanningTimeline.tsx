@@ -413,6 +413,25 @@ export const PlanningTimeline: React.FC = () => {
         </div>
       </div>
 
+      {/* Subtle 'Today' pill indicator anchored to the top of the scrollable timeline container, remains visible even when scrolling horizontally */}
+      {timelineSync.isTodayInRange && (
+        <button
+          type="button"
+          onClick={scrollToToday}
+          className="absolute top-14 sm:top-15 right-3 sm:right-6 z-40 px-3 py-1 rounded-full text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/70 shadow-md backdrop-blur-md flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-all cursor-pointer select-none active:scale-95 group"
+          title={language === 'fr' ? 'Centrer la vue sur Aujourd’hui' : language === 'ar' ? 'الانتقال إلى اليوم' : 'Scroll to Today'}
+        >
+          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
+          <span className="font-bold tracking-tight">
+            {language === 'fr' ? 'Aujourd’hui' : language === 'ar' ? 'اليوم' : 'Today'}
+          </span>
+          <span className="text-[11px] font-mono opacity-85 tabular-nums">
+            {timelineSync.currentTimeStr}
+          </span>
+          <Clock size={12} className="opacity-60 group-hover:scale-110 transition-transform shrink-0" />
+        </button>
+      )}
+
       {/* Main Gantt Matrix: Left Sticky Resource Tree + Right Scrollable Day Matrix */}
       <div
         ref={scrollContainerRef}
@@ -697,23 +716,25 @@ export const PlanningTimeline: React.FC = () => {
                                     className={`absolute top-1.5 h-9 rounded-md px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-sm hover:brightness-105 active:scale-[0.98] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
                                   >
                                     <div className="flex items-center gap-1.5 truncate min-w-0">
-                                      {/* Person icons: if multiple occupants in the room, render multiple person icons */}
+                                      {/* Person icons: if multiple occupants occupy the room, render multiple person icons */}
                                       <div
-                                        className="flex items-center -space-x-1 shrink-0"
+                                        className="flex items-center gap-0.5 shrink-0 bg-black/20 dark:bg-black/35 px-1 py-0.5 rounded"
                                         title={`${occupantsCount} occupant(s) : ${adults} adulte(s)${children > 0 ? `, ${children} enfant(s)` : ''}`}
                                       >
-                                        {Array.from({ length: Math.min(occupantsCount, 4) }).map((_, idx) => (
+                                        {Array.from({ length: Math.min(occupantsCount, barWidth > 120 ? 4 : 2) }).map((_, idx) => (
                                           <User
                                             key={idx}
                                             size={11}
-                                            className={`shrink-0 ${
-                                              idx > 0 ? 'opacity-90 text-amber-300' : 'opacity-100'
+                                            className={`shrink-0 drop-shadow-xs ${
+                                              idx > 0 ? 'text-amber-300 opacity-95' : 'text-white opacity-100'
                                             }`}
                                           />
                                         ))}
-                                        {occupantsCount > 4 && (
-                                          <span className="text-[8px] font-bold font-mono pl-0.5">+{occupantsCount - 4}</span>
-                                        )}
+                                        {(occupantsCount > 2 && barWidth <= 120) || occupantsCount > 4 ? (
+                                          <span className="text-[9px] font-bold font-mono text-white leading-none pl-0.5">
+                                            ×{occupantsCount}
+                                          </span>
+                                        ) : null}
                                       </div>
 
                                       {/* Nationality indicator */}

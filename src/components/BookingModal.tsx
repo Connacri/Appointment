@@ -448,6 +448,17 @@ export const BookingModal: React.FC = () => {
     setSelectedBooking(null);
   };
 
+  // Keyboard accessibility hook called unconditionally BEFORE any early exit
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        closeModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
   // Safe early exit for closed modal - Placed AFTER all hooks have been unconditionally called!
   if (!isOpen) return null;
 
@@ -493,16 +504,6 @@ export const BookingModal: React.FC = () => {
 
   const sheetTitle = getSheetTitle();
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        closeModal();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
-
   return (
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in overflow-y-auto"
@@ -539,11 +540,13 @@ export const BookingModal: React.FC = () => {
           </div>
 
           <button
+            type="button"
             onClick={closeModal}
-            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            title="Fermer"
+            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-blue-500"
+            title="Fermer la boîte de dialogue"
+            aria-label="Fermer"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
@@ -1257,13 +1260,13 @@ export const BookingModal: React.FC = () => {
             <button
               type="button"
               onClick={closeModal}
-              className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-colors text-xs"
+              className="min-h-[44px] px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold transition-colors text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-slate-400"
             >
               {language === 'fr' ? 'Annuler' : language === 'ar' ? 'إلغاء' : 'Cancel'}
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
+              className="min-h-[44px] px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <CheckCircle2 size={16} />
               <span>
