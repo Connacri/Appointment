@@ -12,7 +12,7 @@
  * - Live Hex Console & Hardware Diagnostics
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   KeyRound,
   ShieldCheck,
@@ -186,6 +186,80 @@ export const ProUsbLockSystemView: React.FC = () => {
         minute: '2-digit',
       })
     : null;
+
+  /**
+   * Vrais bâtiments et étages existants pour les cartes Étage / Bâtiment :
+   *  1. si une base CardLock.mdb est importée → distinct `RoomInfo.BldNo` et
+   *     `RoomInfo.FlrNo` (la source de vérité du logiciel d'origine) ;
+   *  2. sinon → dérivés des ressources du planning en cours (champs
+   *     `building` / `floor`, ou préfixe du numéro de chambre).
+   * Ne propose JAMAIS de bâtiment/étage inexistant.
+   */
+  const { availableBuildings, availableFloors } = useMemo(() => {
+    const buildings = new Map<number, number>(); // no → nb de chambres
+    const floors = new Map<number, number>();
+
+    if (mdbSnapshot && mdbSnapshot.rooms.length > 0) {
+      for (const r of mdbSnapshot.rooms) {
+        if (r.building > 0) buildings.set(r.building, (buildings.get(r.building) ?? 0) + 1);
+        if (r.floor > 0) floors.set(r.floor, (floors.get(r.floor) ?? 0) + 1);
+      }
+    } else {
+      // Repli : ressources hôtelières du planning (sans base importée).
+      const hotelResources = resourceGroups
+        .filter((g) => g.sector === 'hotel')
+        .flatMap((g) => g.resources);
+      for (const res of hotelResources) {
+        const bld = parseInt(res.building ?? '', 10);
+        if (Number.isFinite(bld) && bld > 0) {
+          buildings.set(bld, (buildings.get(bld) ?? 0) + 1);
+        }
+        const flr = parseInt(res.floor ?? '', 10);
+        const flrFromName = Number.isFinite(flr) && flr > 0 ? flr : parseInt((res.name || '')[0] ?? '', 10);
+        if (Number.isFinite(flrFromName) && flrFromName > 0) {
+          floors.set(flrFromName, (floors.get(flrFromName) ?? 0) + 1);
+        }
+      }
+    }
+
+    // Repli final : jamais de liste vide (l'utilisateur doit pouvoir encoder).
+    if (buildings.size === 0) buildings.set(1, 0);
+    if (floors.size === 0) floors.set(1, 0);
+
+    const bldNames = new Map<number, string>();
+    if (mdbSnapshot) {
+      for (const b of mdbSnapshot.buildings) bldNames.set(b.no, b.name);
+    }
+
+    return {
+      availableBuildings: [...buildings.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([no, count]) => ({
+          no,
+          label: bldNames.get(no)
+            ? `${bldNames.get(no)} (Bâtiment ${no} — ${count} chambres)`
+            : `Bâtiment ${no}${count ? ` — ${count} chambres` : ''}`,
+        })),
+      availableFloors: [...floors.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([no, count]) => ({
+          no,
+          label: `Étage ${no}${count ? ` — ${count} chambres` : ''}`,
+        })),
+    };
+  }, [mdbSnapshot, resourceGroups]);
+
+  // Après un import de base, une sélection devenue invalide (ex. étage 5
+  // alors que la base n'a que les étages 1 et 2) est réalignée sur la
+  // première valeur réellement existante.
+  useEffect(() => {
+    const floorNos = availableFloors.map((f) => f.no);
+    const buildingNos = availableBuildings.map((b) => b.no);
+    if (!floorNos.includes(staffFloorNo)) setStaffFloorNo(floorNos[0]);
+    if (!buildingNos.includes(staffBuildingNo)) setStaffBuildingNo(buildingNos[0]);
+    if (!floorNos.includes(commissionFloor)) setCommissionFloor(floorNos[0]);
+    if (!buildingNos.includes(commissionBuilding)) setCommissionBuilding(buildingNos[0]);
+  }, [availableFloors, availableBuildings, staffFloorNo, staffBuildingNo, commissionFloor, commissionBuilding]);
 
   /**
    * L'ID et l'Operator Code affichés par CardLock.exe ne sont pas dans la carte :
@@ -1345,12 +1419,17 @@ export const ProUsbLockSystemView: React.FC = () => {
                     onChange={(e) => setStaffFloorNo(Number(e.target.value))}
                     className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
                   >
-                    {[1, 2, 3, 4, 5, 6].map((fl) => (
-                      <option key={fl} value={fl}>
-                        Étage {fl} (Ouvre chambres {fl}01-{fl}99)
+                    {availableFloors.map((fl) => (
+                      <option key={fl.no} value={fl.no}>
+                        {fl.label}
                       </option>
                     ))}
                   </select>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    {mdbStatus.connected
+                      ? 'Étages réels de la base CardLock.mdb importée.'
+                      : 'Étages dérivés des chambres du planning (importez la base pour les valeurs exactes).'}
+                  </p>
                 </div>
               )}
 
@@ -1364,10 +1443,17 @@ export const ProUsbLockSystemView: React.FC = () => {
                     onChange={(e) => setStaffBuildingNo(Number(e.target.value))}
                     className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
                   >
-                    <option value={1}>Bâtiment Principal (Bld 1)</option>
-                    <option value={2}>Résidence Annexe (Bld 2)</option>
-                    <option value={3}>Pavillon Suites (Bld 3)</option>
+                    {availableBuildings.map((b) => (
+                      <option key={b.no} value={b.no}>
+                        {b.label}
+                      </option>
+                    ))}
                   </select>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    {mdbStatus.connected
+                      ? 'Bâtiments réels de la base CardLock.mdb importée.'
+                      : 'Bâtiments dérivés du planning (importez la base pour les noms exacts).'}
+                  </p>
                 </div>
               )}
 
@@ -1592,8 +1678,16 @@ export const ProUsbLockSystemView: React.FC = () => {
                 <div className="space-y-2">
                   <input type="text" value={commissionRoom} onChange={(e)=>setCommissionRoom(e.target.value)} placeholder="Chambre (ex: 101)" className="w-full p-2 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
                   <div className="flex gap-2">
-                    <input type="number" min={1} max={99} value={commissionFloor} onChange={(e)=>setCommissionFloor(Math.max(1,parseInt(e.target.value)||1))} placeholder="Étage" className="w-full p-2 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
-                    <input type="number" min={1} max={99} value={commissionBuilding} onChange={(e)=>setCommissionBuilding(Math.max(1,parseInt(e.target.value)||1))} placeholder="Bâtiment" className="w-full p-2 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
+                    <select value={commissionFloor} onChange={(e)=>setCommissionFloor(Number(e.target.value))} className="w-full p-2 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                      {availableFloors.map((fl) => (
+                        <option key={fl.no} value={fl.no}>{fl.label}</option>
+                      ))}
+                    </select>
+                    <select value={commissionBuilding} onChange={(e)=>setCommissionBuilding(Number(e.target.value))} className="w-full p-2 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                      {availableBuildings.map((b) => (
+                        <option key={b.no} value={b.no}>{b.label}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="flex gap-2">
                     <input type="number" min={1} max={3650} value={commissionValidityDays} onChange={(e)=>setCommissionValidityDays(Math.max(1,parseInt(e.target.value)||365))} placeholder="Durée validité (jours)" className="w-full p-2 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
@@ -1629,10 +1723,23 @@ export const ProUsbLockSystemView: React.FC = () => {
                   <button onClick={() => handleIssueCommissioning('building')} disabled={isWriting} className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs">Carte Bâtiment (0xC0)</button>
                   <button onClick={() => handleIssueCommissioning('master')} disabled={isWriting} className="py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs col-span-2">Passe Général Master (0xB0)</button>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-[10px] text-amber-800 dark:text-amber-200">
+                <div className="grid grid-cols-2 gap-2 text-[10px] text-amber-800 dark:text-amber-200">
                   <div><strong>Durée</strong> <input type="number" min={1} max={3650} value={commissionValidityDays} onChange={e=>setCommissionValidityDays(Math.max(1,parseInt(e.target.value)||365))} className="w-full p-1 text-xs rounded bg-white dark:bg-slate-800" /> j</div>
                   <div><strong>Heure début</strong> <input type="number" min={0} max={23} value={commissionValidityHour} onChange={e=>setCommissionValidityHour(Math.max(0,Math.min(23,parseInt(e.target.value)||12)))} className="w-full p-1 text-xs rounded bg-white dark:bg-slate-800" />h</div>
-                  <div><strong>Étage</strong> <input type="number" min={1} max={99} value={commissionFloor} onChange={e=>setCommissionFloor(Math.max(1,parseInt(e.target.value)||1))} className="w-full p-1 text-xs rounded bg-white dark:bg-slate-800" /></div>
+                  <div><strong>Étage</strong>
+                    <select value={commissionFloor} onChange={e=>setCommissionFloor(Number(e.target.value))} className="w-full p-1 text-xs rounded bg-white dark:bg-slate-800">
+                      {availableFloors.map((fl) => (
+                        <option key={fl.no} value={fl.no}>{fl.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div><strong>Bâtiment</strong>
+                    <select value={commissionBuilding} onChange={e=>setCommissionBuilding(Number(e.target.value))} className="w-full p-1 text-xs rounded bg-white dark:bg-slate-800">
+                      {availableBuildings.map((b) => (
+                        <option key={b.no} value={b.no}>{b.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
