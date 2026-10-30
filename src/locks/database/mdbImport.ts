@@ -81,6 +81,13 @@ export interface ImportedRoom {
   type: string;
   status: string;
   price: string;
+  /**
+   * RoomInfo.CardCount — nombre de cartes client actuellement en circulation
+   * pour cette chambre (compteur de l'ancien logiciel).
+   */
+  cardCount: number;
+  /** RoomInfo.MaxCards — nombre maximum de cartes simultanées autorisées. */
+  maxCards: number;
 }
 
 export interface ImportedGuest {
@@ -268,6 +275,8 @@ export async function parseCardLockMdb(
     type: str(r.sType),
     status: str(r.Status),
     price: str(r.Price),
+    cardCount: num(r.CardCount, 0),
+    maxCards: num(r.MaxCards, 0),
   }));
 
   const guests: ImportedGuest[] = read('GuestInfo').map((r) => ({
@@ -318,13 +327,49 @@ export async function parseCardLockMdb(
 }
 
 /**
+ * Normalise une référence de chambre pour le rattachement réservation↔chambre.
+ *
+ * `GuestInfo.BldRoomNo` est au format « bâtiment-chambre » (`1-103`) alors que
+ * `RoomInfo.RoomNo` est nu (`103`). Sans cette normalisation aucune réservation
+ * ne se rattache à une ressource et le Gantt apparaît vide/décorrélé.
+ */
+export function normalizeRoomNo(value: string): string {
+  const v = str(value);
+  // « 1-103 » → « 103 » ; « 103 » → « 103 ».
+  const m = v.match(/^(?:\d+\s*-\s*)?(\d+)$/);
+  return (m ? m[1] : v).trim();
+}
+
+/**
+ * Parse les dates de la base Access au format texte `jj/mm/aaaa hh:mm:ss`
+ * (ex. `27/05/2015 12:21:50`). Retourne `null` si illisible — jamais de date
+ * fabriquée.
+ */
+export function parseAccessDateTime(value: unknown): string | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+  const v = str(value);
+  if (!v) return null;
+  const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (m) {
+    const [, d, mo, y, h = '0', mi = '0', s = '0'] = m;
+    const dt = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
+    if (!Number.isNaN(dt.getTime())) return dt.toISOString();
+    return null;
+  }
+  // Variante ISO déjà normalisée.
+  const dt = new Date(v);
+  if (!Number.isNaN(dt.getTime())) return dt.toISOString();
+  return null;
+}
+
+/**
  * Convertit un snapshot CardLock.mdb importé en données de planning/Gantt :
  *   • un `ResourceGroup` par bâtiment (ou un groupe "Chambres" si aucun bâtiment)
- *   • un `ResourceItem` par chambre (RoomInfo)
+ *   • un `ResourceItem` par chambre (RoomInfo), avec son compteur de cartes
  *   • un `TimelineBooking` par séjour client (GuestInfo : comeTime → goTime)
  *
- * Ceci permet de réutiliser l'ancienne base dans le planning au lieu de
- * repartir d'une base vide.
+ * Les lignes « Copy » (copies d'une même carte) d'un même séjour sont fusionnées
+ * pour ne pas dupliquer le même séjour sur le Gantt.
  */
 export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
   resourceGroups: ResourceGroup[];
@@ -332,8 +377,8 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 } {
   const { buildings, rooms, guests } = snapshot;
 
-  // Index des chambres par numéro de chambre pour lier les séjours.
-  const roomByNo = new Map(rooms.map((r) => [r.roomNo, r]));
+  // Index des chambres par numéro normalisé pour lier les séjours.
+  const roomByNo = new Map(rooms.map((r) => [normalizeRoomNo(r.roomNo), r]));
 
   // Regroupe les chambres par bâtiment.
   const roomsByBuilding = new Map<number, ImportedRoom[]>();
@@ -396,19 +441,45 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
   }
 
   // Convertit les séjours clients en réservations du planning.
+  // Clé de déduplication : même chambre + même heure d'arrivée + même client
+  // = un seul séjour (les lignes « Copy » sont des cartes supplémentaires).
+  const stayByKey = new Map<string, TimelineBooking>();
   const bookings: TimelineBooking[] = [];
-  for (const g of guests) {
-    const room = roomByNo.get(g.roomNo);
-    const resourceId = room ? `mdb-rm-${room.roomNo}` : `mdb-room-${g.roomNo}`;
-    const resourceName = room ? room.roomNo : g.roomNo;
 
-    const startDate = (g.comeTime && g.comeTime.slice(0, 10)) || new Date().toISOString().slice(0, 10);
-    const endDate = (g.goTime && g.goTime.slice(0, 10)) || startDate;
+  for (const g of guests) {
+    const roomNo = normalizeRoomNo(g.roomNo);
+    const room = roomByNo.get(roomNo);
+    const resourceId = room ? `mdb-rm-${room.roomNo}` : `mdb-room-${roomNo}`;
+    const resourceName = room ? room.roomNo : roomNo;
+
+    const startIso = parseAccessDateTime(g.comeTime);
+    const endIso = parseAccessDateTime(g.goTime);
+    const startDate = startIso ? startIso.slice(0, 10) : new Date().toISOString().slice(0, 10);
+    const endDate = endIso ? endIso.slice(0, 10) : startDate;
 
     const price = room ? parsePrice(room.price) : 0;
+    const flag = g.flag || '';
+    const status: TimelineBooking['status'] = /check.?out/i.test(flag)
+      ? 'checked_out'
+      : /copy/i.test(flag)
+        ? 'confirmed'
+        : /walk.?in|check.?in|arriv/i.test(flag)
+          ? 'checked_in'
+          : 'confirmed';
 
-    bookings.push({
-      id: `mdb-bkg-${g.roomNo}-${startDate}-${bookings.length + 1}`,
+    const key = `${roomNo}|${startIso ?? startDate}|${g.name}`;
+    const existing = stayByKey.get(key);
+    if (existing) {
+      // Carte « Copy » d'un séjour déjà présent : on étend la durée si besoin
+      // et on compte les copies.
+      if (endIso && endDate > existing.endDate) existing.endDate = endDate;
+      const copies = Number(existing.customMetadata?.copies ?? 1) + 1;
+      existing.customMetadata = { ...existing.customMetadata, copies };
+      continue;
+    }
+
+    const booking: TimelineBooking = {
+      id: `mdb-bkg-${roomNo}-${startDate}-${bookings.length + 1}`,
       resourceId,
       resourceName,
       sector: 'hotel',
@@ -417,22 +488,26 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
       guestPhone: '',
       startDate,
       endDate,
-      status: g.flag && /check.?in|arriv/i.test(g.flag) ? 'checked_in' : 'confirmed',
+      status,
       totalPrice: price,
       paymentStatus: 'pending',
-      notes: `Importé de CardLock.mdb — carte ${g.cardId || '—'}, flag: ${g.flag || '—'}`,
+      notes: `Importé de CardLock.mdb — carte ${g.cardId || '—'}, flag: ${flag || '—'}`,
       color: '#2563eb',
       adults: 1,
       customMetadata: {
         source: 'cardlock_mdb',
         cardId: g.cardId,
-        flag: g.flag,
+        flag,
         roomType: room?.type,
         building: room?.building,
         floor: room?.floor,
         originalPrice: room?.price,
+        cardCount: room?.cardCount,
+        maxCards: room?.maxCards,
       },
-    });
+    };
+    stayByKey.set(key, booking);
+    bookings.push(booking);
   }
 
   return { resourceGroups, bookings };

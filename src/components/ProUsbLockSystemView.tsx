@@ -68,6 +68,7 @@ import {
   cardInfoId,
   cardInfoSyncFileName,
 } from '../locks/database/cardInfoSync';
+import { CardResultDialog, CardResult } from './CardResultDialog';
 
 export const ProUsbLockSystemView: React.FC = () => {
   const { language, bookings, resourceGroups, setBookings, setResourceGroups } = useApp();
@@ -92,6 +93,8 @@ export const ProUsbLockSystemView: React.FC = () => {
   const [isWriting, setIsWriting] = useState(false);
   const [readProgress, setReadProgress] = useState(0); // 0-100 pour le progress circulaire lecture
   const [writeProgress, setWriteProgress] = useState(0); // 0-100 pour le progress circulaire écriture
+  // Dialogue système affiché après CHAQUE écriture (succès) ou alerte (échec).
+  const [cardResult, setCardResult] = useState<CardResult | null>(null);
 
   // Guest Card Form State
   const [selectedBookingId, setSelectedBookingId] = useState<string>('');
@@ -383,6 +386,17 @@ export const ProUsbLockSystemView: React.FC = () => {
       });
 
       showToast('success', `Carte Invité pour chambre ${guestRoomNumber} encodée et vérifiée !`);
+      setCardResult({
+        success: true,
+        title: 'Carte Invité encodée avec succès',
+        message: `La carte de la chambre ${newCard.roomNumber} pour ${newCard.holderName} est valide jusqu'au ${newCard.validUntil}.`,
+        details: [
+          { label: 'Chambre', value: newCard.roomNumber || guestRoomNumber },
+          { label: 'Client', value: newCard.holderName },
+          { label: 'Expire le', value: newCard.validUntil },
+          { label: 'Trame (hex)', value: newCard.rawHex },
+        ],
+      });
       setCurrentReadCard(null);
       setWriteProgress(100);
       // Bip de succès (1 long 300ms — distinct d'échec)
@@ -392,6 +406,15 @@ export const ProUsbLockSystemView: React.FC = () => {
       await transport.send(new Uint8Array([0xaa, 0x02, 0x80, 0x00, 0x28]));
     } catch (err: any) {
       showToast('error', `Erreur d'encodage : ${err.message}`);
+      setCardResult({
+        success: false,
+        title: "Échec de l'écriture de la carte Invité",
+        message: err.message,
+        details: [
+          { label: 'Chambre', value: guestRoomNumber },
+          { label: 'Client', value: guestHolderName },
+        ],
+      });
       setWriteProgress(0);
       // Bip d'échec (3 courts rapides 150ms — distinct du succès long)
       try {
@@ -436,8 +459,25 @@ export const ProUsbLockSystemView: React.FC = () => {
       });
 
       showToast('success', `Carte de fonction ${selectedStaffType.toUpperCase()} émise et vérifiée !`);
+      setCardResult({
+        success: true,
+        title: `Carte ${selectedStaffType.toUpperCase()} encodée avec succès`,
+        message: `La carte de fonction pour ${newCard.holderName} est valide jusqu'au ${newCard.validUntil}.`,
+        details: [
+          { label: 'Type', value: selectedStaffType.toUpperCase() },
+          { label: 'Titulaire', value: newCard.holderName },
+          { label: 'Expire le', value: newCard.validUntil },
+          { label: 'Trame (hex)', value: newCard.rawHex },
+        ],
+      });
     } catch (err: any) {
       showToast('error', `Erreur : ${err.message}`);
+      setCardResult({
+        success: false,
+        title: "Échec de l'écriture de la carte de fonction",
+        message: err.message,
+        details: [{ label: 'Type', value: selectedStaffType.toUpperCase() }],
+      });
     } finally {
       setIsWriting(false);
     }
@@ -506,7 +546,7 @@ export const ProUsbLockSystemView: React.FC = () => {
   const handleIssueCommissioning = async (step: 'reset' | 'hard_reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit' | 'group' | 'master' | 'floor' | 'building' | 'emergency') => {    setIsWriting(true);
     try {
       const now = new Date();
-      await lockManager.issueCommissioningCard({
+      const newCard = await lockManager.issueCommissioningCard({
         type: step as any,
         roomNumber: commissionRoom,
         floorNo: commissionFloor,
@@ -523,10 +563,25 @@ export const ProUsbLockSystemView: React.FC = () => {
       });
 
       showToast('success', `Carte de mise en service (${step.toUpperCase()}) émise avec succès !`);
+      setCardResult({
+        success: true,
+        title: `Carte de mise en service (${step.toUpperCase()}) encodée`,
+        message: 'La carte est prête. Présentez-la à la serrure pour la configurer.',
+        details: [
+          { label: 'Type', value: step.toUpperCase() },
+          { label: 'Trame (hex)', value: newCard.rawHex },
+        ],
+      });
       // Bip de succès (1 long 300ms)
       try { const t = lockManager.getTransport(); await t.send(new Uint8Array([0xaa, 0x02, 0x80, 0x01, 0x29])); await new Promise(r => setTimeout(r, 300)); await t.send(new Uint8Array([0xaa, 0x02, 0x80, 0x00, 0x28])); } catch {}
     } catch (err: any) {
       showToast('error', `Erreur : ${err.message}`);
+      setCardResult({
+        success: false,
+        title: `Échec de la carte (${step.toUpperCase()})`,
+        message: err.message,
+        details: [{ label: 'Type', value: step.toUpperCase() }],
+      });
     } finally {
       setIsWriting(false);
     }
@@ -2139,6 +2194,9 @@ export const ProUsbLockSystemView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Dialogue système après chaque écriture de carte (succès) ou alerte (échec) */}
+      <CardResultDialog result={cardResult} onClose={() => setCardResult(null)} />
     </div>
   );
 };

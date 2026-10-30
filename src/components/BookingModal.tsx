@@ -32,6 +32,9 @@ import { BookingStatus, DomainType, TimelineBooking, ResourceItem } from '../typ
 import { domainConfigs } from '../data/mockData';
 import { statusConfig } from './LegendBar';
 import { downloadICS } from '../utils/icsExport';
+import { lockManager } from '../locks/lockManager';
+import { CardResultDialog, CardResult } from './CardResultDialog';
+import { KeyRound, Loader2 } from 'lucide-react';
 
 export const BookingModal: React.FC = () => {
   const {
@@ -114,6 +117,21 @@ export const BookingModal: React.FC = () => {
   const [hotelOptionHighFloor, setHotelOptionHighFloor] = useState(false);
   const [hotelOptionPet, setHotelOptionPet] = useState(false);
   const [hotelOptionWelcomeGift, setHotelOptionWelcomeGift] = useState(false);
+
+  // proUSB Guest Card creation from the booking dialog
+  const [isCreatingCard, setIsCreatingCard] = useState(false);
+  const [cardResult, setCardResult] = useState<CardResult | null>(null);
+  const [usbConnected, setUsbConnected] = useState<boolean>(lockManager.getStatus() === 'connected');
+
+  // Mirror the encoder connection state while the modal is open.
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    setUsbConnected(lockManager.getStatus() === 'connected');
+    const unsubscribe = lockManager.subscribeConnection((status) => {
+      setUsbConnected(status === 'connected');
+    });
+    return unsubscribe;
+  }, [isOpen]);
 
   // 2. RESORT Specific
   const [resortOccupants, setResortOccupants] = useState(4);
@@ -247,6 +265,73 @@ export const BookingModal: React.FC = () => {
   const currentResource = useMemo(() => {
     return domainResources.find((r) => r.id === resourceId) || domainResources[0] || null;
   }, [domainResources, resourceId]);
+
+  /**
+   * Émet la carte client proUSB directement depuis la fiche de réservation :
+   * même chambre, même séjour (arrivée 14h / départ 12h par défaut), même
+   * client. Nécessite l'encodeur USB connecté ; un dialogue succès/échec
+   * système est affiché après chaque tentative.
+   */
+  const handleCreateRoomCard = async () => {
+    if (isCreatingCard) return;
+
+    if (!usbConnected) {
+      setCardResult({
+        success: false,
+        title: 'Encodeur proUSB non connecté',
+        message:
+          "Branchez l'encodeur USB et connectez-le dans l'onglet « Serrures proUSB » avant de créer la carte.",
+        details: [
+          { label: 'Chambre', value: currentResource?.name || resourceNameFallback },
+          { label: 'Client', value: guestName || '—' },
+        ],
+      });
+      return;
+    }
+
+    setIsCreatingCard(true);
+    try {
+      const record = await lockManager.issueGuestCardFromBooking(
+        {
+          id: selectedBooking?.id || `draft-${Date.now()}`,
+          guestName: guestName || selectedBooking?.guestName || 'Client',
+          resourceName: currentResource?.name || resourceNameFallback,
+          startDate,
+          endDate,
+        },
+        'Admin',
+      );
+      setCardResult({
+        success: true,
+        title: 'Carte client encodée avec succès',
+        message: `La carte de la chambre ${record.roomNumber || currentResource?.name} pour ${record.holderName} est valide jusqu'au ${record.validUntil}. Présentez la carte au lecteur de la serrure pour l'activer.`,
+        details: [
+          { label: 'Chambre', value: record.roomNumber || '—' },
+          { label: 'Client', value: record.holderName },
+          { label: 'Expire le', value: record.validUntil },
+          { label: 'Trame (hex)', value: record.rawHex },
+        ],
+      });
+    } catch (error) {
+      setCardResult({
+        success: false,
+        title: "Échec de l'écriture de la carte",
+        message:
+          error instanceof Error
+            ? error.message
+            : "La carte n'a pas pu être encodée. Vérifiez que la carte est bien posée sur l'encodeur.",
+        details: [
+          { label: 'Chambre', value: currentResource?.name || '—' },
+          { label: 'Client', value: guestName || '—' },
+        ],
+      });
+    } finally {
+      setIsCreatingCard(false);
+    }
+  };
+
+  /** Nom de chambre déduit du champ resource (fallback si aucune ressource). */
+  const resourceNameFallback = selectedBooking?.resourceName || '';
 
   // Calculate days / nights duration
   const calculatedDays = useMemo(() => {
@@ -1229,6 +1314,52 @@ export const BookingModal: React.FC = () => {
 
           {/* ACTION BUTTONS */}
           <div className="flex items-center justify-end gap-2 pt-2 flex-wrap">
+            {activeDomain === 'hotel' && (
+              <div className="flex items-center gap-2 mr-auto">
+                <button
+                  type="button"
+                  onClick={() => void handleCreateRoomCard()}
+                  disabled={isCreatingCard}
+                  className={`min-h-[44px] px-3 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-violet-500 ${
+                    isCreatingCard
+                      ? 'bg-slate-300 text-slate-600 cursor-wait'
+                      : usbConnected
+                        ? 'bg-violet-600 hover:bg-violet-500 text-white cursor-pointer'
+                        : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+                  }`}
+                  title={
+                    usbConnected
+                      ? 'Encoder la carte client proUSB pour cette chambre et ce séjour'
+                      : "Encodeur proUSB non connecté — branchez-le d'abord dans l'onglet Serrures"
+                  }
+                >
+                  {isCreatingCard ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+                  <span>
+                    {isCreatingCard
+                      ? language === 'fr'
+                        ? 'Encodage…'
+                        : language === 'ar'
+                          ? 'جارٍ الترميز…'
+                          : 'Encoding…'
+                      : language === 'fr'
+                        ? 'Créer la carte client'
+                        : language === 'ar'
+                          ? 'إنشاء بطاقة الضيف'
+                          : 'Create Guest Card'}
+                  </span>
+                </button>
+                {!usbConnected && (
+                  <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    {language === 'fr'
+                      ? 'Encodeur non connecté'
+                      : language === 'ar'
+                        ? 'المحول غير متصل'
+                        : 'Encoder not connected'}
+                  </span>
+                )}
+              </div>
+            )}
             {isEditing && selectedBooking && (
               <>
                 <button
@@ -1479,6 +1610,9 @@ export const BookingModal: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Card creation result — success or failure dialog */}
+      <CardResultDialog result={cardResult} onClose={() => setCardResult(null)} />
     </div>
   );
 };
