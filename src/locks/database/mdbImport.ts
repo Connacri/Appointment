@@ -209,6 +209,15 @@ export async function parseCardLockMdb(
 
   // Lazy: `mdb-reader` (and its Buffer polyfill) is only fetched when the user
   // actually imports a database — the initial bundle stays untouched.
+  // `buffer` and `mdb-reader` reference Node's `process`, which doesn't exist
+  // in the browser/WebView. Shim it before loading them.
+  if (typeof globalThis.process === 'undefined') {
+    (globalThis as unknown as { process?: unknown }).process = {
+      env: {},
+      version: '',
+      nextTick: (cb: () => void) => setTimeout(cb, 0),
+    };
+  }
   const { Buffer } = await import('buffer');
   const globalRef = globalThis as unknown as { Buffer?: typeof Buffer };
   if (!globalRef.Buffer) globalRef.Buffer = Buffer;
