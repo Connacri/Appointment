@@ -214,6 +214,41 @@ export const ProUsbLockSystemView: React.FC = () => {
     );
   };
 
+  /**
+   * Génère immédiatement le script .vbs pour une seule carte lue (celle qui
+   * affiche « ID absent » dans l'inspecteur). Le script ajoute la ligne dans
+   * CardInfo (ID AutoNumber + Operator Code) de la base vivante VirtualStore.
+   */
+  const handleCreateCardInfoRowForReadCard = () => {
+    if (!currentReadCard) {
+      showToast('error', 'Aucune carte lue à synchroniser.');
+      return;
+    }
+    const rows = [
+      {
+        cardData: currentReadCard.rawHex,
+        holder: currentReadCard.holderName || '',
+        operator: currentReadCard.operatorId || 'Admin',
+      },
+    ];
+    const script = buildCardInfoSyncScript(rows);
+    const fileName = cardInfoSyncFileName();
+    const blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast(
+      'info',
+      `Carte ${currentReadCard.type} (${currentReadCard.siteCode}) exportée dans ${fileName}. Fermez CardLock.exe, double-cliquez sur le fichier, puis ré-importez CardLock.mdb pour voir l'ID et l'Operator Code de cette carte.`
+    );
+  };
+
   const handleConnectHardware = async () => {
     setIsConnecting(true);
     try {
@@ -1017,11 +1052,17 @@ export const ProUsbLockSystemView: React.FC = () => {
                               {row ? (
                                 <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">#{row.id}</span>
                               ) : (
-                                <span
-                                  className="font-sans font-bold text-amber-600"
-                                  title="Clé absente de l'instantané CardLock.mdb importé : réimportez la base vivante"
-                                >
-                                  absent
+                                <span className="font-sans font-bold text-amber-600 flex items-center gap-1">
+                                  absent{' '}
+                                  {!mdbSnapshot && (
+                                    <button
+                                      onClick={handleCreateCardInfoRowForReadCard}
+                                      title="Créer la ligne CardInfo pour cette carte"
+                                      className="ml-1 px-1.5 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-[9px] font-bold text-white transition-colors"
+                                    >
+                                      Créer
+                                    </button>
+                                  )}
                                 </span>
                               )}
                             </div>
@@ -1030,12 +1071,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                               {row ? (
                                 <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{row.operator || 'Admin'}</span>
                               ) : (
-                                <span
-                                  className="font-sans font-bold text-amber-600"
-                                  title="CardLock.exe lit l'Operator Code dans CardInfo.GongHao — lancez « Synchroniser CardLock.mdb »"
-                                >
-                                  absent
-                                </span>
+                                <span className="font-sans font-bold text-amber-600">absent</span>
                               )}
                             </div>
                             {!row && (
