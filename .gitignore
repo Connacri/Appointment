@@ -15,3 +15,7 @@ MD/session-*.md
 tools/re-proUSB/local.env
 
 .idea/caches/
+
+# Local tool installs (external repos with their own licenses/history; not project source)
+/heretic/
+/freellmapi/
