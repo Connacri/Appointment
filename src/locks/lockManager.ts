@@ -683,12 +683,24 @@ class LockManager {
   }
 
   /**
-   * Issues a Master, Floor, Building or Emergency Card
+   * Issues a Master, Floor, Building or Emergency Card.
+   *
+   * The card carries the installation site from the imported database (or the
+   * built-in template) — a commissioned lock rejects a wildcard `0000` staff
+   * card. Pass `universal: true` only for locks that were hard-reset and never
+   * commissioned.
    */
   public async issueMasterCard(
     params: EncodeMasterCardParams & { holderName: string; operator: string }
   ): Promise<IssuedCardRecord> {
-    const recordBytes = encodeMasterCard({ ...params, siteCodeLow: this.getSiteCode() });
+    // Resolve the site from the template (DB-derived when a base is loaded,
+    // built-in default otherwise) — never leave it to the codec fallback.
+    const template = this.getSystemTemplate();
+    const templateSite = ((template.site[0] << 8) | template.site[1]) & 0x3fff;
+    const recordBytes = encodeMasterCard({
+      ...params,
+      siteCodeLow: params.siteCodeLow ?? this.getSiteCode() ?? templateSite,
+    });
     const decoded = await this.writeAndVerifyCard(recordBytes);
 
     const newRecord: IssuedCardRecord = {
@@ -789,6 +801,7 @@ class LockManager {
     }
 
     const decoded = decodeCardRecord(recordBytes);
+    const staffCard = params.type === 'master' || params.type === 'floor' || params.type === 'building' || params.type === 'emergency';
     const newRecord: IssuedCardRecord = {
       id: `card-${Date.now()}`,
       rawHex: decoded.rawHex,
@@ -799,7 +812,9 @@ class LockManager {
       operator: params.operator,
       issuedAt: new Date().toISOString(),
       status: 'active',
-      validUntil: 'N/A',
+      validUntil: staffCard && decoded.validity
+        ? `${String(decoded.validity.endDay).padStart(2, '0')}/${String(decoded.validity.endMonth).padStart(2, '0')}/${decoded.validity.endYear} 23:59`
+        : 'N/A',
     };
 
     this.issuedCards.unshift(newRecord);

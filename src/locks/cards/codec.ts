@@ -246,6 +246,13 @@ export interface EncodeMasterCardParams {
   siteCodeLow?: number;
   /** Byte [6] — per-card random nonce (CardLock.exe uses a random value). */
   nonce?: number;
+  /**
+   * Write site `0000` (wildcard). Only valid for locks that have **not** been
+   * commissioned yet (fresh hard reset, site still `0000`). A commissioned
+   * lock compares the full site and rejects a `0000` staff card — verified on
+   * hardware: master cards must carry the installation site (`033B` here).
+   */
+  universal?: boolean;
 }
 
 /**
@@ -259,14 +266,15 @@ export function encodeMasterCard(params: EncodeMasterCardParams): Uint8Array {
   card[0] = 0xc9;
   card[1] = DEFAULT_SITE_HIGH;
 
-  // Master cards from CardLock.mdb carry a 00 00 site:
-  //   C9 12 00 00 FF 00 29 80 00 B0 94 4C 5A A4 4D FB
-  // → a master is not bound to a site and opens every lock of the reader.
-  // Other families keep the site read from the database.
+  // Site handling — verified against the live CardLock.mdb and hardware:
+  // a COMMISSIONED lock compares the full site, so master/emergency cards
+  // must carry the installation site (e.g. 033B) by default. The wildcard
+  // site 0000 is only accepted by a lock that was hard-reset and never
+  // commissioned (site still 0000) — expose it solely via `universal`.
   const siteLow = (params.siteCodeLow ?? DEFAULT_SITE_LOW) & 0x3fff;
-  const siteIndependent = type === 'master' || type === 'emergency';
-  card[2] = siteIndependent ? 0x00 : (siteLow >> 8) & 0xff;
-  card[3] = siteIndependent ? 0x00 : siteLow & 0xff;
+  const wildcardSite = params.universal === true;
+  card[2] = wildcardSite ? 0x00 : (siteLow >> 8) & 0xff;
+  card[3] = wildcardSite ? 0x00 : siteLow & 0xff;
 
   switch (type) {
     case 'floor':
@@ -439,7 +447,9 @@ export function encodeSystemCard(params: {
 }
 
 export interface EncodeCommissioningCardParams {
-  type: 'reset' | 'hard_reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit';
+  type:
+    | 'reset' | 'hard_reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit'
+    | 'master' | 'floor' | 'building' | 'emergency' | 'group';
   roomNumber?: string;
   floorNo?: number;
   buildingNo?: number;
@@ -453,10 +463,16 @@ export interface EncodeCommissioningCardParams {
   issuedAt?: Date;
   /** Write site 0x0000 so the card resets a lock of **any** system. */
   universal?: boolean;
+  /** Validity window for master/floor/building/emergency cards. */
+  validity?: CardValidityWindow;
 }
 
 /**
- * Encodes special setup, commissioning and audit cards
+ * Encodes special setup, commissioning and audit cards.
+ *
+ * Staff/commissioning families (master, floor, building, emergency) delegate
+ * to `encodeMasterCard` so they share the verified layout and the real
+ * installation site. `group` uses the 0x80 family.
  */
 export function encodeCommissioningCard(params: EncodeCommissioningCardParams): Uint8Array {
   if (params.type === 'reset' || params.type === 'hard_reset') {
@@ -468,13 +484,46 @@ export function encodeCommissioningCard(params: EncodeCommissioningCardParams): 
     });
   }
 
+  // Staff card families share the master layout and carry the installation
+  // site by default (a commissioned lock rejects a 0000 site unless universal).
+  if (params.type === 'master' || params.type === 'floor' || params.type === 'building' || params.type === 'emergency') {
+    const tpl = params.template;
+    const templateSite = tpl ? ((tpl.site[0] << 8) | tpl.site[1]) & 0x3fff : DEFAULT_SITE_LOW & 0x3fff;
+    const now = params.issuedAt ?? new Date();
+    const defaultValidity: CardValidityWindow = {
+      startYear: now.getFullYear(),
+      startMonth: now.getMonth() + 1,
+      startDay: now.getDate(),
+      startHour: now.getHours(),
+      startMinute: now.getMinutes(),
+      endYear: now.getFullYear() + 5,
+      endMonth: now.getMonth() + 1,
+      endDay: now.getDate(),
+      endHour: 23,
+      endMinute: 59,
+    };
+    return encodeMasterCard({
+      cardIndex: params.cardIndex ?? 1,
+      cardType: params.type,
+      floorNo: params.floorNo,
+      buildingNo: params.buildingNo,
+      siteCodeLow: templateSite,
+      universal: params.universal,
+      validity: params.validity ?? defaultValidity,
+    });
+  }
+
   const card = new Uint8Array(16);
   const index = (params.cardIndex ?? 0) & 0x0f;
 
+  // Site comes from the imported template (CardLock.mdb), never a hardcoded
+  // value — a lock commissioned at 033B rejects cards stamped 24B6.
+  const tpl = params.template;
+  const siteLow = (tpl ? ((tpl.site[0] << 8) | tpl.site[1]) : DEFAULT_SITE_LOW) & 0x3fff;
   card[0] = 0xc9;
   card[1] = DEFAULT_SITE_HIGH;
-  card[2] = (DEFAULT_SITE_LOW >> 8) & 0xff;
-  card[3] = DEFAULT_SITE_LOW & 0xff;
+  card[2] = params.universal ? 0x00 : (siteLow >> 8) & 0xff;
+  card[3] = params.universal ? 0x00 : siteLow & 0xff;
 
   const now = params.time || {
     year: new Date().getFullYear(),
@@ -556,6 +605,19 @@ export function encodeCommissioningCard(params: EncodeCommissioningCardParams): 
     }
     case 'group_set': {
       card[9] = 0x50 | index;
+      break;
+    }
+    case 'group': {
+      // Group pass — 0x80 family, opens every room of the lock's group.
+      card[4] = 0xff;
+      card[5] = 0x00;
+      card[6] = pseudoRand(index + 41);
+      card[7] = 0x80;
+      card[8] = 0x00;
+      card[9] = 0x80 | index; // 0x80 family
+      card[13] = pseudoRand(index + 13);
+      card[14] = pseudoRand(index + 17);
+      card[15] = pseudoRand(index + 19);
       break;
     }
     case 'limit': {

@@ -76,9 +76,29 @@ check(
 );
 
 // ── CardInfo ID 39 — master B0, 2018-04-09 17:26 → 2019-04-09 23:59
+// The genuine record writes wildcard site 0000 (universal master) — only
+// reproduced when `universal: true` is passed explicitly.
 check(
-  'master 0xB0',
+  'master 0xB0 (universal)',
   'C9 12 00 00 FF 00 29 80 00 B0 94 4C 5A A4 4D FB',
+  encodeMasterCard({
+    cardIndex: 0,
+    cardType: 'master',
+    nonce: 0x29,
+    universal: true,
+    validity: {
+      startYear: 2018, startMonth: 4, startDay: 9, startHour: 17, startMinute: 26,
+      endYear: 2019, endMonth: 4, endDay: 9, endHour: 23, endMinute: 59,
+    },
+    siteCodeLow: 0x033b,
+  }),
+);
+
+// ── Default master — carries the installation site (033B) so a commissioned
+// lock accepts it. A wildcard 0000 master is rejected by a commissioned lock.
+check(
+  'master 0xB0 (site réel)',
+  'C9 12 03 3B FF 00 29 80 00 B0 94 4C 5A A4 4D FB',
   encodeMasterCard({
     cardIndex: 0,
     cardType: 'master',
