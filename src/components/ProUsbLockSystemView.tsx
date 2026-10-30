@@ -53,6 +53,9 @@ import {
   IssuedCardRecord,
 } from '../locks/lockManager';
 import {
+  mdbSnapshotToPlanning,
+} from '../locks/database/mdbImport';
+import {
   PROUSB_CARD_TYPES,
   ProUsbCardType,
   DecodedProUsbCard,
@@ -67,7 +70,7 @@ import {
 } from '../locks/database/cardInfoSync';
 
 export const ProUsbLockSystemView: React.FC = () => {
-  const { language, bookings, resourceGroups } = useApp();
+  const { language, bookings, resourceGroups, setBookings, setResourceGroups } = useApp();
 
   const [activeTab, setActiveTab] = useState<
     'reception' | 'staff_cards' | 'commissioning' | 'audit_log' | 'encoder_hardware' | 'settings' | 'security'
@@ -470,6 +473,29 @@ export const ProUsbLockSystemView: React.FC = () => {
         'success',
         `CardLock.mdb importée : ${snapshot.counts.cards} cartes, ${snapshot.counts.rooms} chambres, ${snapshot.counts.guests} séjours${warn}`,
       );
+
+      // Propose d'importer aussi les chambres et séjours dans le planning/Gantt
+      // afin de ne pas repartir d'une base vide.
+      if (
+        snapshot.counts.rooms > 0 ||
+        snapshot.counts.guests > 0
+      ) {
+        const wantPlanning = window.confirm(
+          `Importer aussi dans le planning/Gantt ?\n\n` +
+          `${snapshot.counts.rooms} chambre(s) et ${snapshot.counts.guests} séjour(s) seront créés.\n` +
+          `Ceci remplacera les ressources et réservations actuelles du planning.`,
+        );
+        if (wantPlanning) {
+          const { resourceGroups: mdbGroups, bookings: mdbBookings } =
+            mdbSnapshotToPlanning(snapshot);
+          setResourceGroups(mdbGroups);
+          setBookings(mdbBookings);
+          showToast(
+            'success',
+            `Planning mis à jour : ${mdbGroups.length} groupe(s) de ressources, ${mdbBookings.length} réservation(s).`,
+          );
+        }
+      }
     } catch (err: any) {
       showToast('error', `Import CardLock.mdb impossible : ${err.message}`);
     } finally {

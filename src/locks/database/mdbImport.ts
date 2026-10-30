@@ -35,6 +35,7 @@
  */
 
 import { DEFAULT_SYSTEM_CARD_TEMPLATE as DEFAULT_TEMPLATE } from '../cards/codec';
+import { ResourceGroup, ResourceItem, TimelineBooking } from '../../types/booking';
 
 /**
  * Default template used when no `CardLock.mdb` has been imported yet.
@@ -305,4 +306,150 @@ export async function parseCardLockMdb(
     counts: { cards: cards.length, guests: guests.length, rooms: rooms.length, openings },
     warnings,
   };
+}
+
+/**
+ * Convertit un snapshot CardLock.mdb importé en données de planning/Gantt :
+ *   • un `ResourceGroup` par bâtiment (ou un groupe "Chambres" si aucun bâtiment)
+ *   • un `ResourceItem` par chambre (RoomInfo)
+ *   • un `TimelineBooking` par séjour client (GuestInfo : comeTime → goTime)
+ *
+ * Ceci permet de réutiliser l'ancienne base dans le planning au lieu de
+ * repartir d'une base vide.
+ */
+export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
+  resourceGroups: ResourceGroup[];
+  bookings: TimelineBooking[];
+} {
+  const { buildings, rooms, guests } = snapshot;
+
+  // Index des chambres par numéro de chambre pour lier les séjours.
+  const roomByNo = new Map(rooms.map((r) => [r.roomNo, r]));
+
+  // Regroupe les chambres par bâtiment.
+  const roomsByBuilding = new Map<number, ImportedRoom[]>();
+  const roomsWithoutBuilding: ImportedRoom[] = [];
+  for (const r of rooms) {
+    if (r.building && r.building > 0) {
+      const arr = roomsByBuilding.get(r.building) ?? [];
+      arr.push(r);
+      roomsByBuilding.set(r.building, arr);
+    } else {
+      roomsWithoutBuilding.push(r);
+    }
+  }
+
+  const resourceGroups: ResourceGroup[] = [];
+
+  // Un groupe par bâtiment.
+  for (const b of buildings) {
+    const bRooms = roomsByBuilding.get(b.no) ?? [];
+    resourceGroups.push({
+      id: `mdb-bld-${b.no}`,
+      name: {
+        fr: b.name || `Bâtiment ${b.no}`,
+        en: b.name || `Building ${b.no}`,
+        ar: b.name || `مبنى ${b.no}`,
+      },
+      sector: 'hotel',
+      icon: 'Building',
+      resources: bRooms.map((r) => resourceItemFromRoom(r)),
+    });
+  }
+
+  // Groupe pour les chambres sans bâtiment.
+  if (roomsWithoutBuilding.length > 0) {
+    resourceGroups.push({
+      id: 'mdb-rooms-nobld',
+      name: {
+        fr: 'Chambres (sans bâtiment)',
+        en: 'Rooms (no building)',
+        ar: 'الغرف (بدون مبنى)',
+      },
+      sector: 'hotel',
+      icon: 'BedDouble',
+      resources: roomsWithoutBuilding.map((r) => resourceItemFromRoom(r)),
+    });
+  }
+
+  // Si aucune chambre ni bâtiment, on crée un groupe vide pour ne pas perdre l'import.
+  if (resourceGroups.length === 0 && rooms.length > 0) {
+    resourceGroups.push({
+      id: 'mdb-rooms',
+      name: {
+        fr: 'Chambres importées',
+        en: 'Imported rooms',
+        ar: 'الغرف المستوردة',
+      },
+      sector: 'hotel',
+      resources: rooms.map((r) => resourceItemFromRoom(r)),
+    });
+  }
+
+  // Convertit les séjours clients en réservations du planning.
+  const bookings: TimelineBooking[] = [];
+  for (const g of guests) {
+    const room = roomByNo.get(g.roomNo);
+    const resourceId = room ? `mdb-rm-${room.roomNo}` : `mdb-room-${g.roomNo}`;
+    const resourceName = room ? room.roomNo : g.roomNo;
+
+    const startDate = (g.comeTime && g.comeTime.slice(0, 10)) || new Date().toISOString().slice(0, 10);
+    const endDate = (g.goTime && g.goTime.slice(0, 10)) || startDate;
+
+    const price = room ? parsePrice(room.price) : 0;
+
+    bookings.push({
+      id: `mdb-bkg-${g.roomNo}-${startDate}-${bookings.length + 1}`,
+      resourceId,
+      resourceName,
+      sector: 'hotel',
+      guestName: g.name || 'Client',
+      guestEmail: '',
+      guestPhone: '',
+      startDate,
+      endDate,
+      status: g.flag && /check.?in|arriv/i.test(g.flag) ? 'checked_in' : 'confirmed',
+      totalPrice: price,
+      paymentStatus: 'pending',
+      notes: `Importé de CardLock.mdb — carte ${g.cardId || '—'}, flag: ${g.flag || '—'}`,
+      color: '#2563eb',
+      adults: 1,
+      customMetadata: {
+        source: 'cardlock_mdb',
+        cardId: g.cardId,
+        flag: g.flag,
+        roomType: room?.type,
+        building: room?.building,
+        floor: room?.floor,
+        originalPrice: room?.price,
+      },
+    });
+  }
+
+  return { resourceGroups, bookings };
+}
+
+function resourceItemFromRoom(r: ImportedRoom): ResourceItem {
+  return {
+    id: `mdb-rm-${r.roomNo}`,
+    name: r.roomNo,
+    type: r.type || 'Chambre',
+    sector: 'hotel',
+    pricePerDay: parsePrice(r.price),
+    housekeepingStatus: (r.status && /clean/i.test(r.status)
+      ? 'clean'
+      : /dirty/i.test(r.status)
+        ? 'dirty'
+        : /out.of.order|hs/i.test(r.status)
+          ? 'out_of_order'
+          : 'clean') as ResourceItem['housekeepingStatus'],
+    capacity: 1,
+    building: r.building ? String(r.building) : undefined,
+    floor: r.floor ? String(r.floor) : undefined,
+  };
+}
+
+function parsePrice(value: string): number {
+  const n = parseFloat(String(value).replace(/[^0-9.,-]/g, '').replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
 }
