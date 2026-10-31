@@ -69,6 +69,7 @@ import {
   cardInfoSyncFileName,
 } from '../locks/database/cardInfoSync';
 import { CardResultDialog, CardResult } from './CardResultDialog';
+import { CardCreationProgressModal } from './CardCreationProgressModal';
 
 export const ProUsbLockSystemView: React.FC = () => {
   const { language, bookings, resourceGroups, setBookings, setResourceGroups } = useApp();
@@ -93,6 +94,8 @@ export const ProUsbLockSystemView: React.FC = () => {
   const [isWriting, setIsWriting] = useState(false);
   const [readProgress, setReadProgress] = useState(0); // 0-100 pour le progress circulaire lecture
   const [writeProgress, setWriteProgress] = useState(0); // 0-100 pour le progress circulaire écriture
+  const [writingCardTitle, setWritingCardTitle] = useState('Carte proUSB');
+  const [writingCardStep, setWritingCardStep] = useState<string | undefined>();
   // Dialogue système affiché après CHAQUE écriture (succès) ou alerte (échec).
   const [cardResult, setCardResult] = useState<CardResult | null>(null);
 
@@ -429,55 +432,102 @@ export const ProUsbLockSystemView: React.FC = () => {
     }
   };
 
-  const handleIssueGuestCard = async () => {
+  // Helper pour exécuter toute création de carte avec circular progress immersif,
+  // bip sonore officiel de réussite et sonnerie d'alerte lors de l'échec.
+  const runWithCardProgress = async (
+    title: string,
+    action: (updateProgress: (p: number, step?: string) => void) => Promise<void>
+  ) => {
     setIsWriting(true);
-    setWriteProgress(10);
+    setWritingCardTitle(title);
+    setWriteProgress(15);
+    setWritingCardStep("Connexion à l'encodeur USB...");
+
+    let current = 15;
+    const progressTimer = setInterval(() => {
+      current = Math.min(92, current + Math.floor(Math.random() * 12) + 8);
+      setWriteProgress(current);
+      if (current < 45) {
+        setWritingCardStep("Génération de la trame binaire proUSB...");
+      } else if (current < 80) {
+        setWritingCardStep("Écriture radiofréquence RFID sur la carte...");
+      } else {
+        setWritingCardStep("Vérification de la signature et relecture...");
+      }
+    }, 110);
+
     try {
-      const startParts = guestStartDate.split('-').map(Number);
-      const endParts = guestEndDate.split('-').map(Number);
-
-      const newCard = await lockManager.issueGuestCard({
-        roomNumber: guestRoomNumber,
-        cardIndex: 1,
-        holderName: guestHolderName,
-        operator: 'Admin',
-        validity: {
-          startYear: startParts[0],
-          startMonth: startParts[1],
-          startDay: startParts[2],
-          startHour: guestStartHour,
-          endYear: endParts[0],
-          endMonth: endParts[1],
-          endDay: endParts[2],
-          endHour: guestEndHour,
-          endMinute: 0,
-        },
-        options: {
-          allowDeadbolt,
-          coverCardsBefore,
-          openPublicDoor,
-        },
+      await action((p, step) => {
+        setWriteProgress(p);
+        if (step) setWritingCardStep(step);
       });
-
-      showToast('success', `Carte Invité pour chambre ${guestRoomNumber} encodée et vérifiée !`);
-      setCardResult({
-        success: true,
-        title: 'Carte Invité encodée avec succès',
-        message: `La carte de la chambre ${newCard.roomNumber} pour ${newCard.holderName} est valide jusqu'au ${newCard.validUntil}.`,
-        details: [
-          { label: 'Chambre', value: newCard.roomNumber || guestRoomNumber },
-          { label: 'Client', value: newCard.holderName },
-          { label: 'Expire le', value: newCard.validUntil },
-          { label: 'Trame (hex)', value: newCard.rawHex },
-        ],
-      });
-      setCurrentReadCard(null);
+      clearInterval(progressTimer);
       setWriteProgress(100);
-      // Bip de succès (1 long 300ms — distinct d'échec)
-      const transport = lockManager.getTransport();
-      await transport.send(new Uint8Array([0xaa, 0x02, 0x80, 0x01, 0x29]));
-      await new Promise(r => setTimeout(r, 300));
-      await transport.send(new Uint8Array([0xaa, 0x02, 0x80, 0x00, 0x28]));
+      setWritingCardStep("Carte encodée avec succès !");
+      await lockManager.notifySuccess();
+    } catch (err: any) {
+      clearInterval(progressTimer);
+      setWriteProgress(0);
+      setWritingCardStep("Échec de l'encodage");
+      await lockManager.notifyFailure();
+      throw err;
+    } finally {
+      clearInterval(progressTimer);
+      setTimeout(() => {
+        setIsWriting(false);
+        setWriteProgress(0);
+        setWritingCardStep(undefined);
+      }, 1000);
+    }
+  };
+
+  const handleIssueGuestCard = async () => {
+    const cardTitle = `Carte Client · Chambre ${guestRoomNumber} (${guestHolderName})`;
+    try {
+      await runWithCardProgress(cardTitle, async (updateProgress) => {
+        updateProgress(30, "Préparation de la trame client 0x60...");
+        const startParts = guestStartDate.split('-').map(Number);
+        const endParts = guestEndDate.split('-').map(Number);
+
+        updateProgress(60, "Écriture radiofréquence sur la carte...");
+        const newCard = await lockManager.issueGuestCard({
+          roomNumber: guestRoomNumber,
+          cardIndex: 1,
+          holderName: guestHolderName,
+          operator: 'Admin',
+          validity: {
+            startYear: startParts[0],
+            startMonth: startParts[1],
+            startDay: startParts[2],
+            startHour: guestStartHour,
+            endYear: endParts[0],
+            endMonth: endParts[1],
+            endDay: endParts[2],
+            endHour: guestEndHour,
+            endMinute: 0,
+          },
+          options: {
+            allowDeadbolt,
+            coverCardsBefore,
+            openPublicDoor,
+          },
+        });
+
+        updateProgress(90, "Vérification relecture de la chambre...");
+        showToast('success', `Carte Invité pour chambre ${guestRoomNumber} encodée et vérifiée !`);
+        setCardResult({
+          success: true,
+          title: 'Carte Invité encodée avec succès',
+          message: `La carte de la chambre ${newCard.roomNumber} pour ${newCard.holderName} est valide jusqu'au ${newCard.validUntil}.`,
+          details: [
+            { label: 'Chambre', value: newCard.roomNumber || guestRoomNumber },
+            { label: 'Client', value: newCard.holderName },
+            { label: 'Expire le', value: newCard.validUntil },
+            { label: 'Trame (hex)', value: newCard.rawHex },
+          ],
+        });
+        setCurrentReadCard(null);
+      });
     } catch (err: any) {
       showToast('error', `Erreur d'encodage : ${err.message}`);
       setCardResult({
@@ -489,60 +539,51 @@ export const ProUsbLockSystemView: React.FC = () => {
           { label: 'Client', value: guestHolderName },
         ],
       });
-      setWriteProgress(0);
-      // Bip d'échec (3 courts rapides 150ms — distinct du succès long)
-      try {
-        const transport = lockManager.getTransport();
-        for (let i = 0; i < 3; i++) {
-          await transport.send(new Uint8Array([0xaa, 0x02, 0x80, 0x01, 0x29]));
-          await new Promise(r => setTimeout(r, 150));
-          await transport.send(new Uint8Array([0xaa, 0x02, 0x80, 0x00, 0x28]));
-          await new Promise(r => setTimeout(r, 50));
-        }
-      } catch {}
-    } finally {
-      setIsWriting(false);
-      setTimeout(() => setWriteProgress(0), 3000);
     }
   };
 
   const handleIssueStaffCard = async () => {
-    setIsWriting(true);
+    const cardTitle = `Carte de Fonction · ${selectedStaffType.toUpperCase()} (${staffHolderName})`;
     try {
-      const now = new Date();
-      const end = new Date(now.getTime() + staffValidityDays * 24 * 3600 * 1000);
+      await runWithCardProgress(cardTitle, async (updateProgress) => {
+        updateProgress(30, `Préparation de la trame ${selectedStaffType.toUpperCase()}...`);
+        const now = new Date();
+        const end = new Date(now.getTime() + staffValidityDays * 24 * 3600 * 1000);
 
-      const newCard = await lockManager.issueMasterCard({
-        cardType: selectedStaffType as any,
-        cardIndex: 1,
-        floorNo: staffFloorNo,
-        buildingNo: staffBuildingNo,
-        holderName: staffHolderName,
-        operator: 'SuperAdmin',
-        validity: {
-          startYear: now.getFullYear(),
-          startMonth: now.getMonth() + 1,
-          startDay: now.getDate(),
-          startHour: 0,
-          endYear: end.getFullYear(),
-          endMonth: end.getMonth() + 1,
-          endDay: end.getDate(),
-          endHour: 23,
-          endMinute: 59,
-        },
-      });
+        updateProgress(65, "Écriture radiofréquence dans la puce...");
+        const newCard = await lockManager.issueMasterCard({
+          cardType: selectedStaffType as any,
+          cardIndex: 1,
+          floorNo: staffFloorNo,
+          buildingNo: staffBuildingNo,
+          holderName: staffHolderName,
+          operator: 'SuperAdmin',
+          validity: {
+            startYear: now.getFullYear(),
+            startMonth: now.getMonth() + 1,
+            startDay: now.getDate(),
+            startHour: 0,
+            endYear: end.getFullYear(),
+            endMonth: end.getMonth() + 1,
+            endDay: end.getDate(),
+            endHour: 23,
+            endMinute: 59,
+          },
+        });
 
-      showToast('success', `Carte de fonction ${selectedStaffType.toUpperCase()} émise et vérifiée !`);
-      setCardResult({
-        success: true,
-        title: `Carte ${selectedStaffType.toUpperCase()} encodée avec succès`,
-        message: `La carte de fonction pour ${newCard.holderName} est valide jusqu'au ${newCard.validUntil}.`,
-        details: [
-          { label: 'Type', value: selectedStaffType.toUpperCase() },
-          { label: 'Titulaire', value: newCard.holderName },
-          { label: 'Expire le', value: newCard.validUntil },
-          { label: 'Trame (hex)', value: newCard.rawHex },
-        ],
+        updateProgress(90, "Vérification de la trame et permissions...");
+        showToast('success', `Carte de fonction ${selectedStaffType.toUpperCase()} émise et vérifiée !`);
+        setCardResult({
+          success: true,
+          title: `Carte ${selectedStaffType.toUpperCase()} encodée avec succès`,
+          message: `La carte de fonction pour ${newCard.holderName} est valide jusqu'au ${newCard.validUntil}.`,
+          details: [
+            { label: 'Type', value: selectedStaffType.toUpperCase() },
+            { label: 'Titulaire', value: newCard.holderName },
+            { label: 'Expire le', value: newCard.validUntil },
+            { label: 'Trame (hex)', value: newCard.rawHex },
+          ],
+        });
       });
     } catch (err: any) {
       showToast('error', `Erreur : ${err.message}`);
@@ -552,8 +593,6 @@ export const ProUsbLockSystemView: React.FC = () => {
         message: err.message,
         details: [{ label: 'Type', value: selectedStaffType.toUpperCase() }],
       });
-    } finally {
-      setIsWriting(false);
     }
   };
 
@@ -617,37 +656,57 @@ export const ProUsbLockSystemView: React.FC = () => {
     }
   };
 
-  const handleIssueCommissioning = async (step: 'reset' | 'hard_reset' | 'room_set' | 'time_set' | 'record' | 'checkout' | 'blacklist' | 'group_set' | 'limit' | 'group' | 'master' | 'floor' | 'building' | 'emergency') => {    setIsWriting(true);
+  const handleIssueCommissioning = async (
+    step:
+      | 'reset'
+      | 'hard_reset'
+      | 'room_set'
+      | 'time_set'
+      | 'record'
+      | 'checkout'
+      | 'blacklist'
+      | 'group_set'
+      | 'limit'
+      | 'group'
+      | 'master'
+      | 'floor'
+      | 'building'
+      | 'emergency'
+  ) => {
+    const cardTitle = `Carte de Mise en Service · ${step.toUpperCase()}${commissionRoom ? ` (Chambre ${commissionRoom})` : ''}`;
     try {
-      const now = new Date();
-      const newCard = await lockManager.issueCommissioningCard({
-        type: step as any,
-        roomNumber: commissionRoom,
-        floorNo: commissionFloor,
-        buildingNo: commissionBuilding,
-        operator: 'Admin',
-        universal: (step === 'reset' || step === 'hard_reset') ? universalSystemCard : undefined,
-        time: {
-          year: now.getFullYear(),
-          month: now.getMonth() + 1,
-          day: now.getDate(),
-          hour: commissionValidityHour,
-          minute: 0,
-        },
-      });
+      await runWithCardProgress(cardTitle, async (updateProgress) => {
+        updateProgress(30, `Initialisation étape ${step.toUpperCase()}...`);
+        const now = new Date();
+        updateProgress(65, "Écriture radiofréquence de configuration...");
+        const newCard = await lockManager.issueCommissioningCard({
+          type: step as any,
+          roomNumber: commissionRoom,
+          floorNo: commissionFloor,
+          buildingNo: commissionBuilding,
+          operator: 'Admin',
+          universal: (step === 'reset' || step === 'hard_reset') ? universalSystemCard : undefined,
+          time: {
+            year: now.getFullYear(),
+            month: now.getMonth() + 1,
+            day: now.getDate(),
+            hour: commissionValidityHour,
+            minute: 0,
+          },
+        });
 
-      showToast('success', `Carte de mise en service (${step.toUpperCase()}) émise avec succès !`);
-      setCardResult({
-        success: true,
-        title: `Carte de mise en service (${step.toUpperCase()}) encodée`,
-        message: 'La carte est prête. Présentez-la à la serrure pour la configurer.',
-        details: [
-          { label: 'Type', value: step.toUpperCase() },
-          { label: 'Trame (hex)', value: newCard.rawHex },
-        ],
+        updateProgress(90, "Vérification des paramètres serrure...");
+        showToast('success', `Carte de mise en service (${step.toUpperCase()}) émise avec succès !`);
+        setCardResult({
+          success: true,
+          title: `Carte de mise en service (${step.toUpperCase()}) encodée`,
+          message: 'La carte est prête. Présentez-la à la serrure pour la configurer.',
+          details: [
+            { label: 'Type', value: step.toUpperCase() },
+            { label: 'Trame (hex)', value: newCard.rawHex },
+          ],
+        });
       });
-      // Bip de succès (1 long 300ms)
-      try { const t = lockManager.getTransport(); await t.send(new Uint8Array([0xaa, 0x02, 0x80, 0x01, 0x29])); await new Promise(r => setTimeout(r, 300)); await t.send(new Uint8Array([0xaa, 0x02, 0x80, 0x00, 0x28])); } catch {}
     } catch (err: any) {
       showToast('error', `Erreur : ${err.message}`);
       setCardResult({
@@ -656,8 +715,6 @@ export const ProUsbLockSystemView: React.FC = () => {
         message: err.message,
         details: [{ label: 'Type', value: step.toUpperCase() }],
       });
-    } finally {
-      setIsWriting(false);
     }
   };
 
@@ -988,10 +1045,19 @@ export const ProUsbLockSystemView: React.FC = () => {
                   <button
                     onClick={handleIssueGuestCard}
                     disabled={isWriting}
-                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 disabled:opacity-75 cursor-pointer"
                   >
-                    <KeyRound size={15} />
-                    <span>{isWriting ? 'Encodage en cours...' : 'Encoder la Carte Client'}</span>
+                    {isWriting ? (
+                      <div className="relative w-4 h-4 shrink-0">
+                        <svg className="w-4 h-4 -rotate-90" viewBox="0 0 36 36">
+                          <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                          <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${Math.max(5, writeProgress)}, 100`} />
+                        </svg>
+                      </div>
+                    ) : (
+                      <KeyRound size={15} />
+                    )}
+                    <span>{isWriting ? `Encodage… ${Math.round(writeProgress)}%` : 'Encoder la Carte Client'}</span>
                   </button>
                 </div>
               </div>
@@ -1478,10 +1544,23 @@ export const ProUsbLockSystemView: React.FC = () => {
                 <button
                   onClick={handleIssueStaffCard}
                   disabled={isWriting}
-                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2"
+                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-75"
                 >
-                  <ShieldCheck size={16} />
-                  <span>Encoder Carte de Fonction ({selectedStaffType.toUpperCase()})</span>
+                  {isWriting ? (
+                    <div className="relative w-4 h-4 shrink-0">
+                      <svg className="w-4 h-4 -rotate-90" viewBox="0 0 36 36">
+                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${Math.max(5, writeProgress)}, 100`} />
+                      </svg>
+                    </div>
+                  ) : (
+                    <ShieldCheck size={16} />
+                  )}
+                  <span>
+                    {isWriting
+                      ? `Encodage… ${Math.round(writeProgress)}%`
+                      : `Encoder Carte de Fonction (${selectedStaffType.toUpperCase()})`}
+                  </span>
                 </button>
               </div>
             </div>
@@ -2301,6 +2380,14 @@ export const ProUsbLockSystemView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Indicateur circulaire de progression immersif affiché lors de l'encodage de toute carte */}
+      <CardCreationProgressModal
+        isOpen={isWriting}
+        progress={writeProgress}
+        cardTitle={writingCardTitle}
+        statusText={writingCardStep}
+      />
 
       {/* Dialogue système après chaque écriture de carte (succès) ou alerte (échec) */}
       <CardResultDialog result={cardResult} onClose={() => setCardResult(null)} />

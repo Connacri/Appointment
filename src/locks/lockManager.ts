@@ -44,6 +44,7 @@ import {
   type MdbSnapshot,
   type SystemCardProfile,
 } from './database/mdbImport';
+import { encoderAudio } from './sound/encoderAudio';
 
 // Types expected by TopBar (remote API compatibility)
 export type UsbConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'unsupported';
@@ -509,6 +510,20 @@ class LockManager {
         await new Promise((r) => setTimeout(r, 200));
       }
     }
+  }
+
+  /**
+   * Déclenche le bip sonore de confirmation de réussite (Web Audio + buzzer physique de l'encodeur)
+   */
+  public async notifySuccess(): Promise<void> {
+    await encoderAudio.notifySuccess(this.getTransport());
+  }
+
+  /**
+   * Déclenche la sonnerie d'échec / alerte (Web Audio distinct + 3 bips avertisseurs buzzer physique)
+   */
+  public async notifyFailure(): Promise<void> {
+    await encoderAudio.notifyFailure(this.getTransport());
   }
 
   /**

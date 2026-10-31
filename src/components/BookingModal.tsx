@@ -34,6 +34,7 @@ import { statusConfig } from './LegendBar';
 import { downloadICS } from '../utils/icsExport';
 import { lockManager } from '../locks/lockManager';
 import { CardResultDialog, CardResult } from './CardResultDialog';
+import { CardCreationProgressModal } from './CardCreationProgressModal';
 import { KeyRound, Loader2 } from 'lucide-react';
 
 export const BookingModal: React.FC = () => {
@@ -120,6 +121,7 @@ export const BookingModal: React.FC = () => {
 
   // proUSB Guest Card creation from the booking dialog
   const [isCreatingCard, setIsCreatingCard] = useState(false);
+  const [cardProgress, setCardProgress] = useState(0);
   const [cardResult, setCardResult] = useState<CardResult | null>(null);
   const [usbConnected, setUsbConnected] = useState<boolean>(lockManager.getStatus() === 'connected');
 
@@ -276,6 +278,7 @@ export const BookingModal: React.FC = () => {
     if (isCreatingCard) return;
 
     if (!usbConnected) {
+      await lockManager.notifyFailure();
       setCardResult({
         success: false,
         title: 'Encodeur proUSB non connecté',
@@ -290,6 +293,11 @@ export const BookingModal: React.FC = () => {
     }
 
     setIsCreatingCard(true);
+    setCardProgress(15);
+    const progressTimer = setInterval(() => {
+      setCardProgress((prev) => Math.min(92, prev + Math.floor(Math.random() * 12) + 8));
+    }, 110);
+
     try {
       const record = await lockManager.issueGuestCardFromBooking(
         {
@@ -301,6 +309,9 @@ export const BookingModal: React.FC = () => {
         },
         'Admin',
       );
+      clearInterval(progressTimer);
+      setCardProgress(100);
+      await lockManager.notifySuccess();
       setCardResult({
         success: true,
         title: 'Carte client encodée avec succès',
@@ -313,6 +324,9 @@ export const BookingModal: React.FC = () => {
         ],
       });
     } catch (error) {
+      clearInterval(progressTimer);
+      setCardProgress(0);
+      await lockManager.notifyFailure();
       setCardResult({
         success: false,
         title: "Échec de l'écriture de la carte",
@@ -326,7 +340,11 @@ export const BookingModal: React.FC = () => {
         ],
       });
     } finally {
-      setIsCreatingCard(false);
+      clearInterval(progressTimer);
+      setTimeout(() => {
+        setIsCreatingCard(false);
+        setCardProgress(0);
+      }, 1000);
     }
   };
 
@@ -1333,14 +1351,19 @@ export const BookingModal: React.FC = () => {
                       : "Encodeur proUSB non connecté — branchez-le d'abord dans l'onglet Serrures"
                   }
                 >
-                  {isCreatingCard ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+                  {isCreatingCard ? (
+                    <div className="relative w-4 h-4 shrink-0 mr-1">
+                      <svg className="w-4 h-4 -rotate-90" viewBox="0 0 36 36">
+                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${Math.max(5, cardProgress)}, 100`} />
+                      </svg>
+                    </div>
+                  ) : (
+                    <KeyRound size={14} />
+                  )}
                   <span>
                     {isCreatingCard
-                      ? language === 'fr'
-                        ? 'Encodage…'
-                        : language === 'ar'
-                          ? 'جارٍ الترميز…'
-                          : 'Encoding…'
+                      ? `Encodage… ${Math.round(cardProgress)}%`
                       : language === 'fr'
                         ? 'Créer la carte client'
                         : language === 'ar'
@@ -1610,6 +1633,14 @@ export const BookingModal: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Indicateur circulaire de progression immersif lors de la création de la carte */}
+      <CardCreationProgressModal
+        isOpen={isCreatingCard}
+        progress={cardProgress}
+        cardTitle={`Carte Client · ${currentResource?.name || resourceNameFallback || 'Chambre'} (${guestName || 'Client'})`}
+        statusText="Encodage RFID et vérification en cours..."
+      />
 
       {/* Card creation result — success or failure dialog */}
       <CardResultDialog result={cardResult} onClose={() => setCardResult(null)} />
