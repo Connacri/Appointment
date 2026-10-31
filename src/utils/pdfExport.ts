@@ -1,17 +1,33 @@
 import jsPDF from 'jspdf';
 import { InvoiceRecord } from '../types/booking';
+import { EstablishmentProfile, DEFAULT_ESTABLISHMENT_PROFILE } from '../types/establishment';
 
-export function exportInvoicePDF(doc: InvoiceRecord, lang: 'fr' | 'en' = 'fr') {
+export function exportInvoicePDF(
+  doc: InvoiceRecord,
+  lang: 'fr' | 'en' = 'fr',
+  establishmentProfile?: EstablishmentProfile
+) {
   const pdf = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
     format: 'a4',
   });
 
+  const profile = establishmentProfile || DEFAULT_ESTABLISHMENT_PROFILE;
   const isFr = lang === 'fr';
+  const currencySymbol = doc.currency || profile.defaultCurrency || 'DA';
 
-  // Theme primary colors
-  const primaryColor = doc.docType === 'invoice' ? [2, 132, 199] : doc.docType === 'quote' ? [16, 185, 129] : [139, 92, 246];
+  const formatAmount = (val: number) => {
+    return `${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`;
+  };
+
+  // Primary palette based on document type
+  const primaryColor =
+    doc.docType === 'invoice'
+      ? [30, 58, 138] // Navy Blue / Prestige
+      : doc.docType === 'quote'
+      ? [5, 150, 105] // Emerald
+      : [109, 40, 217]; // Purple / Violet
 
   // Document Title by type
   const docTitle =
@@ -21,91 +37,149 @@ export function exportInvoicePDF(doc: InvoiceRecord, lang: 'fr' | 'en' = 'fr') {
       ? isFr ? 'DEVIS ESTIMATIF' : 'PRICE QUOTATION'
       : isFr ? 'FACTURE PRO FORMA' : 'PRO FORMA INVOICE';
 
-  // 1. Header Box
+  // 1. Top Decorative Accent Banner
   pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  pdf.rect(0, 0, 210, 24, 'F');
+  pdf.rect(0, 0, 210, 6, 'F');
 
-  pdf.setTextColor(255, 255, 255);
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(16);
-  pdf.text('OMNIBOOK SOLUTIONS', 14, 15);
+  // 2. Hotel Header: Name, Stars & Logo
+  let headerY = 16;
 
-  pdf.setFontSize(12);
-  pdf.text(docTitle, 210 - 14, 15, { align: 'right' });
+  // Try to render image if base64 PNG or JPEG
+  let logoDrawn = false;
+  if (profile.logoUrl && (profile.logoUrl.startsWith('data:image/png') || profile.logoUrl.startsWith('data:image/jpeg'))) {
+    try {
+      pdf.addImage(profile.logoUrl, 'PNG', 14, headerY, 20, 20);
+      logoDrawn = true;
+    } catch (e) {
+      // Fallback to geometric crest
+    }
+  }
 
-  // 2. Company & Client Info
-  pdf.setTextColor(30, 41, 59);
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(10);
-  pdf.text(isFr ? 'Émetteur :' : 'Issuer:', 14, 34);
+  const textStartX = logoDrawn ? 38 : 14;
 
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.text([
-    'OmniBook Hospitality & Clinic SAS',
-    '8 Boulevard de la Madeleine, 75009 Paris, France',
-    'SIRET : 892 411 928 00014 · TVA : FR 48 892411928',
-    'Contact : support@omnibook.app · Tél : +33 1 42 68 00 00',
-  ], 14, 40);
-
-  // Client Box
-  pdf.setFillColor(248, 250, 252);
-  pdf.roundedRect(120, 30, 76, 32, 2, 2, 'F');
-  pdf.setDrawColor(226, 232, 240);
-  pdf.roundedRect(120, 30, 76, 32, 2, 2, 'S');
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(10);
-  pdf.text(isFr ? 'Client / Destinataire :' : 'Bill To:', 125, 37);
-
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.text([
-    doc.customerName,
-    doc.customerEmail,
-    doc.customerPhone || '',
-    doc.customerAddress ? doc.customerAddress.substring(0, 38) : '',
-  ], 125, 43);
-
-  // 3. Document Details Metadata Bar
-  pdf.setFillColor(241, 245, 249);
-  pdf.rect(14, 68, 182, 12, 'F');
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(8.5);
-  pdf.setTextColor(71, 85, 105);
-
-  const numLabel = isFr ? 'N° DOCUMENT' : 'DOCUMENT NO.';
-  const dateLabel = isFr ? 'DATE D\'ÉMISSION' : 'ISSUE DATE';
-  const dueLabel = doc.docType === 'quote' ? (isFr ? 'VALIDITÉ' : 'VALID UNTIL') : (isFr ? 'ÉCHÉANCE' : 'DUE DATE');
-  const domLabel = isFr ? 'SECTEUR' : 'DOMAIN';
-
-  pdf.text(numLabel, 18, 75);
-  pdf.text(dateLabel, 70, 75);
-  pdf.text(dueLabel, 120, 75);
-  pdf.text(domLabel, 165, 75);
-
-  pdf.setFont('helvetica', 'bold');
+  // Hotel Name
   pdf.setTextColor(15, 23, 42);
-  pdf.text(doc.docNumber, 18, 81);
-  pdf.text(doc.issueDate, 70, 81);
-  pdf.text(doc.validUntilOrDueDate, 120, 81);
-  pdf.text(doc.domain.toUpperCase(), 165, 81);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(15);
+  pdf.text(profile.name.toUpperCase(), textStartX, headerY + 5);
 
-  // 4. Line Items Table
-  let curY = 92;
+  // Stars + Category
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.setTextColor(217, 119, 6); // Amber
+  const starString = '★'.repeat(Math.min(5, Math.max(1, profile.stars || 4)));
+  pdf.text(`${starString}  ${profile.typeLabel || 'Établissement Hôtelier'}`, textStartX, headerY + 10);
+
+  // Slogan (if present)
+  if (profile.slogan) {
+    pdf.setFont('helvetica', 'italic');
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(`« ${profile.slogan} »`, textStartX, headerY + 14);
+  }
+
+  // Document Title badge on the right
   pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  pdf.rect(14, curY, 182, 8, 'F');
+  pdf.roundedRect(135, headerY, 61, 10, 2, 2, 'F');
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  pdf.text(docTitle, 165.5, headerY + 6.8, { align: 'center' });
+
+  // Document Number & Date under the badge
+  pdf.setTextColor(71, 85, 105);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8.5);
+  pdf.text(`${isFr ? 'Réf :' : 'Ref:'} ${doc.docNumber}`, 196, headerY + 15, { align: 'right' });
+  pdf.text(`${isFr ? 'Date :' : 'Date:'} ${doc.issueDate}`, 196, headerY + 19, { align: 'right' });
+
+  // 3. Sender & Client Address Columns
+  const infoY = headerY + 24;
+
+  // Issuer (Left)
+  pdf.setFillColor(248, 250, 252);
+  pdf.roundedRect(14, infoY, 86, 32, 2, 2, 'F');
+  pdf.setDrawColor(226, 232, 240);
+  pdf.roundedRect(14, infoY, 86, 32, 2, 2, 'S');
+
+  pdf.setTextColor(15, 23, 42);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8.5);
+  pdf.text(isFr ? 'ÉMETTEUR / LIEU DE SÉJOUR :' : 'ISSUER / HOTEL DETAILS:', 18, infoY + 6);
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8);
+  pdf.setTextColor(51, 65, 85);
+  const fullAddress = `${profile.address}, ${profile.postalCode || ''} ${profile.city}`;
+  pdf.text([
+    fullAddress.substring(0, 48),
+    `${profile.country} · Tél: ${profile.phone}`,
+    `Email: ${profile.email}`,
+    profile.website ? `Web: ${profile.website}` : '',
+  ], 18, infoY + 12);
+
+  // Client / Destinataire (Right)
+  pdf.setFillColor(248, 250, 252);
+  pdf.roundedRect(110, infoY, 86, 32, 2, 2, 'F');
+  pdf.setDrawColor(226, 232, 240);
+  pdf.roundedRect(110, infoY, 86, 32, 2, 2, 'S');
+
+  pdf.setTextColor(15, 23, 42);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8.5);
+  pdf.text(isFr ? 'DESTINATAIRE / FACTURÉ À :' : 'BILL TO / GUEST:', 114, infoY + 6);
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.setTextColor(15, 23, 42);
+  pdf.text(doc.customerName.substring(0, 42), 114, infoY + 12);
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8);
+  pdf.setTextColor(51, 65, 85);
+  pdf.text([
+    doc.customerAddress ? doc.customerAddress.substring(0, 44) : (isFr ? 'Adresse client sur dossier' : 'Client address on file'),
+    doc.customerEmail || '',
+    doc.customerPhone ? `Tél: ${doc.customerPhone}` : '',
+  ], 114, infoY + 17);
+
+  // 4. Metadata Strip (Validity, Sector, Currency)
+  const metaY = infoY + 36;
+  pdf.setFillColor(241, 245, 249);
+  pdf.rect(14, metaY, 182, 10, 'F');
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(7.5);
+  pdf.setTextColor(100, 116, 139);
+
+  const dueLabel = doc.docType === 'quote' ? (isFr ? 'VALIDITÉ DU DEVIS' : 'VALIDITY') : (isFr ? 'ÉCHÉANCE RÈGLEMENT' : 'DUE DATE');
+  pdf.text(isFr ? 'N° DOSSIER' : 'FILE NO.', 18, metaY + 4);
+  pdf.text(isFr ? 'DATE D\'ÉMISSION' : 'ISSUE DATE', 65, metaY + 4);
+  pdf.text(dueLabel, 115, metaY + 4);
+  pdf.text(isFr ? 'DEVISE' : 'CURRENCY', 170, metaY + 4);
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8.5);
+  pdf.setTextColor(15, 23, 42);
+  pdf.text(doc.docNumber, 18, metaY + 8);
+  pdf.text(doc.issueDate, 65, metaY + 8);
+  pdf.text(doc.validUntilOrDueDate, 115, metaY + 8);
+  pdf.text(currencySymbol, 170, metaY + 8);
+
+  // 5. Line Items Table
+  let curY = metaY + 14;
+  pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+  pdf.rect(14, curY, 182, 7.5, 'F');
 
   pdf.setTextColor(255, 255, 255);
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(8.5);
-  pdf.text(isFr ? 'Désignation de la prestation / séjour' : 'Description', 18, curY + 5.5);
-  pdf.text(isFr ? 'Qté' : 'Qty', 130, curY + 5.5, { align: 'center' });
-  pdf.text(isFr ? 'P.U. HT' : 'Unit HT', 155, curY + 5.5, { align: 'right' });
-  pdf.text(isFr ? 'Total TTC' : 'Total TTC', 190, curY + 5.5, { align: 'right' });
+  pdf.setFontSize(8);
+  pdf.text(isFr ? 'DÉSIGNATION DE LA PRESTATION / CHAMBRE' : 'DESCRIPTION / SERVICES', 18, curY + 5);
+  pdf.text(isFr ? 'QTÉ' : 'QTY', 125, curY + 5, { align: 'center' });
+  pdf.text(isFr ? 'P.U. HT' : 'UNIT HT', 152, curY + 5, { align: 'right' });
+  pdf.text(isFr ? 'TOTAL TTC' : 'TOTAL TTC', 190, curY + 5, { align: 'right' });
 
-  curY += 8;
+  curY += 7.5;
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(30, 41, 59);
 
@@ -113,118 +187,171 @@ export function exportInvoicePDF(doc: InvoiceRecord, lang: 'fr' | 'en' = 'fr') {
     const isAlt = idx % 2 === 1;
     if (isAlt) {
       pdf.setFillColor(248, 250, 252);
-      pdf.rect(14, curY, 182, 8, 'F');
+      pdf.rect(14, curY, 182, 7.5, 'F');
     }
     pdf.setDrawColor(241, 245, 249);
-    pdf.line(14, curY + 8, 196, curY + 8);
+    pdf.line(14, curY + 7.5, 196, curY + 7.5);
 
-    pdf.setFontSize(8.5);
-    pdf.text(item.description.substring(0, 60), 18, curY + 5.5);
-    pdf.text(String(item.quantity), 130, curY + 5.5, { align: 'center' });
-    pdf.text(`${item.unitPrice.toFixed(2)} €`, 155, curY + 5.5, { align: 'right' });
-    pdf.text(`${item.total.toFixed(2)} €`, 190, curY + 5.5, { align: 'right' });
+    pdf.setFontSize(8);
+    pdf.text(item.description.substring(0, 62), 18, curY + 5);
+    pdf.text(String(item.quantity), 125, curY + 5, { align: 'center' });
+    pdf.text(formatAmount(item.unitPrice), 152, curY + 5, { align: 'right' });
+    pdf.text(formatAmount(item.total), 190, curY + 5, { align: 'right' });
 
-    curY += 8;
+    curY += 7.5;
   });
 
-  // 5. Totals & Tax Breakdown Box
+  // 6. Bank Details (Left) & Financial Totals (Right)
   curY += 6;
   const totX = 115;
   const valX = 190;
 
-  pdf.setFontSize(8.5);
-  pdf.text(isFr ? 'Sous-total Hors Taxes (HT) :' : 'Subtotal Excl. Tax:', totX, curY);
-  pdf.text(`${doc.subtotalHT.toFixed(2)} €`, valX, curY, { align: 'right' });
-  curY += 5;
+  // Left Bank Box
+  pdf.setFillColor(248, 250, 252);
+  pdf.roundedRect(14, curY, 90, 36, 2, 2, 'F');
+  pdf.setDrawColor(226, 232, 240);
+  pdf.roundedRect(14, curY, 90, 36, 2, 2, 'S');
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8);
+  pdf.setTextColor(15, 23, 42);
+  pdf.text(isFr ? 'MODALITÉS DE RÈGLEMENT PAR VIREMENT :' : 'PAYMENT WIRE TRANSFER INSTRUCTIONS:', 18, curY + 6);
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(7.5);
+  pdf.setTextColor(51, 65, 85);
+  pdf.text([
+    profile.bankName ? `Banque : ${profile.bankName}` : '',
+    profile.bankAccountRib ? `RIB/IBAN : ${profile.bankAccountRib}` : '',
+    profile.bankSwift ? `BIC/SWIFT : ${profile.bankSwift}` : '',
+    isFr ? `Réf virement obligatoire : ${doc.docNumber}` : `Transfer reference: ${doc.docNumber}`,
+  ].filter(Boolean), 18, curY + 12);
+
+  // Right Totals Breakdown
+  pdf.setFontSize(8);
+  pdf.setTextColor(51, 65, 85);
+  pdf.text(isFr ? 'Sous-total Hors Taxes (HT) :' : 'Subtotal Excl. Tax:', totX, curY + 4);
+  pdf.text(formatAmount(doc.subtotalHT), valX, curY + 4, { align: 'right' });
+
+  let lineOffset = 9;
 
   if (doc.discountAmount > 0) {
     pdf.setTextColor(220, 38, 38);
     const promoDesc = doc.discountCode ? ` (${doc.discountCode})` : '';
-    pdf.text(`${isFr ? 'Remise / Promo' : 'Discount'}${promoDesc} :`, totX, curY);
-    pdf.text(`- ${doc.discountAmount.toFixed(2)} €`, valX, curY, { align: 'right' });
-    curY += 5;
-    pdf.setTextColor(30, 41, 59);
+    pdf.text(`${isFr ? 'Remise' : 'Discount'}${promoDesc} :`, totX, curY + lineOffset);
+    pdf.text(`- ${formatAmount(doc.discountAmount)}`, valX, curY + lineOffset, { align: 'right' });
+    lineOffset += 5;
+    pdf.setTextColor(51, 65, 85);
   }
 
   if (doc.vatAmount > 0) {
-    pdf.text(isFr ? 'TVA collectée :' : 'VAT Tax:', totX, curY);
-    pdf.text(`${doc.vatAmount.toFixed(2)} €`, valX, curY, { align: 'right' });
-    curY += 5;
+    pdf.text(isFr ? 'TVA collectée :' : 'VAT Amount:', totX, curY + lineOffset);
+    pdf.text(formatAmount(doc.vatAmount), valX, curY + lineOffset, { align: 'right' });
+    lineOffset += 5;
   }
 
   if (doc.cityTouristTax > 0) {
-    pdf.text(isFr ? 'Taxe de séjour forfaitaire :' : 'City Tourist Tax:', totX, curY);
-    pdf.text(`${doc.cityTouristTax.toFixed(2)} €`, valX, curY, { align: 'right' });
-    curY += 5;
+    pdf.text(isFr ? 'Taxe de séjour :' : 'City Tourist Tax:', totX, curY + lineOffset);
+    pdf.text(formatAmount(doc.cityTouristTax), valX, curY + lineOffset, { align: 'right' });
+    lineOffset += 5;
   }
 
+  // Total Line Separator
   pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  pdf.line(totX, curY, valX + 6, curY);
-  curY += 6;
+  pdf.line(totX, curY + lineOffset, valX + 6, curY + lineOffset);
+  lineOffset += 5;
 
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
-  pdf.setTextColor(15, 23, 42);
-  pdf.text(isFr ? 'TOTAL NET TTC :' : 'TOTAL AMOUNT DUE:', totX, curY);
-  pdf.text(`${doc.totalTTC.toFixed(2)} €`, valX, curY, { align: 'right' });
-  curY += 6;
-
-  if (doc.depositPaid > 0) {
-    pdf.setFontSize(9);
-    pdf.setTextColor(16, 185, 129);
-    pdf.text(isFr ? 'Acompte déjà versé :' : 'Deposit Paid:', totX, curY);
-    pdf.text(`- ${doc.depositPaid.toFixed(2)} €`, valX, curY, { align: 'right' });
-    curY += 5;
-
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(9.5);
-    pdf.setTextColor(30, 41, 59);
-    pdf.text(isFr ? 'Reste à régler :' : 'Balance Remaining:', totX, curY);
-    pdf.text(`${doc.balanceDue.toFixed(2)} €`, valX, curY, { align: 'right' });
-    curY += 6;
-  }
-
-  // 6. Stamp / Status Badge
-  pdf.setDrawColor(
-    doc.status === 'paid' ? 16 : doc.status === 'sent' ? 2 : 139,
-    doc.status === 'paid' ? 185 : doc.status === 'sent' ? 132 : 92,
-    doc.status === 'paid' ? 129 : doc.status === 'sent' ? 199 : 246
-  );
-  pdf.setLineWidth(0.8);
-  pdf.roundedRect(14, curY - 18, 48, 14, 2, 2, 'S');
-
+  // Total TTC
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(10);
+  pdf.setTextColor(15, 23, 42);
+  pdf.text(isFr ? 'TOTAL NET TTC :' : 'TOTAL AMOUNT DUE:', totX, curY + lineOffset);
+  pdf.text(formatAmount(doc.totalTTC), valX, curY + lineOffset, { align: 'right' });
+  lineOffset += 6;
+
+  if (doc.depositPaid > 0) {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(5, 150, 105);
+    pdf.text(isFr ? 'Acompte déjà versé :' : 'Deposit Paid:', totX, curY + lineOffset);
+    pdf.text(`- ${formatAmount(doc.depositPaid)}`, valX, curY + lineOffset, { align: 'right' });
+    lineOffset += 5;
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9);
+    pdf.setTextColor(30, 58, 138);
+    pdf.text(isFr ? 'NET À PAYER :' : 'BALANCE DUE:', totX, curY + lineOffset);
+    pdf.text(formatAmount(doc.balanceDue), valX, curY + lineOffset, { align: 'right' });
+    lineOffset += 6;
+  }
+
+  // 7. Stamp / Status Badge (Below bank info)
+  const stampY = curY + 42;
+  const statusIsPaid = doc.status === 'paid';
+
+  pdf.setDrawColor(
+    statusIsPaid ? 5 : 30,
+    statusIsPaid ? 150 : 58,
+    statusIsPaid ? 105 : 138
+  );
+  pdf.setLineWidth(0.6);
+  pdf.roundedRect(14, stampY, 52, 14, 2, 2, 'S');
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
   pdf.setTextColor(
-    doc.status === 'paid' ? 16 : doc.status === 'sent' ? 2 : 139,
-    doc.status === 'paid' ? 185 : doc.status === 'sent' ? 132 : 92,
-    doc.status === 'paid' ? 129 : doc.status === 'sent' ? 199 : 246
+    statusIsPaid ? 5 : 30,
+    statusIsPaid ? 150 : 58,
+    statusIsPaid ? 105 : 138
   );
 
-  const statusText =
-    doc.status === 'paid'
-      ? isFr ? '✓ PAYÉ / ACQUITTÉ' : '✓ PAID IN FULL'
+  const statusLabel =
+    statusIsPaid
+      ? isFr ? '✓ RÈGLEMENT ACQUITTÉ' : '✓ PAID IN FULL'
       : doc.docType === 'quote'
-      ? isFr ? 'DEVIS EN COURS' : 'PROPOSED QUOTE'
-      : isFr ? 'EN ATTENTE RÈGLEMENT' : 'PAYMENT PENDING';
+      ? isFr ? 'DEVIS PROPOSÉ' : 'PROPOSED QUOTATION'
+      : isFr ? 'EN ATTENTE PAIEMENT' : 'PAYMENT PENDING';
 
-  pdf.text(statusText, 38, curY - 9, { align: 'center' });
+  pdf.text(statusLabel, 40, stampY + 9, { align: 'center' });
 
-  // 7. Payment Information & Legal Footer
+  // 8. Signatures & Cachet
+  pdf.setDrawColor(203, 213, 225);
+  pdf.roundedRect(130, stampY, 66, 18, 2, 2, 'S');
   pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(8);
-  pdf.setTextColor(100, 116, 139);
+  pdf.setFontSize(7);
+  pdf.setTextColor(148, 163, 184);
+  pdf.text(isFr ? 'Cachet & Signature de la Direction' : 'Official Stamp & Authorized Signature', 163, stampY + 5, { align: 'center' });
+  pdf.text(`${profile.city}, ${doc.issueDate}`, 163, stampY + 15, { align: 'center' });
 
-  const footerY = 270;
+  // 9. Fiscal & Legal Footer (Always at bottom)
+  const footerY = 268;
   pdf.setDrawColor(226, 232, 240);
   pdf.line(14, footerY, 196, footerY);
 
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(7.5);
+  pdf.setTextColor(100, 116, 139);
+
+  // Build fiscal line from profile
+  const fiscalParts = [
+    profile.taxNumber ? `NIF : ${profile.taxNumber}` : '',
+    profile.tradeRegisterNumber ? `RC : ${profile.tradeRegisterNumber}` : '',
+    profile.statisticalIdNumber ? `NIS : ${profile.statisticalIdNumber}` : '',
+    profile.taxArticleNumber ? `Art. Imp. : ${profile.taxArticleNumber}` : '',
+  ].filter(Boolean);
+
+  const fiscalString = fiscalParts.join('  ·  ');
+
   pdf.text([
-    isFr ? 'Modalités : Virement bancaire ou Carte Bancaire sécurisée · IBAN : FR76 3000 4000 5000 6000 7000 890 · BIC : BNPAFRPP' : 'Payment terms: Bank wire transfer or secure Card · IBAN: FR76 3000 4000 5000 6000 7000 890 · BIC: BNPAFRPP',
-    isFr ? 'Pénalités de retard : 3 fois le taux d\'intérêt légal en vigueur · Indemnité forfaitaire de recouvrement : 40 €.' : 'Late payment interest: 3x legal rate · Fixed recovery compensation: 40 €.',
-    isFr ? 'OmniBook AGENTS.md — Système certifié conforme aux normes internationales de gestion hôtelière et clinique.' : 'OmniBook AGENTS.md — Certified multi-sector hospitality and healthcare management standard.',
+    fiscalString || `${profile.name} · Établissement Hôtelier Agréé`,
+    isFr
+      ? 'Pénalités de retard : 3 fois le taux d\'intérêt légal en vigueur · Indemnité forfaitaire de recouvrement : 40 ' + currencySymbol
+      : 'Late interest: 3x statutory rate · Recovery indemnity: 40 ' + currencySymbol,
+    isFr
+      ? `Système certifié OmniBook Hospitality — Document comptable officiel émis pour ${doc.customerName}`
+      : `OmniBook Hospitality System — Official accounting invoice issued for ${doc.customerName}`,
   ], 14, footerY + 5);
 
-  // Trigger download
+  // Save the PDF
   pdf.save(`${doc.docNumber}_${doc.customerName.replace(/\s+/g, '_')}.pdf`);
 }

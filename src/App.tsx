@@ -27,6 +27,7 @@ import { ObjectBoxInspectorModal } from './components/ObjectBoxInspectorModal';
 import { QrPassModal } from './components/QrPassModal';
 import { QrScannerModal } from './components/QrScannerModal';
 import { ProUsbLockSystemView } from './components/ProUsbLockSystemView';
+import { EstablishmentSetupModal } from './components/EstablishmentSetupModal';
 
 const MainLayout: React.FC = () => {
   const {
@@ -37,6 +38,9 @@ const MainLayout: React.FC = () => {
     setActiveQrPassBooking,
     isQrScannerOpen,
     setIsQrScannerOpen,
+    isEstablishmentModalOpen,
+    setIsEstablishmentModalOpen,
+    hasOnboarded,
   } = useApp();
 
   return (
@@ -100,6 +104,11 @@ const MainLayout: React.FC = () => {
       <QrScannerModal
         isOpen={isQrScannerOpen}
         onClose={() => setIsQrScannerOpen(false)}
+      />
+      <EstablishmentSetupModal
+        isOpen={isEstablishmentModalOpen}
+        onClose={() => setIsEstablishmentModalOpen(false)}
+        isFirstLaunch={!hasOnboarded}
       />
     </div>
   );

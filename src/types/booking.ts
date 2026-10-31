@@ -80,6 +80,7 @@ export interface InvoiceRecord {
   status: 'draft' | 'sent' | 'paid' | 'accepted' | 'rejected' | 'overdue';
   paymentMethod?: 'credit_card' | 'bank_transfer' | 'cash' | 'online';
   termsAndNotes?: string;
+  currency?: string;
 }
 
 export interface PromoOffer {

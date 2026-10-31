@@ -21,9 +21,12 @@ import {
   Hotel,
   Palmtree,
   Calendar,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
+import { playSuccessFeedback } from '../utils/audioFeedback';
 import { PipelineStatusIndicator } from './PipelineStatusIndicator';
 import {
   lockManager,
@@ -60,6 +63,8 @@ export const TopBar: React.FC = () => {
     setActiveView,
     isSidebarMobileOpen,
     setIsSidebarMobileOpen,
+    isSoundEnabled,
+    toggleSound,
   } = useApp();
 
   const [usbStatus, setUsbStatus] = useState<UsbConnectionStatus>(lockManager.getStatus());

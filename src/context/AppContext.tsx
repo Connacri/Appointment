@@ -22,8 +22,19 @@ import {
   initialStockItems,
   initialPmsTasks,
 } from '../data/mockData';
+import { EstablishmentProfile, DEFAULT_ESTABLISHMENT_PROFILE } from '../types/establishment';
 import { objectBox } from '../db/objectbox';
 import { lockManager } from '../locks/lockManager';
+import {
+  audioFeedbackService,
+  playAudioFeedback,
+  playSuccessFeedback,
+  playErrorFeedback,
+  playClickFeedback,
+  playBipFeedback,
+  type AudioFeedbackType,
+  type AudioFeedbackOptions,
+} from '../utils/audioFeedback';
 
 export type ActiveAppView =
   | 'planning'
@@ -120,6 +131,15 @@ interface AppContextType {
   dynamicRates: Record<string, Record<string, number>>;
   setDynamicRate: (roomType: string, date: string, price: number) => void;
   applyDynamicRatesBulk: (roomType: string, rates: Record<string, number>) => void;
+  isSoundEnabled: boolean;
+  toggleSound: () => boolean;
+  playFeedback: (type: AudioFeedbackType, options?: AudioFeedbackOptions) => void;
+  establishmentProfile: EstablishmentProfile;
+  setEstablishmentProfile: (profile: EstablishmentProfile) => void;
+  isEstablishmentModalOpen: boolean;
+  setIsEstablishmentModalOpen: (open: boolean) => void;
+  hasOnboarded: boolean;
+  setHasOnboarded: (done: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -144,6 +164,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentRole, setCurrentRoleState] = useState<UserRole>(() => {
     return (localStorage.getItem('omnibook_role') as UserRole) || 'manager';
   });
+
+  const [isSoundEnabled, setIsSoundEnabled] = useState<boolean>(() => audioFeedbackService.isEnabled());
+
+  const toggleSound = () => {
+    const next = audioFeedbackService.toggle();
+    setIsSoundEnabled(next);
+    return next;
+  };
+
+  const playFeedback = (type: AudioFeedbackType, options?: AudioFeedbackOptions) => {
+    playAudioFeedback(type, options);
+  };
 
   const isViewAllowedForDomain = (_view: ActiveAppView, domain: DomainType) => {
     return domain === 'hotel' || domain === 'resort';
@@ -186,6 +218,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrencyState(c);
     localStorage.setItem('omnibook_currency', c);
   };
+
+  // Establishment Profile (Hôtel, Coordonnées, Logo, Fiscalité) & Onboarding
+  const [establishmentProfile, setEstablishmentProfileState] = useState<EstablishmentProfile>(() => {
+    const saved = localStorage.getItem('omnibook_establishment_profile');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return DEFAULT_ESTABLISHMENT_PROFILE;
+  });
+
+  const setEstablishmentProfile = (profile: EstablishmentProfile) => {
+    setEstablishmentProfileState(profile);
+    localStorage.setItem('omnibook_establishment_profile', JSON.stringify(profile));
+  };
+
+  const [hasOnboarded, setHasOnboardedState] = useState<boolean>(() => {
+    return localStorage.getItem('omnibook_onboarding_completed') === 'true';
+  });
+
+  const setHasOnboarded = (done: boolean) => {
+    setHasOnboardedState(done);
+    if (done) {
+      localStorage.setItem('omnibook_onboarding_completed', 'true');
+    } else {
+      localStorage.removeItem('omnibook_onboarding_completed');
+    }
+  };
+
+  // 1ère ouverture : ouvre automatiquement le modal d'onboarding si non complété
+  const [isEstablishmentModalOpen, setIsEstablishmentModalOpen] = useState<boolean>(() => {
+    return localStorage.getItem('omnibook_onboarding_completed') !== 'true';
+  });
 
   // Stock & Inventory
   const [stockItems, setStockItems] = useState<StockItem[]>(() => {
@@ -585,6 +653,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...taskData,
       id: `tsk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     };
+    playSuccessFeedback();
     setTasks((prev) => {
       const updated = [newTask, ...prev];
       localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
@@ -593,6 +662,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateTaskStatus = (id: string, status: PmsTask['status']) => {
+    if (status === 'done') {
+      playSuccessFeedback();
+    } else {
+      playClickFeedback();
+    }
+
     setTasks((prev) => {
       const updated = prev.map((t) => {
         if (t.id === id) {
@@ -623,6 +698,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const toggleSubtask = (taskId: string, subtaskId: string) => {
+    playClickFeedback();
     setTasks((prev) => {
       const updated = prev.map((t) => {
         if (t.id === taskId && t.subtasks) {
@@ -639,6 +715,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteTask = (id: string) => {
+    playClickFeedback();
     setTasks((prev) => {
       const updated = prev.filter((t) => t.id !== id);
       localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
@@ -864,6 +941,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dynamicRates,
         setDynamicRate,
         applyDynamicRatesBulk,
+        isSoundEnabled,
+        toggleSound,
+        playFeedback,
+        establishmentProfile,
+        setEstablishmentProfile,
+        isEstablishmentModalOpen,
+        setIsEstablishmentModalOpen,
+        hasOnboarded,
+        setHasOnboarded,
       }}
     >
       {children}

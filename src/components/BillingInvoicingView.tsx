@@ -16,14 +16,19 @@ import {
   X,
   CreditCard,
   Building,
+  Building2,
+  Settings2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { initialInvoices, initialPromos } from '../data/mockData';
 import { InvoiceRecord, DocumentType, InvoiceItem } from '../types/booking';
 import { exportInvoicePDF } from '../utils/pdfExport';
+import { InvoicePreviewModal } from './InvoicePreviewModal';
+import { playClickFeedback } from '../utils/audioFeedback';
 
 export const BillingInvoicingView: React.FC = () => {
-  const { language, activeSector, currentDomain } = useApp();
+  const { language, activeSector, currentDomain, establishmentProfile, setIsEstablishmentModalOpen, currency } = useApp();
+  const activeCurrency = establishmentProfile.defaultCurrency || currency || 'DA';
 
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => {
     const saved = localStorage.getItem('omnibook_invoices');
@@ -118,6 +123,7 @@ export const BillingInvoicingView: React.FC = () => {
       discountAmount: Math.round(discountAmount * 100) / 100,
       vatAmount: Math.round(vatAmount * 100) / 100,
       cityTouristTax: 0,
+      currency: activeCurrency,
       totalTTC: Math.round(totalTTC * 100) / 100,
       depositPaid: newDeposit,
       balanceDue: Math.round(balanceDue * 100) / 100,
@@ -183,15 +189,41 @@ export const BillingInvoicingView: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors self-start md:self-auto"
-        >
-          <Plus size={16} />
-          <span>
-            {language === 'fr' ? '+ Nouveau Devis / Facture' : '+ New Quote / Invoice'}
-          </span>
-        </button>
+        <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+          <button
+            type="button"
+            onClick={() => {
+              playClickFeedback();
+              setIsEstablishmentModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            title="Personnaliser le nom de l'hôtel, logo, mentions fiscales et coordonnées pour vos factures"
+          >
+            {establishmentProfile.logoUrl ? (
+              <img
+                src={establishmentProfile.logoUrl}
+                alt="Logo"
+                className="w-5 h-5 object-contain rounded shrink-0"
+              />
+            ) : (
+              <Building2 size={16} className="text-blue-600" />
+            )}
+            <span className="truncate max-w-[160px] sm:max-w-[220px]">
+              {establishmentProfile.name || 'Mon Établissement'}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+          >
+            <Plus size={16} />
+            <span>
+              {language === 'fr' ? '+ Nouveau Devis / Facture' : '+ New Quote / Invoice'}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Promotions & Offers Highlights Banner */}
@@ -317,67 +349,97 @@ export const BillingInvoicingView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-              {filteredDocs.map((doc) => (
-                <tr key={doc.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-850/40 transition-colors">
-                  <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
-                    {doc.docNumber}
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 uppercase font-mono">
-                      {doc.domain}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">{getDocTypeBadge(doc.docType)}</td>
-                  <td className="py-3 px-4">
-                    <div className="font-semibold text-slate-800 dark:text-slate-200">
-                      {doc.customerName}
-                    </div>
-                    <div className="text-[11px] text-slate-400">{doc.customerEmail}</div>
-                  </td>
-                  <td className="py-3 px-4 font-mono text-slate-500">{doc.issueDate}</td>
-                  <td className="py-3 px-4 font-mono text-slate-500">{doc.validUntilOrDueDate}</td>
-                  <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white text-sm">
-                    {doc.totalTTC.toFixed(2)} €
-                    {doc.discountAmount > 0 && (
-                      <span className="block text-[10px] text-rose-500 font-normal">
-                        (-{doc.discountAmount}€ promo)
+              {filteredDocs.map((doc) => {
+                const docCurr = doc.currency || activeCurrency;
+                return (
+                  <tr
+                    key={doc.id}
+                    className="hover:bg-blue-50/40 dark:hover:bg-slate-850/60 transition-colors group cursor-pointer"
+                    onClick={() => {
+                      playClickFeedback();
+                      setSelectedInvoice(doc);
+                    }}
+                  >
+                    <td className="py-3 px-4 font-mono font-bold text-blue-600 dark:text-blue-400 group-hover:underline">
+                      {doc.docNumber}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 uppercase font-mono">
+                        {doc.domain}
                       </span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        doc.status === 'paid'
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                          : doc.status === 'sent'
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                          : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                      }`}
-                    >
-                      {doc.status === 'paid' ? 'Payé' : doc.status === 'sent' ? 'Envoyé' : 'Brouillon'}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => exportInvoicePDF(doc, 'fr')}
-                        className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white text-white rounded font-medium flex items-center gap-1 transition-colors"
-                        title="Télécharger PDF (FR)"
+                    </td>
+                    <td className="py-3 px-4">{getDocTypeBadge(doc.docType)}</td>
+                    <td className="py-3 px-4">
+                      <div className="font-semibold text-slate-800 dark:text-slate-200">
+                        {doc.customerName}
+                      </div>
+                      <div className="text-[11px] text-slate-400">{doc.customerEmail}</div>
+                    </td>
+                    <td className="py-3 px-4 font-mono text-slate-500">{doc.issueDate}</td>
+                    <td className="py-3 px-4 font-mono text-slate-500">{doc.validUntilOrDueDate}</td>
+                    <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white text-sm">
+                      {doc.totalTTC.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {docCurr}
+                      {doc.discountAmount > 0 && (
+                        <span className="block text-[10px] text-rose-500 font-normal">
+                          (-{doc.discountAmount} {docCurr} promo)
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          doc.status === 'paid'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                            : doc.status === 'sent'
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                            : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                        }`}
                       >
-                        <Download size={13} />
-                        <span>PDF (FR)</span>
-                      </button>
-                      <button
-                        onClick={() => exportInvoicePDF(doc, 'en')}
-                        className="px-2 py-1 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded font-medium text-slate-700 dark:text-slate-200 transition-colors"
-                        title="Download PDF in English (EN)"
-                      >
-                        EN
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {doc.status === 'paid' ? 'Payé' : doc.status === 'sent' ? 'Envoyé' : 'Brouillon'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playClickFeedback();
+                            setSelectedInvoice(doc);
+                          }}
+                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/80 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                          title="Aperçu & Impression du document officiel"
+                        >
+                          <Eye size={13} />
+                          <span>Aperçu</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playClickFeedback();
+                            exportInvoicePDF(doc, 'fr', establishmentProfile);
+                          }}
+                          className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white text-white rounded-lg font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                          title="Télécharger PDF officiel (FR)"
+                        >
+                          <Download size={13} />
+                          <span>PDF</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playClickFeedback();
+                            exportInvoicePDF(doc, 'en', establishmentProfile);
+                          }}
+                          className="px-2 py-1 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg font-medium text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                          title="Download PDF in English (EN)"
+                        >
+                          EN
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -558,21 +620,21 @@ export const BillingInvoicingView: React.FC = () => {
               <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl space-y-1 font-mono text-xs">
                 <div className="flex justify-between text-slate-500">
                   <span>Sous-total HT :</span>
-                  <span>{subtotalHT.toFixed(2)} €</span>
+                  <span>{subtotalHT.toFixed(2)} {activeCurrency}</span>
                 </div>
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-rose-600">
                     <span>Remise ({newSelectedPromo}) :</span>
-                    <span>- {discountAmount.toFixed(2)} €</span>
+                    <span>- {discountAmount.toFixed(2)} {activeCurrency}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-slate-500">
                   <span>TVA estimée :</span>
-                  <span>{vatAmount.toFixed(2)} €</span>
+                  <span>{vatAmount.toFixed(2)} {activeCurrency}</span>
                 </div>
                 <div className="flex justify-between font-bold text-sm text-slate-900 dark:text-white border-t border-slate-200 dark:border-slate-700 pt-1">
                   <span>TOTAL NET TTC :</span>
-                  <span>{totalTTC.toFixed(2)} €</span>
+                  <span>{totalTTC.toFixed(2)} {activeCurrency}</span>
                 </div>
               </div>
 
@@ -581,13 +643,13 @@ export const BillingInvoicingView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 font-medium"
+                  className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 font-medium cursor-pointer"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-sm"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold rounded-lg shadow-sm cursor-pointer"
                 >
                   Générer le Document & Enregistrer
                 </button>
@@ -596,6 +658,14 @@ export const BillingInvoicingView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* High-Fidelity Official Document Preview & Print Modal */}
+      <InvoicePreviewModal
+        invoice={selectedInvoice}
+        isOpen={!!selectedInvoice}
+        onClose={() => setSelectedInvoice(null)}
+        onEditEstablishment={() => setIsEstablishmentModalOpen(true)}
+      />
     </div>
   );
 };

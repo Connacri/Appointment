@@ -50,6 +50,8 @@ export const PlanningTimeline: React.FC = () => {
     currency,
   } = useApp();
 
+  const isRTL = language === 'ar';
+
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Responsive mode: compact (phone), standard, or wide
@@ -440,10 +442,12 @@ export const PlanningTimeline: React.FC = () => {
       >
         {/* LEFT COLUMN: Resource Tree */}
         <div
-          className={`${leftColWidthClass} shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 sticky left-0 z-20 select-none shadow-xs transition-all duration-200 backdrop-blur-xs`}
+          className={`${leftColWidthClass} shrink-0 ${
+            isRTL ? 'border-l sticky right-0' : 'border-r sticky left-0'
+          } border-slate-200 dark:border-slate-800 bg-slate-50/95 dark:bg-slate-900/95 z-20 select-none shadow-xs transition-all duration-200 backdrop-blur-xs flex flex-col`}
         >
           {/* Header of Resources Column with STICKY TOP-0 */}
-          <div className="h-16 md:h-20 border-b border-slate-200 dark:border-slate-800 px-2 sm:px-3 flex flex-col justify-center bg-slate-100 dark:bg-slate-800 sticky top-0 left-0 z-30">
+          <div className="h-16 md:h-20 min-h-[64px] md:min-h-[80px] max-h-[64px] md:max-h-[80px] shrink-0 border-b border-slate-200 dark:border-slate-800 px-2 sm:px-3 flex flex-col justify-center bg-slate-100 dark:bg-slate-850 sticky top-0 z-30">
             <span className="text-[11px] md:text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider truncate">
               {leftBarMode === 'mini'
                 ? 'Ress.'
@@ -453,26 +457,26 @@ export const PlanningTimeline: React.FC = () => {
                 ? (language === 'fr' ? 'Villas, Bungalows & Suites' : language === 'ar' ? 'فلل وشاليهات المنتجع' : 'Resort Villas & Bungalows')
                 : (language === 'fr' ? 'Hébergements' : 'Accommodations')}
             </span>
-            <span className="text-[9px] md:text-[10px] text-blue-600 dark:text-blue-400 font-medium truncate mt-0.5">
+            <span className="text-[9px] md:text-[10px] text-blue-600 dark:text-blue-400 font-bold truncate mt-0.5">
               {currentDomain.toUpperCase()}
             </span>
           </div>
 
           {/* Resource Groups & Items */}
-          <div className="divide-y divide-slate-200/60 dark:divide-slate-800/60">
+          <div className="flex flex-col">
             {filteredGroups.map((grp) => {
               const isCollapsed = collapsedGroups[grp.id];
               return (
-                <div key={grp.id} className="text-xs">
+                <div key={grp.id} className="flex flex-col">
                   {/* Group Header Row */}
                   <div
                     onClick={() => toggleGroup(grp.id)}
-                    className="h-10 px-1.5 sm:px-2.5 bg-slate-200/60 dark:bg-slate-800/60 flex items-center justify-between cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                    className="h-10 min-h-[40px] max-h-[40px] shrink-0 px-2 sm:px-2.5 bg-slate-200/80 dark:bg-slate-800/80 flex items-center justify-between cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-800"
                   >
                     <div className="flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate">
-                      {isCollapsed ? <ChevronRight size={13} className="shrink-0" /> : <ChevronDown size={13} className="shrink-0" />}
+                      {isCollapsed ? <ChevronRight size={13} className="shrink-0 text-slate-500" /> : <ChevronDown size={13} className="shrink-0 text-slate-500" />}
                       {leftBarMode !== 'mini' && (
-                        <span className="truncate text-[11px] sm:text-xs">
+                        <span className="truncate text-[11px] sm:text-xs font-bold">
                           {grp.name[language] || grp.name.en}
                         </span>
                       )}
@@ -481,35 +485,32 @@ export const PlanningTimeline: React.FC = () => {
                   </div>
 
                   {/* Resource Sub-Items */}
-                  {!isCollapsed && (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800/40 bg-white dark:bg-slate-900">
-                      {grp.resources.map((res) => (
-                        <div
-                          key={res.id}
-                          className="h-12 px-1.5 sm:px-2.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                        >
-                          <div className="flex items-center gap-1.5 truncate">
-                            {renderHousekeepingTag(res.housekeepingStatus)}
-                            {leftBarMode !== 'mini' && (
-                              <span className="font-medium text-slate-800 dark:text-slate-200 truncate text-[11px]">
-                                {res.name}
-                              </span>
-                            )}
-                            {leftBarMode === 'mini' && (
-                              <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-[10px] truncate">
-                                {res.name.replace(/[^0-9]/g, '') || res.name.slice(0, 3)}
-                              </span>
-                            )}
-                          </div>
-                          {leftBarMode === 'normal' && (
-                            <span className="text-[10px] text-slate-400 font-mono tabular-nums shrink-0 hidden sm:inline">
-                              {res.pricePerDay} {currency}
+                  {!isCollapsed &&
+                    grp.resources.map((res) => (
+                      <div
+                        key={res.id}
+                        className="h-12 min-h-[48px] max-h-[48px] shrink-0 px-1.5 sm:px-2.5 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
+                          {renderHousekeepingTag(res.housekeepingStatus)}
+                          {leftBarMode !== 'mini' && (
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 truncate text-[11px]">
+                              {res.name}
+                            </span>
+                          )}
+                          {leftBarMode === 'mini' && (
+                            <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-[10px] truncate">
+                              {res.name.replace(/[^0-9]/g, '') || res.name.slice(0, 3)}
                             </span>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                        {leftBarMode === 'normal' && (
+                          <span className="text-[10px] text-slate-400 font-mono tabular-nums shrink-0 hidden sm:inline">
+                            {res.pricePerDay} {currency}
+                          </span>
+                        )}
+                      </div>
+                    ))}
                 </div>
               );
             })}
@@ -527,7 +528,7 @@ export const PlanningTimeline: React.FC = () => {
                 transform: 'translateX(-50%)',
               }}
             >
-              {/* Floating Pill Time Badge: Positioned at header-grid threshold (top-16 md:top-20 -mt-3.5) with live pulse */}
+              {/* Floating Pill Time Badge */}
               <div className="sticky top-16 md:top-20 -mt-3.5 z-40 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono text-white bg-rose-600 shadow-md shadow-rose-600/50 whitespace-nowrap flex items-center gap-1.5 border-2 border-white dark:border-slate-900 select-none">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                 <span>{timelineSync.currentTimeStr}</span>
@@ -538,12 +539,12 @@ export const PlanningTimeline: React.FC = () => {
           )}
 
           {/* Timeline Header: Days row + Availability badge */}
-          <div className="h-16 md:h-20 border-b border-slate-200 dark:border-slate-800 flex bg-white dark:bg-slate-900 sticky top-0 z-10 select-none">
+          <div className="h-16 md:h-20 min-h-[64px] md:min-h-[80px] max-h-[64px] md:max-h-[80px] shrink-0 border-b border-slate-200 dark:border-slate-800 flex bg-white dark:bg-slate-900 sticky top-0 z-10 select-none">
             {timelineDays.map((day) => (
               <div
                 key={day.dateStr}
                 style={{ width: `${colWidth}px` }}
-                className={`shrink-0 border-r border-slate-200/70 dark:border-slate-800/70 flex flex-col justify-between p-1 md:p-1.5 transition-colors relative ${
+                className={`shrink-0 border-r border-slate-200/70 dark:border-slate-800/70 flex flex-col justify-between p-1 md:p-1.5 transition-colors relative h-full ${
                   day.isToday
                     ? 'bg-rose-50/40 dark:bg-rose-950/25 ring-1 ring-inset ring-rose-400/40'
                     : day.isWeekend
@@ -587,14 +588,14 @@ export const PlanningTimeline: React.FC = () => {
           </div>
 
           {/* Resource Rows & Gantt Bars Matrix */}
-          <div className="divide-y divide-slate-200/60 dark:divide-slate-800/60">
+          <div className="flex flex-col">
             {filteredGroups.map((grp) => {
               const isCollapsed = collapsedGroups[grp.id];
 
               return (
-                <div key={grp.id}>
+                <div key={grp.id} className="flex flex-col">
                   {/* Group Availability Row */}
-                  <div className="h-10 flex bg-slate-100/70 dark:bg-slate-850/50 border-b border-slate-200/50 dark:border-slate-800/50">
+                  <div className="h-10 min-h-[40px] max-h-[40px] shrink-0 flex bg-slate-200/60 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 select-none">
                     {timelineDays.map((day) => {
                       const avail = groupAvailability[grp.id]?.[day.dateStr] ?? 0;
                       const isFree = avail > 0;
@@ -602,11 +603,11 @@ export const PlanningTimeline: React.FC = () => {
                         <div
                           key={day.dateStr}
                           style={{ width: `${colWidth}px` }}
-                          className="shrink-0 border-r border-slate-200/60 dark:border-slate-800/60 flex items-center justify-center p-1"
+                          className="shrink-0 border-r border-slate-200/60 dark:border-slate-800/60 flex items-center justify-center p-1 h-full"
                         >
                           <span
                             className={`w-6 h-5 rounded text-[11px] font-bold font-mono flex items-center justify-center shadow-2xs tabular-nums ${
-                              isFree ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
+                              isFree ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
                             }`}
                             title={`${avail} disponibilité(s) le ${day.dateStr}`}
                           >
@@ -626,7 +627,7 @@ export const PlanningTimeline: React.FC = () => {
                       return (
                         <div
                           key={res.id}
-                          className="h-12 flex relative hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors"
+                          className="h-12 min-h-[48px] max-h-[48px] shrink-0 flex relative border-b border-slate-200/80 dark:border-slate-800/80 hover:bg-blue-50/20 dark:hover:bg-blue-950/20 transition-colors bg-white dark:bg-slate-900"
                         >
                           {/* Background Grid Cells for clicking to add booking */}
                           {timelineDays.map((day) => (
@@ -640,7 +641,7 @@ export const PlanningTimeline: React.FC = () => {
                                 });
                                 setIsNewBookingModalOpen(true);
                               }}
-                              className={`shrink-0 border-r border-slate-100 dark:border-slate-800/40 cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors ${
+                              className={`shrink-0 border-r border-slate-100 dark:border-slate-800/40 h-full cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors ${
                                 day.isWeekend ? 'bg-slate-50/30 dark:bg-slate-900/20' : ''
                               }`}
                               title={`Cliquez pour réserver le ${day.dateStr}`}
@@ -649,15 +650,17 @@ export const PlanningTimeline: React.FC = () => {
 
                           {/* Render Booking Gantt Bars overlaying the grid */}
                           {resBookings.map((bkg) => {
+                            const firstVisibleDate = timelineDays[0]?.dateStr;
+                            const lastVisibleDate = timelineDays[timelineDays.length - 1]?.dateStr;
+
+                            // Skip if outside visible timeline range
+                            if (bkg.endDate <= firstVisibleDate || bkg.startDate > lastVisibleDate) return null;
+
                             const startIndex = getDateIndex(bkg.startDate);
                             const endIndex = getDateIndex(bkg.endDate);
 
-                            // Skip if outside current visible range
-                            if (endIndex === -1 && startIndex === -1) return null;
-
-                            const visibleStart = Math.max(0, startIndex);
-                            const visibleEnd =
-                              endIndex === -1 ? totalDays : Math.min(totalDays, endIndex);
+                            const visibleStart = startIndex === -1 ? 0 : startIndex;
+                            const visibleEnd = endIndex === -1 ? totalDays : endIndex;
 
                             if (visibleEnd <= visibleStart) return null;
 
@@ -678,6 +681,10 @@ export const PlanningTimeline: React.FC = () => {
                             const bookingCurrency = bkg.paymentCurrency || currency;
                             const currencySymbol = bookingCurrency === 'DA' || bookingCurrency === 'DZD' ? 'DA' : bookingCurrency === 'EUR' ? '€' : bookingCurrency === 'USD' ? '$' : bookingCurrency === 'RMB' ? '¥' : bookingCurrency === 'GBP' ? '£' : bookingCurrency === 'SAR' ? 'SAR' : bookingCurrency;
                             const displayPrice = bkg.originalCurrencyAmount || bkg.totalPrice;
+
+                            const posStyle: React.CSSProperties = isRTL
+                              ? { right: `${leftOffset + 3}px`, width: `${barWidth}px` }
+                              : { left: `${leftOffset + 3}px`, width: `${barWidth}px` };
 
                             return (
                               <div
@@ -709,12 +716,9 @@ export const PlanningTimeline: React.FC = () => {
                                     setActivePreviewBooking(null);
                                   }
                                 }}
-                                style={{
-                                  left: `${leftOffset + 3}px`,
-                                  width: `${barWidth}px`,
-                                }}
-                                    className={`absolute top-1.5 h-9 rounded-md px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-sm hover:brightness-105 active:scale-[0.98] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
-                                  >
+                                style={posStyle}
+                                className={`absolute top-1.5 h-9 rounded-md px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-sm hover:brightness-105 active:scale-[0.98] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
+                              >
                                     <div className="flex items-center gap-1.5 truncate min-w-0">
                                       {/* Person icons: if multiple occupants occupy the room, render multiple person icons */}
                                       <div
