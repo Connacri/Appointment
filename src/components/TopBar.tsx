@@ -115,6 +115,9 @@ export const TopBar: React.FC = () => {
 
   const urgentTasksCount = tasks.filter((t) => t.priority === 'urgent' && t.status !== 'done').length;
   const lowStockCount = stockItems.filter((s) => s.quantity <= s.minThreshold).length;
+  const canCreateBooking = ['admin', 'manager', 'receptionist', 'client'].includes(currentRole);
+  const canUseUsb = ['admin', 'manager', 'receptionist'].includes(currentRole);
+  const canSeeFinance = ['admin', 'manager'].includes(currentRole);
 
   // Direct USB Hardware Permission Request via WebHID
   const handlePhysicalUsbClick = async () => {
@@ -251,7 +254,7 @@ export const TopBar: React.FC = () => {
         {/* ======================================================== */}
         <div className="ml-auto flex items-center justify-end gap-2 shrink-0 min-w-0">
           {/* Currency Dropdown */}
-          <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-1.5 py-1">
+          {canSeeFinance && <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-1.5 py-1">
             <select
               value={currency === 'DZD' ? 'DA' : currency}
               onChange={(e) => setCurrency(e.target.value)}
@@ -265,10 +268,10 @@ export const TopBar: React.FC = () => {
               <option value="GBP">🇬🇧 £ (GBP)</option>
               <option value="SAR">🇸🇦 ﷼ (SAR)</option>
             </select>
-          </div>
+          </div>}
 
           {/* PROMINENT USB PHYSIQUE (WebHID) BUTTON */}
-          <button
+          {canUseUsb && <button
             type="button"
             onClick={handlePhysicalUsbClick}
             disabled={isRequestingUsb}
@@ -310,35 +313,35 @@ export const TopBar: React.FC = () => {
               <span className="hidden sm:inline">USB Physique</span>
               {usbStatus === 'connected' && <span className="hidden md:inline font-normal text-emerald-700 dark:text-emerald-300"> • Prêt</span>}
             </span>
-          </button>
+          </button>}
 
           {/* CI/CD Pipeline Status Badge (GitHub Actions) */}
-          <div className="hidden sm:block">
+          {canSeeFinance && <div className="hidden lg:block">
             <PipelineStatusIndicator />
-          </div>
+          </div>}
 
           {/* Primary Action Button: + Nouveau / + New Booking (Touch target >= 44px) */}
-          <button
+          {canCreateBooking && <button
             type="button"
             onClick={() => {
               setNewBookingInitialSlot(null);
               setIsNewBookingModalOpen(true);
             }}
-            className="min-h-[44px] px-2.5 sm:px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+            className="min-h-11 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             title="Créer une nouvelle réservation ou séjour"
           >
             <Plus size={16} strokeWidth={2.5} />
             <span className="text-[11px] sm:text-xs">
               {language === 'fr' ? <><span className="sm:hidden">Réserver</span><span className="hidden sm:inline">Nouveau</span></> : language === 'ar' ? 'حجز جديد' : <><span className="sm:hidden">Book</span><span className="hidden sm:inline">New Booking</span></>}
             </span>
-          </button>
+          </button>}
 
           {/* Quick Menu ("...") for overflow items */}
           <div className="relative" ref={moreMenuRef}>
             <button
               type="button"
               onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
-              className="w-9 h-9 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors cursor-pointer"
+              className="w-10 h-10 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               title="Options & Paramètres rapides"
               aria-label="Options"
             >
@@ -486,7 +489,7 @@ export const TopBar: React.FC = () => {
         </div>
 
         {/* Secondary toolbar row: search, date navigation and range */}
-        <div className="w-full min-w-0 flex items-center gap-2 flex-wrap">
+        <div className={`w-full min-w-0 flex items-center gap-2 flex-wrap ${activeView === "planning" ? "" : "hidden"}`}>
           <div className="relative flex-1 min-w-[160px] max-w-[240px]">
             {/* Search Box - Fluid & Touch Friendly */}
           <div className="relative w-full min-w-0">
