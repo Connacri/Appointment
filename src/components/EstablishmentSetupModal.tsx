@@ -28,6 +28,9 @@ import {
   CreditCard,
   ShieldCheck,
   ArrowRight,
+  Layers,
+  Plus,
+  Database,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -37,6 +40,8 @@ import {
 } from '../types/establishment';
 import { PRESET_HOTEL_LOGOS } from '../utils/establishmentDefaults';
 import { playSuccessFeedback, playClickFeedback } from '../utils/audioFeedback';
+import { lockManager } from '../locks/lockManager';
+import { mdbSnapshotToPlanning } from '../locks/database/mdbImport';
 
 interface EstablishmentSetupModalProps {
   isOpen: boolean;
@@ -49,9 +54,9 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   onClose,
   isFirstLaunch = false,
 }) => {
-  const { establishmentProfile, setEstablishmentProfile, language, currency, setCurrency } = useApp();
+  const { establishmentProfile, setEstablishmentProfile, language, currency, setCurrency, resourceGroups, setResourceGroups, setBookings } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'identity' | 'logo' | 'contact' | 'fiscal'>('identity');
+  const [activeTab, setActiveTab] = useState<'identity' | 'logo' | 'contact' | 'fiscal' | 'structure'>('identity');
   const [formData, setFormData] = useState<EstablishmentProfile>(() => {
     return establishmentProfile || DEFAULT_ESTABLISHMENT_PROFILE;
   });
@@ -60,6 +65,15 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     establishmentProfile?.logoUrl || PRESET_HOTEL_LOGOS[0].svgDataUrl
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mdbInputRef = useRef<HTMLInputElement>(null);
+  const [buildingName, setBuildingName] = useState('Bâtiment principal');
+  const [buildingNo, setBuildingNo] = useState('1');
+  const [floorNo, setFloorNo] = useState('0');
+  const [roomPrefix, setRoomPrefix] = useState('');
+  const [roomStart, setRoomStart] = useState('101');
+  const [roomCount, setRoomCount] = useState('10');
+  const [structureMessage, setStructureMessage] = useState('');
+  const [isImportingMdb, setIsImportingMdb] = useState(false);
 
   if (!isOpen) return null;
 
@@ -88,6 +102,74 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     setCustomLogoPreview(dataUrl);
     setFormData((prev) => ({ ...prev, logoUrl: dataUrl }));
     playClickFeedback();
+  };
+
+  const handleCreateRooms = () => {
+    const bNo = Number(buildingNo);
+    const fNo = Number(floorNo);
+    const start = Number(roomStart);
+    const count = Number(roomCount);
+    if (!buildingName.trim() || !Number.isInteger(bNo) || bNo < 1 || !Number.isInteger(fNo) || fNo < 0 ||
+        !Number.isInteger(start) || start < 1 || !Number.isInteger(count) || count < 1 || count > 300) {
+      setStructureMessage('Vérifiez le bâtiment, l’étage et la plage de numéros (1 à 300 chambres).');
+      return;
+    }
+    const groupId = `manual-building-${bNo}`;
+    const existing = resourceGroups.find((group) => group.id === groupId);
+    const existingNumbers = new Set((existing?.resources || []).map((room) => room.name));
+    const additions = Array.from({ length: count }, (_, index) => {
+      const number = String(start + index);
+      return {
+        id: `manual-room-${bNo}-${fNo}-${number}`,
+        name: `${roomPrefix.trim()}${number}`,
+        type: 'Chambre',
+        sector: 'hotel' as const,
+        pricePerDay: 0,
+        housekeepingStatus: 'clean' as const,
+        capacity: 1,
+        building: String(bNo),
+        floor: String(fNo),
+      };
+    }).filter((room) => !existingNumbers.has(room.name));
+    if (additions.length === 0) {
+      setStructureMessage('Aucune chambre créée : ces numéros existent déjà dans ce bâtiment.');
+      return;
+    }
+    const nextGroup = {
+      id: groupId,
+      name: { fr: buildingName.trim(), en: buildingName.trim(), ar: buildingName.trim() },
+      sector: 'hotel' as const,
+      icon: 'Building',
+      resources: [...(existing?.resources || []), ...additions],
+    };
+    setResourceGroups((prev) => existing
+      ? prev.map((group) => group.id === groupId ? nextGroup : group)
+      : [...prev, nextGroup]);
+    setStructureMessage(`${additions.length} chambre(s) ajoutée(s) à ${buildingName}, étage ${fNo}.`);
+    playSuccessFeedback();
+  };
+
+  const handleMdbImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setIsImportingMdb(true);
+    setStructureMessage('');
+    try {
+      const snapshot = await lockManager.importMdb(file);
+      const planning = mdbSnapshotToPlanning(snapshot);
+      if (planning.resourceGroups.length) setResourceGroups(planning.resourceGroups);
+      if (planning.bookings.length) setBookings((prev) => {
+        const importedIds = new Set(planning.bookings.map((booking) => booking.id));
+        return [...prev.filter((booking) => !importedIds.has(booking.id)), ...planning.bookings];
+      });
+      setStructureMessage(`Import réussi : ${snapshot.counts.rooms} chambres, ${snapshot.buildings.length} bâtiment(s), ${snapshot.counts.guests} séjour(s), ${snapshot.counts.cards} carte(s).${snapshot.warnings.length ? ' Avertissements : ' + snapshot.warnings.join(' ') : ''}`);
+      playSuccessFeedback();
+    } catch (error) {
+      setStructureMessage(`Échec de l’import : ${error instanceof Error ? error.message : 'fichier illisible'}`);
+    } finally {
+      setIsImportingMdb(false);
+      event.target.value = '';
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -159,6 +241,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
             { id: 'logo', label: '2. Logo & Visuel', icon: ImageIcon },
             { id: 'contact', label: '3. Adresse & Contact', icon: MapPin },
             { id: 'fiscal', label: '4. Fiscalité & RIB Bancaire', icon: Landmark },
+            { id: 'structure', label: '5. Bâtiments & Chambres', icon: Layers },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -660,6 +743,71 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB 5: BUILDINGS, FLOORS AND ROOMS */}
+          {activeTab === 'structure' && (
+            <div className="space-y-5 animate-in fade-in">
+              <section className="rounded-2xl border border-blue-200 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-950/20 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-blue-900 dark:text-blue-200 font-extrabold text-sm">
+                  <Database size={17} /> Importer la base proUSB CardLock.mdb
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Sélectionnez la base existante depuis Windows. Pour importer les données à jour, privilégiez la copie VirtualStore si elle existe. L’application ne peut pas accéder seule à un chemin local Windows.
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 break-all">
+                  Cible habituelle : C:\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb
+                </p>
+                <input ref={mdbInputRef} type="file" accept=".mdb,application/x-msaccess" onChange={handleMdbImport} className="hidden" />
+                <button type="button" disabled={isImportingMdb} onClick={() => mdbInputRef.current?.click()}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 disabled:opacity-60">
+                  <Upload size={15} /> {isImportingMdb ? 'Analyse de la base en cours…' : 'Choisir CardLock.mdb'}
+                </button>
+                {(() => {
+                  const status = lockManager.getMdbStatus();
+                  return status.connected ? (
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300">Base chargée : {status.source} — {status.rooms} chambres, {status.guests} séjours, {status.cards} cartes.</p>
+                  ) : null;
+                })()}
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+                <div className="flex items-center gap-2 font-extrabold text-slate-900 dark:text-white text-sm">
+                  <Building2 size={17} /> Créer la structure manuellement
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Créez un bâtiment, choisissez son étage et générez une plage de chambres. Les numéros déjà présents dans ce bâtiment sont ignorés.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="space-y-1"><span className="block font-semibold">Nom du bâtiment</span>
+                    <input value={buildingName} onChange={(e) => setBuildingName(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="Bâtiment principal" />
+                  </label>
+                  <label className="space-y-1"><span className="block font-semibold">N° bâtiment</span>
+                    <input type="number" min="1" value={buildingNo} onChange={(e) => setBuildingNo(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                  </label>
+                  <label className="space-y-1"><span className="block font-semibold">Étage (0 = rez-de-chaussée)</span>
+                    <input type="number" min="0" value={floorNo} onChange={(e) => setFloorNo(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                  </label>
+                  <label className="space-y-1"><span className="block font-semibold">Préfixe facultatif</span>
+                    <input value={roomPrefix} onChange={(e) => setRoomPrefix(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="Ex. A-" />
+                  </label>
+                  <label className="space-y-1"><span className="block font-semibold">Premier numéro de chambre</span>
+                    <input type="number" min="1" value={roomStart} onChange={(e) => setRoomStart(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                  </label>
+                  <label className="space-y-1"><span className="block font-semibold">Nombre de chambres à créer</span>
+                    <input type="number" min="1" max="300" value={roomCount} onChange={(e) => setRoomCount(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                  </label>
+                </div>
+                <button type="button" onClick={handleCreateRooms} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-2">
+                  <Plus size={15} /> Créer les chambres
+                </button>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  Structure actuelle : {resourceGroups.length} bâtiment(s) / groupe(s), {resourceGroups.reduce((total, group) => total + group.resources.length, 0)} chambre(s).
+                </div>
+              </section>
+
+              {structureMessage && <div role="status" className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3 text-xs text-slate-700 dark:text-slate-200">{structureMessage}</div>}
             </div>
           )}
 
