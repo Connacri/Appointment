@@ -55,7 +55,7 @@ const MainLayout: React.FC = () => {
         <Sidebar />
 
         {/* Right Main Working View */}
-        <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
+        <div className="relative z-0 flex-1 flex flex-col h-full overflow-hidden min-w-0">
           <TopBar />
 
           <main className="flex-1 flex flex-col overflow-hidden relative">
