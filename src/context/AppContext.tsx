@@ -144,6 +144,20 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Strict YYYY-MM-DD calendar validation. Date() alone normalizes impossible dates
+// (for example 2026-02-31) into a date in the following month.
+const isValidCalendarDate = (value: string): boolean => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(() => {
     return (localStorage.getItem('omnibook_lang') as Language) || 'fr';
@@ -413,13 +427,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Save bookings & resources to localStorage & ObjectBox
   useEffect(() => {
     localStorage.setItem('omnibook_bookings', JSON.stringify(bookings));
-    // Asynchronously update ObjectBox store
-    bookings.forEach((b) => objectBox.put('bookings', b));
+    // Atomic replacement keeps IndexedDB and its fallback aligned, including deletions.
+    void objectBox.replaceAll('bookings', bookings).catch((error) => {
+      console.error('[AppContext] Failed to persist bookings to ObjectBox:', error);
+    });
   }, [bookings]);
 
   useEffect(() => {
     localStorage.setItem('omnibook_resource_groups', JSON.stringify(resourceGroups));
-    resourceGroups.flatMap((g) => g.resources).forEach((r) => objectBox.put('resources', r));
+    const resources = resourceGroups.flatMap((g) => g.resources);
+    void objectBox.replaceAll('resources', resources).catch((error) => {
+      console.error('[AppContext] Failed to persist resources to ObjectBox:', error);
+    });
   }, [resourceGroups]);
 
   // Seed initial ObjectBox data on startup
@@ -485,6 +504,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addBooking = (
     bookingData: Omit<TimelineBooking, 'id'>
   ): { success: boolean; error?: string; booking?: TimelineBooking } => {
+    // Validate both calendar dates for every reservation sector before changing state.
+    if (!isValidCalendarDate(bookingData.startDate) || !isValidCalendarDate(bookingData.endDate)) {
+      return {
+        success: false,
+        error:
+          language === 'fr'
+            ? 'Dates de réservation invalides.'
+            : language === 'ar'
+            ? 'تواريخ الحجز غير صالحة.'
+            : 'Invalid booking dates.',
+      };
+    }
+
     // 1. Strict date sanity checks before modifying state
     if (bookingData.sector === 'hotel' || bookingData.sector === 'resort') {
       const s = new Date(bookingData.startDate + 'T14:00');
@@ -646,7 +678,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const confirmCheckInAndCashPayment = (
     bookingId: string,
-    cashReceived: boolean = true
+    cashReceived: boolean = false
   ): { success: boolean; message: string; booking?: TimelineBooking } => {
     let targetBooking: TimelineBooking | undefined;
     let paymentSettled = false;
@@ -912,13 +944,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const purgeAllUserData = async (): Promise<void> => {
-    // 1. Reset all application in-memory state
+    // Reset all user-owned in-memory collections.
     setBookings([]);
     setSelectedBooking(null);
+    setResourceGroups([]);
     setTasks([]);
+    setStockItems([]);
     setStockMovements([]);
-    setEstablishmentProfile(DEFAULT_ESTABLISHMENT_PROFILE);
-    setClientProfile({
+    setDynamicRates({});
+    setEstablishmentProfileState(DEFAULT_ESTABLISHMENT_PROFILE);
+    setClientProfileState({
       id: '',
       name: '',
       email: '',
@@ -926,47 +961,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       memberNumber: '',
       loyaltyPoints: 0,
     });
+    setSelectedEstablishmentId('all');
+    setHasOnboardedState(false);
+    setIsEstablishmentModalOpen(false);
+    setActiveSector('all');
     setSearchQuery('');
 
-    // 2. Clear all local storage records
-    const keysToRemove = [
-      'omnibook_bookings',
-      'omnibook_resource_groups',
-      'omnibook_pms_tasks',
-      'omnibook_stock_items',
-      'omnibook_stock_movements',
-      'omnibook_dynamic_rates',
-      'omnibook_establishment_profile',
-      'omnibook_onboarding_completed',
-      'omnibook_client_profile',
-      'omnibook_currency',
-      'omnibook_sound_enabled',
-      'omnibook_prousb_issued_cards',
-      'omnibook_prousb_audit_records',
-      'omnibook_prousb_settings',
-      'omnibook_prousb_mdb_snapshot',
-    ];
-    for (const key of keysToRemove) {
-      try {
-        localStorage.removeItem(key);
-      } catch (e) {
-        console.warn(`[AppContext] Error removing ${key}:`, e);
+    // Remove every key owned by this application, including future proUSB keys.
+    try {
+      for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+        const key = localStorage.key(index);
+        if (key && (key.startsWith('omnibook_') || key.startsWith('ob_'))) {
+          localStorage.removeItem(key);
+        }
       }
+      sessionStorage.clear();
+    } catch (error) {
+      console.error('[AppContext] Failed to clear browser storage:', error);
+      throw error;
     }
 
-    // 3. Purge proUSB physical and audit records
-    try {
-      lockManager.purgeAllData();
-    } catch (e) {
-      console.warn('[AppContext] lockManager purge failed:', e);
-    }
+    // Clear proUSB cards, MDB snapshot, settings and audit records in memory.
+    lockManager.purgeAllData();
 
-    // 4. Purge IndexedDB object stores & fallback collections
-    try {
-      await objectBox.clearAll();
-    } catch (e) {
-      console.warn('[AppContext] objectBox clearAll failed:', e);
-    }
+    // Wait for IndexedDB completion. A failed transaction must not be reported as success.
+    await objectBox.clearAll();
   };
 
   return (
