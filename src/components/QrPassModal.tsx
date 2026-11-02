@@ -21,6 +21,7 @@ import { useApp } from '../context/AppContext';
 import { TimelineBooking, DomainType } from '../types/booking';
 import { statusConfig } from './LegendBar';
 import { domainConfigs } from '../data/mockData';
+import { getTranslation } from '../i18n/translations';
 import { downloadICS } from '../utils/icsExport';
 
 interface QrPassModalProps {
@@ -34,6 +35,7 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [isCashFlowOpen, setIsCashFlowOpen] = useState(false);
   const [cashAmountGiven, setCashAmountGiven] = useState<number>(0);
+  const [cashAmountInvalid, setCashAmountInvalid] = useState(false);
   const [confirmationNotice, setConfirmationNotice] = useState<string | null>(null);
   const printableRef = useRef<HTMLDivElement>(null);
 
@@ -126,9 +128,14 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
   };
 
   const handleFinalizeCashPayment = () => {
+    if (!Number.isFinite(cashAmountGiven) || cashAmountGiven < booking.totalPrice) {
+      setCashAmountInvalid(true);
+      return;
+    }
+    setCashAmountInvalid(false);
     const res = confirmCheckInAndCashPayment(booking.id, true);
     setConfirmationNotice(res.message);
-    setIsCashFlowOpen(false);
+    if (res.success) setIsCashFlowOpen(false);
   };
 
   const handleDownloadQr = () => {
@@ -319,7 +326,7 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
                     type="number"
                     min={booking.totalPrice}
                     value={cashAmountGiven}
-                    onChange={(e) => setCashAmountGiven(Number(e.target.value))}
+                    onChange={(e) => { setCashAmountGiven(Number(e.target.value)); setCashAmountInvalid(false); }}
                     className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold"
                   />
                 </div>
@@ -332,6 +339,11 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
                   </div>
                 </div>
               </div>
+              {cashAmountInvalid && (
+                <p role="alert" className="text-[11px] font-semibold text-rose-700 dark:text-rose-300">
+                  {getTranslation('cashAmountInsufficient', language)}
+                </p>
+              )}
 
               <button
                 type="button"
