@@ -202,6 +202,31 @@ class ObjectBoxStore {
     });
   }
 
+  // Atomically replace a collection snapshot. This removes rows deleted from app state.
+  public async replaceAll<T extends { id: string }>(
+    boxName: 'bookings' | 'invoices' | 'resources',
+    items: T[]
+  ): Promise<void> {
+    await this.openStore();
+    localStorage.setItem(`ob_${boxName}`, JSON.stringify(items));
+    if (!this.idb) return;
+
+    await new Promise<void>((resolve, reject) => {
+      let tx: IDBTransaction;
+      try {
+        tx = this.idb!.transaction(boxName, 'readwrite');
+        const store = tx.objectStore(boxName);
+        store.clear();
+        for (const item of items) store.put(item);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error ?? new Error(`IndexedDB replaceAll failed: ${boxName}`));
+        tx.onabort = () => reject(tx.error ?? new Error(`IndexedDB replaceAll aborted: ${boxName}`));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
   // Put / Upsert
   public async put<T extends { id: string }>(
     boxName: 'bookings' | 'invoices' | 'resources',
@@ -265,32 +290,30 @@ class ObjectBoxStore {
     });
   }
 
-  // Clear all stores completely (for legal GDPR / Account Deletion purge)
+  // Clear all stores completely (for legal GDPR / Account Deletion purge).
+  // Reject on transaction failure so the caller cannot falsely report a successful deletion.
   public async clearAll(): Promise<void> {
     await this.openStore();
-    try {
-      localStorage.removeItem('ob_bookings');
-      localStorage.removeItem('ob_invoices');
-      localStorage.removeItem('ob_resources');
-    } catch (e) {
-      console.warn('[ObjectBox] LocalStorage clear error:', e);
-    }
 
-    if (this.idb) {
-      return new Promise<void>((resolve) => {
-        try {
-          const tx = this.idb!.transaction(['bookings', 'invoices', 'resources'], 'readwrite');
-          tx.objectStore('bookings').clear();
-          tx.objectStore('invoices').clear();
-          tx.objectStore('resources').clear();
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => resolve();
-          tx.onabort = () => resolve();
-        } catch {
-          resolve();
-        }
-      });
+    for (const boxName of ['bookings', 'invoices', 'resources'] as const) {
+      localStorage.removeItem(`ob_${boxName}`);
     }
+    if (!this.idb) return;
+
+    await new Promise<void>((resolve, reject) => {
+      let tx: IDBTransaction;
+      try {
+        tx = this.idb!.transaction(['bookings', 'invoices', 'resources'], 'readwrite');
+        tx.objectStore('bookings').clear();
+        tx.objectStore('invoices').clear();
+        tx.objectStore('resources').clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error ?? new Error('IndexedDB purge transaction failed'));
+        tx.onabort = () => reject(tx.error ?? new Error('IndexedDB purge transaction aborted'));
+      } catch (error) {
+        reject(error);
+      }
+    });
   }
 
   // Get Store Statistics
