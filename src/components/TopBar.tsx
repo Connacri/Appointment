@@ -66,6 +66,7 @@ export const TopBar: React.FC = () => {
     setIsOffline,
     activeSector,
     setActiveSector,
+    currentDomain,
     currentRole,
     setIsQrScannerOpen,
     setActiveQrPassBooking,
@@ -174,7 +175,7 @@ export const TopBar: React.FC = () => {
 
   return (
     <>
-      <header className="relative z-[500] min-w-0 w-full py-2 px-2.5 sm:px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-2 shrink-0 select-none shadow-xs">
+      <header className="relative z-[500] min-w-0 w-full py-2 px-2.5 sm:px-4 bg-white/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-2 shrink-0 select-none shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90 dark:supports-[backdrop-filter]:bg-slate-900/90">
         <div className="w-full min-w-0 flex flex-col gap-2">
         {/* Primary toolbar row: breadcrumb, sector, currency, USB and actions */}
         <div className="w-full min-w-0 flex items-center flex-wrap gap-2">
@@ -207,6 +208,12 @@ export const TopBar: React.FC = () => {
             <ChevronRight size={13} className="mx-1 text-slate-400 shrink-0 rtl:rotate-180" />
             <span className="font-semibold text-slate-900 dark:text-white truncate max-w-[110px] sm:max-w-[160px]">
               {viewLabels[activeView]?.[language] || activeView}
+            </span>
+            <span className={`hidden sm:inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold border ${currentRole === 'admin' ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800' : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}`}>
+              {currentRole === 'admin' ? 'ADMIN' : currentRole === 'manager' ? (language === 'fr' ? 'GESTIONNAIRE' : language === 'ar' ? 'مدير' : 'MANAGER') : currentRole === 'receptionist' ? (language === 'fr' ? 'RÉCEPTION' : language === 'ar' ? 'استقبال' : 'RECEPTION') : currentRole === 'staff' ? (language === 'fr' ? 'ÉQUIPE' : language === 'ar' ? 'فريق العمل' : 'STAFF') : (language === 'fr' ? 'CLIENT' : language === 'ar' ? 'عميل' : 'CLIENT')}
+            </span>
+            <span className="hidden md:inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900">
+              {currentDomain === 'hotel' ? (language === 'fr' ? 'HÔTEL' : language === 'ar' ? 'فندق' : 'HOTEL') : 'RESORT'}
             </span>
           </nav>
 
