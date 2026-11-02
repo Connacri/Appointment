@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0F172A,45:1D4ED8,100:06B6D4&height=190&section=header&text=Appointment%20PMS&fontSize=48&fontColor=FFFFFF&fontAlignY=38&desc=Property%20Management%20System%20%E2%80%A2%20Hotel%20%26%20Resort&descAlignY=58&descSize=16" width="100%" alt="Appointment PMS — Hotel and Resort Management" />
+<img src="./docs/assets/appointment-pms-banner.svg" width="100%" alt="Appointment PMS — Hotel and Resort Management" />
 
 <a href="https://github.com/Connacri/Appointment">
   <img src="https://readme-typing-svg.demolab.com?font=Plus+Jakarta+Sans&weight=600&size=20&duration=2800&pause=900&color=2563EB&center=true&vCenter=true&width=760&lines=Planifier+les+s%C3%A9jours+avec+une+timeline+Gantt;Piloter+les+op%C3%A9rations+h%C3%B4teli%C3%A8res+au+m%C3%AAme+endroit;G%C3%A9rer+les+r%C3%A9servations%2C+les+%C3%A9quipes+et+les+revenus;Connecter+les+serrures+proUSB+et+les+cartes+clients" alt="Animated Appointment PMS feature highlights" />
