@@ -55,28 +55,28 @@ export const PlanningTimeline: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Responsive mode: compact (phone), standard, or wide
-  const [columnZoomMode, setColumnZoomMode] = useState<'compact' | 'standard' | 'wide'>('standard');
-  const [leftBarMode, setLeftBarMode] = useState<'normal' | 'compact' | 'mini'>('normal');
-  const [isMobileScreen, setIsMobileScreen] = useState(false);
+  const [columnZoomMode, setColumnZoomMode] = useState<'compact' | 'standard' | 'wide'>(() => typeof window !== 'undefined' && window.innerWidth < 768 ? 'compact' : 'standard');
+  const [leftBarMode, setLeftBarMode] = useState<'normal' | 'compact' | 'mini'>(() => typeof window !== 'undefined' && window.innerWidth < 768 ? 'compact' : 'normal');
+  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
 
-  // Detect small screen on mount & resize
+  // Responsive defaults follow the phone breakpoint and restore desktop sizing when resized.
   useEffect(() => {
-    const handleResize = () => {
-      const isMobile = window.innerWidth < 640;
+    const media = window.matchMedia('(max-width: 767px)');
+    const applyViewport = (isMobile: boolean) => {
       setIsMobileScreen(isMobile);
-      if (isMobile && leftBarMode === 'normal') {
-        setLeftBarMode('compact');
-      }
+      setLeftBarMode(isMobile ? 'compact' : 'normal');
+      setColumnZoomMode(isMobile ? 'compact' : 'standard');
     };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    applyViewport(media.matches);
+    const handleChange = (event: MediaQueryListEvent) => applyViewport(event.matches);
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
   }, []);
 
   // Dynamic day column width adapted to viewport
   const colWidth = useMemo(() => {
     if (isMobileScreen) {
-      return columnZoomMode === 'compact' ? 62 : columnZoomMode === 'wide' ? 120 : 88;
+      return columnZoomMode === 'compact' ? 64 : columnZoomMode === 'wide' ? 96 : 76;
     }
     return columnZoomMode === 'compact' ? 76 : columnZoomMode === 'wide' ? 144 : 112;
   }, [columnZoomMode, isMobileScreen]);
@@ -270,16 +270,16 @@ export const PlanningTimeline: React.FC = () => {
   // Left column width classes
   const leftColWidthClass = useMemo(() => {
     if (leftBarMode === 'mini') return 'w-12 sm:w-16';
-    if (leftBarMode === 'compact') return 'w-24 sm:w-32';
+    if (leftBarMode === 'compact') return 'w-28 sm:w-32';
     return 'w-44 sm:w-56 md:w-64';
   }, [leftBarMode]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-950 relative select-none">
       {/* Responsive Toolbar */}
-      <div className="min-h-10 py-1.5 px-2 md:px-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-1.5 bg-slate-50 dark:bg-slate-900 select-none text-xs shrink-0 flex-wrap">
+      <div className="min-h-10 py-2 px-2 md:py-1.5 md:px-3 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-1.5 bg-slate-50 dark:bg-slate-900 select-none text-xs shrink-0">
         {/* Left Column Mode Toggle: Normal / Compact / Mini */}
-        <div className="flex items-center gap-1">
+        <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-1 min-w-0">
           <div className="flex items-center bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 shadow-2xs">
             <button
               onClick={() => setLeftBarMode('mini')}
@@ -318,11 +318,11 @@ export const PlanningTimeline: React.FC = () => {
 
           {/* Hotel Establishment Switcher (ADEF Centre-ville / ADEF Plage) */}
           {currentDomain === 'hotel' && (
-            <div className="flex items-center gap-1.5 ml-2">
+            <div className="flex items-center gap-1.5 ml-1 min-w-0 flex-1 sm:flex-initial">
               <select
                 value={selectedEstablishmentId}
                 onChange={(e) => setSelectedEstablishmentId(e.target.value)}
-                className="px-2.5 py-1 text-[11px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 shadow-2xs cursor-pointer"
+                className="w-full max-w-[190px] sm:max-w-none min-w-0 px-2 py-1 text-[10px] sm:text-[11px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 shadow-2xs cursor-pointer"
               >
                 <option value="all">🏨 {language === 'fr' ? 'Tous les complexes ADEF' : 'All ADEF Hotels'}</option>
                 {establishments.map((h) => (
@@ -336,7 +336,7 @@ export const PlanningTimeline: React.FC = () => {
         </div>
 
         {/* Center / Right controls: Zoom & Fast Date Navigation */}
-        <div className="flex items-center gap-1.5 flex-wrap ml-auto">
+        <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-1.5 flex-wrap sm:ml-auto">
           {/* Quick Date Jump Input */}
           <div className="flex items-center gap-1 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-0.5">
             <CalendarDays size={13} className="text-slate-400 shrink-0" />
@@ -420,7 +420,7 @@ export const PlanningTimeline: React.FC = () => {
         <button
           type="button"
           onClick={scrollToToday}
-          className="absolute top-14 sm:top-15 right-3 sm:right-6 z-40 px-3 py-1 rounded-full text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/70 shadow-md backdrop-blur-md flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-all cursor-pointer select-none active:scale-95 group"
+          className="absolute top-[116px] sm:top-15 right-2 sm:right-6 z-40 px-3 py-1 rounded-full text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/70 shadow-md backdrop-blur-md flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-all cursor-pointer select-none active:scale-95 group"
           title={language === 'fr' ? 'Centrer la vue sur Aujourd’hui' : language === 'ar' ? 'الانتقال إلى اليوم' : 'Scroll to Today'}
         >
           <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
@@ -437,7 +437,7 @@ export const PlanningTimeline: React.FC = () => {
       {/* Main Gantt Matrix: Left Sticky Resource Tree + Right Scrollable Day Matrix */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-auto flex scroll-smooth"
+        className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-contain flex scroll-smooth touch-pan-x touch-pan-y"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {/* LEFT COLUMN: Resource Tree */}
@@ -489,7 +489,7 @@ export const PlanningTimeline: React.FC = () => {
                     grp.resources.map((res) => (
                       <div
                         key={res.id}
-                        className="h-12 min-h-[48px] max-h-[48px] shrink-0 px-1.5 sm:px-2.5 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900"
+                        className="h-14 sm:h-12 min-h-[56px] sm:min-h-[48px] max-h-[56px] sm:max-h-[48px] shrink-0 px-1.5 sm:px-2.5 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900"
                       >
                         <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
                           {renderHousekeepingTag(res.housekeepingStatus)}
@@ -627,7 +627,7 @@ export const PlanningTimeline: React.FC = () => {
                       return (
                         <div
                           key={res.id}
-                          className="h-12 min-h-[48px] max-h-[48px] shrink-0 flex relative border-b border-slate-200/80 dark:border-slate-800/80 hover:bg-blue-50/20 dark:hover:bg-blue-950/20 transition-colors bg-white dark:bg-slate-900"
+                          className="h-14 sm:h-12 min-h-[56px] sm:min-h-[48px] max-h-[56px] sm:max-h-[48px] shrink-0 flex relative border-b border-slate-200/80 dark:border-slate-800/80 hover:bg-blue-50/20 dark:hover:bg-blue-950/20 transition-colors bg-white dark:bg-slate-900"
                         >
                           {/* Background Grid Cells for clicking to add booking */}
                           {timelineDays.map((day) => (
@@ -733,7 +733,7 @@ export const PlanningTimeline: React.FC = () => {
                                   }
                                 }}
                                 style={posStyle}
-                                className={`absolute top-1.5 h-9 rounded-md px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-sm hover:brightness-105 active:scale-[0.98] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
+                                className={`absolute top-2 sm:top-1.5 h-10 sm:h-9 rounded-md px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-sm hover:brightness-105 active:scale-[0.98] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
                               >
                                     <div className="flex items-center gap-1.5 truncate min-w-0">
                                       {/* Person icons: if multiple occupants occupy the room, render stacked group of person icons */}
@@ -898,7 +898,7 @@ export const PlanningTimeline: React.FC = () => {
           {/* Mobile Touch Action Sheet for Smartphone Tap */}
           {activePreviewBooking && activePreviewBooking.isMobileSheet && (
             <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-2xs flex items-end justify-center p-0 sm:p-4">
-              <div className="w-full sm:max-w-md bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-2xl p-4 shadow-2xl space-y-3 animate-in slide-in-from-bottom-5">
+              <div className="w-full sm:max-w-md max-h-[88dvh] overflow-y-auto bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl space-y-3 animate-in slide-in-from-bottom-5">
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-slate-900 dark:text-white text-sm">
