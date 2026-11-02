@@ -126,11 +126,11 @@ export const PlanningTimeline: React.FC = () => {
     return columnZoomMode === 'compact' ? 38 : columnZoomMode === 'wide' ? 144 : 112;
   }, [columnZoomMode, isMobileScreen]);
 
-  // Narrow mode also halves the day-header height, keeping the sticky row proportional.
-  const dayHeaderHeightClass = columnZoomMode === 'compact'
-    ? 'h-8 min-h-[32px] max-h-[32px]'
-    : isDayHeaderCollapsed
-      ? 'h-9 min-h-[36px] max-h-[36px]'
+  // Keep enough height for both weekday and date labels; collapse only after vertical scrolling.
+  const dayHeaderHeightClass = isDayHeaderCollapsed
+    ? 'h-9 min-h-[36px] max-h-[36px]'
+    : columnZoomMode === 'compact'
+      ? 'h-12 min-h-[48px] max-h-[48px]'
       : 'h-16 md:h-20 min-h-[64px] md:min-h-[80px] max-h-[64px] md:max-h-[80px]';
 
   // Collapsed state for resource groups
@@ -174,13 +174,19 @@ export const PlanningTimeline: React.FC = () => {
     }
   };
 
-  // Generate date list based on currentBaseDate & mode
-  const totalDays = dateRangeMode === 'two_weeks' ? 14 : 28;
+  // In narrow mode, show the complete calendar month instead of the 14-day range.
+  const [baseYear, baseMonth] = currentBaseDate.split('-').map(Number);
+  const timelineBaseDate = columnZoomMode === 'compact'
+    ? `${baseYear}-${String(baseMonth).padStart(2, '0')}-01`
+    : currentBaseDate;
+  const totalDays = columnZoomMode === 'compact'
+    ? new Date(baseYear, baseMonth, 0).getDate()
+    : dateRangeMode === 'two_weeks' ? 14 : 28;
 
   // Global Timeline Sync Hook: observes date state changes globally to keep
   // the 'current time' red line and 'today' view header perfectly synchronized.
   const timelineSync = useTimelineSync({
-    currentBaseDate,
+    currentBaseDate: timelineBaseDate,
     totalDays,
     colWidth,
     scrollContainerRef,
@@ -189,7 +195,7 @@ export const PlanningTimeline: React.FC = () => {
   });
 
   const timelineDays = useMemo(() => {
-    const [y, m, d] = currentBaseDate.split('-').map(Number);
+    const [y, m, d] = timelineBaseDate.split('-').map(Number);
     const dates: { dateStr: string; dayNum: number; dayName: string; isWeekend: boolean; isToday: boolean }[] = [];
 
     const realTodayStr = timelineSync.todayDateStr;
@@ -221,7 +227,7 @@ export const PlanningTimeline: React.FC = () => {
       });
     }
     return dates;
-  }, [currentBaseDate, totalDays, language, timelineSync.todayDateStr]);
+  }, [timelineBaseDate, totalDays, language, timelineSync.todayDateStr]);
 
   const todayIndex = timelineSync.todayIndex;
   const currentTimeStr = timelineSync.currentTimeStr;
