@@ -78,3 +78,32 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
+/* Shared PMS control language: consistent buttons across top bars, menus and views. */
+@layer base {
+  button:not([data-unstyled]):not([class*="rounded-full"]) {
+    border-radius: 0.625rem;
+    font-family: inherit;
+    font-weight: 600;
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: 150ms;
+    transition-timing-function: ease-out;
+  }
+
+  button:not([data-unstyled]):focus-visible {
+    outline: 2px solid rgb(59 130 246);
+    outline-offset: 2px;
+  }
+
+  button:not([data-unstyled]):disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}
+
+/* Dragging the Gantt must not select text or trigger browser-native image dragging. */
+[data-gantt-pan="true"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
