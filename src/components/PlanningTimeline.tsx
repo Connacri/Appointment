@@ -59,7 +59,7 @@ export const PlanningTimeline: React.FC = () => {
   const onTimelinePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType !== 'mouse' || e.button !== 0) return;
     const target = e.target as HTMLElement;
-    if (target.closest('button,a,input,select,textarea,[role="button"],[data-booking-card="true"]')) return;
+    if (target.closest('button,a,input,select,textarea,[role="button"],[data-booking-card="true"],[data-gantt-group-toggle="true"]')) return;
     const el = scrollContainerRef.current;
     if (!el) return;
     dragPanRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop, moved: false };
@@ -120,20 +120,21 @@ export const PlanningTimeline: React.FC = () => {
     setIsDayHeaderCollapsed(el.scrollTop > 48);
     if (edgeLoadLockRef.current) return;
     const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
-    const position = isRTL ? Math.abs(el.scrollLeft) : el.scrollLeft;
+    const raw = el.scrollLeft;
+    const position = isRTL ? Math.max(0, Math.min(maxScroll, Math.abs(raw))) : Math.max(0, Math.min(maxScroll, raw));
     const distanceToStart = isRTL ? maxScroll - position : position;
     const distanceToEnd = isRTL ? position : maxScroll - position;
-    if (distanceToStart < 500) {
+    const chunkDays = 31;
+    if (distanceToStart < 700) {
       edgeLoadLockRef.current = true;
-      pendingPrependWidthRef.current = 30 * colWidth;
-      const parts = timelineWindowStart.split('-').map(Number);
-      const earlier = new Date(parts[0], parts[1] - 1, parts[2] - 30);
-      const earlierIso = [earlier.getFullYear(), String(earlier.getMonth() + 1).padStart(2, '0'), String(earlier.getDate()).padStart(2, '0')].join('-');
-      setTimelineWindowStart(earlierIso);
-      setTimelineWindowDays((count) => count + 30);
-    } else if (distanceToEnd < 500) {
+      pendingPrependWidthRef.current = chunkDays * colWidth;
+      const [year, month, day] = timelineWindowStart.split('-').map(Number);
+      const earlier = new Date(year, month - 1, day - chunkDays);
+      setTimelineWindowStart([earlier.getFullYear(), String(earlier.getMonth() + 1).padStart(2, '0'), String(earlier.getDate()).padStart(2, '0')].join('-'));
+      setTimelineWindowDays((count) => count + chunkDays);
+    } else if (distanceToEnd < 700) {
       edgeLoadLockRef.current = true;
-      setTimelineWindowDays((count) => count + 30);
+      setTimelineWindowDays((count) => count + chunkDays);
       window.requestAnimationFrame(() => { edgeLoadLockRef.current = false; });
     }
   };
@@ -198,18 +199,17 @@ export const PlanningTimeline: React.FC = () => {
   };
 
   const scrollToToday = () => {
-    if (timelineSync.isTodayInRange) {
-      timelineSync.scrollToNow();
-    } else {
-      const now = new Date();
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      const targetBaseStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
-      setCurrentBaseDate(targetBaseStr);
-      setTimeout(() => {
-        timelineSync.scrollToNow();
-      }, 80);
+    const today = new Date();
+    const todayIso = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
+    const index = timelineDays.findIndex((day) => day.dateStr === todayIso);
+    if (index >= 0 && scrollContainerRef.current) {
+      const el = scrollContainerRef.current;
+      const visibleWidth = Math.max(0, el.clientWidth - (el.querySelector('[data-gantt-resource-column="true"]') as HTMLElement | null)?.offsetWidth! || 0);
+      const target = Math.max(0, index * colWidth - visibleWidth / 2 + colWidth / 2);
+      el.scrollTo({ left: target * (isRTL ? -1 : 1), behavior: 'smooth' });
+      return;
     }
+    setCurrentBaseDate(todayIso);
   };
 
   // In narrow mode, show the complete calendar month instead of the 14-day range.
@@ -252,7 +252,7 @@ export const PlanningTimeline: React.FC = () => {
   });
 
   const timelineDays = useMemo(() => {
-    const [y, m, d] = timelineBaseDate.split('-').map(Number);
+    const [y, m, d] = timelineWindowStart.split('-').map(Number);
     const dates: { dateStr: string; dayNum: number; dayName: string; isWeekend: boolean; isToday: boolean }[] = [];
 
     const realTodayStr = timelineSync.todayDateStr;
@@ -262,7 +262,7 @@ export const PlanningTimeline: React.FC = () => {
       { weekday: 'short' }
     );
 
-    for (let i = 0; i < totalDays; i++) {
+    for (let i = 0; i < timelineWindowDays; i++) {
       const cur = new Date(y, m - 1, d);
       cur.setDate(cur.getDate() + i);
       const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(
@@ -646,11 +646,12 @@ export const PlanningTimeline: React.FC = () => {
         onClickCapture={onTimelineClickCapture}
         onScroll={handleTimelineScroll}
         data-gantt-pan="true"
-        className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-contain flex touch-pan-x touch-pan-y cursor-grab active:cursor-grabbing"
+        className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-contain flex touch-pan-x touch-pan-y cursor-grab active:cursor-grabbing [scrollbar-gutter:stable]"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {/* LEFT COLUMN: Resource Tree */}
         <div
+          data-gantt-resource-column="true"
           className={`${leftColWidthClass} shrink-0 ${
             isRTL ? 'border-l sticky right-0' : 'border-r sticky left-0'
           } border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 z-[90] select-none shadow-xs transition-all duration-200 flex flex-col`}
@@ -680,7 +681,11 @@ export const PlanningTimeline: React.FC = () => {
                   {/* Group Header Row */}
                   <div
                     onClick={() => toggleGroup(grp.id)}
-                    className="h-10 min-h-[40px] max-h-[40px] shrink-0 px-2 sm:px-2.5 bg-slate-200/80 dark:bg-slate-800/80 flex items-center justify-between cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-800"
+                    type="button"
+                    data-gantt-group-toggle="true"
+                    aria-expanded={!isCollapsed}
+                    aria-label={`${isCollapsed ? 'Développer' : 'Réduire'} ${grp.name[language] || grp.name.en}`}
+                    className="w-full h-10 min-h-[40px] max-h-[40px] shrink-0 px-2 sm:px-2.5 bg-slate-200/80 dark:bg-slate-800/80 flex items-center justify-between cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-800 text-left"
                   >
                     <div className="flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate">
                       {isCollapsed ? <ChevronRight size={13} className="shrink-0 text-slate-500" /> : <ChevronDown size={13} className="shrink-0 text-slate-500" />}
@@ -691,7 +696,7 @@ export const PlanningTimeline: React.FC = () => {
                       )}
                     </div>
                     {getSectorIcon(grp.sector)}
-                  </div>
+                  </button>
 
                   {/* Resource Sub-Items */}
                   {!isCollapsed &&
