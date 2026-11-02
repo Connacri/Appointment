@@ -19,7 +19,7 @@ export const LegalModal: React.FC = () => {
     purgeAllUserData,
   } = useApp();
 
-  const [hasPurged, setHasPurged] = useState(false);
+  const [hasPurged, setHasPurged] = useState(false);\n  const [purgeFailed, setPurgeFailed] = useState(false);
   const [confirmStep, setConfirmStep] = useState(false);
 
   React.useEffect(() => {
@@ -36,13 +36,19 @@ export const LegalModal: React.FC = () => {
   if (!isLegalModalOpen) return null;
 
   const handleExecutePurge = async () => {
-    await purgeAllUserData();
-    setHasPurged(true);
-    setTimeout(() => {
-      setHasPurged(false);
-      setConfirmStep(false);
-      setIsLegalModalOpen(false);
-    }, 2500);
+    setPurgeFailed(false);
+    try {
+      await purgeAllUserData();
+      setHasPurged(true);
+      setTimeout(() => {
+        setHasPurged(false);
+        setConfirmStep(false);
+        setIsLegalModalOpen(false);
+      }, 2500);
+    } catch (error) {
+      console.error('[LegalModal] Data purge failed:', error);
+      setPurgeFailed(true);
+    }
   };
 
   return (
@@ -77,6 +83,11 @@ export const LegalModal: React.FC = () => {
 
         {/* Content */}
         <div className="p-5 space-y-4 text-xs">
+          {purgeFailed && (
+            <div role="alert" className="p-3 rounded-xl border border-rose-300 bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800">
+              {getTranslation('deleteFailureToast', language)}
+            </div>
+          )}
           {hasPurged ? (
             <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-xl text-emerald-900 dark:text-emerald-200 text-center space-y-2">
               <CheckCircle2 size={32} className="mx-auto text-emerald-500" />
