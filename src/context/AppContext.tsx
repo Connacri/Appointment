@@ -16,7 +16,6 @@ import {
 } from '../types/booking';
 import {
   initialBookings,
-  initialResourceGroups,
   initialInvoices,
   initialEstablishments,
   initialStockItems,
@@ -329,7 +328,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error(e);
       }
     }
-    return initialResourceGroups;
+    // No fabricated rooms: use the locally persisted inventory until CardLock.mdb is imported.
+    return [];
   });
 
   const [bookings, setBookings] = useState<TimelineBooking[]>(() => {
