@@ -432,6 +432,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     objectBox.openStore().then(() => {
       initialInvoices.forEach((inv) => objectBox.put('invoices', inv));
+    }).catch((error) => {
+      console.error('[AppContext] ObjectBox initialization failed:', error);
     });
   }, []);
 
