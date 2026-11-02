@@ -20,3 +20,61 @@
     font-family: var(--font-mono);
   }
 }
+
+
+/* Shared responsive safeguards for every PMS workspace tab. */
+@layer base {
+  #root,
+  #root > *,
+  main,
+  main > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  main :where(input, select, textarea) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  main :where(table) {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  main > * {
+    width: 100%;
+  }
+
+  main :where(table) {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  main :where(pre) {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  main :where(button) {
+    touch-action: manipulation;
+  }
+
+  /* Keep dense KPI grids readable instead of squeezing four columns. */
+  main :where(.grid-cols-4) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  main :where(.grid-cols-3) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 380px) {
+  main :where(.grid-cols-2) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
