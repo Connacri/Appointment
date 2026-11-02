@@ -277,10 +277,10 @@ export const PlanningTimeline: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-950 relative select-none">
       {/* Responsive Toolbar */}
-      <div className="min-h-10 py-2 px-2 md:py-1.5 md:px-3 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-1.5 bg-slate-50 dark:bg-slate-900 select-none text-xs shrink-0">
+      <div className="w-full min-w-0 min-h-10 py-2 px-2 md:py-1.5 md:px-3 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-1.5 bg-slate-50 dark:bg-slate-900 select-none text-xs shrink-0">
         {/* Left Column Mode Toggle: Normal / Compact / Mini */}
-        <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-1 min-w-0">
-          <div className="flex items-center bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 shadow-2xs">
+        <div className="w-full sm:w-auto flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-1 min-w-0">
+          <div className="w-full sm:w-auto flex items-center justify-start bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 shadow-2xs">
             <button
               onClick={() => setLeftBarMode('mini')}
               className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
@@ -318,11 +318,11 @@ export const PlanningTimeline: React.FC = () => {
 
           {/* Hotel Establishment Switcher (ADEF Centre-ville / ADEF Plage) */}
           {currentDomain === 'hotel' && (
-            <div className="flex items-center gap-1.5 ml-1 min-w-0 flex-1 sm:flex-initial">
+            <div className="w-full sm:w-auto flex items-center gap-1.5 sm:ml-1 min-w-0">
               <select
                 value={selectedEstablishmentId}
                 onChange={(e) => setSelectedEstablishmentId(e.target.value)}
-                className="w-full max-w-[190px] sm:max-w-none min-w-0 px-2 py-1 text-[10px] sm:text-[11px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 shadow-2xs cursor-pointer"
+                className="w-full sm:w-auto sm:max-w-none min-w-0 px-2 py-2 sm:py-1 text-[11px] sm:text-[11px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 shadow-2xs cursor-pointer"
               >
                 <option value="all">🏨 {language === 'fr' ? 'Tous les complexes ADEF' : 'All ADEF Hotels'}</option>
                 {establishments.map((h) => (
@@ -336,9 +336,9 @@ export const PlanningTimeline: React.FC = () => {
         </div>
 
         {/* Center / Right controls: Zoom & Fast Date Navigation */}
-        <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-1.5 flex-wrap sm:ml-auto">
+        <div className="w-full sm:w-auto grid grid-cols-2 sm:flex sm:items-center sm:justify-end gap-2 sm:gap-1.5 sm:ml-auto min-w-0">
           {/* Quick Date Jump Input */}
-          <div className="flex items-center gap-1 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-0.5">
+          <div className="col-span-2 sm:col-span-1 min-w-0 w-full sm:w-auto flex items-center justify-center sm:justify-start gap-1 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 sm:py-0.5">
             <CalendarDays size={13} className="text-slate-400 shrink-0" />
             <input
               type="date"
@@ -346,13 +346,13 @@ export const PlanningTimeline: React.FC = () => {
               onChange={(e) => {
                 if (e.target.value) setCurrentBaseDate(e.target.value);
               }}
-              className="text-[11px] font-mono bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer w-24 sm:w-28"
+              className="text-[11px] font-mono bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer w-28 sm:w-28"
               title="Aller directement à une date"
             />
           </div>
 
           {/* Day Column Zoom Selector */}
-          <div className="flex items-center bg-slate-200 dark:bg-slate-800 p-0.5 rounded-lg text-[11px] font-semibold">
+          <div className="w-full sm:w-auto flex items-center justify-center bg-slate-200 dark:bg-slate-800 p-0.5 rounded-lg text-[11px] font-semibold">
             <button
               onClick={() => setColumnZoomMode('compact')}
               className={`px-2 py-0.5 rounded transition-colors ${
@@ -389,7 +389,7 @@ export const PlanningTimeline: React.FC = () => {
           </div>
 
           {/* Horizontal scroll navigation buttons */}
-          <div className="flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 bg-white dark:bg-slate-800">
+          <div className="w-full sm:w-auto flex items-center justify-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 bg-white dark:bg-slate-800">
             <button
               onClick={() => scrollTimeline(-colWidth * 2)}
               className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-600 dark:text-slate-300 active:scale-95 transition-all"
@@ -420,7 +420,7 @@ export const PlanningTimeline: React.FC = () => {
         <button
           type="button"
           onClick={scrollToToday}
-          className="absolute top-[116px] sm:top-15 right-2 sm:right-6 z-40 px-3 py-1 rounded-full text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/70 shadow-md backdrop-blur-md flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-all cursor-pointer select-none active:scale-95 group"
+          className="absolute top-[168px] sm:top-15 right-2 sm:right-6 z-40 px-3 py-1 rounded-full text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/70 shadow-md backdrop-blur-md flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-all cursor-pointer select-none active:scale-95 group"
           title={language === 'fr' ? 'Centrer la vue sur Aujourd’hui' : language === 'ar' ? 'الانتقال إلى اليوم' : 'Scroll to Today'}
         >
           <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
