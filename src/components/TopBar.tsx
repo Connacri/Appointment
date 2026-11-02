@@ -274,13 +274,13 @@ export const TopBar: React.FC = () => {
             disabled={isRequestingUsb}
             className={`min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer shadow-xs focus-visible:ring-2 focus-visible:ring-blue-500 ${
               usbStatus === 'connected'
-                ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200'
-                : 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/70 dark:hover:bg-amber-900/70 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200'
+                ? 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 border-emerald-700 text-white shadow-md shadow-emerald-600/20'
+                : 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200'
             }`}
             title={
               usbStatus === 'connected'
-                ? `Encodeur USB proUSB connecté (${usbDevice?.productName || 'USB HID'}) - Cliquez pour gérer`
-                : "Encodeur USB non connecté - Cliquez pour demander l'autorisation WebHID au navigateur"
+                ? `Encodeur USB proUSB détecté et connecté (${usbDevice?.productName || 'USB HID'}) - Cliquez pour gérer`
+                : "Détection automatique active. Branchez l'encodeur USB ; si c'est la première utilisation, cliquez pour autoriser WebHID."
             }
           >
             <span className="relative flex h-2.5 w-2.5 shrink-0">
