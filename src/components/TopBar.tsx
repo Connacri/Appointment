@@ -172,7 +172,7 @@ export const TopBar: React.FC = () => {
   return (
     <>
       <header className="relative z-[500] min-w-0 w-full py-2 px-2.5 sm:px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-2 shrink-0 select-none shadow-xs">
-        <div className="w-full min-w-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="w-full min-w-0 flex flex-col gap-2">
         {/* ======================================================== */}
         {/* SECTION GAUCHE : Menu Mobile, Recherche, Secteur         */}
         {/* ======================================================== */}
