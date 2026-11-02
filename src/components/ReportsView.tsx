@@ -20,7 +20,7 @@ export const ReportsView: React.FC = () => {
   const resortRevenue = bookings.filter((b) => b.sector === 'resort').reduce((acc, b) => acc + b.totalPrice, 0);
 
   return (
-    <div className="flex-1 p-4 md:p-6 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-6">
+    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-5 md:space-y-6">
       <div>
         <h1 className="text-xl font-bold text-slate-900 dark:text-white">
           {language === 'fr' ? 'Rapports & Indicateurs d\'Activité' : language === 'ar' ? 'التقارير ومؤشرات الأداء' : 'Reports & Performance Metrics'}
