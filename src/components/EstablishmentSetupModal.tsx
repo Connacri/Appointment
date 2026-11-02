@@ -192,12 +192,12 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
 
   return (
     <div
-      className="fixed inset-0 z-[10002] flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[30000] flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
       aria-labelledby="establishment-modal-title"
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-3xl w-full shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full shadow-2xl flex flex-col max-h-[94vh] overflow-hidden">
         {/* Modal Header */}
         <div className="px-6 py-4.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-blue-50/60 via-indigo-50/40 to-transparent dark:from-blue-950/30 dark:via-slate-900 dark:to-transparent">
           <div className="flex items-center gap-3">
@@ -206,7 +206,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 id="establishment-modal-title" className="text-base font-extrabold text-slate-900 dark:text-white">
+                <h2 id="establishment-modal-title" className="text-sm sm:text-base leading-snug font-extrabold text-slate-900 dark:text-white">
                   {isFirstLaunch
                     ? "Bienvenue sur OmniBook — Configuration de votre Établissement"
                     : "Paramètres de l'Établissement & Coordonnées de Facturation"}
@@ -349,7 +349,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                           setFormData({ ...formData, stars: star });
                           playClickFeedback();
                         }}
-                        className="p-1 text-slate-300 hover:text-amber-400 transition-colors"
+                        aria-label={"Définir le classement à " + star + " étoile(s)"} aria-pressed={star === formData.stars} className="p-1 rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
                       >
                         <Star
                           size={18}
@@ -358,7 +358,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                       </button>
                     ))}
                     <span className="ml-2 font-bold text-slate-700 dark:text-slate-300 text-xs">
-                      {formData.stars === 5 ? '5 Étoiles (Palace / Luxe)' : `${formData.stars} Étoiles`}
+                      {formData.stars === 5 ? '5 étoiles' : `${formData.stars} étoiles`}
                     </span>
                   </div>
                 </div>
