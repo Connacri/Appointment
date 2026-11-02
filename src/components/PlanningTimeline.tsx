@@ -116,7 +116,26 @@ export const PlanningTimeline: React.FC = () => {
     return () => media.removeEventListener('change', handleChange);
   }, []);
   const handleTimelineScroll = (event: React.UIEvent<HTMLDivElement>) => {
-    setIsDayHeaderCollapsed(event.currentTarget.scrollTop > 48);
+    const el = event.currentTarget;
+    setIsDayHeaderCollapsed(el.scrollTop > 48);
+    if (edgeLoadLockRef.current) return;
+    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+    const position = isRTL ? Math.abs(el.scrollLeft) : el.scrollLeft;
+    const distanceToStart = isRTL ? maxScroll - position : position;
+    const distanceToEnd = isRTL ? position : maxScroll - position;
+    if (distanceToStart < 500) {
+      edgeLoadLockRef.current = true;
+      pendingPrependWidthRef.current = 30 * colWidth;
+      const parts = timelineWindowStart.split('-').map(Number);
+      const earlier = new Date(parts[0], parts[1] - 1, parts[2] - 30);
+      const earlierIso = [earlier.getFullYear(), String(earlier.getMonth() + 1).padStart(2, '0'), String(earlier.getDate()).padStart(2, '0')].join('-');
+      setTimelineWindowStart(earlierIso);
+      setTimelineWindowDays((count) => count + 30);
+    } else if (distanceToEnd < 500) {
+      edgeLoadLockRef.current = true;
+      setTimelineWindowDays((count) => count + 30);
+      window.requestAnimationFrame(() => { edgeLoadLockRef.current = false; });
+    }
   };
 
   // Dynamic day column width adapted to viewport
@@ -198,15 +217,34 @@ export const PlanningTimeline: React.FC = () => {
   const timelineBaseDate = columnZoomMode === 'compact'
     ? `${baseYear}-${String(baseMonth).padStart(2, '0')}-01`
     : currentBaseDate;
-  const totalDays = columnZoomMode === 'compact'
+  const initialWindowDays = columnZoomMode === 'compact'
     ? new Date(baseYear, baseMonth, 0).getDate()
     : dateRangeMode === 'two_weeks' ? 14 : 28;
+  const [timelineWindowStart, setTimelineWindowStart] = useState(timelineBaseDate);
+  const [timelineWindowDays, setTimelineWindowDays] = useState(initialWindowDays);
+  const pendingPrependWidthRef = useRef(0);
+  const edgeLoadLockRef = useRef(false);
 
-  // Global Timeline Sync Hook: observes date state changes globally to keep
-  // the 'current time' red line and 'today' view header perfectly synchronized.
+  useEffect(() => {
+    setTimelineWindowStart(timelineBaseDate);
+    setTimelineWindowDays(initialWindowDays);
+    pendingPrependWidthRef.current = 0;
+    edgeLoadLockRef.current = false;
+  }, [timelineBaseDate, initialWindowDays]);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    const adjustment = pendingPrependWidthRef.current;
+    if (!el || !adjustment) return;
+    el.scrollLeft += isRTL ? -adjustment : adjustment;
+    pendingPrependWidthRef.current = 0;
+    edgeLoadLockRef.current = false;
+  }, [timelineWindowStart, timelineWindowDays, isRTL]);
+
+  // Global Timeline Sync Hook: observes the expanding date window.
   const timelineSync = useTimelineSync({
-    currentBaseDate: timelineBaseDate,
-    totalDays,
+    currentBaseDate: timelineWindowStart,
+    totalDays: timelineWindowDays,
     colWidth,
     scrollContainerRef,
     language,
@@ -246,7 +284,7 @@ export const PlanningTimeline: React.FC = () => {
       });
     }
     return dates;
-  }, [timelineBaseDate, totalDays, language, timelineSync.todayDateStr]);
+  }, [timelineWindowStart, timelineWindowDays, language, timelineSync.todayDateStr]);
 
   const todayIndex = timelineSync.todayIndex;
   const currentTimeStr = timelineSync.currentTimeStr;
@@ -608,7 +646,7 @@ export const PlanningTimeline: React.FC = () => {
         onClickCapture={onTimelineClickCapture}
         onScroll={handleTimelineScroll}
         data-gantt-pan="true"
-        className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-contain flex scroll-smooth touch-pan-x touch-pan-y cursor-grab active:cursor-grabbing"
+        className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-contain flex touch-pan-x touch-pan-y cursor-grab active:cursor-grabbing"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {/* LEFT COLUMN: Resource Tree */}
