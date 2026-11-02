@@ -380,10 +380,6 @@ export const TopBar: React.FC = () => {
               <span className="sm:hidden">USB</span>
               <span className="hidden sm:inline">USB Physique</span>
               {usbStatus === 'connected' && <span className="hidden md:inline font-normal text-emerald-700 dark:text-emerald-300"> • Prêt</span>}
-            </span></span>
-              ) : (
-                <span>USB Physique <span className="hidden md:inline font-normal text-amber-700 dark:text-amber-300">(Activer)</span></span>
-              )}
             </span>
           </button>
 
