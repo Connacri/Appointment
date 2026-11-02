@@ -3,9 +3,9 @@ import { Language } from '../types/booking';
 export const translations = {
   // Brand & Top Navigation
   brandName: {
-    fr: 'Appointment PMS',
-    en: 'Appointment PMS',
-    ar: 'Appointment PMS',
+    fr: 'APPOINTMENT PMS',
+    en: 'APPOINTMENT PMS',
+    ar: 'APPOINTMENT PMS',
   },
   tagline: {
     fr: 'Hôtellerie, Resort & Gestion PMS',
