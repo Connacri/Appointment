@@ -336,9 +336,9 @@ export const PlanningTimeline: React.FC = () => {
         </div>
 
         {/* Center / Right controls: Zoom & Fast Date Navigation */}
-        <div className="w-full sm:w-auto grid grid-cols-[minmax(0,1fr)_auto_auto] sm:flex sm:items-center sm:justify-end gap-1.5 sm:gap-1.5 sm:ml-auto min-w-0">
+        <div className="w-full sm:w-auto grid grid-cols-2 sm:flex sm:items-center sm:justify-end gap-1.5 sm:gap-1.5 sm:ml-auto min-w-0">
           {/* Quick Date Jump Input */}
-          <div className="min-w-0 w-full sm:w-auto flex items-center justify-center sm:justify-start gap-1 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-lg px-1.5 sm:px-2 h-9 sm:h-auto py-1 sm:py-0.5">
+          <div className="col-span-2 sm:col-span-1 min-w-0 w-full sm:w-auto flex items-center justify-center sm:justify-start gap-1 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-lg px-1.5 sm:px-2 h-9 sm:h-auto py-1 sm:py-0.5">
             <CalendarDays size={13} className="text-slate-400 shrink-0" />
             <input
               type="date"
