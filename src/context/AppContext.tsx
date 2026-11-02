@@ -680,43 +680,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     bookingId: string,
     cashReceived: boolean = false
   ): { success: boolean; message: string; booking?: TimelineBooking } => {
-    let targetBooking: TimelineBooking | undefined;
-    let paymentSettled = false;
+    const currentBooking = bookings.find((booking) => booking.id === bookingId);
+    if (!currentBooking) {
+      return {
+        success: false,
+        message:
+          language === 'fr'
+            ? 'Réservation introuvable.'
+            : language === 'ar'
+            ? 'الحجز غير موجود.'
+            : 'Booking not found.',
+      };
+    }
+
+    // Only an explicit cashReceived=true can settle a pending cash payment.
+    // A previously paid booking remains paid; a pending booking remains pending otherwise.
+    const paymentSettled =
+      currentBooking.paymentStatus === 'paid' || cashReceived === true;
+    const updatedBooking: TimelineBooking = {
+      ...currentBooking,
+      status: 'checked_in',
+      paymentStatus: paymentSettled ? 'paid' : currentBooking.paymentStatus,
+      notes:
+        (currentBooking.notes || '') +
+        (cashReceived === true && currentBooking.paymentStatus !== 'paid'
+          ? ' [✓ Présence confirmée via QR Code & Paiement Cash finalisé]'
+          : ' [✓ Présence confirmée via QR Code]'),
+    };
 
     setBookings((prev) =>
-      prev.map((b) => {
-        if (b.id === bookingId) {
-          // A booking payment is only marked as paid if cash was genuinely received or if it was already paid
-          const isNowPaid = b.paymentStatus === 'paid' || cashReceived === true;
-          paymentSettled = isNowPaid;
-
-          const updated: TimelineBooking = {
-            ...b,
-            status: 'checked_in',
-            paymentStatus: isNowPaid ? 'paid' : b.paymentStatus,
-            notes:
-              (b.notes || '') +
-              (cashReceived === true && b.paymentStatus !== 'paid'
-                ? ' [✓ Présence confirmée via QR Code & Paiement Cash finalisé]'
-                : ' [✓ Présence confirmée via QR Code]'),
-          };
-          targetBooking = updated;
-          return updated;
-        }
-        return b;
-      })
+      prev.map((booking) =>
+        booking.id === bookingId ? updatedBooking : booking
+      )
     );
-
-    if (selectedBooking && selectedBooking.id === bookingId) {
-      setSelectedBooking((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: 'checked_in',
-              paymentStatus: targetBooking?.paymentStatus ?? (cashReceived === true ? 'paid' : prev.paymentStatus),
-            }
-          : null
-      );
+    if (selectedBooking?.id === bookingId) {
+      setSelectedBooking(updatedBooking);
     }
 
     const message = paymentSettled
@@ -734,7 +732,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return {
       success: true,
       message,
-      booking: targetBooking,
+      booking: updatedBooking,
     };
   };
 
@@ -975,7 +973,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.removeItem(key);
         }
       }
-      sessionStorage.clear();
+      for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {\n        const key = sessionStorage.key(index);\n        if (key && key.startsWith('omnibook_')) sessionStorage.removeItem(key);\n      }
     } catch (error) {
       console.error('[AppContext] Failed to clear browser storage:', error);
       throw error;
