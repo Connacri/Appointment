@@ -615,7 +615,7 @@ export const PlanningTimeline: React.FC = () => {
         <div
           className={`${leftColWidthClass} shrink-0 ${
             isRTL ? 'border-l sticky right-0' : 'border-r sticky left-0'
-          } border-slate-200 dark:border-slate-800 bg-slate-50/95 dark:bg-slate-900/95 z-20 select-none shadow-xs transition-all duration-200 backdrop-blur-xs flex flex-col`}
+          } border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 z-[90] select-none shadow-xs transition-all duration-200 flex flex-col`}
         >
           {/* Header of Resources Column with STICKY TOP-0 */}
           <div className={`${dayHeaderHeightClass} shrink-0 border-b border-slate-200 dark:border-slate-800 px-2 sm:px-3 flex flex-col justify-center bg-slate-100 dark:bg-slate-850 sticky top-0 z-[80] isolate transition-[height,min-height,max-height] duration-200`}>
@@ -743,16 +743,14 @@ export const PlanningTimeline: React.FC = () => {
                           style={{ width: `${colWidth}px` }}
                           className="shrink-0 border-r border-slate-200/60 dark:border-slate-800/60 flex items-center justify-center p-1 h-full"
                         >
-                          {isCollapsed && (
-                            <span
-                              className={`w-6 h-5 rounded text-[11px] font-bold font-mono flex items-center justify-center shadow-2xs tabular-nums ${
-                                isFree ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
-                              }`}
-                              title={`${avail} disponibilité(s) le ${day.dateStr}`}
-                            >
-                              {avail}
-                            </span>
-                          )}
+                          <span
+                            className={`w-6 h-5 rounded text-[11px] font-bold font-mono flex items-center justify-center shadow-2xs tabular-nums ${
+                              isFree ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
+                            }`}
+                            title={`${avail} disponibilité(s) le ${day.dateStr}`}
+                          >
+                            {avail}
+                          </span>
                         </div>
                       );
                     })}
