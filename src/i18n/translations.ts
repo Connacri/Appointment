@@ -469,6 +469,11 @@ export const translations = {
     en: 'Your account and local storage have been completely erased.',
     ar: 'تم مسح حسابك وكافة السجلات المحلية بالكامل بنجاح.',
   },
+  deleteFailureToast: {
+    fr: 'La suppression est incomplète. Certaines données locales n’ont pas pu être effacées. Réessayez ou contactez le support.',
+    en: 'Deletion is incomplete. Some local data could not be erased. Please retry or contact support.',
+    ar: 'لم تكتمل عملية الحذف. تعذر مسح بعض البيانات المحلية. يرجى المحاولة مجدداً أو الاتصال بالدعم.',
+  },
   privacyPolicyExternal: {
     fr: 'Consulter la Politique de Confidentialité publique (/privacy/)',
     en: 'Read Public Privacy Policy (/privacy/)',
