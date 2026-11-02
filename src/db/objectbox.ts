@@ -212,7 +212,11 @@ class ObjectBoxStore {
     items: T[]
   ): Promise<void> {
     await this.openStore();
-    try {\n      localStorage.setItem(`ob_${boxName}`, JSON.stringify(items));\n    } catch (error) {\n      console.warn('[ObjectBox] Snapshot fallback write failed:', error);\n    }
+    try {
+      localStorage.setItem(`ob_${boxName}`, JSON.stringify(items));
+    } catch (error) {
+      console.warn('[ObjectBox] Snapshot fallback write failed:', error);
+    }
     if (!this.idb) return;
 
     await new Promise<void>((resolve, reject) => {
