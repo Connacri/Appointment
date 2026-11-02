@@ -24,6 +24,7 @@ import {
 } from '../data/mockData';
 import { EstablishmentProfile, DEFAULT_ESTABLISHMENT_PROFILE } from '../types/establishment';
 import { objectBox } from '../db/objectbox';
+import { isValidCalendarDate, shouldMarkPaymentAsPaid } from '../utils/bookingValidation';
 import { lockManager } from '../locks/lockManager';
 import {
   audioFeedbackService,
@@ -143,20 +144,6 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
-
-// Strict YYYY-MM-DD calendar validation. Date() alone normalizes impossible dates
-// (for example 2026-02-31) into a date in the following month.
-const isValidCalendarDate = (value: string): boolean => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return false;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-  return parsed.getUTCFullYear() === year &&
-    parsed.getUTCMonth() === month - 1 &&
-    parsed.getUTCDate() === day;
-};
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(() => {
@@ -696,7 +683,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Only an explicit cashReceived=true can settle a pending cash payment.
     // A previously paid booking remains paid; a pending booking remains pending otherwise.
     const paymentSettled =
-      currentBooking.paymentStatus === 'paid' || cashReceived === true;
+      shouldMarkPaymentAsPaid(currentBooking.paymentStatus, cashReceived);
     const updatedBooking: TimelineBooking = {
       ...currentBooking,
       status: 'checked_in',
