@@ -3,9 +3,9 @@ import { Language } from '../types/booking';
 export const translations = {
   // Brand & Top Navigation
   brandName: {
-    fr: 'OmniBook',
-    en: 'OmniBook',
-    ar: 'أومني بوك',
+    fr: 'Appointment PMS',
+    en: 'Appointment PMS',
+    ar: 'Appointment PMS',
   },
   tagline: {
     fr: 'Hôtellerie, Resort & Gestion PMS',
