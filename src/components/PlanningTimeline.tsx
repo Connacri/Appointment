@@ -63,18 +63,17 @@ export const PlanningTimeline: React.FC = () => {
     dragPanRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop, moved: false };
     el.setPointerCapture(e.pointerId);
   };
+  // Mouse drag pans horizontally only. Vertical movement remains native mouse-wheel scrolling.
   const onTimelinePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = dragPanRef.current;
     const el = scrollContainerRef.current;
     if (!d || !el || d.pointerId !== e.pointerId) return;
     const dx = e.clientX - d.x;
-    const dy = e.clientY - d.y;
-    if (!d.moved && Math.hypot(dx, dy) < 4) return;
+    if (Math.abs(dx) < 4) return;
     d.moved = true;
     suppressClickRef.current = true;
     e.preventDefault();
     el.scrollLeft = d.left - dx;
-    el.scrollTop = d.top - dy;
   };
   const onTimelinePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = dragPanRef.current;
