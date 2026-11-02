@@ -520,7 +520,7 @@ export const TopBar: React.FC = () => {
         <div className="w-full min-w-0 flex items-center gap-2">
           <div className="relative flex-1 min-w-0">
             {/* Search Box - Fluid & Touch Friendly */}
-          <div className="relative flex-1 sm:flex-initial min-w-[84px] max-w-none sm:max-w-[240px]">
+          <div className="relative w-full min-w-0">
             <Search
               size={15}
               className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
@@ -552,7 +552,7 @@ export const TopBar: React.FC = () => {
           </div>
           <div className="shrink-0 flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 text-xs font-semibold">
             {/* 14J / 1M Segment */}
-          <div className="hidden sm:flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 text-xs font-semibold">
+          <div className="flex items-center">
             <button
               type="button"
               onClick={() => setDateRangeMode('two_weeks')}
