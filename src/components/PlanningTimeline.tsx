@@ -144,6 +144,23 @@ export const PlanningTimeline: React.FC = () => {
     isMobileSheet?: boolean;
   } | null>(null);
 
+  // Keep the hover preview alive while the pointer travels from a booking bar to its card.
+  const previewCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelPreviewClose = () => {
+    if (previewCloseTimerRef.current) {
+      clearTimeout(previewCloseTimerRef.current);
+      previewCloseTimerRef.current = null;
+    }
+  };
+  const schedulePreviewClose = () => {
+    cancelPreviewClose();
+    previewCloseTimerRef.current = setTimeout(() => {
+      setActivePreviewBooking(null);
+      previewCloseTimerRef.current = null;
+    }, 300);
+  };
+  useEffect(() => () => cancelPreviewClose(), []);
+
   const toggleGroup = (groupId: string) => {
     setCollapsedGroups((prev) => ({
       ...prev,
@@ -750,6 +767,7 @@ export const PlanningTimeline: React.FC = () => {
                                 }}
                                 onMouseEnter={(e) => {
                                   if (!isMobileScreen) {
+                                    cancelPreviewClose();
                                     const rect = e.currentTarget.getBoundingClientRect();
                                     setActivePreviewBooking({
                                       booking: bkg,
@@ -760,9 +778,7 @@ export const PlanningTimeline: React.FC = () => {
                                   }
                                 }}
                                 onMouseLeave={() => {
-                                  if (!isMobileScreen) {
-                                    setActivePreviewBooking(null);
-                                  }
+                                  if (!isMobileScreen) schedulePreviewClose();
                                 }}
                                 style={posStyle}
                                 className={`absolute top-2 sm:top-1.5 h-10 sm:h-9 rounded-md px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-sm hover:brightness-105 active:scale-[0.98] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
@@ -842,8 +858,8 @@ export const PlanningTimeline: React.FC = () => {
                 top: `${Math.min(window.innerHeight - 250, activePreviewBooking.y ?? 100)}px`,
               }}
               className="w-68 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-3 z-50 text-xs animate-in fade-in zoom-in-95 pointer-events-auto"
-              onMouseEnter={() => {}}
-              onMouseLeave={() => setActivePreviewBooking(null)}
+              onMouseEnter={cancelPreviewClose}
+              onMouseLeave={schedulePreviewClose}
             >
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 mb-2">
                 <span className="font-bold text-slate-900 dark:text-white truncate">
