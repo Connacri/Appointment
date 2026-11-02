@@ -53,6 +53,45 @@ export const PlanningTimeline: React.FC = () => {
   const isRTL = language === 'ar';
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const dragPanRef = useRef<{ pointerId: number; x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
+  const suppressClickRef = useRef(false);
+  const onTimelinePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button,a,input,select,textarea,[role="button"],[data-booking-card="true"]')) return;
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    dragPanRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop, moved: false };
+    el.setPointerCapture(e.pointerId);
+  };
+  const onTimelinePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragPanRef.current;
+    const el = scrollContainerRef.current;
+    if (!d || !el || d.pointerId !== e.pointerId) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    if (!d.moved && Math.hypot(dx, dy) < 4) return;
+    d.moved = true;
+    suppressClickRef.current = true;
+    e.preventDefault();
+    el.scrollLeft = d.left - dx;
+    el.scrollTop = d.top - dy;
+  };
+  const onTimelinePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragPanRef.current;
+    const el = scrollContainerRef.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    if (el && el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    dragPanRef.current = null;
+    if (d.moved) window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+  };
+  const onTimelineClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!suppressClickRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    suppressClickRef.current = false;
+  };
+
 
   // Responsive mode: compact (phone), standard, or wide
   const [columnZoomMode, setColumnZoomMode] = useState<'compact' | 'standard' | 'wide'>(() => typeof window !== 'undefined' && window.innerWidth < 768 ? 'compact' : 'standard');
@@ -437,7 +476,12 @@ export const PlanningTimeline: React.FC = () => {
       {/* Main Gantt Matrix: Left Sticky Resource Tree + Right Scrollable Day Matrix */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-contain flex scroll-smooth touch-pan-x touch-pan-y"
+        onPointerDown={onTimelinePointerDown}
+        onPointerMove={onTimelinePointerMove}
+        onPointerUp={onTimelinePointerEnd}
+        onPointerCancel={onTimelinePointerEnd}
+        onClickCapture={onTimelineClickCapture}
+        className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-contain flex scroll-smooth touch-pan-x touch-pan-y cursor-grab active:cursor-grabbing"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {/* LEFT COLUMN: Resource Tree */}
