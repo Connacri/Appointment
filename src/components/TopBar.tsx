@@ -171,11 +171,11 @@ export const TopBar: React.FC = () => {
 
   return (
     <>
-      <header className="min-h-14 py-1.5 px-2.5 sm:px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 z-20 shrink-0 select-none shadow-xs">
+      <header className="min-w-0 w-full min-h-14 py-2 px-2.5 sm:px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-2 z-20 shrink-0 select-none shadow-xs">
         {/* ======================================================== */}
         {/* SECTION GAUCHE : Menu Mobile, Recherche, Secteur         */}
         {/* ======================================================== */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+        <div className="w-full sm:w-auto flex items-center gap-1.5 sm:gap-2.5 min-w-0">
           {/* Mobile Sidebar Hamburger Toggle (Touch target >= 44px) */}
           <button
             type="button"
@@ -205,7 +205,7 @@ export const TopBar: React.FC = () => {
           </nav>
 
           {/* Search Box - Fluid & Touch Friendly */}
-          <div className="relative min-w-[100px] max-w-[200px] sm:max-w-[240px]">
+          <div className="relative flex-1 sm:flex-initial min-w-[84px] max-w-none sm:max-w-[240px]">
             <Search
               size={15}
               className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
@@ -278,7 +278,7 @@ export const TopBar: React.FC = () => {
         {/* ======================================================== */}
         {/* SECTION CENTRALE : Date & Mode 14J / 1M                   */}
         {/* ======================================================== */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <div className="w-full sm:w-auto flex items-center justify-between sm:justify-center gap-1 sm:gap-2 shrink-0 min-w-0">
           <div className="flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 shadow-2xs">
             <button
               type="button"
@@ -337,7 +337,7 @@ export const TopBar: React.FC = () => {
         {/* ======================================================== */}
         {/* SECTION DROITE : USB Physique, CI Pipeline, + Nouveau    */}
         {/* ======================================================== */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-2 shrink-0 min-w-0">
           {/* PROMINENT USB PHYSIQUE (WebHID) BUTTON */}
           <button
             type="button"
@@ -377,8 +377,10 @@ export const TopBar: React.FC = () => {
             />
 
             <span className="text-[11px] sm:text-xs font-bold whitespace-nowrap">
-              {usbStatus === 'connected' ? (
-                <span>USB Physique <span className="hidden sm:inline font-normal text-emerald-700 dark:text-emerald-300">• Prêt</span></span>
+              <span className="sm:hidden">USB</span>
+              <span className="hidden sm:inline">USB Physique</span>
+              {usbStatus === 'connected' && <span className="hidden md:inline font-normal text-emerald-700 dark:text-emerald-300"> • Prêt</span>}
+            </span></span>
               ) : (
                 <span>USB Physique <span className="hidden md:inline font-normal text-amber-700 dark:text-amber-300">(Activer)</span></span>
               )}
