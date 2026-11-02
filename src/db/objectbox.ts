@@ -42,7 +42,7 @@ class ObjectBoxStore {
   public async openStore(): Promise<boolean> {
     if (this.isInitialized && this.idb) return true;
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       if (typeof window === 'undefined' || !window.indexedDB) {
         this.isInitialized = true;
         resolve(true);
@@ -82,8 +82,12 @@ class ObjectBoxStore {
       };
 
       req.onerror = () => {
-        this.isInitialized = true;
-        resolve(true);
+        this.isInitialized = false;
+        reject(req.error ?? new Error('Unable to open the local IndexedDB database'));
+      };
+      req.onblocked = () => {
+        this.isInitialized = false;
+        reject(new Error('Opening the local IndexedDB database was blocked by another tab'));
       };
     });
   }
@@ -208,7 +212,7 @@ class ObjectBoxStore {
     items: T[]
   ): Promise<void> {
     await this.openStore();
-    localStorage.setItem(`ob_${boxName}`, JSON.stringify(items));
+    try {\n      localStorage.setItem(`ob_${boxName}`, JSON.stringify(items));\n    } catch (error) {\n      console.warn('[ObjectBox] Snapshot fallback write failed:', error);\n    }
     if (!this.idb) return;
 
     await new Promise<void>((resolve, reject) => {
