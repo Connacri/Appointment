@@ -250,6 +250,23 @@ export const TopBar: React.FC = () => {
         {/* SECTION DROITE : USB Physique, CI Pipeline, + Nouveau    */}
         {/* ======================================================== */}
         <div className="ml-auto flex items-center justify-end gap-2 shrink-0 min-w-0">
+          {/* Currency Dropdown */}
+          <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-1.5 py-1">
+            <select
+              value={currency === 'DZD' ? 'DA' : currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className="bg-transparent text-slate-800 dark:text-slate-100 font-bold cursor-pointer focus:outline-none text-xs"
+              title="Devise principale de facturation"
+            >
+              <option value="DA">🇩🇿 DA (DZD)</option>
+              <option value="EUR">🇪🇺 € (EUR)</option>
+              <option value="USD">🇺🇸 $ (USD)</option>
+              <option value="RMB">🇨🇳 ¥ (RMB)</option>
+              <option value="GBP">🇬🇧 £ (GBP)</option>
+              <option value="SAR">🇸🇦 ﷼ (SAR)</option>
+            </select>
+          </div>
+
           {/* PROMINENT USB PHYSIQUE (WebHID) BUTTON */}
           <button
             type="button"
@@ -298,23 +315,6 @@ export const TopBar: React.FC = () => {
           {/* CI/CD Pipeline Status Badge (GitHub Actions) */}
           <div className="hidden sm:block">
             <PipelineStatusIndicator />
-          </div>
-
-          {/* Currency Dropdown */}
-          <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-1.5 py-1">
-            <select
-              value={currency === 'DZD' ? 'DA' : currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="bg-transparent text-slate-800 dark:text-slate-100 font-bold cursor-pointer focus:outline-none text-xs"
-              title="Devise principale de facturation"
-            >
-              <option value="DA">🇩🇿 DA (DZD)</option>
-              <option value="EUR">🇪🇺 € (EUR)</option>
-              <option value="USD">🇺🇸 $ (USD)</option>
-              <option value="RMB">🇨🇳 ¥ (RMB)</option>
-              <option value="GBP">🇬🇧 £ (GBP)</option>
-              <option value="SAR">🇸🇦 ﷼ (SAR)</option>
-            </select>
           </div>
 
           {/* Primary Action Button: + Nouveau / + New Booking (Touch target >= 44px) */}
@@ -485,6 +485,39 @@ export const TopBar: React.FC = () => {
 
         {/* Secondary toolbar row: search, date navigation and range */}
         <div className="w-full min-w-0 flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[160px] max-w-[240px]">
+            {/* Search Box - Fluid & Touch Friendly */}
+          <div className="relative w-full min-w-0">
+            <Search
+              size={15}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={
+                language === 'fr'
+                  ? 'Recherche...'
+                  : language === 'ar'
+                  ? 'بحث...'
+                  : 'Search...'
+              }
+              className="w-full h-9 pl-8 pr-7 text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium truncate"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full"
+                title="Effacer la recherche"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          </div>
+
         {/* ======================================================== */}
         {/* SECTION CENTRALE : Date & Mode 14J / 1M                   */}
         {/* ======================================================== */}
@@ -518,39 +551,6 @@ export const TopBar: React.FC = () => {
           </div>
 
 
-        </div>
-          <div className="relative flex-1 min-w-[160px] max-w-[240px]">
-            {/* Search Box - Fluid & Touch Friendly */}
-          <div className="relative w-full min-w-0">
-            <Search
-              size={15}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-            />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={
-                language === 'fr'
-                  ? 'Recherche...'
-                  : language === 'ar'
-                  ? 'بحث...'
-                  : 'Search...'
-              }
-              className="w-full h-9 pl-8 pr-7 text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium truncate"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full"
-                title="Effacer la recherche"
-              >
-                <X size={13} />
-              </button>
-            )}
-          </div>
-          </div>
           <div className="shrink-0 flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 text-xs font-semibold">
             {/* 14J / 1M Segment */}
           <div className="flex items-center">
