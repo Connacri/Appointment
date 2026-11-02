@@ -99,6 +99,7 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
     }
 
     setCashAmountGiven(booking.totalPrice || 0);
+    setCashAmountInvalid(false);
   }, [booking, displayMode]);
 
   if (!booking) return null;
