@@ -483,6 +483,8 @@ export const TopBar: React.FC = () => {
         </div>
         </div>
 
+        </div>
+
         {/* Secondary toolbar row: search, date navigation and range */}
         <div className="w-full min-w-0 flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[160px] max-w-[240px]">
