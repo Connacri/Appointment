@@ -480,6 +480,7 @@ export const PlanningTimeline: React.FC = () => {
         onPointerUp={onTimelinePointerEnd}
         onPointerCancel={onTimelinePointerEnd}
         onClickCapture={onTimelineClickCapture}
+        data-gantt-pan="true"
         className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-contain flex scroll-smooth touch-pan-x touch-pan-y cursor-grab active:cursor-grabbing"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
