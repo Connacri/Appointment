@@ -193,10 +193,10 @@ export const TopBar: React.FC = () => {
               type="button"
               onClick={() => setActiveView('planning')}
               className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-bold flex items-center gap-1.5 text-slate-800 dark:text-slate-200 cursor-pointer"
-              title="OmniBook PMS - Retour au planning"
+              title="Appointment PMS - Retour au planning"
             >
               <Hotel size={15} className="text-blue-600 dark:text-blue-400 shrink-0" />
-              <span className="hidden xl:inline font-bold">OmniBook</span>
+              <span className="hidden xl:inline font-bold">Appointment PMS</span>
             </button>
             <ChevronRight size={13} className="mx-1 text-slate-400 shrink-0 rtl:rotate-180" />
             <span className="font-semibold text-slate-900 dark:text-white truncate max-w-[110px] sm:max-w-[160px]">
