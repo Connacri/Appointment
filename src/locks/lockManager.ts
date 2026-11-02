@@ -108,7 +108,9 @@ class LockManager {
 
   constructor() {
     this.setupTransportLogging(this.webHidTransport);
-    // Real hardware only: automatically connect to the proUSB encoder when plugged in via USB
+    this.webHidTransport.onConnectionChange = () => this.notifyStateListeners();
+    // Auto-connect only to a previously authorized proUSB device; first-time WebHID
+    // permission must be granted from the USB button by an explicit user gesture.
     this.webHidTransport.setAutoConnectEnabled(true);
   }
 
