@@ -401,7 +401,7 @@ export const BookingAnalyticsView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 p-4 md:p-6 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-6">
+    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-5 md:space-y-6">
       {/* Analytics Master Switcher Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
         <div className="flex items-center gap-1 bg-slate-200/80 dark:bg-slate-900 p-1 rounded-xl text-xs font-semibold">
