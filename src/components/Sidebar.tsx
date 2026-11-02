@@ -161,7 +161,7 @@ export const Sidebar: React.FC = () => {
   ];
 
   const navItems = allNavItems.filter(
-    (item) => item.roles.includes(currentRole) && item.domains.includes(currentDomain)
+    (item) => (currentRole === 'admin' || item.roles.includes(currentRole)) && item.domains.includes(currentDomain)
   );
 
   const handleNavClick = (view: any) => {
@@ -264,7 +264,7 @@ export const Sidebar: React.FC = () => {
               key={item.id}
               type="button"
               onClick={() => handleNavClick(item.view)}
-              className={`w-full flex items-center gap-3 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`w-full flex items-center gap-3 px-3 min-h-11 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-xs font-bold'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
