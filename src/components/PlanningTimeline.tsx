@@ -487,6 +487,7 @@ export const PlanningTimeline: React.FC = () => {
         onPointerUp={onTimelinePointerEnd}
         onPointerCancel={onTimelinePointerEnd}
         onClickCapture={onTimelineClickCapture}
+        onScroll={handleTimelineScroll}
         data-gantt-pan="true"
         className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-contain flex scroll-smooth touch-pan-x touch-pan-y cursor-grab active:cursor-grabbing"
         style={{ WebkitOverflowScrolling: 'touch' }}
@@ -498,7 +499,7 @@ export const PlanningTimeline: React.FC = () => {
           } border-slate-200 dark:border-slate-800 bg-slate-50/95 dark:bg-slate-900/95 z-20 select-none shadow-xs transition-all duration-200 backdrop-blur-xs flex flex-col`}
         >
           {/* Header of Resources Column with STICKY TOP-0 */}
-          <div className="h-16 md:h-20 min-h-[64px] md:min-h-[80px] max-h-[64px] md:max-h-[80px] shrink-0 border-b border-slate-200 dark:border-slate-800 px-2 sm:px-3 flex flex-col justify-center bg-slate-100 dark:bg-slate-850 sticky top-0 z-30">
+          <div className={`${isDayHeaderCollapsed ? "h-9 min-h-[36px] max-h-[36px]" : "h-16 md:h-20 min-h-[64px] md:min-h-[80px] max-h-[64px] md:max-h-[80px]"} shrink-0 border-b border-slate-200 dark:border-slate-800 px-2 sm:px-3 flex flex-col justify-center bg-slate-100 dark:bg-slate-850 sticky top-0 z-30 transition-[height,min-height,max-height] duration-200`}>
             <span className="text-[11px] md:text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider truncate">
               {leftBarMode === 'mini'
                 ? 'Ress.'
@@ -590,50 +591,17 @@ export const PlanningTimeline: React.FC = () => {
           )}
 
           {/* Timeline Header: Days row + Availability badge */}
-          <div className="h-16 md:h-20 min-h-[64px] md:min-h-[80px] max-h-[64px] md:max-h-[80px] shrink-0 border-b border-slate-200 dark:border-slate-800 flex bg-white dark:bg-slate-900 sticky top-0 z-10 select-none">
+          <div className={`${isDayHeaderCollapsed ? "h-9 min-h-[36px] max-h-[36px]" : "h-16 md:h-20 min-h-[64px] md:min-h-[80px] max-h-[64px] md:max-h-[80px]"} shrink-0 border-b border-slate-200 dark:border-slate-800 flex bg-white dark:bg-slate-900 sticky top-0 z-10 select-none transition-[height,min-height,max-height] duration-200`}>
             {timelineDays.map((day) => (
-              <div
-                key={day.dateStr}
-                style={{ width: `${colWidth}px` }}
-                className={`shrink-0 border-r border-slate-200/70 dark:border-slate-800/70 flex flex-col justify-between p-1 md:p-1.5 transition-colors relative h-full ${
-                  day.isToday
-                    ? 'bg-rose-50/40 dark:bg-rose-950/25 ring-1 ring-inset ring-rose-400/40'
-                    : day.isWeekend
-                    ? 'bg-slate-50/50 dark:bg-slate-900/40'
-                    : ''
-                }`}
-              >
-                {/* Day status indicator: Simple icon indicating today in the table */}
-                {day.isToday ? (
-                  <div
-                    className="flex items-center justify-center py-0.5"
-                    title={`${language === 'fr' ? 'Aujourd’hui' : language === 'ar' ? 'اليوم' : 'Today'} • ${currentTimeStr}`}
-                  >
-                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-100 dark:bg-rose-950/70 text-rose-600 dark:text-rose-400 border border-rose-300 dark:border-rose-700/60 shadow-2xs">
-                      <Clock size={12} className="animate-pulse" />
-                    </span>
-                  </div>
+              <div key={day.dateStr} style={{ width: `${colWidth}px` }} className={`shrink-0 border-r border-slate-200/70 dark:border-slate-800/70 flex flex-col items-center justify-center gap-0.5 px-1 transition-colors relative h-full overflow-hidden ${day.isToday ? "bg-rose-50/40 dark:bg-rose-950/25 ring-1 ring-inset ring-rose-400/40" : day.isWeekend ? "bg-slate-50/50 dark:bg-slate-900/40" : ""}`}>
+                {isDayHeaderCollapsed ? (
+                  <span className={`text-[11px] font-bold tabular-nums ${day.isToday ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-slate-200"}`}>{day.dayNum}</span>
                 ) : (
-                  <div className="h-5" />
+                  <>
+                    <span className={`text-[10px] md:text-[11px] font-semibold uppercase tracking-wide ${day.isToday ? "text-rose-600 dark:text-rose-400" : "text-slate-400"}`}>{day.dayName}</span>
+                    <span className={`text-sm md:text-base font-bold tabular-nums ${day.isToday ? "text-rose-600 dark:text-rose-400" : "text-slate-800 dark:text-slate-100"}`}>{day.dayNum}</span>
+                  </>
                 )}
-
-                {/* Day Number and Weekday */}
-                <div className="flex items-baseline justify-between mt-auto">
-                  <span
-                    className={`text-xs md:text-sm font-bold tabular-nums ${
-                      day.isToday ? 'text-rose-600 dark:text-rose-400 font-extrabold' : 'text-slate-800 dark:text-slate-200'
-                    }`}
-                  >
-                    {day.dayNum}
-                  </span>
-                  <span
-                    className={`text-[9px] md:text-[10px] font-semibold uppercase ${
-                      day.isToday ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-slate-400'
-                    }`}
-                  >
-                    {day.dayName}
-                  </span>
-                </div>
               </div>
             ))}
           </div>
