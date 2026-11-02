@@ -171,7 +171,7 @@ export const TopBar: React.FC = () => {
 
   return (
     <>
-      <header className="min-w-0 w-full min-h-14 py-2 px-2.5 sm:px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-2 z-20 shrink-0 select-none shadow-xs">
+      <header className="relative z-[500] min-w-0 w-full min-h-14 py-2 px-2.5 sm:px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-2 z-20 shrink-0 select-none shadow-xs">
         {/* ======================================================== */}
         {/* SECTION GAUCHE : Menu Mobile, Recherche, Secteur         */}
         {/* ======================================================== */}
