@@ -416,16 +416,12 @@ export const TopBar: React.FC = () => {
               setNewBookingInitialSlot(null);
               setIsNewBookingModalOpen(true);
             }}
-            className="min-h-[38px] px-3 sm:px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+            className="min-h-[44px] px-2.5 sm:px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
             title="Créer une nouvelle réservation ou séjour"
           >
             <Plus size={16} strokeWidth={2.5} />
-            <span className="hidden sm:inline">
-              {language === 'fr'
-                ? 'Nouveau'
-                : language === 'ar'
-                ? 'حجز جديد'
-                : 'New Booking'}
+            <span className="text-[11px] sm:text-xs">
+              {language === 'fr' ? <><span className="sm:hidden">Réserver</span><span className="hidden sm:inline">Nouveau</span></> : language === 'ar' ? 'حجز جديد' : <><span className="sm:hidden">Book</span><span className="hidden sm:inline">New Booking</span></>}
             </span>
           </button>
 
