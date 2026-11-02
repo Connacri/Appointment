@@ -122,8 +122,9 @@ export const PlanningTimeline: React.FC = () => {
     const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
     const raw = el.scrollLeft;
     const position = isRTL ? Math.max(0, Math.min(maxScroll, Math.abs(raw))) : Math.max(0, Math.min(maxScroll, raw));
-    const distanceToStart = isRTL ? maxScroll - position : position;
-    const distanceToEnd = isRTL ? position : maxScroll - position;
+    // In RTL, scrollLeft grows negatively from the logical start in Chromium.
+    const distanceToStart = position;
+    const distanceToEnd = maxScroll - position;
     const chunkDays = 31;
     if (distanceToStart < 700) {
       edgeLoadLockRef.current = true;
