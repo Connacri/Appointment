@@ -176,7 +176,6 @@ export const TopBar: React.FC = () => {
   return (
     <>
       <header className="relative z-[500] min-w-0 w-full py-2 px-2.5 sm:px-4 bg-white/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-2 shrink-0 select-none shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90 dark:supports-[backdrop-filter]:bg-slate-900/90">
-        <div className="w-full min-w-0 flex flex-col gap-2">
         {/* Primary toolbar row: breadcrumb, sector, currency, USB and actions */}
         <div className="w-full min-w-0 flex items-center flex-wrap gap-2">
         {/* ======================================================== */}
@@ -491,8 +490,6 @@ export const TopBar: React.FC = () => {
             )}
           </div>
         </div>
-        </div>
-
         </div>
 
         {/* Secondary toolbar row: search, date navigation and range */}

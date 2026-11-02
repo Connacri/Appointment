@@ -845,7 +845,7 @@ export const PlanningTimeline: React.FC = () => {
                             const endIndex = getDateIndex(bkg.endDate);
 
                             const visibleStart = startIndex === -1 ? 0 : startIndex;
-                            const visibleEnd = endIndex === -1 ? totalDays : endIndex;
+                            const visibleEnd = endIndex === -1 ? timelineDays.length : endIndex;
 
                             if (visibleEnd <= visibleStart) return null;
 
