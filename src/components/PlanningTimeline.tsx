@@ -509,7 +509,7 @@ export const PlanningTimeline: React.FC = () => {
                 ? (language === 'fr' ? 'Villas, Bungalows & Suites' : language === 'ar' ? 'فلل وشاليهات المنتجع' : 'Resort Villas & Bungalows')
                 : (language === 'fr' ? 'Hébergements' : 'Accommodations')}
             </span>
-            <span className="text-[9px] md:text-[10px] text-blue-600 dark:text-blue-400 font-bold truncate mt-0.5">
+            <span className={`${isDayHeaderCollapsed ? "hidden" : "block"} text-[9px] md:text-[10px] text-blue-600 dark:text-blue-400 font-bold truncate mt-0.5`}>
               {currentDomain.toUpperCase()}
             </span>
           </div>
@@ -581,7 +581,7 @@ export const PlanningTimeline: React.FC = () => {
               }}
             >
               {/* Floating Pill Time Badge */}
-              <div className="sticky top-16 md:top-20 -mt-3.5 z-40 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono text-white bg-rose-600 shadow-md shadow-rose-600/50 whitespace-nowrap flex items-center gap-1.5 border-2 border-white dark:border-slate-900 select-none">
+              <div className={`sticky ${isDayHeaderCollapsed ? "top-9" : "top-16 md:top-20"} -mt-3.5 z-40 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono text-white bg-rose-600 shadow-md shadow-rose-600/50 whitespace-nowrap flex items-center gap-1.5 border-2 border-white dark:border-slate-900 select-none`}>
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                 <span>{timelineSync.currentTimeStr}</span>
               </div>
