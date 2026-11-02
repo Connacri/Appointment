@@ -121,9 +121,10 @@ export const PlanningTimeline: React.FC = () => {
   // Dynamic day column width adapted to viewport
   const colWidth = useMemo(() => {
     if (isMobileScreen) {
-      return columnZoomMode === 'compact' ? 64 : columnZoomMode === 'wide' ? 96 : 76;
+      // Narrow mode: reduce each day cell by 50% while preserving the other presets.
+      return columnZoomMode === 'compact' ? 32 : columnZoomMode === 'wide' ? 96 : 76;
     }
-    return columnZoomMode === 'compact' ? 76 : columnZoomMode === 'wide' ? 144 : 112;
+    return columnZoomMode === 'compact' ? 38 : columnZoomMode === 'wide' ? 144 : 112;
   }, [columnZoomMode, isMobileScreen]);
 
   // Collapsed state for resource groups
@@ -499,7 +500,7 @@ export const PlanningTimeline: React.FC = () => {
           } border-slate-200 dark:border-slate-800 bg-slate-50/95 dark:bg-slate-900/95 z-20 select-none shadow-xs transition-all duration-200 backdrop-blur-xs flex flex-col`}
         >
           {/* Header of Resources Column with STICKY TOP-0 */}
-          <div className={`${isDayHeaderCollapsed ? "h-9 min-h-[36px] max-h-[36px]" : "h-16 md:h-20 min-h-[64px] md:min-h-[80px] max-h-[64px] md:max-h-[80px]"} shrink-0 border-b border-slate-200 dark:border-slate-800 px-2 sm:px-3 flex flex-col justify-center bg-slate-100 dark:bg-slate-850 sticky top-0 z-30 transition-[height,min-height,max-height] duration-200`}>
+          <div className={`${isDayHeaderCollapsed ? "h-9 min-h-[36px] max-h-[36px]" : "h-16 md:h-20 min-h-[64px] md:min-h-[80px] max-h-[64px] md:max-h-[80px]"} shrink-0 border-b border-slate-200 dark:border-slate-800 px-2 sm:px-3 flex flex-col justify-center bg-slate-100 dark:bg-slate-850 sticky top-0 z-[80] isolate transition-[height,min-height,max-height] duration-200`}>
             <span className="text-[11px] md:text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider truncate">
               {leftBarMode === 'mini'
                 ? 'Ress.'
@@ -546,12 +547,12 @@ export const PlanningTimeline: React.FC = () => {
                         <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
                           {renderHousekeepingTag(res.housekeepingStatus)}
                           {leftBarMode !== 'mini' && (
-                            <span className="font-semibold text-slate-800 dark:text-slate-200 truncate text-[11px]">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 truncate text-xs sm:text-[13px]">
                               {res.name}
                             </span>
                           )}
                           {leftBarMode === 'mini' && (
-                            <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-[10px] truncate">
+                            <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-[11px] truncate">
                               {res.name.replace(/[^0-9]/g, '') || res.name.slice(0, 3)}
                             </span>
                           )}
@@ -591,7 +592,7 @@ export const PlanningTimeline: React.FC = () => {
           )}
 
           {/* Timeline Header: Days row + Availability badge */}
-          <div className={`${isDayHeaderCollapsed ? "h-9 min-h-[36px] max-h-[36px]" : "h-16 md:h-20 min-h-[64px] md:min-h-[80px] max-h-[64px] md:max-h-[80px]"} shrink-0 border-b border-slate-200 dark:border-slate-800 flex bg-white dark:bg-slate-900 sticky top-0 z-10 select-none transition-[height,min-height,max-height] duration-200`}>
+          <div className={`${isDayHeaderCollapsed ? "h-9 min-h-[36px] max-h-[36px]" : "h-16 md:h-20 min-h-[64px] md:min-h-[80px] max-h-[64px] md:max-h-[80px]"} shrink-0 border-b border-slate-200 dark:border-slate-800 flex bg-white dark:bg-slate-900 sticky top-0 z-[70] isolate select-none transition-[height,min-height,max-height] duration-200`}>
             {timelineDays.map((day) => (
               <div key={day.dateStr} style={{ width: `${colWidth}px` }} className={`shrink-0 border-r border-slate-200/70 dark:border-slate-800/70 flex flex-col items-center justify-center gap-0.5 px-1 transition-colors relative h-full overflow-hidden ${day.isToday ? "bg-rose-50/40 dark:bg-rose-950/25 ring-1 ring-inset ring-rose-400/40" : day.isWeekend ? "bg-slate-50/50 dark:bg-slate-900/40" : ""}`}>
                 {isDayHeaderCollapsed ? (
