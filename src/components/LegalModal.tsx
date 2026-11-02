@@ -19,7 +19,8 @@ export const LegalModal: React.FC = () => {
     purgeAllUserData,
   } = useApp();
 
-  const [hasPurged, setHasPurged] = useState(false);\n  const [purgeFailed, setPurgeFailed] = useState(false);
+  const [hasPurged, setHasPurged] = useState(false);
+  const [purgeFailed, setPurgeFailed] = useState(false);
   const [confirmStep, setConfirmStep] = useState(false);
 
   React.useEffect(() => {
