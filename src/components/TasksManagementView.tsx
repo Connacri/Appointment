@@ -113,7 +113,7 @@ export const TasksManagementView: React.FC = () => {
   return (
     <div className="flex-1 min-w-0 min-h-0 w-full max-w-full flex flex-col md:flex-row h-full overflow-hidden bg-slate-50 dark:bg-slate-950">
       {/* Left / Center Tasks Workspace (inspired by f0a8290b850fbd4fd4dbd072137389bc.jpg) */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden p-4 md:p-6 space-y-4">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col h-full overflow-hidden p-3 sm:p-4 md:p-6 space-y-4">
         {/* Top Header */}
         <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-200 dark:border-slate-800">
           <div>
@@ -350,7 +350,7 @@ export const TasksManagementView: React.FC = () => {
       </div>
 
       {/* Right Drawer / Upcoming Task Details (Identical to f0a8290b850fbd4fd4dbd072137389bc.jpg) */}
-      <div className="w-full md:w-88 lg:w-96 p-4 md:p-6 bg-white dark:bg-slate-900 border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 flex flex-col space-y-4 overflow-y-auto">
+      <div className="w-full md:w-88 lg:w-96 max-h-[42vh] md:max-h-none min-h-0 p-3 sm:p-4 md:p-6 bg-white dark:bg-slate-900 border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 flex flex-col space-y-4 overflow-y-auto">
         <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
