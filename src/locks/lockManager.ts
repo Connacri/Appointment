@@ -877,16 +877,27 @@ class LockManager {
    * Clears all persisted proUSB data (for reset)
    */
   public clearPersistedData(): void {
-    localStorage.removeItem('omnibook_prousb_issued_cards');
-    localStorage.removeItem('omnibook_prousb_audit_records');
-    localStorage.removeItem('omnibook_prousb_settings');
+    try {
+      localStorage.removeItem('omnibook_prousb_issued_cards');
+      localStorage.removeItem('omnibook_prousb_audit_records');
+      localStorage.removeItem('omnibook_prousb_settings');
+      localStorage.removeItem('omnibook_prousb_mdb_snapshot');
+    } catch (e) {
+      console.warn('[LockManager] Failed to clear storage:', e);
+    }
     this.issuedCards = [];
     this.auditRecords = [];
+    this.mdbSnapshot = null;
     this.settings = { ...initialSettings };
-    this.saveIssuedCards();
-    this.saveAuditRecords();
-    this.saveSettings();
     this.notifyStateListeners();
+  }
+
+  /**
+   * Completely purges all proUSB personal and audit data
+   */
+  public purgeAllData(): void {
+    this.clearPersistedData();
+    this.logs = [];
   }
 
   /**

@@ -35,8 +35,8 @@ export const LegalModal: React.FC = () => {
 
   if (!isLegalModalOpen) return null;
 
-  const handleExecutePurge = () => {
-    purgeAllUserData();
+  const handleExecutePurge = async () => {
+    await purgeAllUserData();
     setHasPurged(true);
     setTimeout(() => {
       setHasPurged(false);

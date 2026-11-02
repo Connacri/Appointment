@@ -88,7 +88,7 @@ class ObjectBoxStore {
     });
   }
 
-  // Generic paginated box query (ObjectBox §11 pattern)
+  // Generic paginated box query with true storage-side cursor pagination (ObjectBox §11 pattern)
   public async queryBox<T>(
     boxName: 'bookings' | 'invoices' | 'resources',
     options?: ObjectBoxQueryOptions<T>
@@ -113,34 +113,89 @@ class ObjectBoxStore {
       try {
         const tx = this.idb!.transaction(boxName, 'readonly');
         const store = tx.objectStore(boxName);
-        const req = store.getAll();
+        const direction: IDBCursorDirection = options?.orderDesc ? 'prev' : 'next';
 
-        req.onsuccess = () => {
-          let list: T[] = req.result || [];
-          if (options?.where) list = list.filter(options.where);
-          const total = list.length;
+        // Check if an index exists for the specified orderBy property
+        let source: IDBObjectStore | IDBIndex = store;
+        if (options?.orderBy && typeof options.orderBy === 'string' && store.indexNames.contains(options.orderBy)) {
+          source = store.index(options.orderBy);
+        }
 
-          if (options?.orderBy) {
-            const key = options.orderBy;
-            list.sort((a, b) => {
-              const va = a[key];
-              const vb = b[key];
-              if (va < vb) return options.orderDesc ? 1 : -1;
-              if (va > vb) return options.orderDesc ? -1 : 1;
-              return 0;
-            });
-          }
+        const offset = options?.offset || 0;
+        const limit = options?.limit !== undefined ? options.limit : Infinity;
+        const whereFn = options?.where;
 
-          if (options?.offset !== undefined || options?.limit !== undefined) {
-            const off = options.offset || 0;
-            const lim = options.limit || list.length;
-            list = list.slice(off, off + lim);
-          }
+        // If there's no custom filter function, perform true engine-level cursor skip & limit
+        if (!whereFn) {
+          const countReq = store.count();
+          let totalCount = 0;
 
-          resolve({ data: list, total });
-        };
+          countReq.onsuccess = () => {
+            totalCount = countReq.result;
 
-        req.onerror = () => reject(req.error);
+            if (totalCount === 0 || limit <= 0 || offset >= totalCount) {
+              resolve({ data: [], total: totalCount });
+              return;
+            }
+
+            const cursorReq = source.openCursor(null, direction);
+            const results: T[] = [];
+            let hasAdvanced = false;
+
+            cursorReq.onsuccess = (e) => {
+              const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
+              if (!cursor) {
+                resolve({ data: results, total: totalCount });
+                return;
+              }
+
+              // True storage engine skip without loading skipped items into memory
+              if (offset > 0 && !hasAdvanced) {
+                hasAdvanced = true;
+                cursor.advance(offset);
+                return;
+              }
+
+              results.push(cursor.value);
+              if (results.length < limit) {
+                cursor.continue();
+              } else {
+                resolve({ data: results, total: totalCount });
+              }
+            };
+
+            cursorReq.onerror = () => reject(cursorReq.error);
+          };
+
+          countReq.onerror = () => reject(countReq.error);
+        } else {
+          // Streaming cursor iteration with predicate evaluation
+          const cursorReq = source.openCursor(null, direction);
+          const results: T[] = [];
+          let matchedIndex = 0;
+          let totalMatching = 0;
+
+          cursorReq.onsuccess = (e) => {
+            const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
+            if (!cursor) {
+              resolve({ data: results, total: totalMatching });
+              return;
+            }
+
+            const item = cursor.value as T;
+            if (whereFn(item)) {
+              totalMatching++;
+              if (matchedIndex >= offset && results.length < limit) {
+                results.push(item);
+              }
+              matchedIndex++;
+            }
+
+            cursor.continue();
+          };
+
+          cursorReq.onerror = () => reject(cursorReq.error);
+        }
       } catch (err) {
         reject(err);
       }
@@ -154,12 +209,18 @@ class ObjectBoxStore {
   ): Promise<void> {
     await this.openStore();
 
-    if (!this.idb) {
+    // Always keep localStorage fallback in sync
+    try {
       const raw = localStorage.getItem(`ob_${boxName}`);
       let list: T[] = raw ? JSON.parse(raw) : [];
       list = list.filter((x) => x.id !== item.id);
       list.push(item);
       localStorage.setItem(`ob_${boxName}`, JSON.stringify(list));
+    } catch (e) {
+      console.warn('[ObjectBox] Fallback sync warning:', e);
+    }
+
+    if (!this.idb) {
       return;
     }
 
@@ -172,20 +233,26 @@ class ObjectBoxStore {
     });
   }
 
-  // Remove
+  // Remove — guarantees complete deletion from both IDB and fallback store
   public async remove(
     boxName: 'bookings' | 'invoices' | 'resources',
     id: string
   ): Promise<void> {
     await this.openStore();
 
-    if (!this.idb) {
+    // Clean from localStorage fallback
+    try {
       const raw = localStorage.getItem(`ob_${boxName}`);
       if (raw) {
         let list: any[] = JSON.parse(raw);
         list = list.filter((x) => x.id !== id);
         localStorage.setItem(`ob_${boxName}`, JSON.stringify(list));
       }
+    } catch (e) {
+      console.warn('[ObjectBox] Fallback remove error:', e);
+    }
+
+    if (!this.idb) {
       return;
     }
 
@@ -196,6 +263,34 @@ class ObjectBoxStore {
       req.onsuccess = () => resolve();
       req.onerror = () => reject(req.error);
     });
+  }
+
+  // Clear all stores completely (for legal GDPR / Account Deletion purge)
+  public async clearAll(): Promise<void> {
+    await this.openStore();
+    try {
+      localStorage.removeItem('ob_bookings');
+      localStorage.removeItem('ob_invoices');
+      localStorage.removeItem('ob_resources');
+    } catch (e) {
+      console.warn('[ObjectBox] LocalStorage clear error:', e);
+    }
+
+    if (this.idb) {
+      return new Promise<void>((resolve) => {
+        try {
+          const tx = this.idb!.transaction(['bookings', 'invoices', 'resources'], 'readwrite');
+          tx.objectStore('bookings').clear();
+          tx.objectStore('invoices').clear();
+          tx.objectStore('resources').clear();
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+          tx.onabort = () => resolve();
+        } catch {
+          resolve();
+        }
+      });
+    }
   }
 
   // Get Store Statistics

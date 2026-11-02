@@ -24,7 +24,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, ActiveAppView } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
 import { playSuccessFeedback } from '../utils/audioFeedback';
 import { PipelineStatusIndicator } from './PipelineStatusIndicator';
@@ -33,6 +33,20 @@ import {
   UsbConnectionStatus,
   UsbDeviceInfo,
 } from '../locks/lockManager';
+
+const viewLabels: Record<ActiveAppView, { fr: string; en: string; ar: string }> = {
+  planning: { fr: 'Planning', en: 'Planning', ar: 'الجدول الزمني' },
+  my_bookings: { fr: 'Réservations', en: 'Bookings', ar: 'الحجوزات' },
+  reports: { fr: 'Main Courante', en: 'Night Audit', ar: 'التقارير اليومية' },
+  analytics: { fr: 'Statistiques & Revenus', en: 'Analytics & Revenue', ar: 'الإحصائيات' },
+  housekeeping: { fr: 'Gouvernante & Chambres', en: 'Housekeeping', ar: 'خدمة الغرف' },
+  tasks: { fr: 'Tâches PMS', en: 'PMS Tasks', ar: 'مهام الفندق' },
+  stock: { fr: 'Stocks & Économat', en: 'Stock & Inventory', ar: 'المخزون' },
+  pricing: { fr: 'Tarifs Dynamiques', en: 'Dynamic Pricing', ar: 'الأسعار الديناميكية' },
+  billing: { fr: 'Facturation & Devis', en: 'Billing & Invoices', ar: 'الفواتير' },
+  channels: { fr: 'Channel Manager', en: 'Channel Manager', ar: 'مدير القنوات' },
+  prousb: { fr: 'Serrures proUSB', en: 'proUSB Locks', ar: 'أقفال proUSB' },
+};
 
 export const TopBar: React.FC = () => {
   const {
@@ -60,6 +74,7 @@ export const TopBar: React.FC = () => {
     setCurrency,
     tasks,
     stockItems,
+    activeView,
     setActiveView,
     isSidebarMobileOpen,
     setIsSidebarMobileOpen,
@@ -160,7 +175,7 @@ export const TopBar: React.FC = () => {
         {/* ======================================================== */}
         {/* SECTION GAUCHE : Menu Mobile, Recherche, Secteur         */}
         {/* ======================================================== */}
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
           {/* Mobile Sidebar Hamburger Toggle (Touch target >= 44px) */}
           <button
             type="button"
@@ -172,8 +187,25 @@ export const TopBar: React.FC = () => {
             <Menu size={20} />
           </button>
 
+          {/* Breadcrumb Navigation Trail */}
+          <nav aria-label="Fil d'Ariane / Breadcrumb" className="flex items-center text-xs text-slate-500 dark:text-slate-400 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveView('planning')}
+              className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-bold flex items-center gap-1.5 text-slate-800 dark:text-slate-200 cursor-pointer"
+              title="OmniBook PMS - Retour au planning"
+            >
+              <Hotel size={15} className="text-blue-600 dark:text-blue-400 shrink-0" />
+              <span className="hidden xl:inline font-bold">OmniBook</span>
+            </button>
+            <ChevronRight size={13} className="mx-1 text-slate-400 shrink-0 rtl:rotate-180" />
+            <span className="font-semibold text-slate-900 dark:text-white truncate max-w-[110px] sm:max-w-[160px]">
+              {viewLabels[activeView]?.[language] || activeView}
+            </span>
+          </nav>
+
           {/* Search Box - Fluid & Touch Friendly */}
-          <div className="relative min-w-[120px] max-w-[240px] sm:max-w-[280px]">
+          <div className="relative min-w-[100px] max-w-[200px] sm:max-w-[240px]">
             <Search
               size={15}
               className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"

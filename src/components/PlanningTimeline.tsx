@@ -672,7 +672,23 @@ export const PlanningTimeline: React.FC = () => {
 
                             const adults = bkg.adults ?? (bkg.customMetadata?.hotelAdults) ?? (bkg.customMetadata?.residenceOccupants) ?? 1;
                             const children = bkg.children ?? (bkg.customMetadata?.hotelChildren) ?? 0;
-                            const occupantsCount = adults + children;
+                            const occupantsCount = Math.max(1, adults + children);
+
+                            // Detect if room has multiple active occupants: either > 1 guest in this booking
+                            // OR overlapping active reservations on the same resource/room (shared room/dorm)
+                            const overlappingBookings = resBookings.filter(
+                              (other) =>
+                                other.id !== bkg.id &&
+                                other.status !== 'cancelled' &&
+                                other.startDate < bkg.endDate &&
+                                other.endDate > bkg.startDate
+                            );
+                            const hasMultipleOccupants = occupantsCount > 1 || overlappingBookings.length > 0;
+                            const totalRoomGuests = occupantsCount + overlappingBookings.reduce((sum, b) => {
+                              const a = b.adults ?? (b.customMetadata?.hotelAdults) ?? 1;
+                              const c = b.children ?? (b.customMetadata?.hotelChildren) ?? 0;
+                              return sum + a + c;
+                            }, 0);
 
                             const isAlgerian = bkg.guestType === 'algerian' || bkg.nationality === 'Algérienne' || bkg.nationality === 'Algerian' || bkg.nationality === 'DZ';
                             const isForeigner = bkg.guestType === 'foreigner' || (!isAlgerian && !!bkg.nationality);
@@ -720,26 +736,43 @@ export const PlanningTimeline: React.FC = () => {
                                 className={`absolute top-1.5 h-9 rounded-md px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-sm hover:brightness-105 active:scale-[0.98] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
                               >
                                     <div className="flex items-center gap-1.5 truncate min-w-0">
-                                      {/* Person icons: if multiple occupants occupy the room, render multiple person icons */}
-                                      <div
-                                        className="flex items-center gap-0.5 shrink-0 bg-black/20 dark:bg-black/35 px-1 py-0.5 rounded"
-                                        title={`${occupantsCount} occupant(s) : ${adults} adulte(s)${children > 0 ? `, ${children} enfant(s)` : ''}`}
-                                      >
-                                        {Array.from({ length: Math.min(occupantsCount, barWidth > 120 ? 4 : 2) }).map((_, idx) => (
-                                          <User
-                                            key={idx}
-                                            size={11}
-                                            className={`shrink-0 drop-shadow-xs ${
-                                              idx > 0 ? 'text-amber-300 opacity-95' : 'text-white opacity-100'
-                                            }`}
-                                          />
-                                        ))}
-                                        {(occupantsCount > 2 && barWidth <= 120) || occupantsCount > 4 ? (
-                                          <span className="text-[9px] font-bold font-mono text-white leading-none pl-0.5">
-                                            ×{occupantsCount}
+                                      {/* Person icons: if multiple occupants occupy the room, render stacked group of person icons */}
+                                      {hasMultipleOccupants ? (
+                                        <div
+                                          className="flex items-center -space-x-1.5 rtl:space-x-reverse shrink-0 select-none py-0.5"
+                                          title={`${occupantsCount} occupant(s) pour cette réservation (${adults} adulte(s)${children > 0 ? `, ${children} enfant(s)` : ''})${
+                                            overlappingBookings.length > 0
+                                              ? ` • ${overlappingBookings.length} autre(s) réservation(s) active(s) dans cette même chambre (${totalRoomGuests} personnes au total)`
+                                              : ''
+                                          }`}
+                                        >
+                                          {/* First occupant icon */}
+                                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-900/60 text-white ring-1 ring-white/50 shadow-2xs shrink-0">
+                                            <User size={9} className="drop-shadow-2xs" />
                                           </span>
-                                        ) : null}
-                                      </div>
+                                          {/* Second occupant icon (stacked cluster) */}
+                                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-400 text-slate-950 ring-1 ring-white/70 shadow-2xs shrink-0">
+                                            <User size={9} className="font-bold" />
+                                          </span>
+                                          {/* Third or counter pill if > 2 occupants or co-occupancy */}
+                                          {occupantsCount > 2 ? (
+                                            <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-slate-900/80 text-amber-300 text-[8px] font-bold font-mono ring-1 ring-white/40 shadow-2xs tabular-nums shrink-0">
+                                              +{occupantsCount - 2}
+                                            </span>
+                                          ) : overlappingBookings.length > 0 ? (
+                                            <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[8px] font-bold font-mono ring-1 ring-white/50 shadow-2xs tabular-nums shrink-0" title="Chambre partagée / Multiple occupants">
+                                              +{overlappingBookings.length}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      ) : (
+                                        <div
+                                          className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-black/25 text-white ring-1 ring-white/30 shrink-0 select-none"
+                                          title="1 occupant (adulte)"
+                                        >
+                                          <User size={10} className="drop-shadow-2xs" />
+                                        </div>
+                                      )}
 
                                       {/* Nationality indicator */}
                                       {nationalityBadge && (

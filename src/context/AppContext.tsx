@@ -107,7 +107,7 @@ interface AppContextType {
   setIsOffline: (offline: boolean) => void;
   isSidebarMobileOpen: boolean;
   setIsSidebarMobileOpen: (open: boolean) => void;
-  purgeAllUserData: () => void;
+  purgeAllUserData: () => Promise<void> | void;
   activeView: ActiveAppView;
   setActiveView: (view: ActiveAppView) => void;
 
@@ -485,7 +485,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addBooking = (
     bookingData: Omit<TimelineBooking, 'id'>
   ): { success: boolean; error?: string; booking?: TimelineBooking } => {
-    // Business rule check: double booking prevention
+    // 1. Strict date sanity checks before modifying state
+    if (bookingData.sector === 'hotel' || bookingData.sector === 'resort') {
+      const s = new Date(bookingData.startDate + 'T14:00');
+      const e = new Date(bookingData.endDate + 'T12:00');
+      if (isNaN(s.getTime()) || isNaN(e.getTime())) {
+        return {
+          success: false,
+          error:
+            language === 'fr'
+              ? 'Dates de séjour invalides.'
+              : language === 'ar'
+              ? 'تواريخ الإقامة غير صالحة.'
+              : 'Invalid stay dates.',
+        };
+      }
+      if (e <= s) {
+        return {
+          success: false,
+          error:
+            language === 'fr'
+              ? "Règle hôtel : la date de départ doit être postérieure à la date d'arrivée."
+              : language === 'ar'
+              ? 'قاعدة الفندق: يجب أن يكون تاريخ المغادرة بعد تاريخ الوصول.'
+              : 'Hotel rule: Check-out date must be after check-in date.',
+        };
+      }
+      if (e.getTime() - s.getTime() > 365 * 24 * 3600 * 1000) {
+        return {
+          success: false,
+          error:
+            language === 'fr'
+              ? 'Règle hôtel : séjour supérieur à 365 jours non autorisé.'
+              : language === 'ar'
+              ? 'قاعدة الفندق: لا يُسمح بإقامة تتجاوز 365 يوماً.'
+              : 'Hotel rule: Stay cannot exceed 365 days.',
+        };
+      }
+    }
+
+    // 2. Business rule check: double booking prevention
     const hasConflict = checkConflict(
       bookingData.resourceId,
       bookingData.startDate,
@@ -504,6 +543,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
+    // 3. Only now instantiate and commit the valid booking
     const newBkg: TimelineBooking = {
       ...bookingData,
       id: `bkg_${Date.now()}`,
@@ -512,30 +552,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Auto-issue proUSB guest card for hotel/resort bookings
     if (bookingData.sector === 'hotel' || bookingData.sector === 'resort') {
-      // Expert hotelier: check-in must be before check-out; max stay sanity check
-      const s = new Date(bookingData.startDate + 'T14:00');
-      const e = new Date(bookingData.endDate + 'T12:00');
-      if (e <= s) {
-        return { success: false, error: 'Régle hôtel : la date de départ doit être après la date d\'arrivée.' };
-      }
-      if ((e.getTime() - s.getTime()) > 365 * 24 * 3600 * 1000) {
-        return { success: false, error: 'Régle hôtel : séjour supérieur à 365 jours non autorisé.' };
-      }
       try {
-        lockManager.issueGuestCardFromBooking(
-          {
-            id: newBkg.id,
-            guestName: bookingData.guestName,
-            resourceName: bookingData.resourceName,
-            startDate: bookingData.startDate,
-            endDate: bookingData.endDate,
-          },
-          currentRole === 'manager' ? 'Admin' : 'Reception'
-        ).then((card: any) => {
-          console.log('[AppContext] Auto-issued proUSB guest card for booking', newBkg.id, card.rawHex);
-        }).catch((err: any) => {
-          console.warn('[AppContext] Failed to auto-issue proUSB card:', err);
-        });
+        lockManager
+          .issueGuestCardFromBooking(
+            {
+              id: newBkg.id,
+              guestName: bookingData.guestName,
+              resourceName: bookingData.resourceName,
+              startDate: bookingData.startDate,
+              endDate: bookingData.endDate,
+            },
+            currentRole === 'manager' ? 'Admin' : 'Reception'
+          )
+          .then((card: any) => {
+            console.log('[AppContext] Auto-issued proUSB guest card for booking', newBkg.id, card?.rawHex);
+          })
+          .catch((err: any) => {
+            console.warn('[AppContext] Failed to auto-issue proUSB card:', err);
+          });
       } catch (e) {
         console.warn('[AppContext] proUSB card auto-issue error:', e);
       }
@@ -615,15 +649,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     cashReceived: boolean = true
   ): { success: boolean; message: string; booking?: TimelineBooking } => {
     let targetBooking: TimelineBooking | undefined;
+    let paymentSettled = false;
+
     setBookings((prev) =>
       prev.map((b) => {
         if (b.id === bookingId) {
-          const isCash = b.paymentStatus === 'pending' || cashReceived;
+          // A booking payment is only marked as paid if cash was genuinely received or if it was already paid
+          const isNowPaid = b.paymentStatus === 'paid' || cashReceived === true;
+          paymentSettled = isNowPaid;
+
           const updated: TimelineBooking = {
             ...b,
             status: 'checked_in',
-            paymentStatus: isCash ? 'paid' : b.paymentStatus,
-            notes: (b.notes || '') + (isCash ? ' [✓ Présence confirmée via QR Code & Paiement Cash finalisé]' : ' [✓ Présence confirmée via QR Code]'),
+            paymentStatus: isNowPaid ? 'paid' : b.paymentStatus,
+            notes:
+              (b.notes || '') +
+              (cashReceived === true && b.paymentStatus !== 'paid'
+                ? ' [✓ Présence confirmée via QR Code & Paiement Cash finalisé]'
+                : ' [✓ Présence confirmée via QR Code]'),
           };
           targetBooking = updated;
           return updated;
@@ -633,17 +676,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     if (selectedBooking && selectedBooking.id === bookingId) {
-      setSelectedBooking((prev) => (prev ? { ...prev, status: 'checked_in', paymentStatus: 'paid' } : null));
+      setSelectedBooking((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'checked_in',
+              paymentStatus: targetBooking?.paymentStatus ?? (cashReceived === true ? 'paid' : prev.paymentStatus),
+            }
+          : null
+      );
     }
+
+    const message = paymentSettled
+      ? language === 'fr'
+        ? 'Présence confirmée par QR Code et règlement finalisé avec succès !'
+        : language === 'ar'
+        ? 'تم تأكيد الحضور برمز QR وتسوية الدفع بنجاح!'
+        : 'Check-in confirmed with QR Code and payment settled successfully!'
+      : language === 'fr'
+      ? 'Présence confirmée par QR Code (règlement toujours en attente).'
+      : language === 'ar'
+      ? 'تم تأكيد الحضور برمز QR (الدفع لا يزال قيد الانتظار).'
+      : 'Check-in confirmed with QR Code (payment remains pending).';
 
     return {
       success: true,
-      message:
-        language === 'fr'
-          ? 'Présence confirmée par QR Code et règlement finalisé avec succès !'
-          : language === 'ar'
-          ? 'تم تأكيد الحضور برمز QR وتسوية الدفع بنجاح!'
-          : 'Check-in confirmed with QR Code and payment settled successfully!',
+      message,
       booking: targetBooking,
     };
   };
@@ -853,14 +911,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const purgeAllUserData = () => {
-    localStorage.removeItem('omnibook_bookings');
-    localStorage.removeItem('omnibook_resource_groups');
-    localStorage.removeItem('omnibook_pms_tasks');
-    localStorage.removeItem('omnibook_stock_items');
-    localStorage.removeItem('omnibook_stock_movements');
+  const purgeAllUserData = async (): Promise<void> => {
+    // 1. Reset all application in-memory state
     setBookings([]);
     setSelectedBooking(null);
+    setTasks([]);
+    setStockMovements([]);
+    setEstablishmentProfile(DEFAULT_ESTABLISHMENT_PROFILE);
+    setClientProfile({
+      id: '',
+      name: '',
+      email: '',
+      phone: '',
+      memberNumber: '',
+      loyaltyPoints: 0,
+    });
+    setSearchQuery('');
+
+    // 2. Clear all local storage records
+    const keysToRemove = [
+      'omnibook_bookings',
+      'omnibook_resource_groups',
+      'omnibook_pms_tasks',
+      'omnibook_stock_items',
+      'omnibook_stock_movements',
+      'omnibook_dynamic_rates',
+      'omnibook_establishment_profile',
+      'omnibook_onboarding_completed',
+      'omnibook_client_profile',
+      'omnibook_currency',
+      'omnibook_sound_enabled',
+      'omnibook_prousb_issued_cards',
+      'omnibook_prousb_audit_records',
+      'omnibook_prousb_settings',
+      'omnibook_prousb_mdb_snapshot',
+    ];
+    for (const key of keysToRemove) {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {
+        console.warn(`[AppContext] Error removing ${key}:`, e);
+      }
+    }
+
+    // 3. Purge proUSB physical and audit records
+    try {
+      lockManager.purgeAllData();
+    } catch (e) {
+      console.warn('[AppContext] lockManager purge failed:', e);
+    }
+
+    // 4. Purge IndexedDB object stores & fallback collections
+    try {
+      await objectBox.clearAll();
+    } catch (e) {
+      console.warn('[AppContext] objectBox clearAll failed:', e);
+    }
   };
 
   return (
