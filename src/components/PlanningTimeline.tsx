@@ -680,9 +680,9 @@ export const PlanningTimeline: React.FC = () => {
               return (
                 <div key={grp.id} className="flex flex-col">
                   {/* Group Header Row */}
-                  <div
-                    onClick={() => toggleGroup(grp.id)}
+                  <button
                     type="button"
+                    onClick={() => toggleGroup(grp.id)}
                     data-gantt-group-toggle="true"
                     aria-expanded={!isCollapsed}
                     aria-label={`${isCollapsed ? 'Développer' : 'Réduire'} ${grp.name[language] || grp.name.en}`}
