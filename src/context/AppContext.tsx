@@ -24,6 +24,7 @@ import {
 } from '../data/mockData';
 import { EstablishmentProfile, DEFAULT_ESTABLISHMENT_PROFILE } from '../types/establishment';
 import { objectBox } from '../db/objectbox';
+import { isValidCalendarDate, shouldMarkPaymentAsPaid } from '../utils/bookingValidation';
 import { lockManager } from '../locks/lockManager';
 import {
   audioFeedbackService,
@@ -413,19 +414,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Save bookings & resources to localStorage & ObjectBox
   useEffect(() => {
     localStorage.setItem('omnibook_bookings', JSON.stringify(bookings));
-    // Asynchronously update ObjectBox store
-    bookings.forEach((b) => objectBox.put('bookings', b));
+    // Atomic replacement keeps IndexedDB and its fallback aligned, including deletions.
+    void objectBox.replaceAll('bookings', bookings).catch((error) => {
+      console.error('[AppContext] Failed to persist bookings to ObjectBox:', error);
+    });
   }, [bookings]);
 
   useEffect(() => {
     localStorage.setItem('omnibook_resource_groups', JSON.stringify(resourceGroups));
-    resourceGroups.flatMap((g) => g.resources).forEach((r) => objectBox.put('resources', r));
+    const resources = resourceGroups.flatMap((g) => g.resources);
+    void objectBox.replaceAll('resources', resources).catch((error) => {
+      console.error('[AppContext] Failed to persist resources to ObjectBox:', error);
+    });
   }, [resourceGroups]);
 
   // Seed initial ObjectBox data on startup
   useEffect(() => {
     objectBox.openStore().then(() => {
       initialInvoices.forEach((inv) => objectBox.put('invoices', inv));
+    }).catch((error) => {
+      console.error('[AppContext] ObjectBox initialization failed:', error);
     });
   }, []);
 
@@ -485,6 +493,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addBooking = (
     bookingData: Omit<TimelineBooking, 'id'>
   ): { success: boolean; error?: string; booking?: TimelineBooking } => {
+    // Validate both calendar dates for every reservation sector before changing state.
+    if (!isValidCalendarDate(bookingData.startDate) || !isValidCalendarDate(bookingData.endDate)) {
+      return {
+        success: false,
+        error:
+          language === 'fr'
+            ? 'Dates de réservation invalides.'
+            : language === 'ar'
+            ? 'تواريخ الحجز غير صالحة.'
+            : 'Invalid booking dates.',
+      };
+    }
+
     // 1. Strict date sanity checks before modifying state
     if (bookingData.sector === 'hotel' || bookingData.sector === 'resort') {
       const s = new Date(bookingData.startDate + 'T14:00');
@@ -646,45 +667,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const confirmCheckInAndCashPayment = (
     bookingId: string,
-    cashReceived: boolean = true
+    cashReceived: boolean = false
   ): { success: boolean; message: string; booking?: TimelineBooking } => {
-    let targetBooking: TimelineBooking | undefined;
-    let paymentSettled = false;
+    const currentBooking = bookings.find((booking) => booking.id === bookingId);
+    if (!currentBooking) {
+      return {
+        success: false,
+        message:
+          language === 'fr'
+            ? 'Réservation introuvable.'
+            : language === 'ar'
+            ? 'الحجز غير موجود.'
+            : 'Booking not found.',
+      };
+    }
+
+    // Only an explicit cashReceived=true can settle a pending cash payment.
+    // A previously paid booking remains paid; a pending booking remains pending otherwise.
+    const paymentSettled =
+      shouldMarkPaymentAsPaid(currentBooking.paymentStatus, cashReceived);
+    const updatedBooking: TimelineBooking = {
+      ...currentBooking,
+      status: 'checked_in',
+      paymentStatus: paymentSettled ? 'paid' : currentBooking.paymentStatus,
+      notes:
+        (currentBooking.notes || '') +
+        (cashReceived === true && currentBooking.paymentStatus !== 'paid'
+          ? ' [✓ Présence confirmée via QR Code & Paiement Cash finalisé]'
+          : ' [✓ Présence confirmée via QR Code]'),
+    };
 
     setBookings((prev) =>
-      prev.map((b) => {
-        if (b.id === bookingId) {
-          // A booking payment is only marked as paid if cash was genuinely received or if it was already paid
-          const isNowPaid = b.paymentStatus === 'paid' || cashReceived === true;
-          paymentSettled = isNowPaid;
-
-          const updated: TimelineBooking = {
-            ...b,
-            status: 'checked_in',
-            paymentStatus: isNowPaid ? 'paid' : b.paymentStatus,
-            notes:
-              (b.notes || '') +
-              (cashReceived === true && b.paymentStatus !== 'paid'
-                ? ' [✓ Présence confirmée via QR Code & Paiement Cash finalisé]'
-                : ' [✓ Présence confirmée via QR Code]'),
-          };
-          targetBooking = updated;
-          return updated;
-        }
-        return b;
-      })
+      prev.map((booking) =>
+        booking.id === bookingId ? updatedBooking : booking
+      )
     );
-
-    if (selectedBooking && selectedBooking.id === bookingId) {
-      setSelectedBooking((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: 'checked_in',
-              paymentStatus: targetBooking?.paymentStatus ?? (cashReceived === true ? 'paid' : prev.paymentStatus),
-            }
-          : null
-      );
+    if (selectedBooking?.id === bookingId) {
+      setSelectedBooking(updatedBooking);
     }
 
     const message = paymentSettled
@@ -702,7 +721,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return {
       success: true,
       message,
-      booking: targetBooking,
+      booking: updatedBooking,
     };
   };
 
@@ -912,13 +931,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const purgeAllUserData = async (): Promise<void> => {
-    // 1. Reset all application in-memory state
+    // Reset all user-owned in-memory collections.
     setBookings([]);
     setSelectedBooking(null);
+    setResourceGroups([]);
     setTasks([]);
+    setStockItems([]);
     setStockMovements([]);
-    setEstablishmentProfile(DEFAULT_ESTABLISHMENT_PROFILE);
-    setClientProfile({
+    setDynamicRates({});
+    setEstablishmentProfileState(DEFAULT_ESTABLISHMENT_PROFILE);
+    setClientProfileState({
       id: '',
       name: '',
       email: '',
@@ -926,47 +948,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       memberNumber: '',
       loyaltyPoints: 0,
     });
+    setSelectedEstablishmentId('all');
+    setHasOnboardedState(false);
+    setIsEstablishmentModalOpen(false);
+    setActiveSector('all');
     setSearchQuery('');
 
-    // 2. Clear all local storage records
-    const keysToRemove = [
-      'omnibook_bookings',
-      'omnibook_resource_groups',
-      'omnibook_pms_tasks',
-      'omnibook_stock_items',
-      'omnibook_stock_movements',
-      'omnibook_dynamic_rates',
-      'omnibook_establishment_profile',
-      'omnibook_onboarding_completed',
-      'omnibook_client_profile',
-      'omnibook_currency',
-      'omnibook_sound_enabled',
-      'omnibook_prousb_issued_cards',
-      'omnibook_prousb_audit_records',
-      'omnibook_prousb_settings',
-      'omnibook_prousb_mdb_snapshot',
-    ];
-    for (const key of keysToRemove) {
-      try {
-        localStorage.removeItem(key);
-      } catch (e) {
-        console.warn(`[AppContext] Error removing ${key}:`, e);
+    // Remove every key owned by this application, including future proUSB keys.
+    try {
+      for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+        const key = localStorage.key(index);
+        if (key && (key.startsWith('omnibook_') || key.startsWith('ob_'))) {
+          localStorage.removeItem(key);
+        }
       }
+      for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+        const key = sessionStorage.key(index);
+        if (key && key.startsWith('omnibook_')) sessionStorage.removeItem(key);
+      }
+    } catch (error) {
+      console.error('[AppContext] Failed to clear browser storage:', error);
+      throw error;
     }
 
-    // 3. Purge proUSB physical and audit records
-    try {
-      lockManager.purgeAllData();
-    } catch (e) {
-      console.warn('[AppContext] lockManager purge failed:', e);
-    }
+    // Clear proUSB cards, MDB snapshot, settings and audit records in memory.
+    lockManager.purgeAllData();
 
-    // 4. Purge IndexedDB object stores & fallback collections
-    try {
-      await objectBox.clearAll();
-    } catch (e) {
-      console.warn('[AppContext] objectBox clearAll failed:', e);
-    }
+    // Wait for IndexedDB completion. A failed transaction must not be reported as success.
+    await objectBox.clearAll();
   };
 
   return (

@@ -17,6 +17,12 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ### Fixed
 
+- **Validation des réservations** : validation stricte des dates calendaires `YYYY-MM-DD` pour tous les secteurs avant toute modification d'état ; les dates impossibles comme le 31 février sont refusées.
+- **Confirmation des paiements cash** : l'absence de confirmation d'encaissement ne règle plus une réservation en attente ; l'encaissement exige un montant reçu au moins égal au montant dû, et le calcul du check-in est déterministe.
+- **Purge locale et conformité** : la purge réinitialise les collections utilisateur, retire toutes les clés locales préfixées par l'application, vide les données proUSB et attend la fin de la transaction IndexedDB. Une erreur de stockage empêche désormais l'écran d'annoncer un succès. Le texte légal précise que cette purge locale ne supprime pas les données distantes.
+- **Cohérence ObjectBox/IndexedDB** : les réservations et ressources sont persistées comme instantanés atomiques ; les enregistrements supprimés de l'état React ne restent plus dans les object stores. Les erreurs d'ouverture ou de transaction IndexedDB remontent au lieu d'être masquées.
+
+
 - **Cartes de fonction (Passe Générale, Étage, Bâtiment, Urgence, Groupe) non fonctionnelles** : `encodeCommissioningCard` ne comportait aucun cas pour ces familles — les boutons du onglet « Mise en service » écrivaient une trame quasi vide dont l'octet `[9]=0x00`, c'est-à-dire une fausse carte *reset*. Ces familles déléguent désormais à l'encodeur Master vérifié (`0xB0`/`0xD0`/`0xC0`/`0xA0`), et la famille Groupe (`0x80`) a été ajoutée. Vérifié sur matériel réel.
 - **Site codé en dur `24B6` sur les cartes de fonction** : `encodeCommissioningCard` utilisait `DEFAULT_SITE_LOW` (24B6) pour les cartes groupe/checkout/limite alors que votre système est `033B` — la serrure rejette ces cartes (« pas une carte de ce système »). Le site provient désormais du template importé (`CardLock.mdb`), avec repli sur le site intégré.
 - **Master / Urgence : site réel par défaut** : une serrure commissionnée `033B` refuse une carte de fonction à site `0000` (wildcard acceptée uniquement après un hard reset, avant commissionnement). Les cartes Master et Urgence portent désormais le vrai site d'installation par défaut ; le site `0000` n'est écrit que si l'option « universelle » est demandée explicitement. `issueMasterCard` prend le site dans le template importé au lieu de retomber sur `24B6` quand aucune base n'est chargée.

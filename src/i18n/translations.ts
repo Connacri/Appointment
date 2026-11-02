@@ -460,14 +460,24 @@ export const translations = {
     ar: 'حذف حسابي ومسح كافة بياناتي نهائياً (§19.3)',
   },
   deleteAccountWarning: {
-    fr: 'Action irréversible : Toutes vos réservations, données locales et identifiants de session seront effacés conformément au RGPD.',
-    en: 'Irreversible action: All your bookings, local cached data, and session identifiers will be permanently destroyed.',
-    ar: 'إجراء لا رجعة فيه: سيتم مسح جميع حجوزاتك ومواعيدك وبياناتك المحلية نهائياً وفقاً لقوانين حماية البيانات.',
+    fr: 'Action irréversible : les réservations, paramètres, données proUSB et autres données stockées localement dans cette application seront supprimés. Cette purge locale ne supprime pas les données conservées par un service distant.',
+    en: 'Irreversible action: bookings, settings, proUSB records and other data stored locally by this app will be erased. This local purge does not delete data held by a remote service.',
+    ar: 'إجراء لا رجعة فيه: سيتم حذف الحجوزات والإعدادات وبيانات proUSB وجميع البيانات المخزنة محلياً في التطبيق. لا يؤدي هذا الحذف المحلي إلى حذف البيانات المحفوظة لدى خدمة بعيدة.',
   },
   deleteSuccessToast: {
-    fr: 'Votre compte et vos données locales ont été entièrement purgés avec succès.',
-    en: 'Your account and local storage have been completely erased.',
-    ar: 'تم مسح حسابك وكافة السجلات المحلية بالكامل بنجاح.',
+    fr: 'Les données locales de cette application ont été supprimées avec succès.',
+    en: 'This app’s local data has been successfully erased.',
+    ar: 'تم حذف البيانات المحلية لهذا التطبيق بنجاح.',
+  },
+  deleteFailureToast: {
+    fr: 'La suppression est incomplète. Certaines données locales n’ont pas pu être effacées. Réessayez ou contactez le support.',
+    en: 'Deletion is incomplete. Some local data could not be erased. Please retry or contact support.',
+    ar: 'لم تكتمل عملية الحذف. تعذر مسح بعض البيانات المحلية. يرجى المحاولة مجدداً أو الاتصال بالدعم.',
+  },
+  cashAmountInsufficient: {
+    fr: 'Le montant reçu doit être au moins égal au total à encaisser.',
+    en: 'The cash received must be at least the amount due.',
+    ar: 'يجب أن يكون المبلغ النقدي المستلم مساوياً للمبلغ المستحق على الأقل.',
   },
   privacyPolicyExternal: {
     fr: 'Consulter la Politique de Confidentialité publique (/privacy/)',
