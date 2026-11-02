@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   CalendarDays,
@@ -42,6 +42,25 @@ export const Sidebar: React.FC = () => {
   } = useApp();
 
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const isRtl = language === 'ar';
+
+  // Keep the page fixed while the mobile navigation drawer is open.
+  useEffect(() => {
+    if (!isSidebarMobileOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsSidebarMobileOpen(false);
+    };
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isSidebarMobileOpen, setIsSidebarMobileOpen]);
 
   // Strictly filter navigation items by Role AND Domain for Hotel & Resort
   const allNavItems = [
@@ -330,14 +349,30 @@ export const Sidebar: React.FC = () => {
 
       {/* Mobile Drawer (Modal Overlay) */}
       {isSidebarMobileOpen && (
-        <div className="fixed inset-0 z-[9990] md:hidden flex animate-in fade-in">
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+        <div
+          className="fixed inset-0 z-[9990] md:hidden flex animate-in fade-in"
+          dir={isRtl ? 'rtl' : 'ltr'}
+        >
+          <button
+            type="button"
+            aria-label={language === 'fr' ? 'Fermer le menu' : language === 'ar' ? 'إغلاق القائمة' : 'Close navigation'}
+            className="absolute inset-0 w-full h-full bg-slate-950/70 backdrop-blur-[2px] transition-opacity"
             onClick={() => setIsSidebarMobileOpen(false)}
           />
-          <div className="relative w-72 max-w-[85vw] bg-slate-900 text-slate-300 h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-200">
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label={language === 'fr' ? 'Navigation principale' : language === 'ar' ? 'القائمة الرئيسية' : 'Main navigation'}
+            className={`relative z-10 flex h-[100dvh] w-[min(20rem,88vw)] max-w-[88vw] flex-col bg-slate-900 text-slate-300 shadow-2xl overscroll-contain animate-in duration-200 ${
+              isRtl ? 'mr-auto slide-in-from-right' : 'ml-0 slide-in-from-left'
+            }`}
+            style={{
+              paddingTop: 'env(safe-area-inset-top)',
+              paddingBottom: 'env(safe-area-inset-bottom)',
+            }}
+          >
             {renderContent(true)}
-          </div>
+          </aside>
         </div>
       )}
     </>
