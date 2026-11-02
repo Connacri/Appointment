@@ -434,7 +434,7 @@ export const TopBar: React.FC = () => {
             </button>
 
             {isMoreMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3.5 z-[100] text-xs space-y-3.5 animate-in fade-in zoom-in-95">
+              <div dir={language === 'ar' ? 'rtl' : 'ltr'} className={`absolute top-full mt-2 w-64 max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3.5 z-[1000] text-xs space-y-3.5 animate-in fade-in zoom-in-95 ${language === 'ar' ? 'left-0 right-auto' : 'right-0 left-auto'}`}>
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
                   <span className="font-bold text-slate-900 dark:text-white text-xs">
                     Préférences & Outils
