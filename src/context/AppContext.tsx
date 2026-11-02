@@ -973,7 +973,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.removeItem(key);
         }
       }
-      for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {\n        const key = sessionStorage.key(index);\n        if (key && key.startsWith('omnibook_')) sessionStorage.removeItem(key);\n      }
+      for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+        const key = sessionStorage.key(index);
+        if (key && key.startsWith('omnibook_')) sessionStorage.removeItem(key);
+      }
     } catch (error) {
       console.error('[AppContext] Failed to clear browser storage:', error);
       throw error;
