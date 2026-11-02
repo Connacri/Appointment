@@ -176,7 +176,7 @@ export const Sidebar: React.FC = () => {
         {(!isCollapsed || isMobileView) && (
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-bold text-sm shadow-xs">
-              OB
+              AP
             </div>
             <div className="flex flex-col min-w-0">
               <span className="font-bold text-white text-sm tracking-tight leading-none truncate">
