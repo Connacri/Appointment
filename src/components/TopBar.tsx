@@ -171,7 +171,8 @@ export const TopBar: React.FC = () => {
 
   return (
     <>
-      <header className="relative z-[500] min-w-0 w-full min-h-14 py-2 px-2.5 sm:px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-2 z-20 shrink-0 select-none shadow-xs">
+      <header className="relative z-[500] min-w-0 w-full py-2 px-2.5 sm:px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-2 shrink-0 select-none shadow-xs">
+        <div className="w-full min-w-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         {/* ======================================================== */}
         {/* SECTION GAUCHE : Menu Mobile, Recherche, Secteur         */}
         {/* ======================================================== */}
@@ -203,37 +204,6 @@ export const TopBar: React.FC = () => {
               {viewLabels[activeView]?.[language] || activeView}
             </span>
           </nav>
-
-          {/* Search Box - Fluid & Touch Friendly */}
-          <div className="relative flex-1 sm:flex-initial min-w-[84px] max-w-none sm:max-w-[240px]">
-            <Search
-              size={15}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-            />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={
-                language === 'fr'
-                  ? 'Recherche...'
-                  : language === 'ar'
-                  ? 'بحث...'
-                  : 'Search...'
-              }
-              className="w-full h-9 pl-8 pr-7 text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium truncate"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full"
-                title="Effacer la recherche"
-              >
-                <X size={13} />
-              </button>
-            )}
-          </div>
 
           {/* Sector Pill Switcher: Hotel / Resort (Hidden on small mobile to avoid crowding) */}
           <div className="hidden lg:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700/80 text-xs shrink-0">
@@ -307,31 +277,7 @@ export const TopBar: React.FC = () => {
             </button>
           </div>
 
-          {/* 14J / 1M Segment */}
-          <div className="hidden sm:flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => setDateRangeMode('two_weeks')}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-[11px] font-bold ${
-                dateRangeMode === 'two_weeks'
-                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              14J
-            </button>
-            <button
-              type="button"
-              onClick={() => setDateRangeMode('one_month')}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-[11px] font-bold ${
-                dateRangeMode === 'one_month'
-                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              1M
-            </button>
-          </div>
+
         </div>
 
         {/* ======================================================== */}
@@ -568,6 +514,70 @@ export const TopBar: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Second toolbar row: global search and timeline range */}
+        <div className="w-full min-w-0 flex items-center gap-2">
+          <div className="relative flex-1 min-w-0">
+            {/* Search Box - Fluid & Touch Friendly */}
+          <div className="relative flex-1 sm:flex-initial min-w-[84px] max-w-none sm:max-w-[240px]">
+            <Search
+              size={15}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={
+                language === 'fr'
+                  ? 'Recherche...'
+                  : language === 'ar'
+                  ? 'بحث...'
+                  : 'Search...'
+              }
+              className="w-full h-9 pl-8 pr-7 text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium truncate"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full"
+                title="Effacer la recherche"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          </div>
+          <div className="shrink-0 flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 text-xs font-semibold">
+            {/* 14J / 1M Segment */}
+          <div className="hidden sm:flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setDateRangeMode('two_weeks')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-[11px] font-bold ${
+                dateRangeMode === 'two_weeks'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              14J
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateRangeMode('one_month')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-[11px] font-bold ${
+                dateRangeMode === 'one_month'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              1M
+            </button>
+          </div>
+          </div>
+        </div>
         </div>
       </header>
 
