@@ -44,7 +44,7 @@ const MainLayout: React.FC = () => {
   } = useApp();
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-50 dark:bg-slate-950 font-sans">
+    <div className="flex flex-col h-[100dvh] min-h-0 w-screen overflow-hidden bg-slate-50 dark:bg-slate-950 font-sans">
       <OfflineBanner />
 
       {/* Top Domain & Role Switcher Bar */}
