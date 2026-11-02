@@ -1,6 +1,6 @@
 {
-  "name": "OmniBook — Planning de Réservation",
-  "description": "OmniBook - Planning de réservation multi-domaines, gestion hôtelière et médicale, serrures ProUSB et conformité AGENTS.md.",
+  "name": "Appointment PMS",
+  "description": "Appointment PMS — hotel and resort property management, reservations, Gantt planning, housekeeping, billing and proUSB lock tools.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
