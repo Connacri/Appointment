@@ -92,24 +92,31 @@ export const PlanningTimeline: React.FC = () => {
   };
 
 
-  // Responsive mode: compact (phone), standard, or wide
-  const [columnZoomMode, setColumnZoomMode] = useState<'compact' | 'standard' | 'wide'>(() => typeof window !== 'undefined' && window.innerWidth < 768 ? 'compact' : 'standard');
-  const [leftBarMode, setLeftBarMode] = useState<'normal' | 'compact' | 'mini'>(() => typeof window !== 'undefined' && window.innerWidth < 768 ? 'compact' : 'normal');
+  // Persist the user's last selected density and day-column width.
+  const [columnZoomMode, setColumnZoomMode] = useState<'compact' | 'standard' | 'wide'>(() => {
+    if (typeof window === 'undefined') return 'standard';
+    const saved = window.localStorage.getItem('appointment.gantt.columnZoom');
+    return saved === 'compact' || saved === 'wide' || saved === 'standard' ? saved : window.innerWidth < 768 ? 'compact' : 'standard';
+  });
+  const [leftBarMode, setLeftBarMode] = useState<'normal' | 'compact' | 'mini'>(() => {
+    if (typeof window === 'undefined') return 'normal';
+    const saved = window.localStorage.getItem('appointment.gantt.leftDensity');
+    return saved === 'mini' || saved === 'compact' || saved === 'normal' ? saved : window.innerWidth < 768 ? 'compact' : 'normal';
+  });
   const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
-
-  // Responsive defaults follow the phone breakpoint and restore desktop sizing when resized.
+  const [isDayHeaderCollapsed, setIsDayHeaderCollapsed] = useState(false);
+  useEffect(() => { window.localStorage.setItem('appointment.gantt.columnZoom', columnZoomMode); }, [columnZoomMode]);
+  useEffect(() => { window.localStorage.setItem('appointment.gantt.leftDensity', leftBarMode); }, [leftBarMode]);
   useEffect(() => {
     const media = window.matchMedia('(max-width: 767px)');
-    const applyViewport = (isMobile: boolean) => {
-      setIsMobileScreen(isMobile);
-      setLeftBarMode(isMobile ? 'compact' : 'normal');
-      setColumnZoomMode(isMobile ? 'compact' : 'standard');
-    };
-    applyViewport(media.matches);
-    const handleChange = (event: MediaQueryListEvent) => applyViewport(event.matches);
+    setIsMobileScreen(media.matches);
+    const handleChange = (event: MediaQueryListEvent) => setIsMobileScreen(event.matches);
     media.addEventListener('change', handleChange);
     return () => media.removeEventListener('change', handleChange);
   }, []);
+  const handleTimelineScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    setIsDayHeaderCollapsed(event.currentTarget.scrollTop > 48);
+  };
 
   // Dynamic day column width adapted to viewport
   const colWidth = useMemo(() => {
