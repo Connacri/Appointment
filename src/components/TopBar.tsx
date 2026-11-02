@@ -173,10 +173,12 @@ export const TopBar: React.FC = () => {
     <>
       <header className="relative z-[500] min-w-0 w-full py-2 px-2.5 sm:px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-2 shrink-0 select-none shadow-xs">
         <div className="w-full min-w-0 flex flex-col gap-2">
+        {/* Primary toolbar row: breadcrumb, sector, currency, USB and actions */}
+        <div className="w-full min-w-0 flex items-center flex-wrap gap-2">
         {/* ======================================================== */}
         {/* SECTION GAUCHE : Menu Mobile, Recherche, Secteur         */}
         {/* ======================================================== */}
-        <div className="w-full sm:w-auto flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 shrink-0">
           {/* Mobile Sidebar Hamburger Toggle (Touch target >= 44px) */}
           <button
             type="button"
@@ -197,7 +199,7 @@ export const TopBar: React.FC = () => {
               title="Appointment PMS - Retour au planning"
             >
               <Hotel size={15} className="text-blue-600 dark:text-blue-400 shrink-0" />
-              <span className="hidden xl:inline font-bold">Appointment PMS</span>
+              <span className="hidden xl:inline font-bold">APPOINTMENT PMS</span>
             </button>
             <ChevronRight size={13} className="mx-1 text-slate-400 shrink-0 rtl:rotate-180" />
             <span className="font-semibold text-slate-900 dark:text-white truncate max-w-[110px] sm:max-w-[160px]">
@@ -244,46 +246,10 @@ export const TopBar: React.FC = () => {
             </button>
           </div>
         </div>
-
-        {/* ======================================================== */}
-        {/* SECTION CENTRALE : Date & Mode 14J / 1M                   */}
-        {/* ======================================================== */}
-        <div className="w-full sm:w-auto flex items-center justify-between sm:justify-center gap-1 sm:gap-2 shrink-0 min-w-0">
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => shiftDays(-1)}
-              className="w-8 h-8 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-              title="Jour précédent"
-              aria-label="Jour précédent"
-            >
-              <ChevronLeft size={16} />
-            </button>
-
-            <div className="px-2 sm:px-3 text-center">
-              <span className="text-[11px] sm:text-xs font-bold text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap block">
-                {formatDateDisplay(currentBaseDate)} - {endDateFormatted}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => shiftDays(1)}
-              className="w-8 h-8 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-              title="Jour suivant"
-              aria-label="Jour suivant"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-
-
-        </div>
-
         {/* ======================================================== */}
         {/* SECTION DROITE : USB Physique, CI Pipeline, + Nouveau    */}
         {/* ======================================================== */}
-        <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-2 shrink-0 min-w-0">
+        <div className="ml-auto flex items-center justify-end gap-2 shrink-0 min-w-0">
           {/* PROMINENT USB PHYSIQUE (WebHID) BUTTON */}
           <button
             type="button"
@@ -515,10 +481,45 @@ export const TopBar: React.FC = () => {
             )}
           </div>
         </div>
+        </div>
 
-        {/* Second toolbar row: global search and timeline range */}
-        <div className="w-full min-w-0 flex items-center gap-2">
-          <div className="relative flex-1 min-w-0">
+        {/* Secondary toolbar row: search, date navigation and range */}
+        <div className="w-full min-w-0 flex items-center gap-2 flex-wrap">
+        {/* ======================================================== */}
+        {/* SECTION CENTRALE : Date & Mode 14J / 1M                   */}
+        {/* ======================================================== */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0 min-w-0">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => shiftDays(-1)}
+              className="w-8 h-8 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="Jour précédent"
+              aria-label="Jour précédent"
+            >
+              <ChevronLeft size={16} />
+            </button>
+
+            <div className="px-2 sm:px-3 text-center">
+              <span className="text-[11px] sm:text-xs font-bold text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap block">
+                {formatDateDisplay(currentBaseDate)} - {endDateFormatted}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => shiftDays(1)}
+              className="w-8 h-8 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="Jour suivant"
+              aria-label="Jour suivant"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+
+        </div>
+          <div className="relative flex-1 min-w-[160px] max-w-[240px]">
             {/* Search Box - Fluid & Touch Friendly */}
           <div className="relative w-full min-w-0">
             <Search
