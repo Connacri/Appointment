@@ -109,7 +109,7 @@ export const StockManagementView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 p-4 md:p-6 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-6">
+    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-5 md:space-y-6">
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-200 dark:border-slate-800">
         <div>
