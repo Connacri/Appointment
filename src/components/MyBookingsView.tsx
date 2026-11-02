@@ -135,7 +135,7 @@ export const MyBookingsView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 p-4 md:p-6 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-6">
+    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-5 md:space-y-6">
       {/* 1. CLIENT ACCOUNT DASHBOARD CARD (When in client role) */}
       {isClientRole && (
         <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-emerald-600 rounded-3xl p-5 md:p-6 text-white shadow-xl relative overflow-hidden">
