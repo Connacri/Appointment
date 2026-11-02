@@ -783,14 +783,10 @@ export const PlanningTimeline: React.FC = () => {
                               }}
                               aria-label={`Créer une réservation pour ${res.name} le ${day.dateStr}`}
                               title={`Créer une réservation • ${res.name} • ${day.dateStr}`}
-                              className={`group/cell relative shrink-0 border-r border-slate-100 dark:border-slate-800/40 h-full cursor-pointer flex items-center justify-center p-0 focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 hover:bg-blue-50/70 dark:hover:bg-blue-950/35 active:bg-blue-100 dark:active:bg-blue-900/40 transition-colors ${
-                                day.isWeekend ? 'bg-slate-50/30 dark:bg-slate-900/20' : ''
-                              }`}
-                            >
-                              <span className="pointer-events-none flex items-center justify-center w-5 h-5 rounded-full text-blue-600 dark:text-blue-400 bg-blue-100/0 dark:bg-blue-900/0 opacity-0 group-hover/cell:opacity-100 group-hover/cell:bg-blue-100 dark:group-hover/cell:bg-blue-900/60 group-focus-visible/cell:opacity-100 transition-all text-sm font-bold" aria-hidden="true">
-                                +
-                              </span>
-                            </button>
+                              className={`relative shrink-0 border-r border-slate-100 dark:border-slate-800/40 h-full cursor-pointer p-0 focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 hover:bg-blue-50/70 dark:hover:bg-blue-950/35 active:bg-blue-100 dark:active:bg-blue-900/40 transition-colors ${
+                                 day.isWeekend ? 'bg-slate-50/30 dark:bg-slate-900/20' : ''
+                               }`}
+                             />
                           ))}
 
                           {/* Render Booking Gantt Bars overlaying the grid */}
