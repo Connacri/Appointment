@@ -743,14 +743,16 @@ export const PlanningTimeline: React.FC = () => {
                           style={{ width: `${colWidth}px` }}
                           className="shrink-0 border-r border-slate-200/60 dark:border-slate-800/60 flex items-center justify-center p-1 h-full"
                         >
-                          <span
-                            className={`w-6 h-5 rounded text-[11px] font-bold font-mono flex items-center justify-center shadow-2xs tabular-nums ${
-                              isFree ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
-                            }`}
-                            title={`${avail} disponibilité(s) le ${day.dateStr}`}
-                          >
-                            {avail}
-                          </span>
+                          {isCollapsed && (
+                            <span
+                              className={`w-6 h-5 rounded text-[11px] font-bold font-mono flex items-center justify-center shadow-2xs tabular-nums ${
+                                isFree ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
+                              }`}
+                              title={`${avail} disponibilité(s) le ${day.dateStr}`}
+                            >
+                              {avail}
+                            </span>
+                          )}
                         </div>
                       );
                     })}
