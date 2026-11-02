@@ -4,6 +4,7 @@ import {
   Palmtree,
   UserCheck,
   Shield,
+  Crown,
   Briefcase,
   Users,
 } from 'lucide-react';
@@ -20,6 +21,7 @@ export const DomainRoleSelector: React.FC = () => {
   };
 
   const roles: { id: UserRole; label: { fr: string; en: string; ar: string }; shortLabel: string; icon: any }[] = [
+    { id: 'admin', label: { fr: 'Administrateur', en: 'Administrator', ar: 'مدير النظام' }, shortLabel: 'Admin', icon: Crown },
     {
       id: 'manager',
       label: { fr: 'Directeur / Gérant', en: 'General Manager', ar: 'المدير العام' },
@@ -47,7 +49,7 @@ export const DomainRoleSelector: React.FC = () => {
   ];
 
   return (
-    <div className="relative z-[500] bg-slate-950 border-b border-slate-800/80 px-2.5 sm:px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs select-none z-30">
+    <div className="relative z-[500] bg-slate-950 border-b border-slate-800/80 px-3 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-2.5 text-xs select-none">
       {/* Domains Strip */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
@@ -87,7 +89,7 @@ export const DomainRoleSelector: React.FC = () => {
           {language === 'fr' ? 'Rôle Actif :' : language === 'ar' ? 'الدور:' : 'Role:'}
         </span>
 
-        <div className="flex items-center bg-slate-900 p-0.5 rounded-xl border border-slate-800 gap-0.5">
+        <div className="flex max-w-full items-center gap-1 rounded-2xl border border-slate-800 bg-slate-900/90 p-1">
           {roles.map((r) => {
             const Icon = r.icon;
             const isRoleActive = currentRole === r.id;
@@ -96,9 +98,9 @@ export const DomainRoleSelector: React.FC = () => {
                 key={r.id}
                 type="button"
                 onClick={() => setCurrentRole(r.id)}
-                className={`min-h-[32px] px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                className={`min-h-9 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   isRoleActive
-                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-xs'
+                    ? 'bg-blue-600 text-white font-bold shadow-sm'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
                 }`}
                 title={r.label[language] || r.label.en}
