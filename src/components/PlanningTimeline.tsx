@@ -21,6 +21,7 @@ import {
   MoveRight,
   SlidersHorizontal,
   CalendarDays,
+  Info,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ResourceGroup, ResourceItem, TimelineBooking, BookingStatus } from '../types/booking';
@@ -50,6 +51,7 @@ export const PlanningTimeline: React.FC = () => {
   } = useApp();
 
   const isRTL = language === 'ar';
+  const [showAvailabilityHelp, setShowAvailabilityHelp] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const dragPanRef = useRef<{ pointerId: number; x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
@@ -463,6 +465,16 @@ export const PlanningTimeline: React.FC = () => {
             </button>
           </div>
 
+          <button
+            type="button"
+            onClick={() => setShowAvailabilityHelp(true)}
+            className="min-h-9 px-2.5 flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors text-[10px] sm:text-[11px] font-semibold whitespace-nowrap"
+            title={language === 'fr' ? 'Comprendre les chiffres de disponibilité' : language === 'ar' ? 'فهم أرقام التوفر' : 'Understand availability numbers'}
+          >
+            <Info size={14} />
+            {language === 'fr' ? 'Disponibilités ?' : language === 'ar' ? 'التوفر ؟' : 'Availability?'}
+          </button>
+
           {/* Horizontal scroll navigation buttons */}
           <div className="w-full sm:w-auto flex items-center justify-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 bg-white dark:bg-slate-800 h-9 sm:h-auto">
             <button
@@ -489,6 +501,83 @@ export const PlanningTimeline: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {showAvailabilityHelp && (
+        <div
+          className="absolute inset-0 z-[120] flex items-center justify-center bg-slate-950/55 backdrop-blur-sm p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowAvailabilityHelp(false);
+          }}
+          role="presentation"
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="availability-help-title"
+            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-2xl animate-in fade-in zoom-in-95"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center text-emerald-700 dark:text-emerald-300">
+                  <CalendarDays size={21} />
+                </span>
+                <div>
+                  <h2 id="availability-help-title" className="text-base font-bold text-slate-900 dark:text-white">
+                    {language === 'fr' ? 'Comprendre les disponibilités' : language === 'ar' ? 'فهم أرقام التوفر' : 'Understanding availability'}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {language === 'fr' ? 'Les chiffres affichés au-dessus des chambres' : language === 'ar' ? 'الأرقام المعروضة فوق الغرف' : 'Numbers displayed above the rooms'}
+                  </p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowAvailabilityHelp(false)} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Fermer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              {language === 'fr'
+                ? 'Chaque chiffre indique combien de chambres ou d’unités restent disponibles dans ce groupe pour la date correspondante. Le calcul tient compte des réservations actives.'
+                : language === 'ar'
+                  ? 'كل رقم يوضح عدد الغرف أو الوحدات المتبقية والمتاحة في هذه المجموعة في التاريخ المحدد، بعد احتساب الحجوزات النشطة.'
+                  : 'Each number shows how many rooms or units remain available in this group on that date, after counting active bookings.'}
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 p-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex w-8 h-7 items-center justify-center rounded bg-emerald-600 text-white text-sm font-bold font-mono">5</span>
+                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">{language === 'fr' ? 'Vert' : language === 'ar' ? 'أخضر' : 'Green'}</span>
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                  {language === 'fr' ? '5 unités encore disponibles.' : language === 'ar' ? '5 وحدات لا تزال متاحة.' : '5 units are still available.'}
+                </p>
+              </div>
+              <div className="rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 p-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex w-8 h-7 items-center justify-center rounded bg-rose-600 text-white text-sm font-bold font-mono">0</span>
+                  <span className="text-xs font-bold text-rose-800 dark:text-rose-300">{language === 'fr' ? 'Rouge' : language === 'ar' ? 'أحمر' : 'Red'}</span>
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                  {language === 'fr' ? 'Aucune unité disponible : tout est réservé.' : language === 'ar' ? 'لا توجد وحدات متاحة، جميعها محجوزة.' : 'No units available; all are booked.'}
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-3 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+              {language === 'fr'
+                ? 'Exemple : si le groupe contient 8 chambres et que 3 sont occupées ce jour-là, le chiffre affiché sera 5. Ce chiffre n’est ni un numéro de chambre ni un numéro de réservation.'
+                : language === 'ar'
+                  ? 'مثال: إذا كانت المجموعة تضم 8 غرف وكانت 3 مشغولة في ذلك اليوم، فسيظهر الرقم 5. هذا ليس رقم غرفة ولا رقم حجز.'
+                  : 'Example: if the group has 8 rooms and 3 are occupied that day, the displayed number is 5. It is not a room number or a booking number.'}
+            </p>
+
+            <button type="button" onClick={() => setShowAvailabilityHelp(false)} className="mt-5 w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white py-2.5 text-sm font-semibold transition-colors">
+              {language === 'fr' ? 'J’ai compris' : language === 'ar' ? 'فهمت' : 'Got it'}
+            </button>
+          </section>
+        </div>
+      )}
 
       {/* Subtle 'Today' pill indicator anchored to the top of the scrollable timeline container, remains visible even when scrolling horizontally */}
       {timelineSync.isTodayInRange && (
