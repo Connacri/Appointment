@@ -23,7 +23,6 @@ import {
   CalendarDays,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { initialResourceGroups } from '../data/mockData';
 import { ResourceGroup, ResourceItem, TimelineBooking, BookingStatus } from '../types/booking';
 import { statusConfig } from './LegendBar';
 import { downloadICS } from '../utils/icsExport';
@@ -216,7 +215,7 @@ export const PlanningTimeline: React.FC = () => {
 
   // Filter resource groups strictly by currentDomain (NEVER MIX) & searchQuery & establishment
   const filteredGroups = useMemo(() => {
-    const groups = resourceGroups.length > 0 ? resourceGroups : initialResourceGroups;
+    const groups = resourceGroups;
     return groups
       .filter((grp) => grp.sector === currentDomain)
       .map((grp) => {
