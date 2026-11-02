@@ -109,6 +109,7 @@ export class WebHidTransport implements LockTransport {
   readonly name = 'proUSB Encoder (USB HID)';
   readonly isPhysical = true;
   public onLog?: (direction: 'tx' | 'rx' | 'info' | 'error', message: string, data?: Uint8Array) => void;
+  public onConnectionChange?: () => void;
 
   private device: any = null;
   private pendingResolvers: Array<(value: Uint8Array | null) => void> = [];
@@ -191,6 +192,7 @@ export class WebHidTransport implements LockTransport {
       this.device.addEventListener('disconnect', () => {
         this.onLog?.('error', 'Device disconnected unexpectedly.');
         this.device = null;
+        this.onConnectionChange?.();
         // Reject all pending resolvers
         for (const resolver of this.pendingResolvers) {
           resolver(null);
@@ -199,6 +201,7 @@ export class WebHidTransport implements LockTransport {
       });
 
       this.onLog?.('info', `Connected to ${this.device.productName || 'proUSB-TEMIC'} (Serial: ${this.device.serialNumber || 'Reader_0000016'})`);
+      this.onConnectionChange?.();
       this.onLog?.('info', `HID collections: ${JSON.stringify(this.device.collections?.map((c: any) => ({ usagePage: '0x' + c.usagePage?.toString(16), usage: '0x' + c.usage?.toString(16), outputReports: c.outputReports?.map((r: any) => ({ reportId: '0x' + r.reportId?.toString(16) })), inputReports: c.inputReports?.map((r: any) => ({ reportId: '0x' + r.reportId?.toString(16) })) })))}`);
       
       // Find the correct output report ID from collections
@@ -238,6 +241,7 @@ export class WebHidTransport implements LockTransport {
       await this.device.close();
       this.device = null;
       this.onLog?.('info', 'WebHID device closed.');
+      this.onConnectionChange?.();
     }
   }
 
@@ -256,32 +260,40 @@ export class WebHidTransport implements LockTransport {
 
   private startAutoConnect(): void {
     this.stopAutoConnect();
-    if (typeof navigator === 'undefined' || !('hid' in navigator)) {
-      return;
-    }
-    this.autoConnectTimer = setInterval(() => {
-      if (!this.autoConnectEnabled || this.isOpen()) {
-        return;
-      }
-      void (async () => {
-        try {
-          const devices = await (navigator as any).hid.getDevices();
-          const matching = (Array.isArray(devices) ? devices : []).filter(
-            (d: any) => d.vendorId === PROUSB_VID && d.productId === PROUSB_PID
-          );
-          if (matching.length > 0) {
-            this.onLog?.('info', `proUSB encoder detected via USB (VID 0x${PROUSB_VID.toString(16)} PID 0x${PROUSB_PID.toString(16)}) - auto-connecting...`);
-            try {
-              await this.open();
-            } catch (e) {
-              this.onLog?.('error', `Auto-connect to proUSB encoder failed: ${(e as Error).message}`);
-            }
+    if (typeof navigator === 'undefined' || !('hid' in navigator)) return;
+
+    const hid = (navigator as any).hid;
+    let scanInProgress = false;
+    const scanAndConnect = async () => {
+      if (!this.autoConnectEnabled || this.isOpen() || scanInProgress) return;
+      scanInProgress = true;
+      try {
+        // getDevices lists only devices already authorized by the user.
+        // WebHID deliberately requires a user gesture for first-time permission.
+        const devices = await hid.getDevices();
+        const matching = (Array.isArray(devices) ? devices : []).filter(
+          (device: any) => device.vendorId === PROUSB_VID && device.productId === PROUSB_PID
+        );
+        if (matching.length > 0 && !this.isOpen()) {
+          this.onLog?.('info', 'Encodeur proUSB autorisé détecté — connexion automatique...');
+          try {
+            await this.open();
+          } catch (error) {
+            this.onLog?.('error', `Connexion automatique proUSB impossible : ${(error as Error).message}`);
           }
-        } catch (e) {
-          // Polling errors are non-fatal; the next tick retries.
         }
-      })();
-    }, 3000);
+      } catch {
+        // Permission/API errors are non-fatal; retry on the next scan.
+      } finally {
+        scanInProgress = false;
+      }
+    };
+
+    // Native HID events react immediately to plug/unplug; a short scan is fallback.
+    hid.addEventListener?.('connect', scanAndConnect);
+    hid.addEventListener?.('disconnect', () => this.onConnectionChange?.());
+    void scanAndConnect();
+    this.autoConnectTimer = setInterval(() => { void scanAndConnect(); }, 750);
   }
 
   private stopAutoConnect(): void {
