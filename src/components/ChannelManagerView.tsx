@@ -260,7 +260,7 @@ export const ChannelManagerView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 p-3 md:p-6 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-4 md:space-y-6">
+    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-4 md:space-y-6">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
