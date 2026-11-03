@@ -28,6 +28,7 @@ import { QrPassModal } from './components/QrPassModal';
 import { QrScannerModal } from './components/QrScannerModal';
 import { ProUsbLockSystemView } from './components/ProUsbLockSystemView';
 import { EstablishmentSetupModal } from './components/EstablishmentSetupModal';
+import { SupabaseAuthGate } from './services/supabase/SupabaseAuthGate';
 
 const MainLayout: React.FC = () => {
   const {
@@ -116,8 +117,10 @@ const MainLayout: React.FC = () => {
 
 export default function App() {
   return (
-    <AppProvider>
-      <MainLayout />
-    </AppProvider>
+    <SupabaseAuthGate>
+      <AppProvider>
+        <MainLayout />
+      </AppProvider>
+    </SupabaseAuthGate>
   );
 }
