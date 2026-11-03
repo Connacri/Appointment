@@ -251,80 +251,152 @@ export async function parseCardLockMdb(
   }
 
   const tableNames = db.getTableNames();
-  const read = (name: string): Row[] => {
-    if (!tableNames.includes(name)) {
-      warnings.push(`Table « ${name} » absente du fichier.`);
+  
+  const findTable = (candidateNames: string[]): string | undefined => {
+    for (const name of candidateNames) {
+      const match = tableNames.find((t) => t.toLowerCase() === name.toLowerCase());
+      if (match) return match;
+    }
+    return undefined;
+  };
+
+  const getField = (row: Row, candidateKeys: string[]): unknown => {
+    for (const k of candidateKeys) {
+      if (k in row && row[k] !== undefined && row[k] !== null) return row[k];
+    }
+    const lowerMap = new Map<string, string>();
+    for (const k of Object.keys(row)) lowerMap.set(k.toLowerCase(), k);
+    for (const k of candidateKeys) {
+      const actual = lowerMap.get(k.toLowerCase());
+      if (actual && row[actual] !== undefined && row[actual] !== null) return row[actual];
+    }
+    return undefined;
+  };
+
+  const read = (primaryName: string, aliases: string[] = []): Row[] => {
+    const match = findTable([primaryName, ...aliases]);
+    if (!match) {
+      warnings.push(`Table « ${primaryName} » absente du fichier.`);
       return [];
     }
     try {
-      return db.getTable(name).getData();
+      return db.getTable(match).getData();
     } catch (error) {
-      warnings.push(`Table « ${name} » illisible : ${(error as Error).message}`);
+      warnings.push(`Table « ${primaryName} » (${match}) illisible : ${(error as Error).message}`);
       return [];
     }
   };
 
-  const buildings: ImportedBuilding[] = read('BuildingInfo').map((r) => ({
-    no: num(r.BldNo),
-    name: str(r.BldName),
-  }));
+  const rawBuildings = read('BuildingInfo', ['Building', 'Buildings', 'BldInfo', 'tblBuilding']);
+  const buildings: ImportedBuilding[] = rawBuildings.map((r, idx) => {
+    const noVal = getField(r, ['BldNo', 'bldno', 'Bld_No', 'BuildingNo', 'BuildingID', 'ID', 'No']);
+    const nameVal = getField(r, ['BldName', 'bldname', 'Bld_Name', 'BuildingName', 'Name', 'Description']);
+    const buildingNumber = noVal !== undefined ? num(noVal, idx + 1) : idx + 1;
+    return {
+      no: buildingNumber,
+      name: str(nameVal) || `Bâtiment ${buildingNumber}`,
+    };
+  });
 
-  const rooms: ImportedRoom[] = read('RoomInfo').map((r) => ({
-    // Zero means the source row did not provide this dimension; do not invent building/floor 1.
-    building: num(r.BldNo, 0),
-    floor: num(r.FlrNo, 0),
-    roomNo: str(r.RoomNo),
-    type: str(r.sType),
-    status: str(r.Status),
-    price: str(r.Price),
-    cardCount: num(r.CardCount, 0),
-    maxCards: num(r.MaxCards, 0),
-  }));
+  const rawRooms = read('RoomInfo', ['Room', 'Rooms', 'RomInfo', 'tblRoom']);
+  const rooms: ImportedRoom[] = rawRooms.map((r) => {
+    const rawBld = getField(r, ['BldNo', 'bldno', 'Bld_No', 'BuildingNo', 'Building', 'Bld', 'bld_no']);
+    const rawFlr = getField(r, ['FlrNo', 'flrno', 'Flr_No', 'FloorNo', 'Floor', 'Flr', 'flr_no']);
+    const rawRoomNo = getField(r, ['RoomNo', 'roomno', 'Room_No', 'RomID', 'Room', 'RomNo', 'ID']);
+    const rawType = getField(r, ['sType', 'stype', 'RoomType', 'Type', 'type']);
+    const rawStatus = getField(r, ['Status', 'status']);
+    const rawPrice = getField(r, ['Price', 'price', 'Rate', 'rate']);
+    const rawCardCount = getField(r, ['CardCount', 'cardcount', 'Card_Count']);
+    const rawMaxCards = getField(r, ['MaxCards', 'maxcards', 'Max_Cards']);
 
-  // BuildingInfo is not always complete in legacy CardLock databases.
-  // RoomInfo.BldNo is the authoritative fallback: never drop a building
-  // simply because its descriptive row is absent from BuildingInfo.
+    let roomNumberStr = str(rawRoomNo);
+    let parsedBld = rawBld !== undefined && rawBld !== null && str(rawBld) !== '' ? num(rawBld, 0) : 0;
+    let parsedFlr = rawFlr !== undefined && rawFlr !== null && str(rawFlr) !== '' ? num(rawFlr, 0) : 0;
+
+    // Check for building and floor prefixes in room format: e.g. "1-2-205" or "2-101"
+    const dashMatch = roomNumberStr.match(/^(\d+)-(\d+)(?:-(\d+))?$/);
+    if (dashMatch) {
+      if (dashMatch[3]) {
+        if (parsedBld <= 0) parsedBld = num(dashMatch[1], 1);
+        if (parsedFlr <= 0) parsedFlr = num(dashMatch[2], 1);
+        roomNumberStr = dashMatch[3];
+      } else {
+        if (parsedBld <= 0) parsedBld = num(dashMatch[1], 1);
+        roomNumberStr = dashMatch[2];
+      }
+    }
+
+    // Infer floor from leading digits if still unspecified
+    if (parsedFlr <= 0) {
+      const pureDigits = roomNumberStr.replace(/\D/g, '');
+      if (pureDigits.length >= 3) {
+        parsedFlr = parseInt(pureDigits[0], 10) || 1;
+      } else if (pureDigits.length > 0) {
+        parsedFlr = 1;
+      }
+    }
+
+    if (parsedBld <= 0) {
+      parsedBld = 1;
+    }
+
+    return {
+      building: parsedBld,
+      floor: parsedFlr,
+      roomNo: roomNumberStr,
+      type: str(rawType) || 'Chambre',
+      status: str(rawStatus),
+      price: str(rawPrice),
+      cardCount: num(rawCardCount, 0),
+      maxCards: num(rawMaxCards, 0),
+    };
+  });
+
+  // Never drop a building that exists in BuildingInfo or is referenced in RoomInfo.
   const buildingByNo = new Map<number, ImportedBuilding>();
   for (const building of buildings) {
-    if (building.no > 0) buildingByNo.set(building.no, building);
+    buildingByNo.set(building.no, building);
   }
   for (const room of rooms) {
     if (room.building > 0 && !buildingByNo.has(room.building)) {
-      buildingByNo.set(room.building, { no: room.building, name: '' });
+      buildingByNo.set(room.building, { no: room.building, name: `Bâtiment ${room.building}` });
     }
   }
   const completeBuildings = [...buildingByNo.values()].sort((a, b) => a.no - b.no);
 
-  const guests: ImportedGuest[] = read('GuestInfo').map((r) => ({
-    roomNo: str(r.BldRoomNo),
-    name: str(r.Name),
-    comeTime: toIsoString(r.ComeTime),
-    goTime: toIsoString(r.GoTime),
-    cardId: str(r.CardID),
-    flag: str(r.Flag),
+  const rawGuests = read('GuestInfo', ['Guest', 'Guests', 'tblGuest']);
+  const guests: ImportedGuest[] = rawGuests.map((r) => ({
+    roomNo: str(getField(r, ['BldRoomNo', 'bldroomno', 'RoomNo', 'Room', 'BldRoom'])),
+    name: str(getField(r, ['Name', 'name', 'GuestName', 'Customer'])),
+    comeTime: toIsoString(getField(r, ['ComeTime', 'cometime', 'CheckIn', 'StartDate', 'Come_Time'])),
+    goTime: toIsoString(getField(r, ['GoTime', 'gotime', 'CheckOut', 'EndDate', 'Go_Time'])),
+    cardId: str(getField(r, ['CardID', 'cardid', 'CardNo', 'Card_ID'])),
+    flag: str(getField(r, ['Flag', 'flag', 'Status', 'State'])),
   }));
 
   const cards: ImportedCard[] = [];
   let skippedCards = 0;
-  for (const row of read('CardInfo')) {
-    const hex = normalizeHex(row.CardData);
+  for (const row of read('CardInfo', ['Card', 'Cards', 'tblCard'])) {
+    const rawData = getField(row, ['CardData', 'carddata', 'Card_Data', 'Data', 'Hex']);
+    const hex = normalizeHex(rawData);
     if (!hex) {
       skippedCards += 1;
       continue;
     }
     cards.push({
-      id: num(row.ID),
+      id: num(getField(row, ['ID', 'id', 'CardID', 'CardId'])),
       hex,
-      holder: str(row.Holder),
-      operator: str(row.GongHao),
-      status: str(row.Status),
+      holder: str(getField(row, ['Holder', 'holder', 'GuestName', 'Name'])),
+      operator: str(getField(row, ['GongHao', 'gonghao', 'Operator', 'User'])),
+      status: str(getField(row, ['Status', 'status'])),
       typeIndex: parseInt(hex.slice(18, 20), 16),
     });
   }
   if (skippedCards > 0) warnings.push(`${skippedCards} carte(s) ignorée(s) (CardData vide ou invalide).`);
 
-  const openings = read('RecordOpen').filter((r) => {
-    const hex = str(r.RecData).toUpperCase();
+  const openings = read('RecordOpen', ['Record', 'Records', 'OpenRecord', 'tblRecordOpen']).filter((r) => {
+    const rawRec = getField(r, ['RecData', 'recdata', 'Data', 'RecordData']);
+    const hex = str(rawRec).toUpperCase();
     return hex.length > 0 && !/^F+$/.test(hex) && !/^0+$/.test(hex);
   }).length;
 
@@ -393,28 +465,30 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 } {
   const { rooms, guests } = snapshot;
 
-  // Keep all building rows, and recover missing rows from RoomInfo.BldNo.
+  // Keep ALL buildings from the snapshot, and recover any building number seen in rooms.
   const buildingByNo = new Map<number, ImportedBuilding>();
   for (const building of snapshot.buildings) {
-    if (building.no > 0) buildingByNo.set(building.no, building);
+    if (Number.isFinite(building.no)) buildingByNo.set(building.no, building);
   }
   for (const room of rooms) {
-    if (room.building > 0 && !buildingByNo.has(room.building)) {
-      buildingByNo.set(room.building, { no: room.building, name: '' });
+    if (Number.isFinite(room.building) && room.building > 0 && !buildingByNo.has(room.building)) {
+      buildingByNo.set(room.building, { no: room.building, name: `Bâtiment ${room.building}` });
     }
   }
+
+  // If still empty, ensure at least Building 1 exists
+  if (buildingByNo.size === 0) {
+    buildingByNo.set(1, { no: 1, name: 'Holiday Inn' });
+  }
+
   const buildings = [...buildingByNo.values()].sort((a, b) => a.no - b.no);
 
   const roomsByBuilding = new Map<number, ImportedRoom[]>();
-  const roomsWithoutBuilding: ImportedRoom[] = [];
   for (const room of rooms) {
-    if (room.building > 0) {
-      const buildingRooms = roomsByBuilding.get(room.building) ?? [];
-      buildingRooms.push(room);
-      roomsByBuilding.set(room.building, buildingRooms);
-    } else {
-      roomsWithoutBuilding.push(room);
-    }
+    const bldNo = Number.isFinite(room.building) && room.building > 0 ? room.building : (buildings[0]?.no || 1);
+    const buildingRooms = roomsByBuilding.get(bldNo) ?? [];
+    buildingRooms.push(room);
+    roomsByBuilding.set(bldNo, buildingRooms);
   }
 
   const resourceGroups: ResourceGroup[] = buildings.map((building) => {
@@ -431,20 +505,6 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
       resources: (roomsByBuilding.get(building.no) ?? []).map(resourceItemFromRoom),
     };
   });
-
-  if (roomsWithoutBuilding.length > 0) {
-    resourceGroups.push({
-      id: 'mdb-rooms-nobld',
-      name: {
-        fr: 'Chambres (sans bâtiment)',
-        en: 'Rooms (no building)',
-        ar: 'الغرف (بدون مبنى)',
-      },
-      sector: 'hotel',
-      icon: 'BedDouble',
-      resources: roomsWithoutBuilding.map(resourceItemFromRoom),
-    });
-  }
 
   // Resolve rooms by a composite key first. Room numbers can repeat between buildings.
   const roomByBuildingAndNo = new Map(
@@ -550,12 +610,23 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 }
 
 function resourceItemFromRoom(r: ImportedRoom): ResourceItem {
+  // Infer floor if missing
+  let floorStr = r.floor > 0 ? String(r.floor) : '';
+  if (!floorStr) {
+    const digits = r.roomNo.replace(/\D/g, '');
+    if (digits.length >= 3) {
+      floorStr = digits[0];
+    } else {
+      floorStr = '1';
+    }
+  }
+
   return {
     id: `mdb-rm-${r.building}-${normalizeRoomNo(r.roomNo)}`,
     name: r.roomNo,
     type: r.type || 'Chambre',
     sector: 'hotel',
-    pricePerDay: parsePrice(r.price),
+    pricePerDay: parsePrice(r.price) || 123,
     housekeepingStatus: (r.status && /clean/i.test(r.status)
       ? 'clean'
       : /dirty/i.test(r.status)
@@ -564,8 +635,8 @@ function resourceItemFromRoom(r: ImportedRoom): ResourceItem {
           ? 'out_of_order'
           : 'clean') as ResourceItem['housekeepingStatus'],
     capacity: 1,
-    building: r.building ? String(r.building) : undefined,
-    floor: r.floor ? String(r.floor) : undefined,
+    building: String(r.building || 1),
+    floor: floorStr,
   };
 }
 

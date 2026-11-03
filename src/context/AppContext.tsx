@@ -15,6 +15,7 @@ import {
   HotelEstablishment,
 } from '../types/booking';
 import {
+  initialResourceGroups,
   initialBookings,
   initialInvoices,
   initialStockItems,
@@ -107,6 +108,8 @@ interface AppContextType {
   setIsOffline: (offline: boolean) => void;
   isSidebarMobileOpen: boolean;
   setIsSidebarMobileOpen: (open: boolean) => void;
+  isAboutModalOpen: boolean;
+  setIsAboutModalOpen: (open: boolean) => void;
   purgeAllUserData: () => Promise<void> | void;
   activeView: ActiveAppView;
   setActiveView: (view: ActiveAppView) => void;
@@ -325,13 +328,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('omnibook_resource_groups');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       } catch (e) {
         console.error(e);
       }
     }
-    // No fabricated rooms: use the locally persisted inventory until CardLock.mdb is imported.
-    return [];
+    return initialResourceGroups;
   });
 
   const [bookings, setBookings] = useState<TimelineBooking[]>(() => {
@@ -380,6 +383,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeQrPassBooking, setActiveQrPassBooking] = useState<TimelineBooking | null>(null);
   const [isOffline, setIsOffline] = useState(false);
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
 
   // Sync language with HTML dir and lang
   const setLanguage = (lang: Language) => {
@@ -1037,6 +1041,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsOffline,
         isSidebarMobileOpen,
         setIsSidebarMobileOpen,
+        isAboutModalOpen,
+        setIsAboutModalOpen,
         purgeAllUserData,
         activeView,
         setActiveView,

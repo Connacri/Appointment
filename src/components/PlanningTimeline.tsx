@@ -349,7 +349,17 @@ export const PlanningTimeline: React.FC = () => {
       }
       const floors = new Map<string, ResourceItem[]>();
       for (const resource of group.resources) {
-        const floor = resource.floor?.trim() || '';
+        let floor = resource.floor?.trim() || '';
+        if (!floor) {
+          const pureDigits = resource.name.replace(/\D/g, '');
+          if (pureDigits.length >= 3) {
+            floor = pureDigits[0];
+          } else if (pureDigits.length > 0) {
+            floor = '1';
+          } else {
+            floor = '1';
+          }
+        }
         const items = floors.get(floor) ?? [];
         items.push(resource);
         floors.set(floor, items);
@@ -357,15 +367,44 @@ export const PlanningTimeline: React.FC = () => {
       result.set(group.id, [...floors.entries()]
         .sort(([a], [b]) => a.localeCompare(b, language, { numeric: true, sensitivity: 'base' }))
         .map(([floor, resources]) => ({
-          key: floor || 'unassigned',
-          label: floor
-            ? (language === 'fr' ? `Étage ${floor}` : language === 'ar' ? `الطابق ${floor}` : `Floor ${floor}`)
-            : (language === 'fr' ? 'Étage non renseigné' : language === 'ar' ? 'طابق غير محدد' : 'Floor not specified'),
+          key: floor,
+          floorNumber: floor,
+          label: language === 'fr' ? `Étage ${floor}` : language === 'ar' ? `الطابق ${floor}` : `Floor ${floor}`,
+          shortLabel: language === 'ar' ? `ط${floor}` : `É${floor}`,
           resources,
         })));
     }
     return result;
   }, [filteredGroups, language]);
+
+  const allFloorsCollapsed = useMemo(() => {
+    let totalFloors = 0;
+    let collapsedCount = 0;
+    for (const [grpId, floors] of floorGroupsByGroup.entries()) {
+      for (const flr of floors) {
+        if (flr.label) {
+          totalFloors++;
+          if (collapsedFloors[`${grpId}:${flr.key}`]) {
+            collapsedCount++;
+          }
+        }
+      }
+    }
+    return totalFloors > 0 && collapsedCount === totalFloors;
+  }, [floorGroupsByGroup, collapsedFloors]);
+
+  const toggleAllFloors = () => {
+    const next: Record<string, boolean> = {};
+    const shouldCollapse = !allFloorsCollapsed;
+    for (const [grpId, floors] of floorGroupsByGroup.entries()) {
+      for (const flr of floors) {
+        if (flr.label) {
+          next[`${grpId}:${flr.key}`] = shouldCollapse;
+        }
+      }
+    }
+    setCollapsedFloors(next);
+  };
 
   // Calculate day-by-day availability per group
   const groupAvailability = useMemo(() => {
@@ -543,6 +582,23 @@ export const PlanningTimeline: React.FC = () => {
             <Info size={13} />
             <span className="hidden text-[10px] font-semibold sm:inline">{language === 'fr' ? 'Dispo' : 'Help'}</span>
           </button>
+
+          {/* Toggle all floors button (Hotel sector) */}
+          {currentDomain === 'hotel' && (
+            <button
+              type="button"
+              onClick={toggleAllFloors}
+              className="flex h-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-semibold text-slate-700 shadow-2xs hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-850 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer gap-1"
+              title={allFloorsCollapsed ? "Déplier tous les étages" : "Replier tous les étages"}
+            >
+              <SlidersHorizontal size={12} className="text-blue-500 shrink-0" />
+              <span className="hidden sm:inline">
+                {allFloorsCollapsed
+                  ? (language === 'fr' ? 'Déplier étages' : language === 'ar' ? 'توسيع الطوابق' : 'Expand floors')
+                  : (language === 'fr' ? 'Replier étages' : language === 'ar' ? 'طي الطوابق' : 'Collapse floors')}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 

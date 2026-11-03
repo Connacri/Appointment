@@ -1,48 +1,44 @@
 import { ResourceGroup, TimelineBooking, InvoiceRecord, PromoOffer } from '../types/booking';
 
 export const initialResourceGroups: ResourceGroup[] = [
-  // 1. HÔTELLERIE
+  // 1. HÔTELLERIE — Bâtiment 1 : Holiday Inn & Bâtiment 2 : Annexe & Suites
   {
-    id: 'grp_single',
+    id: 'bld_1_holiday_inn',
     name: {
-      fr: 'Chambres Simples (Single Room)',
-      en: 'Single Rooms',
-      ar: 'غرف مفردة',
+      fr: 'Holiday Inn',
+      en: 'Holiday Inn',
+      ar: 'هوليداي إن (المبنى 1)',
     },
     sector: 'hotel',
+    icon: 'Building',
     resources: [
-      { id: 'rm_101', name: '101 - Purple Room', type: 'Single Room', sector: 'hotel', pricePerDay: 85, housekeepingStatus: 'clean', capacity: 1, establishmentId: 'adef_cv' },
-      { id: 'rm_102', name: '102 - Yellow Room', type: 'Single Room', sector: 'hotel', pricePerDay: 85, housekeepingStatus: 'clean', capacity: 1, establishmentId: 'adef_cv' },
-      { id: 'rm_103', name: '103 - Green Room', type: 'Single Room', sector: 'hotel', pricePerDay: 90, housekeepingStatus: 'cleaning', capacity: 1, establishmentId: 'adef_cv' },
-      { id: 'rm_104', name: '104 - Orange Room', type: 'Single Room', sector: 'hotel', pricePerDay: 90, housekeepingStatus: 'dirty', capacity: 1, establishmentId: 'adef_cv' },
+      { id: 'rm_101', name: '101', type: 'Chambre Single Standard', sector: 'hotel', pricePerDay: 123, housekeepingStatus: 'clean', capacity: 1, building: '1', floor: '1', establishmentId: 'adef_cv' },
+      { id: 'rm_102', name: '102', type: 'Chambre Single Confort', sector: 'hotel', pricePerDay: 123, housekeepingStatus: 'clean', capacity: 1, building: '1', floor: '1', establishmentId: 'adef_cv' },
+      { id: 'rm_103', name: '103', type: 'Chambre Double Supérieure', sector: 'hotel', pricePerDay: 123, housekeepingStatus: 'cleaning', capacity: 2, building: '1', floor: '1', establishmentId: 'adef_cv' },
+      { id: 'rm_104', name: '104', type: 'Chambre Double Standard', sector: 'hotel', pricePerDay: 123, housekeepingStatus: 'dirty', capacity: 2, building: '1', floor: '1', establishmentId: 'adef_cv' },
+      { id: 'rm_105', name: '105', type: 'Chambre Single Vue Jardin', sector: 'hotel', pricePerDay: 123, housekeepingStatus: 'clean', capacity: 1, building: '1', floor: '1', establishmentId: 'adef_cv' },
+      { id: 'rm_201', name: '201', type: 'Suite Junior Panorama', sector: 'hotel', pricePerDay: 123, housekeepingStatus: 'clean', capacity: 2, building: '1', floor: '2', establishmentId: 'adef_cv' },
+      { id: 'rm_202', name: '202', type: 'Chambre Double Deluxe', sector: 'hotel', pricePerDay: 135, housekeepingStatus: 'clean', capacity: 2, building: '1', floor: '2', establishmentId: 'adef_cv' },
+      { id: 'rm_203', name: '203', type: 'Chambre Double Balcon', sector: 'hotel', pricePerDay: 140, housekeepingStatus: 'clean', capacity: 2, building: '1', floor: '2', establishmentId: 'adef_cv' },
+      { id: 'rm_301', name: '301', type: 'Suite Prestige Exécutive', sector: 'hotel', pricePerDay: 190, housekeepingStatus: 'clean', capacity: 3, building: '1', floor: '3', establishmentId: 'adef_cv' },
+      { id: 'rm_302', name: '302', type: 'Suite Présidentielle', sector: 'hotel', pricePerDay: 260, housekeepingStatus: 'clean', capacity: 4, building: '1', floor: '3', establishmentId: 'adef_cv' },
     ],
   },
   {
-    id: 'grp_double',
+    id: 'bld_2_annexe',
     name: {
-      fr: 'Chambres Doubles Standard Panorama',
-      en: 'Double Standard Rooms',
-      ar: 'غرف مزدوجة بانورامية',
+      fr: 'Holiday Inn — Bâtiment 2 (Annexe & Suites)',
+      en: 'Holiday Inn — Building 2 (Annex & Suites)',
+      ar: 'هوليداي إن — المبنى 2 (الملحق والأجنحة)',
     },
     sector: 'hotel',
+    icon: 'Building',
     resources: [
-      { id: 'rm_201', name: '201 - Blue Room', type: 'Double Room', sector: 'hotel', pricePerDay: 110, housekeepingStatus: 'clean', capacity: 2, establishmentId: 'adef_cv' },
-      { id: 'rm_202', name: '202 - Violet Room', type: 'Double Room', sector: 'hotel', pricePerDay: 115, housekeepingStatus: 'clean', capacity: 2, establishmentId: 'adef_cv' },
-      { id: 'rm_203', name: '203 - Red Room', type: 'Double Room', sector: 'hotel', pricePerDay: 120, housekeepingStatus: 'clean', capacity: 2, establishmentId: 'adef_cv' },
-    ],
-  },
-  {
-    id: 'grp_suite',
-    name: {
-      fr: 'Suites de Prestige',
-      en: 'Prestige Suites',
-      ar: 'أجنحة فاخرة',
-    },
-    sector: 'hotel',
-    resources: [
-      { id: 'rm_301', name: '301 - Cozy Suite', type: 'Suite', sector: 'hotel', pricePerDay: 190, housekeepingStatus: 'clean', capacity: 3, establishmentId: 'adef_cv' },
-      { id: 'rm_302', name: '302 - Wonderful Suite', type: 'Suite', sector: 'hotel', pricePerDay: 230, housekeepingStatus: 'clean', capacity: 4, establishmentId: 'adef_cv' },
-      { id: 'rm_303', name: '303 - Presidential Suite', type: 'Suite', sector: 'hotel', pricePerDay: 350, housekeepingStatus: 'clean', capacity: 4, establishmentId: 'adef_cv' },
+      { id: 'rm_401', name: '401', type: 'Chambre Deluxe Annexe', sector: 'hotel', pricePerDay: 130, housekeepingStatus: 'clean', capacity: 2, building: '2', floor: '1', establishmentId: 'adef_cv' },
+      { id: 'rm_402', name: '402', type: 'Chambre Supérieure Annexe', sector: 'hotel', pricePerDay: 130, housekeepingStatus: 'clean', capacity: 2, building: '2', floor: '1', establishmentId: 'adef_cv' },
+      { id: 'rm_403', name: '403', type: 'Studio Familial', sector: 'hotel', pricePerDay: 160, housekeepingStatus: 'cleaning', capacity: 4, building: '2', floor: '1', establishmentId: 'adef_cv' },
+      { id: 'rm_501', name: '501', type: 'Suite Balcon Privatif', sector: 'hotel', pricePerDay: 210, housekeepingStatus: 'clean', capacity: 3, building: '2', floor: '2', establishmentId: 'adef_cv' },
+      { id: 'rm_502', name: '502', type: 'Suite Royale Annexe', sector: 'hotel', pricePerDay: 280, housekeepingStatus: 'clean', capacity: 4, building: '2', floor: '2', establishmentId: 'adef_cv' },
     ],
   },
 

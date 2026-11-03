@@ -19,6 +19,7 @@ import {
   Coins,
   Globe,
   Flower2,
+  Info,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -39,6 +40,7 @@ export const Sidebar: React.FC = () => {
     setIsCockpitOpen,
     setIsLegalModalOpen,
     setIsObjectBoxOpen,
+    setIsAboutModalOpen,
     isSidebarMobileOpen,
     setIsSidebarMobileOpen,
   } = useApp();
@@ -362,6 +364,24 @@ export const Sidebar: React.FC = () => {
             <span className="truncate">
               {language === 'fr' ? 'Légal & Confidentialité' : language === 'ar' ? 'الخصوصية والحساب' : 'Legal & Privacy'}
             </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setIsAboutModalOpen(true);
+            setIsSidebarMobileOpen(false);
+          }}
+          className="w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold text-cyan-400 hover:text-cyan-200 bg-cyan-950/40 border border-cyan-800/40 hover:bg-cyan-900/40 transition-colors cursor-pointer"
+          title="À Propos de FORSLOG LTD et du Développeur S.M. Ramzi Guedouar"
+        >
+          <Info size={16} className="shrink-0 text-cyan-400" />
+          {(!isCollapsed || isMobileView) && (
+            <div className="flex items-center justify-between w-full">
+              <span className="truncate">{language === 'fr' ? 'À Propos' : language === 'ar' ? 'حول النظام' : 'About'}</span>
+              <span className="text-[10px] text-cyan-300 font-mono bg-cyan-900/60 px-1.5 py-0.5 rounded">FORSLOG</span>
+            </div>
           )}
         </button>
       </div>

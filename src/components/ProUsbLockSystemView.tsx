@@ -70,6 +70,8 @@ import {
 } from '../locks/database/cardInfoSync';
 import { CardResultDialog, CardResult } from './CardResultDialog';
 import { CardCreationProgressModal } from './CardCreationProgressModal';
+import { isSupabaseConfigured } from '../services/supabase/supabaseClient';
+import { syncCardLockMdbToSupabase } from '../services/supabase/pmsRepository';
 
 export const ProUsbLockSystemView: React.FC = () => {
   const { language, bookings, resourceGroups, setBookings, setResourceGroups } = useApp();
@@ -653,6 +655,20 @@ export const ProUsbLockSystemView: React.FC = () => {
             'success',
             `Planning mis à jour : ${mdbGroups.length} groupe(s) de ressources, ${mdbBookings.length} réservation(s).`,
           );
+
+          // Align with Supabase if configured
+          if (isSupabaseConfigured) {
+            syncCardLockMdbToSupabase(mdbGroups, mdbBookings)
+              .then((res) => {
+                showToast(
+                  'success',
+                  `Supabase synchronisé : ${res.groupsCount} bâtiment(s), ${res.resourcesCount} chambre(s), ${res.bookingsCount} séjour(s).`
+                );
+              })
+              .catch((syncErr) => {
+                console.warn('[ProUsb] Supabase sync notice:', syncErr);
+              });
+          }
         }
       }
     } catch (err: any) {

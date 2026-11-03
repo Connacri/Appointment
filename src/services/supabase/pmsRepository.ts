@@ -106,3 +106,55 @@ export async function addStockMovement(workspaceId: WorkspaceId, establishmentId
   const {data:auth} = await db.auth.getUser();
   return unwrap(await db.from('stock_movements').insert({id:m.id,workspace_id:workspaceId,establishment_id:establishmentId,item_id:m.itemId,timestamp:m.timestamp,delta:m.delta,reason:m.reason,room:m.room ?? null,actor_name:m.user,created_by:auth.user?.id ?? null}).select().single());
 }
+
+export async function syncCardLockMdbToSupabase(
+  groups: ResourceGroup[],
+  bookingsList: TimelineBooking[]
+): Promise<{ groupsCount: number; resourcesCount: number; bookingsCount: number }> {
+  const db = requireSupabase();
+  const { data: auth } = await db.auth.getUser();
+  if (!auth.user) throw new Error('Authentification Supabase requise pour la synchronisation cloud.');
+
+  const workspaces = await listWorkspaces();
+  let wsId = workspaces[0]?.id;
+  if (!wsId) {
+    const ws = await createWorkspace('Appointment Hotel & Resort');
+    wsId = ws.id;
+  }
+
+  // Ensure default establishment exists
+  const establishments = await listEstablishments(wsId);
+  let estId = establishments[0]?.id;
+  if (!estId) {
+    estId = 'adef_cv';
+    await saveEstablishment(wsId, {
+      id: estId,
+      code: 'HTL-ORAN',
+      name: 'Appointment Hotel & Resort',
+      city: 'Oran',
+      stars: 4,
+      taxRate: 19,
+      checkInTime: '14:00',
+      checkOutTime: '12:00',
+      facilities: ['WiFi', 'Parking', 'Climatisation', 'proUSB'],
+      domain: 'hotel',
+      currency: 'DZD',
+    });
+  }
+
+  let totalResources = 0;
+  for (const group of groups) {
+    await saveResourceGroup(wsId, estId, group);
+    totalResources += group.resources.length;
+  }
+
+  for (const booking of bookingsList) {
+    await saveBooking(wsId, estId, booking);
+  }
+
+  return {
+    groupsCount: groups.length,
+    resourcesCount: totalResources,
+    bookingsCount: bookingsList.length,
+  };
+}

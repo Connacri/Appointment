@@ -31,11 +31,15 @@ import { SpaManagementView } from './components/SpaManagementView';
 import { EstablishmentSetupModal } from './components/EstablishmentSetupModal';
 import { SupabaseAuthGate } from './services/supabase/SupabaseAuthGate';
 
+import { AboutModal } from './components/AboutModal';
+
 const MainLayout: React.FC = () => {
   const {
     activeView,
     isObjectBoxOpen,
     setIsObjectBoxOpen,
+    isAboutModalOpen,
+    setIsAboutModalOpen,
     activeQrPassBooking,
     setActiveQrPassBooking,
     isQrScannerOpen,
@@ -49,16 +53,15 @@ const MainLayout: React.FC = () => {
     <div className="flex flex-col h-[100dvh] min-h-0 w-full max-w-full overflow-hidden bg-slate-50 dark:bg-slate-950 font-sans">
       <OfflineBanner />
 
-      {/* Top Domain & Role Switcher Bar */}
-      <DomainRoleSelector />
+      {/* Top Full-Width Unified Header matching szsz.png */}
+      <TopBar />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Left Navigation Sidebar */}
         <Sidebar />
 
         {/* Right Main Working View */}
         <div className="relative z-0 flex-1 flex flex-col h-full overflow-hidden min-w-0">
-          <TopBar />
 
           <main className="flex-1 flex flex-col overflow-hidden relative">
             {activeView === 'planning' && (
@@ -112,6 +115,10 @@ const MainLayout: React.FC = () => {
         isOpen={isEstablishmentModalOpen}
         onClose={() => setIsEstablishmentModalOpen(false)}
         isFirstLaunch={!hasOnboarded}
+      />
+      <AboutModal
+        isOpen={isAboutModalOpen}
+        onClose={() => setIsAboutModalOpen(false)}
       />
     </div>
   );
