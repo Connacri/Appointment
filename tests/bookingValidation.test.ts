@@ -160,3 +160,26 @@ test('CardLock import preserves building, floor and room type as separate Gantt 
   );
 });
 
+test('CardLock import does not fabricate building or floor 1 when source fields are missing', () => {
+  const snapshot: MdbSnapshot = {
+    fileName: 'CardLock.mdb',
+    fileLastModified: null,
+    importedAt: '2026-11-03T00:00:00.000Z',
+    buildings: [],
+    rooms: [
+      { building: 0, floor: 0, roomNo: 'X01', type: 'Chambre spéciale', status: '', price: '', cardCount: 0, maxCards: 1 },
+    ],
+    guests: [],
+    cards: [],
+    systemProfile: null,
+    counts: { cards: 0, guests: 0, rooms: 1, openings: 0 },
+    warnings: [],
+  };
+
+  const planning = mdbSnapshotToPlanning(snapshot);
+  assert.equal(planning.resourceGroups[0].id, 'mdb-rooms-nobld');
+  assert.equal(planning.resourceGroups[0].resources[0].building, undefined);
+  assert.equal(planning.resourceGroups[0].resources[0].floor, undefined);
+  assert.equal(planning.resourceGroups[0].resources[0].type, 'Chambre spéciale');
+});
+
