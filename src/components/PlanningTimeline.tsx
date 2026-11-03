@@ -46,12 +46,27 @@ export const PlanningTimeline: React.FC = () => {
     updateBookingStatus,
     selectedEstablishmentId,
     setSelectedEstablishmentId,
-    establishments,
     currency,
   } = useApp();
 
   const isRTL = language === 'ar';
   const [showAvailabilityHelp, setShowAvailabilityHelp] = useState(false);
+
+  // The Gantt filter must reflect actual inventory: imported CardLock buildings
+  // and buildings created locally in the establishment setup screen.
+  const hotelBuildingOptions = useMemo(
+    () => resourceGroups.filter((group) => group.sector === 'hotel' && group.resources.length > 0),
+    [resourceGroups]
+  );
+
+  useEffect(() => {
+    if (
+      selectedEstablishmentId !== 'all' &&
+      !hotelBuildingOptions.some((group) => group.id === selectedEstablishmentId)
+    ) {
+      setSelectedEstablishmentId('all');
+    }
+  }, [hotelBuildingOptions, selectedEstablishmentId, setSelectedEstablishmentId]);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const dragPanRef = useRef<{ pointerId: number; x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
@@ -292,16 +307,13 @@ export const PlanningTimeline: React.FC = () => {
 
   // Filter resource groups strictly by currentDomain (NEVER MIX) & searchQuery & establishment
   const filteredGroups = useMemo(() => {
-    const groups = resourceGroups;
-    return groups
-      .filter((grp) => grp.sector === currentDomain)
+    return resourceGroups
+      .filter((grp) =>
+        grp.sector === currentDomain &&
+        (currentDomain !== 'hotel' || selectedEstablishmentId === 'all' || grp.id === selectedEstablishmentId)
+      )
       .map((grp) => {
         let matchingResources = grp.resources;
-        if (currentDomain === 'hotel' && selectedEstablishmentId !== 'all') {
-          matchingResources = matchingResources.filter(
-            (r) => !r.establishmentId || r.establishmentId === selectedEstablishmentId
-          );
-        }
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
           matchingResources = matchingResources.filter(
@@ -439,9 +451,11 @@ export const PlanningTimeline: React.FC = () => {
               className="h-7 w-[124px] sm:w-[170px] max-w-[38vw] shrink-0 rounded-md border border-slate-200 bg-white px-1 text-[10px] font-semibold text-slate-800 shadow-2xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
               aria-label={language === 'fr' ? 'Établissement' : 'Establishment'}
             >
-              <option value="all">🏨 {language === 'fr' ? 'Tous complexes' : 'All hotels'}</option>
-              {establishments.map((h) => (
-                <option key={h.id} value={h.id}>{h.code} – {h.name}</option>
+              <option value="all">🏢 {language === 'fr' ? 'Tous les bâtiments' : language === 'ar' ? 'كل المباني' : 'All buildings'}</option>
+              {hotelBuildingOptions.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name[language] || group.name.fr}
+                </option>
               ))}
             </select>
           )}
