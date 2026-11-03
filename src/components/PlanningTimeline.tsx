@@ -392,151 +392,114 @@ export const PlanningTimeline: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-950 relative select-none">
-      {/* Responsive Toolbar */}
-      <div className="w-full min-w-0 min-h-10 py-2 px-2 md:py-1.5 md:px-3 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-1.5 bg-slate-50 dark:bg-slate-900 select-none text-xs shrink-0">
-        {/* Left Column Mode Toggle: Normal / Compact / Mini */}
-        <div className="w-full sm:w-auto grid grid-cols-[auto_minmax(0,1fr)] sm:flex sm:flex-row sm:items-center gap-2 sm:gap-1 min-w-0">
-          <div className="w-fit max-w-full flex items-center justify-start bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 shadow-2xs">
-            <button
-              onClick={() => setLeftBarMode('mini')}
-              className={`min-h-9 px-2.5 py-1.5 rounded text-[11px] font-semibold transition-colors ${
-                leftBarMode === 'mini'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-              title="Mini (Icônes seules, gain max timeline)"
-            >
-              Mini
-            </button>
-            <button
-              onClick={() => setLeftBarMode('compact')}
-              className={`min-h-9 px-2.5 py-1.5 rounded text-[11px] font-semibold transition-colors ${
-                leftBarMode === 'compact'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-              title="Compact"
-            >
-              Compact
-            </button>
-            <button
-              onClick={() => setLeftBarMode('normal')}
-              className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors hidden sm:block ${
-                leftBarMode === 'normal'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-              title="Complet (Largeur max)"
-            >
-              Complet
-            </button>
+      {/* Responsive Toolbar: one compact, horizontally scrollable row on phones */}
+      <div className="w-full min-w-0 shrink-0 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 select-none">
+        <div className="flex min-w-0 flex-row items-center gap-1.5 overflow-x-auto overflow-y-hidden whitespace-nowrap px-2 py-1.5 sm:overflow-visible md:px-3 md:py-1 scrollbar-thin">
+          {/* Resource label density */}
+          <div className="flex shrink-0 items-center gap-1">
+            <div className="flex items-center rounded-md border border-slate-200 bg-white p-0.5 shadow-2xs dark:border-slate-700 dark:bg-slate-850">
+              <button
+                onClick={() => setLeftBarMode('mini')}
+                className={`min-h-7 rounded px-2 py-1 text-[10px] font-semibold transition-colors ${leftBarMode === 'mini' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
+                title="Mini — largeur minimale"
+                aria-pressed={leftBarMode === 'mini'}
+              >Mini</button>
+              <button
+                onClick={() => setLeftBarMode('compact')}
+                className={`min-h-7 rounded px-2 py-1 text-[10px] font-semibold transition-colors ${leftBarMode === 'compact' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
+                title="Compact"
+                aria-pressed={leftBarMode === 'compact'}
+              >Compact</button>
+              <button
+                onClick={() => setLeftBarMode('normal')}
+                className={`hidden min-h-7 rounded px-2 py-1 text-[10px] font-semibold transition-colors sm:block ${leftBarMode === 'normal' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
+                title="Complet — largeur maximale"
+                aria-pressed={leftBarMode === 'normal'}
+              >Complet</button>
+            </div>
           </div>
 
-          {/* Hotel Establishment Switcher (ADEF Centre-ville / ADEF Plage) */}
+          {/* Establishment selector */}
           {currentDomain === 'hotel' && (
-            <div className="w-full sm:w-auto flex items-center gap-1.5 sm:ml-1 min-w-0">
-              <select
-                value={selectedEstablishmentId}
-                onChange={(e) => setSelectedEstablishmentId(e.target.value)}
-                className="w-full min-w-0 h-9 px-2 py-1 text-[10px] sm:text-[11px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 shadow-2xs cursor-pointer"
-              >
-                <option value="all">🏨 {language === 'fr' ? 'Tous les complexes ADEF' : 'All ADEF Hotels'}</option>
-                {establishments.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.code} – {h.name} ({'★'.repeat(h.stars)})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={selectedEstablishmentId}
+              onChange={(e) => setSelectedEstablishmentId(e.target.value)}
+              className="h-8 w-[138px] max-w-[42vw] shrink-0 rounded-md border border-slate-200 bg-white px-1.5 text-[10px] font-semibold text-slate-800 shadow-2xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 sm:w-[190px] sm:max-w-none sm:text-[11px]"
+              aria-label={language === 'fr' ? 'Établissement' : 'Establishment'}
+            >
+              <option value="all">🏨 {language === 'fr' ? 'Tous les complexes' : 'All hotels'}</option>
+              {establishments.map((h) => (
+                <option key={h.id} value={h.id}>{h.code} – {h.name} ({'★'.repeat(h.stars)})</option>
+              ))}
+            </select>
           )}
-        </div>
 
-        {/* Center / Right controls: Zoom & Fast Date Navigation */}
-        <div className="w-full sm:w-auto grid grid-cols-2 sm:flex sm:items-center sm:justify-end gap-1.5 sm:gap-1.5 sm:ml-auto min-w-0">
-          {/* Quick Date Jump Input */}
-          <div className="col-span-2 sm:col-span-1 min-w-0 w-full sm:w-auto flex items-center justify-center sm:justify-start gap-1 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-lg px-1.5 sm:px-2 h-9 sm:h-auto py-1 sm:py-0.5">
-            <CalendarDays size={13} className="text-slate-400 shrink-0" />
+          {/* Date */}
+          <div className="flex h-8 w-[132px] shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 dark:border-slate-700 dark:bg-slate-850 sm:w-[148px]">
+            <CalendarDays size={13} className="shrink-0 text-slate-400" />
             <input
               type="date"
               value={currentBaseDate}
-              onChange={(e) => {
-                if (e.target.value) setCurrentBaseDate(e.target.value);
-              }}
-              className="w-full min-w-0 text-[10px] sm:text-[11px] font-mono bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+              onChange={(e) => { if (e.target.value) setCurrentBaseDate(e.target.value); }}
+              className="w-full min-w-0 bg-transparent text-[10px] font-mono text-slate-800 focus:outline-none dark:text-slate-200 sm:text-[11px]"
               title="Aller directement à une date"
+              aria-label="Date du planning"
             />
           </div>
 
-          {/* Day Column Zoom Selector */}
-          <div className="w-full sm:w-auto flex items-center justify-center bg-slate-200 dark:bg-slate-800 p-0.5 rounded-lg text-[10px] sm:text-[11px] font-semibold h-9 sm:h-auto">
+          {/* Day column zoom */}
+          <div className="flex h-8 shrink-0 items-center rounded-md bg-slate-200 p-0.5 text-[10px] font-semibold dark:bg-slate-800 sm:text-[11px]">
             <button
               onClick={() => setColumnZoomMode('compact')}
-              className={`flex-1 min-h-6 md:min-h-8 px-1.5 md:px-2 py-0.5 md:py-1 rounded transition-colors ${
-                columnZoomMode === 'compact'
-                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400'
-              }`}
-              title="Zoom Étroit (Voir plus de jours)"
-            >
-              Étroit
-            </button>
+              className={`min-h-7 rounded px-2 transition-colors ${columnZoomMode === 'compact' ? 'bg-white text-blue-600 shadow-xs dark:bg-slate-700 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}
+              title="Zoom étroit — voir plus de jours"
+              aria-pressed={columnZoomMode === 'compact'}
+            >Étroit</button>
             <button
               onClick={() => setColumnZoomMode('standard')}
-              className={`flex-1 min-h-8 px-2 py-1 rounded transition-colors ${
-                columnZoomMode === 'standard'
-                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400'
-              }`}
-              title="Zoom Normal"
-            >
-              Normal
-            </button>
+              className={`min-h-7 rounded px-2 transition-colors ${columnZoomMode === 'standard' ? 'bg-white text-blue-600 shadow-xs dark:bg-slate-700 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}
+              title="Zoom normal"
+              aria-pressed={columnZoomMode === 'standard'}
+            >Normal</button>
             <button
               onClick={() => setColumnZoomMode('wide')}
-              className={`px-2 py-0.5 rounded transition-colors hidden md:block ${
-                columnZoomMode === 'wide'
-                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400'
-              }`}
-              title="Zoom Large"
-            >
-              Large
-            </button>
+              className={`hidden min-h-7 rounded px-2 transition-colors md:block ${columnZoomMode === 'wide' ? 'bg-white text-blue-600 shadow-xs dark:bg-slate-700 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}
+              title="Zoom large"
+              aria-pressed={columnZoomMode === 'wide'}
+            >Large</button>
           </div>
 
+          {/* Availability help: icon-only on phones */}
           <button
             type="button"
             onClick={() => setShowAvailabilityHelp(true)}
-            className="min-h-9 px-2.5 flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors text-[10px] sm:text-[11px] font-semibold whitespace-nowrap"
-            title={language === 'fr' ? 'Comprendre les chiffres de disponibilité' : language === 'ar' ? 'فهم أرقام التوفر' : 'Understand availability numbers'}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 sm:w-auto sm:gap-1.5 sm:px-2.5"
+            title={language === 'fr' ? 'Comprendre les disponibilités' : language === 'ar' ? 'فهم أرقام التوفر' : 'Understand availability'}
+            aria-label={language === 'fr' ? 'Comprendre les disponibilités' : 'Availability help'}
           >
             <Info size={14} />
-            {language === 'fr' ? 'Disponibilités ?' : language === 'ar' ? 'التوفر ؟' : 'Availability?'}
+            <span className="hidden text-[10px] font-semibold sm:inline sm:text-[11px]">{language === 'fr' ? 'Disponibilités' : language === 'ar' ? 'التوفر' : 'Availability'}</span>
           </button>
 
-          {/* Horizontal scroll navigation buttons */}
-          <div className="w-full sm:w-auto flex items-center justify-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 bg-white dark:bg-slate-800 h-9 sm:h-auto">
+          {/* Timeline navigation */}
+          <div className="flex h-8 shrink-0 items-center gap-0.5 rounded-md border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-800">
             <button
               onClick={() => scrollTimeline(-colWidth * 2)}
-              className="min-w-8 min-h-8 p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-600 dark:text-slate-300 active:scale-95 transition-all"
+              className="flex h-7 w-7 items-center justify-center rounded text-slate-600 transition-colors hover:bg-slate-100 active:scale-95 dark:text-slate-300 dark:hover:bg-slate-700"
               title="Reculer de 2 jours"
-            >
-              <MoveLeft size={13} />
-            </button>
+              aria-label="Reculer de deux jours"
+            ><MoveLeft size={13} /></button>
             <button
               onClick={scrollToToday}
-              className="min-h-8 px-2 py-1 text-[10px] sm:text-[11px] font-bold font-mono text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950 rounded transition-colors whitespace-nowrap"
-              title="Aller à Aujourd'hui"
-            >
-              {language === 'fr' ? 'Aujourd\'hui' : language === 'ar' ? 'اليوم' : 'Today'}
-            </button>
+              className="h-7 rounded px-2 text-[10px] font-bold text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950 sm:text-[11px]"
+              title="Aller à aujourd'hui"
+            >{language === 'fr' ? "Aujourd'hui" : language === 'ar' ? 'اليوم' : 'Today'}</button>
             <button
               onClick={() => scrollTimeline(colWidth * 2)}
-              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-600 dark:text-slate-300 active:scale-95 transition-all"
+              className="flex h-7 w-7 items-center justify-center rounded text-slate-600 transition-colors hover:bg-slate-100 active:scale-95 dark:text-slate-300 dark:hover:bg-slate-700"
               title="Avancer de 2 jours"
-            >
-              <MoveRight size={13} />
-            </button>
+              aria-label="Avancer de deux jours"
+            ><MoveRight size={13} /></button>
           </div>
         </div>
       </div>
