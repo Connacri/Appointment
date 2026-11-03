@@ -17,7 +17,6 @@ import {
 import {
   initialBookings,
   initialInvoices,
-  initialEstablishments,
   initialStockItems,
   initialPmsTasks,
 } from '../data/mockData';
@@ -209,7 +208,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeView, setActiveView] = useState<ActiveAppView>('planning');
 
   // PMS Hotel Complex & Multi-Currency (DZD, EUR, USD, RMB, GBP, SAR)
-  const [establishments] = useState<HotelEstablishment[]>(initialEstablishments);
+  // The Gantt selector is populated from real hotel building groups in resourceGroups.
+  // Keep this compatibility field empty: mock establishments must never appear as real inventory.
+  const establishments: HotelEstablishment[] = [];
   const [selectedEstablishmentId, setSelectedEstablishmentId] = useState<string | 'all'>('all');
   const [currency, setCurrencyState] = useState<string>(() => {
     return localStorage.getItem('omnibook_currency') || 'DA';
