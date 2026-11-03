@@ -125,6 +125,39 @@ test('CardLock import uses building-qualified room IDs and links stays to the co
   assert.equal(planning.bookings[1].resourceId, 'mdb-rm-2-101');
 });
 
+test('CardLock import resolves three-part building-floor-room stay references', () => {
+  const snapshot: MdbSnapshot = {
+    fileName: 'CardLock(1).mdb',
+    fileLastModified: null,
+    importedAt: '2026-11-03T00:00:00.000Z',
+    buildings: [{ no: 1, name: 'Bâtiment principal' }, { no: 2, name: 'Annexe' }],
+    rooms: [
+      { building: 1, floor: 1, roomNo: '12064', type: 'Single', status: '', price: '8000', cardCount: 0, maxCards: 2 },
+      { building: 1, floor: 3, roomNo: '3012', type: 'Suite', status: '', price: '20000', cardCount: 0, maxCards: 2 },
+      { building: 2, floor: 1, roomNo: '12074', type: 'Double', status: '', price: '12000', cardCount: 0, maxCards: 2 },
+    ],
+    guests: [
+      { roomNo: '1-1-12064', name: 'Client étage 1', comeTime: '2026-11-04T14:00:00.000Z', goTime: '2026-11-06T11:00:00.000Z', cardId: '1', flag: '' },
+      { roomNo: '1-3-3012', name: 'Client étage 3', comeTime: '2026-11-04T14:00:00.000Z', goTime: '2026-11-06T11:00:00.000Z', cardId: '2', flag: '' },
+      { roomNo: '2-1-12074', name: 'Client annexe', comeTime: '2026-11-04T14:00:00.000Z', goTime: '2026-11-06T11:00:00.000Z', cardId: '3', flag: '' },
+    ],
+    cards: [],
+    systemProfile: null,
+    counts: { cards: 0, guests: 3, rooms: 3, openings: 0 },
+    warnings: [],
+  };
+
+  const planning = mdbSnapshotToPlanning(snapshot);
+  assert.deepEqual(
+    planning.bookings.map((booking) => [booking.resourceId, booking.customMetadata?.floor]),
+    [
+      ['mdb-rm-1-12064', 1],
+      ['mdb-rm-1-3012', 3],
+      ['mdb-rm-2-12074', 1],
+    ]
+  );
+});
+
 test('CardLock import preserves building, floor and room type as separate Gantt dimensions', () => {
   const snapshot: MdbSnapshot = {
     fileName: 'CardLock.mdb',
