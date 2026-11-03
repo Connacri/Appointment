@@ -705,6 +705,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (selectedBooking?.id === bookingId) {
       setSelectedBooking(updatedBooking);
     }
+    if (activeQrPassBooking?.id === bookingId) {
+      setActiveQrPassBooking(updatedBooking);
+    }
 
     const message = paymentSettled
       ? language === 'fr'
