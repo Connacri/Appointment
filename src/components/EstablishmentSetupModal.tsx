@@ -54,7 +54,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   onClose,
   isFirstLaunch = false,
 }) => {
-  const { establishmentProfile, setEstablishmentProfile, language, currency, setCurrency, resourceGroups, setResourceGroups, setBookings } = useApp();
+  const { establishmentProfile, setEstablishmentProfile, language, currency, setCurrency, resourceGroups, setResourceGroups, setBookings, setSelectedEstablishmentId } = useApp();
 
   const [activeTab, setActiveTab] = useState<'identity' | 'logo' | 'contact' | 'fiscal' | 'structure'>('identity');
   const [formData, setFormData] = useState<EstablishmentProfile>(() => {
@@ -158,7 +158,11 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
       const snapshot = await lockManager.importMdb(file);
       const planning = mdbSnapshotToPlanning(snapshot);
       if (planning.resourceGroups.length) {
-        setResourceGroups(planning.resourceGroups);
+        // Replace the previous MDB snapshot but preserve buildings created locally.
+        setResourceGroups((current) => [
+          ...current.filter((group) => !group.id.startsWith('mdb-')),
+          ...planning.resourceGroups,
+        ]);
         setSelectedEstablishmentId('all');
       }
       if (planning.bookings.length) setBookings((prev) => {
