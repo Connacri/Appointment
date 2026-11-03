@@ -157,7 +157,10 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     try {
       const snapshot = await lockManager.importMdb(file);
       const planning = mdbSnapshotToPlanning(snapshot);
-      if (planning.resourceGroups.length) setResourceGroups(planning.resourceGroups);
+      if (planning.resourceGroups.length) {
+        setResourceGroups(planning.resourceGroups);
+        setSelectedEstablishmentId('all');
+      }
       if (planning.bookings.length) setBookings((prev) => {
         const importedIds = new Set(planning.bookings.map((booking) => booking.id));
         return [...prev.filter((booking) => !importedIds.has(booking.id)), ...planning.bookings];
