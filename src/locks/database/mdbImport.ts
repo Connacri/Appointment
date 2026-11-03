@@ -270,8 +270,9 @@ export async function parseCardLockMdb(
   }));
 
   const rooms: ImportedRoom[] = read('RoomInfo').map((r) => ({
-    building: num(r.BldNo, 1),
-    floor: num(r.FlrNo, 1),
+    // Zero means the source row did not provide this dimension; do not invent building/floor 1.
+    building: num(r.BldNo, 0),
+    floor: num(r.FlrNo, 0),
     roomNo: str(r.RoomNo),
     type: str(r.sType),
     status: str(r.Status),
