@@ -49,12 +49,12 @@ export const ReportsView: React.FC = () => {
           </span>
         </div>
 
-        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+        <div className="min-w-0 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-2">
             <span className="text-xs font-semibold uppercase">Réservations Totales</span>
             <CalendarCheck size={18} className="text-emerald-500" />
           </div>
-          <div className="text-2xl font-bold font-mono text-slate-900 dark:text-white">
+          <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">
             {totalBookings} dossiers
           </div>
           <span className="text-[11px] text-slate-400 mt-1 block">
@@ -62,12 +62,12 @@ export const ReportsView: React.FC = () => {
           </span>
         </div>
 
-        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+        <div className="min-w-0 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-2">
             <span className="text-xs font-semibold uppercase">Unités Hôtel</span>
             <Bed size={18} className="text-indigo-500" />
           </div>
-          <div className="text-2xl font-bold font-mono text-slate-900 dark:text-white">
+          <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">
             {hotelUnits}
           </div>
           <span className="text-[11px] text-emerald-600 font-medium mt-1 block">
@@ -75,12 +75,12 @@ export const ReportsView: React.FC = () => {
           </span>
         </div>
 
-        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+        <div className="min-w-0 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-2">
             <span className="text-xs font-semibold uppercase">Unités Resort</span>
             <Palmtree size={18} className="text-amber-500" />
           </div>
-          <div className="text-2xl font-bold font-mono text-slate-900 dark:text-white">
+          <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">
             {resortUnits}
           </div>
           <span className="text-[11px] text-emerald-600 font-medium mt-1 block">
