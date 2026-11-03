@@ -107,3 +107,21 @@
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* Appointment workspace navigation and action hierarchy. */
+@layer components {
+  .workspace-sidebar { box-shadow: 8px 0 28px rgb(15 23 42 / 0.06); }
+  .workspace-nav-item { position: relative; min-height: 44px; letter-spacing: -0.01em; }
+  .workspace-nav-item[aria-current="page"] { background: linear-gradient(105deg, rgb(37 99 235), rgb(79 70 229)); box-shadow: 0 7px 18px rgb(37 99 235 / 0.2); }
+  .workspace-topbar { isolation: isolate; }
+  .workspace-toolbar-secondary { align-items: center; }
+  .workspace-menu-section { display: grid; gap: 0.5rem; }
+  .workspace-menu-label { color: rgb(100 116 139); font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+  .workspace-topbar button, .workspace-sidebar button { -webkit-tap-highlight-color: transparent; }
+  .workspace-topbar button:focus-visible, .workspace-sidebar button:focus-visible { outline: 2px solid rgb(59 130 246); outline-offset: 2px; }
+}
+@media (max-width: 767px) {
+  .workspace-topbar { padding-inline: max(0.75rem, env(safe-area-inset-left)); }
+  .workspace-toolbar-secondary { gap: 0.5rem; }
+}
+[dir="rtl"] .workspace-sidebar { box-shadow: -8px 0 28px rgb(15 23 42 / 0.06); }
