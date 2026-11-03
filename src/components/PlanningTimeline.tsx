@@ -471,7 +471,7 @@ export const PlanningTimeline: React.FC = () => {
           <div className="w-full sm:w-auto flex items-center justify-center bg-slate-200 dark:bg-slate-800 p-0.5 rounded-lg text-[10px] sm:text-[11px] font-semibold h-9 sm:h-auto">
             <button
               onClick={() => setColumnZoomMode('compact')}
-              className={`flex-1 min-h-8 px-2 py-1 rounded transition-colors ${
+              className={`flex-1 min-h-6 md:min-h-8 px-1.5 md:px-2 py-0.5 md:py-1 rounded transition-colors ${
                 columnZoomMode === 'compact'
                   ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400'
