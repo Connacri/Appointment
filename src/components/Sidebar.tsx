@@ -172,7 +172,7 @@ export const Sidebar: React.FC = () => {
   const renderContent = (isMobileView: boolean) => (
     <div className="flex flex-col h-full overflow-hidden select-none">
       {/* Brand Header */}
-      <div className="min-h-14 border-b border-slate-800 px-3.5 flex items-center justify-between shrink-0 bg-slate-950/60">
+      <div className="min-h-[68px] border-b border-slate-800/80 px-4 flex items-center justify-between shrink-0 bg-slate-950">
         {(!isCollapsed || isMobileView) && (
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-bold text-sm shadow-xs">
@@ -210,52 +210,8 @@ export const Sidebar: React.FC = () => {
         )}
       </div>
 
-      {/* Sector Quick Switcher inside Sidebar */}
-      {(!isCollapsed || isMobileView) && (
-        <div className="p-3 border-b border-slate-800/80 bg-slate-950/40 shrink-0">
-          <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 block mb-2 px-1">
-            {language === 'fr' ? 'Département Actif' : language === 'ar' ? 'القطاع النشط' : 'Department'}
-          </span>
-          <div className="grid grid-cols-2 gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveSector('hotel');
-                setCurrentDomain('hotel');
-              }}
-              className={`min-h-[38px] p-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer font-bold ${
-                currentDomain === 'hotel'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-slate-800/70 text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-              title="Hôtellerie & Séjours"
-            >
-              <Hotel size={15} />
-              <span className="text-xs truncate">Hôtel</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveSector('resort');
-                setCurrentDomain('resort');
-              }}
-              className={`min-h-[38px] p-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer font-bold ${
-                currentDomain === 'resort'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'bg-slate-800/70 text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-              title="Resort, Complexe & Villas"
-            >
-              <Palmtree size={15} />
-              <span className="text-xs truncate">Resort</span>
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Navigation List */}
-      <nav className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
+      <nav aria-label={language === "fr" ? "Navigation principale" : language === "ar" ? "التنقل الرئيسي" : "Main navigation"} className="flex-1 py-4 px-2.5 space-y-1.5 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeView === item.view;
@@ -264,7 +220,8 @@ export const Sidebar: React.FC = () => {
               key={item.id}
               type="button"
               onClick={() => handleNavClick(item.view)}
-              className={`w-full flex items-center gap-3 px-3 min-h-11 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+              aria-current={isActive ? "page" : undefined}
+              className={`workspace-nav-item w-full flex items-center gap-3 px-3 min-h-11 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-xs font-bold'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
@@ -279,7 +236,7 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       {/* Sidebar Footer: ObjectBox DB, AGENTS.md Cockpit & Legal */}
-      <div className="p-2.5 border-t border-slate-800 space-y-1.5 bg-slate-950/80 shrink-0">
+      <div className="p-3 border-t border-slate-800/80 space-y-1.5 bg-slate-950 shrink-0">
         <button
           type="button"
           onClick={() => {
@@ -340,7 +297,7 @@ export const Sidebar: React.FC = () => {
     <>
       {/* Desktop Persistent Sidebar */}
       <aside
-        className={`hidden md:flex bg-slate-900 text-slate-300 flex-col shrink-0 border-r border-slate-800 transition-all duration-200 z-30 ${
+        className={`workspace-sidebar hidden md:flex bg-slate-950 text-slate-300 flex-col shrink-0 border-r border-slate-800/80 transition-[width] duration-200 ease-out z-30 ${
           isCollapsed ? 'w-16' : 'w-64'
         }`}
       >

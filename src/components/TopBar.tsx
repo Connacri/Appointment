@@ -175,9 +175,9 @@ export const TopBar: React.FC = () => {
 
   return (
     <>
-      <header className="relative z-[500] min-w-0 w-full py-2 px-2.5 sm:px-4 bg-white/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-2 shrink-0 select-none shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90 dark:supports-[backdrop-filter]:bg-slate-900/90">
+      <header className="workspace-topbar relative z-[500] min-w-0 w-full px-3 sm:px-5 py-3 bg-white/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-2 shrink-0 select-none shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90 dark:supports-[backdrop-filter]:bg-slate-900/90">
         {/* Primary toolbar row: breadcrumb, sector, currency, USB and actions */}
-        <div className="w-full min-w-0 flex items-center flex-wrap gap-2">
+        <div className="w-full min-w-0 flex items-center flex-wrap gap-3">
         {/* ======================================================== */}
         {/* SECTION GAUCHE : Menu Mobile, Recherche, Secteur         */}
         {/* ======================================================== */}
@@ -215,50 +215,12 @@ export const TopBar: React.FC = () => {
               {currentDomain === 'hotel' ? (language === 'fr' ? 'HÔTEL' : language === 'ar' ? 'فندق' : 'HOTEL') : 'RESORT'}
             </span>
           </nav>
-
-          {/* Sector Pill Switcher: Hotel / Resort (Hidden on small mobile to avoid crowding) */}
-          <div className="hidden lg:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700/80 text-xs shrink-0">
-            <button
-              type="button"
-              onClick={() => setActiveSector('all')}
-              className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                activeSector === 'all'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              Tous
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSector('hotel')}
-              className={`px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-all cursor-pointer ${
-                activeSector === 'hotel'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              <Hotel size={13} />
-              <span>Hôtel</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSector('resort')}
-              className={`px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-all cursor-pointer ${
-                activeSector === 'resort'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              <Palmtree size={13} />
-              <span>Resort</span>
-            </button>
-          </div>
         </div>
+
         {/* ======================================================== */}
         {/* SECTION DROITE : USB Physique, CI Pipeline, + Nouveau    */}
         {/* ======================================================== */}
-        <div className="ml-auto flex items-center justify-end gap-2 shrink-0 min-w-0">
+        <div className="ms-auto flex items-center justify-end gap-2 shrink-0 min-w-0">
           {/* Currency Dropdown */}
           {canSeeFinance && <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-1.5 py-1">
             <select
@@ -369,29 +331,17 @@ export const TopBar: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Language Switcher */}
-                <div>
-                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1.5">
-                    Langue / Language / اللغة :
-                  </span>
-                  <div className="grid grid-cols-3 gap-1">
+                <div className="workspace-menu-section">
+                  <span className="workspace-menu-label">Langue / Language / اللغة</span>
+                  <div className="grid grid-cols-3 gap-1.5">
                     {(['fr', 'en', 'ar'] as const).map((lang) => (
-                      <button
-                        key={lang}
-                        type="button"
-                        onClick={() => setLanguage(lang)}
-                        className={`py-1.5 rounded-lg text-center font-bold text-xs transition-all cursor-pointer ${
-                          language === lang
-                            ? 'bg-blue-600 text-white shadow-xs'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
-                        }`}
-                      >
+                      <button key={lang} type="button" onClick={() => setLanguage(lang)} aria-pressed={language === lang}
+                        className={language === lang ? 'min-h-10 rounded-lg bg-blue-600 text-white font-bold text-xs shadow-xs' : 'min-h-10 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 dark:hover:bg-slate-700'}>
                         {lang.toUpperCase()}
                       </button>
                     ))}
                   </div>
                 </div>
-
                 {/* Theme Mode Switch */}
                 <button
                   type="button"
@@ -421,41 +371,6 @@ export const TopBar: React.FC = () => {
                   </span>
                   <span className="text-[10px] font-bold">{isOffline ? 'ACTIF' : 'OFF'}</span>
                 </button>
-
-                {/* Sector Switcher on mobile */}
-                <div className="lg:hidden pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <span className="text-[11px] font-semibold text-slate-500 block mb-1.5">Secteur Actif :</span>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveSector('hotel');
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className={`p-1.5 rounded-lg flex items-center justify-center gap-1 font-semibold ${
-                        activeSector === 'hotel'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      <Hotel size={13} /> Hôtel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveSector('resort');
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className={`p-1.5 rounded-lg flex items-center justify-center gap-1 font-semibold ${
-                        activeSector === 'resort'
-                          ? 'bg-amber-600 text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      <Palmtree size={13} /> Resort
-                    </button>
-                  </div>
-                </div>
 
                 {/* QR Pass / Scanner */}
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -493,7 +408,7 @@ export const TopBar: React.FC = () => {
         </div>
 
         {/* Secondary toolbar row: search, date navigation and range */}
-        <div className={`w-full min-w-0 flex items-center gap-2 flex-wrap ${activeView === "planning" ? "" : "hidden"}`}>
+        <div className={`workspace-toolbar-secondary w-full min-w-0 flex items-center gap-2 flex-wrap border-t border-slate-100 dark:border-slate-800 pt-2 ${activeView === "planning" ? "" : "hidden"}` }>
           <div className="relative flex-1 min-w-[160px] max-w-[240px]">
             {/* Search Box - Fluid & Touch Friendly */}
           <div className="relative w-full min-w-0">

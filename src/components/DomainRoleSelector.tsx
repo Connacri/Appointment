@@ -49,14 +49,14 @@ export const DomainRoleSelector: React.FC = () => {
   ];
 
   return (
-    <div className="relative z-[500] bg-slate-950 border-b border-slate-800/80 px-3 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-2.5 text-xs select-none">
+    <div className="workspace-contextbar relative z-[500] bg-slate-950 border-b border-slate-800/80 px-3 sm:px-5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs select-none">
       {/* Domains Strip */}
-      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
           {language === 'fr' ? 'Secteur :' : language === 'ar' ? 'القطاع:' : 'Sector:'}
         </span>
 
-        <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-xl border border-slate-800">
+        <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
           {(Object.keys(domainConfigs) as DomainType[]).map((dom) => {
             const cfg = domainConfigs[dom];
             const Icon = domainIcons[dom] || Hotel;
@@ -67,7 +67,7 @@ export const DomainRoleSelector: React.FC = () => {
                 key={dom}
                 type="button"
                 onClick={() => setCurrentDomain(dom)}
-                className={`min-h-[32px] px-3 py-1 rounded-lg flex items-center gap-1.5 font-bold text-xs transition-all cursor-pointer ${
+                className={`min-h-10 px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-bold text-xs transition-all cursor-pointer ${
                   isActive
                     ? dom === 'resort'
                       ? 'bg-amber-500 text-slate-950 shadow-xs'
@@ -89,7 +89,7 @@ export const DomainRoleSelector: React.FC = () => {
           {language === 'fr' ? 'Rôle Actif :' : language === 'ar' ? 'الدور:' : 'Role:'}
         </span>
 
-        <div className="flex max-w-full items-center gap-1 rounded-2xl border border-slate-800 bg-slate-900/90 p-1">
+        <div className="flex max-w-full items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/90 p-1 overflow-x-auto">
           {roles.map((r) => {
             const Icon = r.icon;
             const isRoleActive = currentRole === r.id;
@@ -98,7 +98,7 @@ export const DomainRoleSelector: React.FC = () => {
                 key={r.id}
                 type="button"
                 onClick={() => setCurrentRole(r.id)}
-                className={`min-h-9 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                className={`min-h-10 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   isRoleActive
                     ? 'bg-blue-600 text-white font-bold shadow-sm'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
