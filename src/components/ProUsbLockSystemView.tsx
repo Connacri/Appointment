@@ -636,13 +636,19 @@ export const ProUsbLockSystemView: React.FC = () => {
         const wantPlanning = window.confirm(
           `Importer aussi dans le planning/Gantt ?\n\n` +
           `${snapshot.counts.rooms} chambre(s) et ${snapshot.counts.guests} séjour(s) seront créés.\n` +
-          `Ceci remplacera les ressources et réservations actuelles du planning.`,
+          `Les bâtiments créés localement seront conservés ; les données précédemment importées de CardLock seront actualisées.`,
         );
         if (wantPlanning) {
           const { resourceGroups: mdbGroups, bookings: mdbBookings } =
             mdbSnapshotToPlanning(snapshot);
-          setResourceGroups(mdbGroups);
-          setBookings(mdbBookings);
+          setResourceGroups((current) => [
+            ...current.filter((group) => !group.id.startsWith('mdb-')),
+            ...mdbGroups,
+          ]);
+          setBookings((current) => {
+            const importedIds = new Set(mdbBookings.map((booking) => booking.id));
+            return [...current.filter((booking) => !importedIds.has(booking.id)), ...mdbBookings];
+          });
           showToast(
             'success',
             `Planning mis à jour : ${mdbGroups.length} groupe(s) de ressources, ${mdbBookings.length} réservation(s).`,
