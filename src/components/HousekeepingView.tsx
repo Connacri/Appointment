@@ -28,7 +28,7 @@ export const HousekeepingView: React.FC = () => {
     : (language === 'fr' ? 'Chambres & Étages' : language === 'ar' ? 'الغرف والطوابق' : 'Rooms & Floors');
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-5 md:space-y-6">
+    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-4 sm:space-y-5">
       <div>
         <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <Sparkles size={20} className="text-emerald-500" />
@@ -63,7 +63,7 @@ export const HousekeepingView: React.FC = () => {
           <CheckCircle2 size={24} className="text-emerald-500 opacity-80" />
         </div>
 
-        <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between">
+        <div className="min-w-0 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-start justify-between gap-2">
           <div>
             <span className="text-[11px] font-semibold text-slate-400 block uppercase">En Nettoyage</span>
             <span className="text-2xl font-bold font-mono text-amber-500">
@@ -73,7 +73,7 @@ export const HousekeepingView: React.FC = () => {
           <Clock size={24} className="text-amber-500 opacity-80" />
         </div>
 
-        <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between">
+        <div className="min-w-0 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-start justify-between gap-2">
           <div>
             <span className="text-[11px] font-semibold text-slate-400 block uppercase">À Nettoyer</span>
             <span className="text-2xl font-bold font-mono text-rose-500">
@@ -83,7 +83,7 @@ export const HousekeepingView: React.FC = () => {
           <AlertTriangle size={24} className="text-rose-500 opacity-80" />
         </div>
 
-        <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between">
+        <div className="min-w-0 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-start justify-between gap-2">
           <div>
             <span className="text-[11px] font-semibold text-slate-400 block uppercase">Hors Service</span>
             <span className="text-2xl font-bold font-mono text-slate-400">
@@ -119,7 +119,7 @@ export const HousekeepingView: React.FC = () => {
                     key={res.id}
                     className="min-w-0 p-2.5 sm:p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 space-y-2 shadow-xs"
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-start justify-between gap-2">
                       <span className="min-w-0 truncate font-bold text-xs text-slate-800 dark:text-slate-200">
                         {res.name}
                       </span>
@@ -157,7 +157,7 @@ export const HousekeepingView: React.FC = () => {
                       </button>
                       <button
                         onClick={() => updateHousekeepingStatus(res.id, 'cleaning')}
-                        className={`flex-1 py-1 rounded text-center font-medium transition-colors ${
+                        className={`min-h-9 px-1 rounded-lg text-center font-semibold transition-colors ${
                           status === 'cleaning'
                             ? 'bg-amber-500 text-white'
                             : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-amber-100'
@@ -167,7 +167,7 @@ export const HousekeepingView: React.FC = () => {
                       </button>
                       <button
                         onClick={() => updateHousekeepingStatus(res.id, 'dirty')}
-                        className={`flex-1 py-1 rounded text-center font-medium transition-colors ${
+                        className={`min-h-9 px-1 rounded-lg text-center font-semibold transition-colors ${
                           status === 'dirty'
                             ? 'bg-rose-600 text-white'
                             : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-100'
