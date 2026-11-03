@@ -55,7 +55,7 @@ export const PlanningTimeline: React.FC = () => {
   // The Gantt filter must reflect actual inventory: imported CardLock buildings
   // and buildings created locally in the establishment setup screen.
   const hotelBuildingOptions = useMemo(
-    () => resourceGroups.filter((group) => group.sector === 'hotel' && group.resources.length > 0),
+    () => resourceGroups.filter((group) => group.sector === 'hotel'),
     [resourceGroups]
   );
 
