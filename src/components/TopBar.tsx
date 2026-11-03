@@ -215,6 +215,7 @@ export const TopBar: React.FC = () => {
               {currentDomain === 'hotel' ? (language === 'fr' ? 'HÔTEL' : language === 'ar' ? 'فندق' : 'HOTEL') : 'RESORT'}
             </span>
           </nav>
+        </div>
 
         {/* ======================================================== */}
         {/* SECTION DROITE : USB Physique, CI Pipeline, + Nouveau    */}
