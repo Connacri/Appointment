@@ -135,7 +135,7 @@ export const MyBookingsView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-5 md:space-y-6">
+    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-4 sm:space-y-5">
       {/* 1. CLIENT ACCOUNT DASHBOARD CARD (When in client role) */}
       {isClientRole && (
         <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-emerald-600 rounded-3xl p-5 md:p-6 text-white shadow-xl relative overflow-hidden">
@@ -336,7 +336,7 @@ export const MyBookingsView: React.FC = () => {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-3 sm:gap-4">
           {filtered.map((bkg) => {
             const st = statusConfig[bkg.status] || statusConfig.confirmed;
             const isCashPending = bkg.paymentStatus === 'pending' && bkg.totalPrice > 0;
