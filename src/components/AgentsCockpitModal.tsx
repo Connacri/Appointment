@@ -48,7 +48,7 @@ export const AgentsCockpitModal: React.FC = () => {
     },
     {
       title: '2. CI/CD & Builds Signés Android (AGENTS.md §2, §16, §17)',
-      pts: '20/20',
+      pts: 'À vérifier',
       checks: [
         'Interdiction absolue de signature release en local (GitHub Actions uniquement)',
         'Validation bundletool & apksigner du certificat SHA-256 de l\'AAB/APK',
@@ -75,7 +75,7 @@ export const AgentsCockpitModal: React.FC = () => {
     },
     {
       title: '5. Responsive & Accessibilité WCAG (AGENTS.md §7, §8, §13)',
-      pts: '10/10',
+      pts: 'À vérifier',
       checks: [
         'Zones tactiles >= 48px et contrastes conformes WCAG 2.2 AA',
         'Support fluide Phone (360-430dp), Tablet (600-840dp) et Desktop',
@@ -84,7 +84,7 @@ export const AgentsCockpitModal: React.FC = () => {
     },
     {
       title: '6. Performance & Minification (AGENTS.md §10, §11)',
-      pts: '10/10',
+      pts: 'À vérifier',
       checks: [
         'R8 minification & resource shrinking configurés dans build.gradle',
         'Temps de démarrage < 2s, fluidité 60-120fps et lazy-loading',
@@ -92,7 +92,7 @@ export const AgentsCockpitModal: React.FC = () => {
     },
     {
       title: '7. Hardware & WebHID ProUSB',
-      pts: '10/10',
+      pts: 'À vérifier',
       checks: [
         'API WebHID native avec navigator.hid.requestDevice et feedback audio',
         'Indicateur d\'état matériel (Connecté/Déconnecté) en temps réel',
