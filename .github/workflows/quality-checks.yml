@@ -7,13 +7,14 @@ on:
     branches:
       - 'fix/**'
       - 'feature/**'
+      - 'feat/**'
 
 permissions:
   contents: read
 
 concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   validate:

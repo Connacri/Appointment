@@ -1,5 +1,5 @@
 import { requireSupabase } from './supabaseClient';
-import type { TimelineBooking, ResourceGroup, ResourceItem, HotelEstablishment, PmsTask, StockItem, StockMovement } from '../types/booking';
+import type { TimelineBooking, ResourceGroup, ResourceItem, HotelEstablishment, PmsTask, StockItem, StockMovement } from '../../types/booking';
 
 type WorkspaceId = string;
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
@@ -12,9 +12,9 @@ export async function createWorkspace(name: string) {
   const db = requireSupabase();
   const { data: auth } = await db.auth.getUser();
   if (!auth.user) throw new Error('Authentication required.');
-  const workspace = unwrap(await db.from('workspaces').insert({ name, owner_id: auth.user.id }).select().single());
+  const workspace = unwrap<{ id: WorkspaceId; name: string }>(await db.from('workspaces').insert({ name, owner_id: auth.user.id }).select('id,name').single());
   unwrap(await db.from('workspace_members').insert({ workspace_id: workspace.id, user_id: auth.user.id, role: 'owner' }).select().single());
-  return workspace as { id: WorkspaceId; name: string };
+  return workspace;
 }
 
 export async function listWorkspaces() {

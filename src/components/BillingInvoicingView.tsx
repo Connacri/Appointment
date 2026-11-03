@@ -168,7 +168,7 @@ export const BillingInvoicingView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-5 md:space-y-6">
+    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-4 sm:space-y-5">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
@@ -461,7 +461,7 @@ export const BillingInvoicingView: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateDocument} className="p-5 overflow-y-auto space-y-4 text-xs">
+            <form onSubmit={handleCreateDocument} className="p-3 sm:p-5 overflow-y-auto overscroll-contain space-y-4 text-xs">
               {/* Document Type */}
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">

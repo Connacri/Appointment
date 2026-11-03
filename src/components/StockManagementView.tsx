@@ -109,7 +109,7 @@ export const StockManagementView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-5 md:space-y-6">
+    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-4 sm:space-y-5">
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-200 dark:border-slate-800">
         <div>
@@ -242,7 +242,7 @@ export const StockManagementView: React.FC = () => {
 
       {/* TAB 1: LIVE INVENTORY */}
       {activeTab === 'stock' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+        <div className="grid grid-cols-2 xl:grid-cols-3 gap-2.5 sm:gap-3.5">
           {filteredItems.map((item) => {
             const isLow = item.quantity <= item.minThreshold;
             const progress = Math.min(100, Math.round((item.quantity / Math.max(item.minThreshold * 3, 1)) * 100));

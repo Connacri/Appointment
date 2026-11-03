@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   X,
   ShieldCheck,
-  CheckCircle,
+  AlertCircle,
   Package,
   Smartphone,
   Lock,
@@ -21,6 +21,7 @@ export const AgentsCockpitModal: React.FC = () => {
   const [rolloutFraction, setRolloutFraction] = useState('0.10');
   const [selectedTrack, setSelectedTrack] = useState<'internal' | 'alpha' | 'beta' | 'production'>('internal');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   // Close on Escape key
   useEffect(() => {
@@ -38,7 +39,7 @@ export const AgentsCockpitModal: React.FC = () => {
   const categories = [
     {
       title: '1. Sécurité & Secrets (AGENTS.md §12, §15)',
-      pts: '20/20',
+      pts: 'À vérifier',
       checks: [
         'Zéro fuite de secret dans Git (.env, *.jks, service_account ignorés)',
         'Keystore d\'upload généré uniquement hors dépôt via bootstrap-secrets.sh',
@@ -47,7 +48,7 @@ export const AgentsCockpitModal: React.FC = () => {
     },
     {
       title: '2. CI/CD & Builds Signés Android (AGENTS.md §2, §16, §17)',
-      pts: '20/20',
+      pts: 'À vérifier',
       checks: [
         'Interdiction absolue de signature release en local (GitHub Actions uniquement)',
         'Validation bundletool & apksigner du certificat SHA-256 de l\'AAB/APK',
@@ -56,7 +57,7 @@ export const AgentsCockpitModal: React.FC = () => {
     },
     {
       title: '3. Conformité Play Store & Légale (AGENTS.md §14, §19.3)',
-      pts: '15/15',
+      pts: 'À vérifier',
       checks: [
         'Pages /privacy/ et /delete-account/ actives en FR, EN, AR (dir="rtl")',
         'Formulaire de suppression de compte fonctionnel (in-app + web)',
@@ -65,7 +66,7 @@ export const AgentsCockpitModal: React.FC = () => {
     },
     {
       title: '4. i18n & Parité Arabe RTL (AGENTS.md §9)',
-      pts: '10/10',
+      pts: 'À vérifier',
       checks: [
         'Trilinguisme intégral FR / EN / AR avec support complet du RTL',
         'Typographie Arabe Cairo adaptée et règles de pluriels arabes respectées',
@@ -74,7 +75,7 @@ export const AgentsCockpitModal: React.FC = () => {
     },
     {
       title: '5. Responsive & Accessibilité WCAG (AGENTS.md §7, §8, §13)',
-      pts: '10/10',
+      pts: 'À vérifier',
       checks: [
         'Zones tactiles >= 48px et contrastes conformes WCAG 2.2 AA',
         'Support fluide Phone (360-430dp), Tablet (600-840dp) et Desktop',
@@ -83,7 +84,7 @@ export const AgentsCockpitModal: React.FC = () => {
     },
     {
       title: '6. Performance & Minification (AGENTS.md §10, §11)',
-      pts: '10/10',
+      pts: 'À vérifier',
       checks: [
         'R8 minification & resource shrinking configurés dans build.gradle',
         'Temps de démarrage < 2s, fluidité 60-120fps et lazy-loading',
@@ -91,7 +92,7 @@ export const AgentsCockpitModal: React.FC = () => {
     },
     {
       title: '7. Hardware & WebHID ProUSB',
-      pts: '10/10',
+      pts: 'À vérifier',
       checks: [
         'API WebHID native avec navigator.hid.requestDevice et feedback audio',
         'Indicateur d\'état matériel (Connecté/Déconnecté) en temps réel',
@@ -100,7 +101,7 @@ export const AgentsCockpitModal: React.FC = () => {
     },
     {
       title: '8. Documentation & Traçabilité (AGENTS.md §4, §18, §21)',
-      pts: '5/5',
+      pts: 'À vérifier',
       checks: [
         'README synchronisé avec liens réels vers les téléchargements',
         'Changelog SemVer respecté et Conventional Commits obligatoires',
@@ -108,10 +109,16 @@ export const AgentsCockpitModal: React.FC = () => {
     },
   ];
 
-  const copyToClipboard = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 2000);
+  const copyToClipboard = async (text: string, key: string) => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setCopyError(null);
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch {
+      setCopyError('Copie indisponible dans ce navigateur. Sélectionnez le nom de la variable manuellement.');
+    }
   };
 
   return (
@@ -134,7 +141,7 @@ export const AgentsCockpitModal: React.FC = () => {
                   AGENTS.md Autonomous Cockpit
                 </h2>
                 <span className="px-2.5 py-0.5 bg-emerald-500 text-slate-950 font-black rounded-lg text-[11px] shadow-xs">
-                  Score : 99/100
+                  Non audité
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
@@ -166,7 +173,7 @@ export const AgentsCockpitModal: React.FC = () => {
             }`}
           >
             <ShieldCheck size={16} />
-            <span>Health Scorecard (99/100)</span>
+            <span>Contrôles de conformité</span>
           </button>
 
           <button
@@ -216,14 +223,14 @@ export const AgentsCockpitModal: React.FC = () => {
             <div className="space-y-4">
               <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl text-emerald-900 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <span className="font-bold text-sm block">Conformité Totale AGENTS.md Validée</span>
+                  <span className="font-bold text-sm block">Contrôles à exécuter — aucun audit connecté</span>
                   <p className="text-xs opacity-90 block mt-1 leading-relaxed">
-                    Exigences strictes : builds non locaux, trilinguisme FR/EN/AR avec RTL, WebHID ProUSB, release continue sur chaque commit.
+                    Cette grille liste des critères de contrôle. Elle ne constitue pas une preuve de conformité : aucun résultat de pipeline ni audit automatisé n’est chargé ici.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
                   <span className="text-3xl font-black font-mono text-emerald-600 dark:text-emerald-400">
-                    99/100
+                    N/A
                   </span>
                 </div>
               </div>
@@ -244,7 +251,7 @@ export const AgentsCockpitModal: React.FC = () => {
                       <ul className="space-y-1.5 text-slate-600 dark:text-slate-400 text-[11px]">
                         {cat.checks.map((c, i) => (
                           <li key={i} className="flex items-start gap-2">
-                            <CheckCircle size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                            <AlertCircle size={14} className="text-amber-500 shrink-0 mt-0.5" />
                             <span>{c}</span>
                           </li>
                         ))}
@@ -265,7 +272,7 @@ export const AgentsCockpitModal: React.FC = () => {
                   <span>Pipeline de Release Continue (Sur chaque Push & Commit)</span>
                 </div>
                 <p className="text-xs leading-relaxed opacity-95">
-                  Conformément à votre directive, <strong>chaque commit et push</strong> sur la branche <code>main</code> déclenche automatiquement le workflow GitHub Actions pour recompiler, signer et publier les binaires versionnés avec mise à jour du site web.
+                  Cette section décrit un pipeline cible. L’interface ne vérifie pas l’existence du workflow, son dernier résultat ni la disponibilité des artefacts. Les éléments ci-dessous sont des exemples et ne doivent pas être considérés comme des livrables publiés.
                 </p>
               </div>
 
@@ -284,7 +291,7 @@ export const AgentsCockpitModal: React.FC = () => {
                     </span>
                   </div>
                   <span className="inline-block px-2.5 py-0.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold rounded-md text-[10px]">
-                    Installable direct
+                    Exemple — non vérifié
                   </span>
                 </div>
 
@@ -301,7 +308,7 @@ export const AgentsCockpitModal: React.FC = () => {
                     </span>
                   </div>
                   <span className="inline-block px-2.5 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold rounded-md text-[10px]">
-                    Google Play Track
+                    Exemple — non vérifié
                   </span>
                 </div>
 
@@ -318,7 +325,7 @@ export const AgentsCockpitModal: React.FC = () => {
                     </span>
                   </div>
                   <span className="inline-block px-2.5 py-0.5 bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold rounded-md text-[10px]">
-                    Inno Setup Signé
+                    Exemple — non vérifié
                   </span>
                 </div>
 
@@ -335,7 +342,7 @@ export const AgentsCockpitModal: React.FC = () => {
                     </span>
                   </div>
                   <span className="inline-block px-2.5 py-0.5 bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-bold rounded-md text-[10px]">
-                    Live & PWA Ready
+                    Exemple — non vérifié
                   </span>
                 </div>
               </div>
@@ -351,11 +358,11 @@ export const AgentsCockpitModal: React.FC = () => {
                   </span>
                 </div>
                 <div className="text-[11px] font-mono text-slate-400 space-y-1.5 leading-relaxed">
-                  <div>✔ Étape 1 : Build Vite SPA & Déploiement GitHub Pages</div>
-                  <div>✔ Étape 2 : Compilation & Signature Android APK + AAB via Java 21 Temurin</div>
-                  <div>✔ Étape 3 : Audit d’empreinte apksigner SHA-256 vs UPLOAD_CERT_SHA256</div>
-                  <div>✔ Étape 4 : Compilation & Signature Windows EXE Installer (Inno Setup)</div>
-                  <div>✔ Étape 5 : Publication des packages versionnés avec SHA256SUMS.txt</div>
+                  <div>• Étape 1 : Build Vite SPA & Déploiement GitHub Pages</div>
+                  <div>• Étape 2 : Compilation & Signature Android APK + AAB via Java 21 Temurin</div>
+                  <div>• Étape 3 : Audit d’empreinte apksigner SHA-256 vs UPLOAD_CERT_SHA256</div>
+                  <div>• Étape 4 : Compilation & Signature Windows EXE Installer (Inno Setup)</div>
+                  <div>• Étape 5 : Publication des packages versionnés avec SHA256SUMS.txt</div>
                 </div>
               </div>
             </div>
@@ -367,13 +374,14 @@ export const AgentsCockpitModal: React.FC = () => {
               <div className="p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="font-bold text-slate-900 dark:text-white text-xs">
-                    Piste de Déploiement Google Play (Play Track)
+                    Prévisualisation de piste Google Play
                   </span>
                   <span className="text-[10px] font-mono uppercase bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-800 dark:text-slate-200">
-                    AAB Signé via Actions
+                    État de publication non connecté
                   </span>
                 </div>
 
+                <p className="text-[11px] text-amber-700 dark:text-amber-300">La sélection de piste ci-dessous est locale à cette fenêtre. Elle ne déclenche aucune publication Google Play.</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {(['internal', 'alpha', 'beta', 'production'] as const).map((track) => (
                     <button
@@ -423,13 +431,13 @@ export const AgentsCockpitModal: React.FC = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-slate-100 dark:bg-slate-900 rounded-xl gap-1">
                     <span>APK SHA-256 :</span>
                     <span className="text-emerald-600 dark:text-emerald-400 font-bold truncate">
-                      8F:42:C1:99:A3:21:BC:EE:54:10... (Validé apksigner)
+                      Aucune empreinte chargée — vérification non exécutée
                     </span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-slate-100 dark:bg-slate-900 rounded-xl gap-1">
                     <span>AAB SHA-256 :</span>
                     <span className="text-emerald-600 dark:text-emerald-400 font-bold truncate">
-                      8F:42:C1:99:A3:21:BC:EE:54:10... (Match 100% upload cert)
+                      Aucune empreinte chargée — comparaison non exécutée
                     </span>
                   </div>
                 </div>
@@ -454,13 +462,14 @@ export const AgentsCockpitModal: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
                     <ShieldCheck size={15} className="text-emerald-500" />
-                    GitHub Secrets Requis
+                    Variables GitHub attendues
                   </span>
                   <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950 px-2.5 py-0.5 rounded-md font-bold">
-                    Chiffrés par GitHub
+                    État non vérifié
                   </span>
                 </div>
 
+                {copyError && <p role="alert" className="text-[11px] text-rose-700 dark:text-rose-300">{copyError}</p>}
                 <div className="space-y-2">
                   {[
                     {

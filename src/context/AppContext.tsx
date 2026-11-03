@@ -70,9 +70,9 @@ interface AppContextType {
   setCurrentBaseDate: (date: string) => void;
   shiftDays: (days: number) => void;
   bookings: TimelineBooking[];
-  setBookings: (bookings: TimelineBooking[]) => void;
+  setBookings: React.Dispatch<React.SetStateAction<TimelineBooking[]>>;
   resourceGroups: ResourceGroup[];
-  setResourceGroups: (groups: ResourceGroup[]) => void;
+  setResourceGroups: React.Dispatch<React.SetStateAction<ResourceGroup[]>>;
   updateHousekeepingStatus: (resourceId: string, status: 'clean' | 'cleaning' | 'dirty' | 'out_of_order') => void;
   checkConflict: (resourceId: string, startDate: string, endDate: string, excludeBookingId?: string) => boolean;
   addBooking: (booking: Omit<TimelineBooking, 'id'>) => { success: boolean; error?: string; booking?: TimelineBooking };
@@ -704,6 +704,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     if (selectedBooking?.id === bookingId) {
       setSelectedBooking(updatedBooking);
+    }
+    if (activeQrPassBooking?.id === bookingId) {
+      setActiveQrPassBooking(updatedBooking);
     }
 
     const message = paymentSettled

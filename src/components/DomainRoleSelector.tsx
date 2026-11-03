@@ -67,6 +67,7 @@ export const DomainRoleSelector: React.FC = () => {
                 key={dom}
                 type="button"
                 onClick={() => setCurrentDomain(dom)}
+                aria-pressed={isActive}
                 className={`min-h-10 px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-bold text-xs transition-all cursor-pointer ${
                   isActive
                     ? dom === 'resort'
@@ -98,6 +99,7 @@ export const DomainRoleSelector: React.FC = () => {
                 key={r.id}
                 type="button"
                 onClick={() => setCurrentRole(r.id)}
+                aria-pressed={isRoleActive}
                 className={`min-h-10 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   isRoleActive
                     ? 'bg-blue-600 text-white font-bold shadow-sm'
