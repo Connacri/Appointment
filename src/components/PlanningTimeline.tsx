@@ -44,6 +44,7 @@ export const PlanningTimeline: React.FC = () => {
     setIsNewBookingModalOpen,
     setNewBookingInitialSlot,
     updateBookingStatus,
+    updateHousekeepingStatus,
     selectedEstablishmentId,
     setSelectedEstablishmentId,
     currency,
@@ -438,20 +439,51 @@ export const PlanningTimeline: React.FC = () => {
     return timelineDays.findIndex((d) => d.dateStr === dateStr);
   };
 
-  // Housekeeping tag badge
-  const renderHousekeepingTag = (status?: string) => {
-    switch (status) {
-      case 'clean':
-        return <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Propre / Clean" />;
-      case 'cleaning':
-        return <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" title="En cours de nettoyage / Cleaning" />;
-      case 'dirty':
-        return <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" title="À nettoyer / Dirty" />;
-      case 'out_of_order':
-        return <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" title="Hors service / Out of order" />;
-      default:
-        return null;
-    }
+  const cycleHousekeepingStatus = (resourceId: string, currentStatus?: string) => {
+    const cycleOrder: ('clean' | 'dirty' | 'cleaning' | 'out_of_order')[] = [
+      'clean',
+      'dirty',
+      'cleaning',
+      'out_of_order',
+    ];
+    const currentIndex = cycleOrder.indexOf((currentStatus as any) || 'clean');
+    const nextStatus = cycleOrder[(currentIndex + 1) % cycleOrder.length];
+    updateHousekeepingStatus(resourceId, nextStatus);
+  };
+
+  // Interactive housekeeping status indicator dot (click to change state)
+  const renderHousekeepingTag = (status?: string, resourceId?: string) => {
+    const isOutOfOrder = status === 'out_of_order';
+    const colorClass =
+      status === 'clean'
+        ? 'bg-emerald-500 hover:bg-emerald-400 ring-emerald-300'
+        : status === 'cleaning'
+        ? 'bg-amber-500 hover:bg-amber-400 ring-amber-300'
+        : status === 'dirty'
+        ? 'bg-rose-500 hover:bg-rose-400 ring-rose-300'
+        : 'bg-slate-400 hover:bg-slate-300 ring-slate-400';
+
+    const label =
+      status === 'clean'
+        ? 'Propre (Clean)'
+        : status === 'cleaning'
+        ? 'En cours de nettoyage (Cleaning)'
+        : status === 'dirty'
+        ? 'À nettoyer (Dirty)'
+        : 'HORS SERVICE (HS)';
+
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (resourceId) cycleHousekeepingStatus(resourceId, status);
+        }}
+        className={`relative z-20 w-3.5 h-3.5 rounded-full ${colorClass} shrink-0 cursor-pointer transition-all hover:scale-125 focus:outline-none ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 shadow-2xs pointer-events-auto`}
+        title={`État : ${label} — Cliquez pour changer (Propre → Sale → En cours → Hors Service)`}
+        aria-label={`État de la chambre : ${label}. Cliquez pour modifier`}
+      />
+    );
   };
 
   const getSectorIcon = (sector: string) => {
@@ -703,14 +735,10 @@ export const PlanningTimeline: React.FC = () => {
       {/* Main Gantt Matrix: Left Sticky Resource Tree + Right Scrollable Day Matrix */}
       <div
         ref={scrollContainerRef}
-        onPointerDown={onTimelinePointerDown}
-        onPointerMove={onTimelinePointerMove}
-        onPointerUp={onTimelinePointerEnd}
-        onPointerCancel={onTimelinePointerEnd}
         onClickCapture={onTimelineClickCapture}
         onScroll={handleTimelineScroll}
         data-gantt-pan="true"
-        className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-contain flex touch-pan-x touch-pan-y cursor-grab active:cursor-grabbing [scrollbar-gutter:stable]"
+        className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-contain flex touch-pan-x touch-pan-y [scrollbar-gutter:stable]"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {/* LEFT COLUMN: Resource Tree */}
@@ -780,30 +808,48 @@ export const PlanningTimeline: React.FC = () => {
                           <span className="text-[9px] font-mono text-slate-400 shrink-0">{floorGroup.resources.length}</span>
                         </button>
                       )}
-                      {!collapsedFloors[`${grp.id}:${floorGroup.key}`] && floorGroup.resources.map((res) => (
-                        <div
-                          key={res.id}
-                          className="h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 px-1.5 sm:px-2.5 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900"
-                          title={`${res.name} · ${res.type || 'Chambre'} · ${floorGroup.label}`}
-                        >
-                          <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
-                            {renderHousekeepingTag(res.housekeepingStatus)}
-                            {leftBarMode !== 'mini' ? (
-                              <span className="min-w-0 flex flex-col leading-tight">
-                                <span className="font-semibold text-slate-800 dark:text-slate-200 truncate text-xs sm:text-[13px]">{res.name}</span>
-                                <span className="text-[9px] sm:text-[10px] text-slate-400 dark:text-slate-500 truncate">{res.type || (language === 'fr' ? 'Chambre' : 'Room')}</span>
-                              </span>
-                            ) : (
-                              <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-[11px] truncate">
-                                {res.name.replace(/[^0-9]/g, '') || res.name.slice(0, 3)}
+                      {!collapsedFloors[`${grp.id}:${floorGroup.key}`] && floorGroup.resources.map((res) => {
+                        const isOutOfOrder = res.housekeepingStatus === 'out_of_order';
+                        return (
+                          <div
+                            key={res.id}
+                            className={`h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 px-1.5 sm:px-2.5 flex items-center justify-between border-b transition-colors ${
+                              isOutOfOrder
+                                ? 'bg-slate-200/90 dark:bg-slate-800/90 border-slate-300 dark:border-slate-700 text-slate-400 opacity-80'
+                                : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800/80 hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
+                            }`}
+                            title={`${res.name} · ${res.type || 'Chambre'} · ${floorGroup.label}${isOutOfOrder ? ' · HORS SERVICE (HS)' : ''}`}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
+                              {renderHousekeepingTag(res.housekeepingStatus, res.id)}
+                              {leftBarMode !== 'mini' ? (
+                                <span className="min-w-0 flex flex-col leading-tight">
+                                  <span className={`font-semibold truncate text-xs sm:text-[13px] ${isOutOfOrder ? 'line-through text-slate-500 dark:text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
+                                    {res.name}
+                                  </span>
+                                  <span className="text-[9px] sm:text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                                    {res.type || (language === 'fr' ? 'Chambre' : 'Room')}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-[11px] truncate">
+                                  {res.name.replace(/[^0-9]/g, '') || res.name.slice(0, 3)}
+                                </span>
+                              )}
+                              {isOutOfOrder && (
+                                <span className="ml-1 px-1 py-0.5 rounded text-[8px] font-bold font-mono bg-rose-600/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 shrink-0">
+                                  HS
+                                </span>
+                              )}
+                            </div>
+                            {leftBarMode === 'normal' && (
+                              <span className="text-[10px] text-slate-400 font-mono tabular-nums shrink-0 hidden sm:inline">
+                                {res.pricePerDay} {currency}
                               </span>
                             )}
                           </div>
-                          {leftBarMode === 'normal' && (
-                            <span className="text-[10px] text-slate-400 font-mono tabular-nums shrink-0 hidden sm:inline">{res.pricePerDay} {currency}</span>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </React.Fragment>
                   ))}
                 </div>
@@ -833,8 +879,16 @@ export const PlanningTimeline: React.FC = () => {
             </div>
           )}
 
-          {/* Timeline Header: Days row + Availability badge */}
-          <div className={`${dayHeaderHeightClass} shrink-0 border-b border-slate-200 dark:border-slate-800 flex bg-white dark:bg-slate-900 sticky top-0 z-[70] isolate select-none transition-[height,min-height,max-height] duration-200`}>
+          {/* Timeline Header: Days row (Cursor grab only on dates to pan horizontally) */}
+          <div
+            onPointerDown={onTimelinePointerDown}
+            onPointerMove={onTimelinePointerMove}
+            onPointerUp={onTimelinePointerEnd}
+            onPointerCancel={onTimelinePointerEnd}
+            data-gantt-day-header="true"
+            className={`${dayHeaderHeightClass} shrink-0 border-b border-slate-200 dark:border-slate-800 flex bg-white dark:bg-slate-900 sticky top-0 z-[70] isolate select-none transition-[height,min-height,max-height] duration-200 cursor-grab active:cursor-grabbing`}
+            title="Glisser sur les dates pour déplacer le calendrier horizontalement"
+          >
             {timelineDays.map((day) => (
               <div key={day.dateStr} style={{ width: `${colWidth}px` }} className={`shrink-0 border-r border-slate-200/70 dark:border-slate-800/70 flex flex-col items-center justify-center gap-0.5 px-1 transition-colors relative h-full overflow-hidden ${day.isToday ? "bg-rose-50/40 dark:bg-rose-950/25 ring-1 ring-inset ring-rose-400/40" : day.isWeekend ? "bg-slate-50/50 dark:bg-slate-900/40" : ""}`}>
                 {isDayHeaderCollapsed ? (
@@ -906,35 +960,65 @@ export const PlanningTimeline: React.FC = () => {
                         </div>
                       )}
                       {!collapsedFloors[`${grp.id}:${floorGroup.key}`] && floorGroup.resources.map((res) => {
-                      // Find bookings on this specific resource
-                      const resBookings = bookings.filter((b) => b.resourceId === res.id);
+                        const isOutOfOrder = res.housekeepingStatus === 'out_of_order';
+                        // Find bookings on this specific resource
+                        const resBookings = bookings.filter((b) => b.resourceId === res.id);
 
-                      return (
-                        <div
-                          key={res.id}
-                          className="h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 flex relative border-b border-slate-200/80 dark:border-slate-800/80 hover:bg-blue-50/20 dark:hover:bg-blue-950/20 transition-colors bg-white dark:bg-slate-900"
-                        >
-                          {/* Background Grid Cells for clicking to add booking */}
-                          {timelineDays.map((day) => (
-                            <button
-                              key={day.dateStr}
-                              type="button"
-                              style={{ width: `${colWidth}px` }}
-                              onClick={() => {
-                                setActivePreviewBooking(null);
-                                setNewBookingInitialSlot({
-                                  resourceId: res.id,
-                                  date: day.dateStr,
-                                });
-                                setIsNewBookingModalOpen(true);
-                              }}
-                              aria-label={`Créer une réservation pour ${res.name} le ${day.dateStr}`}
-                              title={`Créer une réservation • ${res.name} • ${day.dateStr}`}
-                              className={`relative shrink-0 border-r border-slate-100 dark:border-slate-800/40 h-full cursor-pointer p-0 focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 hover:bg-blue-50/70 dark:hover:bg-blue-950/35 active:bg-blue-100 dark:active:bg-blue-900/40 transition-colors ${
-                                 day.isWeekend ? 'bg-slate-50/30 dark:bg-slate-900/20' : ''
-                               }`}
-                             />
-                          ))}
+                        return (
+                          <div
+                            key={res.id}
+                            className={`h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 flex relative border-b border-slate-200/80 dark:border-slate-800/80 transition-colors ${
+                              isOutOfOrder
+                                ? 'bg-slate-200/50 dark:bg-slate-850/60'
+                                : 'bg-white dark:bg-slate-900 hover:bg-blue-50/20 dark:hover:bg-blue-950/20'
+                            }`}
+                          >
+                            {/* Background Grid Cells for clicking to add booking */}
+                            {timelineDays.map((day) => {
+                              const isPast = day.dateStr < realTodayStr;
+                              const isCellDisabled = isOutOfOrder || isPast;
+
+                              return (
+                                <button
+                                  key={day.dateStr}
+                                  type="button"
+                                  disabled={isCellDisabled}
+                                  style={{ width: `${colWidth}px` }}
+                                  onClick={() => {
+                                    if (isCellDisabled) return;
+                                    setActivePreviewBooking(null);
+                                    setNewBookingInitialSlot({
+                                      resourceId: res.id,
+                                      date: day.dateStr,
+                                    });
+                                    setIsNewBookingModalOpen(true);
+                                  }}
+                                  aria-label={
+                                    isOutOfOrder
+                                      ? `Chambre ${res.name} hors service (non réservable)`
+                                      : isPast
+                                      ? `Date passée (${day.dateStr}) non réservable`
+                                      : `Créer une réservation pour ${res.name} le ${day.dateStr}`
+                                  }
+                                  title={
+                                    isOutOfOrder
+                                      ? `Chambre ${res.name} hors service (HS)`
+                                      : isPast
+                                      ? `Date passée (${day.dateStr}) — réservations antérieures désactivées`
+                                      : `Créer une réservation • ${res.name} • ${day.dateStr}`
+                                  }
+                                  className={`relative shrink-0 border-r border-slate-100 dark:border-slate-800/40 h-full p-0 transition-colors ${
+                                    isOutOfOrder
+                                      ? 'bg-slate-200/80 dark:bg-slate-800/70 cursor-not-allowed opacity-60'
+                                      : isPast
+                                      ? 'bg-slate-100/70 dark:bg-slate-900/40 cursor-not-allowed opacity-40'
+                                      : `cursor-pointer hover:bg-blue-50/70 dark:hover:bg-blue-950/35 active:bg-blue-100 dark:active:bg-blue-900/40 ${
+                                          day.isWeekend ? 'bg-slate-50/30 dark:bg-slate-900/20' : ''
+                                        }`
+                                  }`}
+                                />
+                              );
+                            })}
 
                           {/* Render Booking Gantt Bars overlaying the grid */}
                           {resBookings.map((bkg) => {
@@ -995,14 +1079,9 @@ export const PlanningTimeline: React.FC = () => {
                                 key={bkg.id}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (isMobileScreen) {
-                                    setActivePreviewBooking({
-                                      booking: bkg,
-                                      isMobileSheet: true,
-                                    });
-                                  } else {
-                                    setSelectedBooking(bkg);
-                                  }
+                                  setSelectedBooking(bkg);
+                                  setIsNewBookingModalOpen(true);
+                                  setActivePreviewBooking(null);
                                 }}
                                 onMouseEnter={(e) => {
                                   if (!isMobileScreen) {

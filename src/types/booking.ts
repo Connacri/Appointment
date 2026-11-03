@@ -144,6 +144,25 @@ export interface TimelineBooking {
   guestType?: 'algerian' | 'foreigner';
   idType?: 'cni' | 'nin' | 'passport';
   identityType?: 'cni' | 'nin' | 'passport';
+  idPieceType?:
+    | 'cni'
+    | 'passport'
+    | 'driving_license'
+    | 'special_authorization'
+    | 'diplomatic_passport'
+    | 'special_passport'
+    | 'official_document';
+  idPieceNumber?: string;
+  specialAuthorizationDesc?: string;
+  wilaya?: string;
+  mealPlanDietPreferences?: string[];
+  lastModifiedAt?: string;
+  lastModifiedBy?: string;
+  modificationHistory?: Array<{
+    timestamp: string;
+    modifiedBy: string;
+    changes: string;
+  }>;
   passportNumber?: string;
   visaNumber?: string;
   entryDateInCountry?: string;
