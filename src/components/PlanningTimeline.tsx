@@ -690,7 +690,7 @@ export const PlanningTimeline: React.FC = () => {
                     data-gantt-group-toggle="true"
                     aria-expanded={!isCollapsed}
                     aria-label={`${isCollapsed ? 'Développer' : 'Réduire'} ${grp.name[language] || grp.name.en}`}
-                    className="w-full h-8 sm:h-9 min-h-[32px] sm:min-h-[36px] max-h-[32px] sm:max-h-[36px] shrink-0 px-2 sm:px-2.5 bg-slate-200/80 dark:bg-slate-800/80 flex items-center justify-between cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-800 text-left"
+                    className="w-full h-7 sm:h-8 min-h-[28px] sm:min-h-[32px] max-h-[28px] sm:max-h-[32px] shrink-0 px-2 sm:px-2.5 bg-slate-200/80 dark:bg-slate-800/80 flex items-center justify-between cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-800 text-left"
                   >
                     <div className="flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate">
                       {isCollapsed ? <ChevronRight size={13} className="shrink-0 text-slate-500" /> : <ChevronDown size={13} className="shrink-0 text-slate-500" />}
