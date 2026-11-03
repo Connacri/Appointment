@@ -7,6 +7,7 @@ on:
     branches:
       - 'fix/**'
       - 'feature/**'
+      - 'feat/**'
 
 permissions:
   contents: read
