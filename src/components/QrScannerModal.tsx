@@ -111,8 +111,9 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
                 } catch {
                   payload = { id: codes[0].rawValue };
                 }
-                const bookingId = payload?.id || payload?.bookingId;
-                const match = bookings.find((booking) => booking.id === bookingId);
+                const supportedPayload = ['ARRIVAL_PASS', 'PAYMENT_RECEIPT'].includes(payload?.type);
+                const bookingId = supportedPayload ? (payload?.id || payload?.bookingId) : null;
+                const match = bookingId ? bookings.find((booking) => booking.id === bookingId) : undefined;
                 if (match && match.status !== 'cancelled' && match.status !== 'checked_out') {
                   setSelectedScannedBooking(match);
                   setCashAmountReceived(match.totalPrice || 0);
@@ -122,8 +123,8 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
                   return;
                 }
                 setCameraError(language === 'fr'
-                  ? 'QR détecté, mais aucune réservation active correspondante n’a été trouvée.'
-                  : 'QR detected, but no matching active booking was found.');
+                  ? 'QR non reconnu ou aucune réservation active correspondante n’a été trouvée.'
+                  : 'QR not recognized or no matching active booking was found.');
               }
             } catch (error) {
               console.warn('[QrScannerModal] QR detection failed:', error);
