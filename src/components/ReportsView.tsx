@@ -11,7 +11,7 @@ import {
 import { useApp } from '../context/AppContext';
 
 export const ReportsView: React.FC = () => {
-  const { bookings, language, resourceGroups } = useApp();
+  const { bookings, language, resourceGroups, currency } = useApp();
 
   const totalRevenue = bookings.reduce((acc, b) => acc + (b.totalPrice || 0), 0);
   const totalBookings = bookings.length;
@@ -29,7 +29,7 @@ export const ReportsView: React.FC = () => {
         </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
           {language === 'fr'
-            ? 'Vue analytique des revenus, du taux d\'occupation et des réservations Hôtel & Resort'
+            ? 'Vue analytique des revenus, des capacités configurées et des réservations Hôtel & Resort'
             : 'Revenue analytics, occupancy rates, and booking distribution for Hotel & Resort'}
         </p>
       </div>
@@ -42,7 +42,7 @@ export const ReportsView: React.FC = () => {
             <CreditCard size={18} className="text-blue-500" />
           </div>
           <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">
-            {totalRevenue.toLocaleString()} €
+            {totalRevenue.toLocaleString()} {currency || 'DA'}
           </div>
           <span className="text-[11px] text-emerald-600 font-medium mt-1 block">
             Estimation basée sur les dossiers enregistrés
@@ -101,7 +101,7 @@ export const ReportsView: React.FC = () => {
               <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
                 <Bed size={14} /> Hôtellerie & Séjours
               </span>
-              <span className="font-mono">{hotelRevenue.toLocaleString()} €</span>
+              <span className="font-mono">{hotelRevenue.toLocaleString()} {currency || 'DA'}</span>
             </div>
             <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
               <div
@@ -116,7 +116,7 @@ export const ReportsView: React.FC = () => {
               <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
                 <Palmtree size={14} /> Resort, Complexe & Villas
               </span>
-              <span className="font-mono">{resortRevenue.toLocaleString()} €</span>
+              <span className="font-mono">{resortRevenue.toLocaleString()} {currency || 'DA'}</span>
             </div>
             <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
               <div
