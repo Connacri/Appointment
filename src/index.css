@@ -150,3 +150,200 @@
     scrollbar-width: thin;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   Global PMS UX foundation — shared by every workspace, form and dialog.
+   Keep these rules structural and low-specificity so page-specific layouts win.
+   -------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    color-scheme: light;
+    --pms-surface: 255 255 255;
+    --pms-canvas: 248 250 252;
+    --pms-border: 226 232 240;
+    --pms-muted: 100 116 139;
+    --pms-accent: 37 99 235;
+    --pms-radius-card: 1rem;
+    --pms-radius-control: 0.625rem;
+    --pms-shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px rgb(15 23 42 / 0.035);
+  }
+
+  .dark {
+    color-scheme: dark;
+    --pms-surface: 15 23 42;
+    --pms-canvas: 2 6 23;
+    --pms-border: 51 65 85;
+    --pms-muted: 148 163 184;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-width: 320px;
+    background: rgb(var(--pms-canvas));
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button, input, select, textarea {
+    font: inherit;
+  }
+
+  button, [role="button"], a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+    select, textarea) {
+    max-width: 100%;
+    min-width: 0;
+    accent-color: rgb(var(--pms-accent));
+  }
+
+  :where(input, select, textarea):focus-visible {
+    outline: 2px solid rgb(var(--pms-accent) / 0.85);
+    outline-offset: 1px;
+  }
+
+  ::selection {
+    color: white;
+    background: rgb(var(--pms-accent) / 0.82);
+  }
+}
+
+/* Shared scroll behavior for dense operational data. */
+@layer components {
+  .pms-card {
+    min-width: 0;
+    border: 1px solid rgb(var(--pms-border));
+    border-radius: var(--pms-radius-card);
+    background: rgb(var(--pms-surface));
+    box-shadow: var(--pms-shadow-card);
+  }
+
+  .pms-page-header {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .pms-toolbar {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .pms-table-wrap {
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pms-dialog-panel {
+    width: min(100%, 48rem);
+    max-height: min(92dvh, 56rem);
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid rgb(var(--pms-border));
+    border-radius: 1.25rem;
+    background: rgb(var(--pms-surface));
+    box-shadow: 0 24px 80px rgb(2 6 23 / 0.24);
+  }
+}
+
+/* Global dialog safety: panels remain within the visual viewport on phones. */
+@media (max-width: 767px) {
+  body {
+    overscroll-behavior-y: none;
+  }
+
+  main {
+    min-height: 0;
+    overscroll-behavior: contain;
+  }
+
+  main :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select, textarea) {
+    font-size: max(16px, 0.875rem);
+  }
+
+  main :where(textarea) {
+    min-height: 5rem;
+  }
+
+  /* Existing full-screen modal shells use fixed + inset-0 Tailwind classes. */
+  [class*="fixed"][class*="inset-0"] {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-right: max(0.5rem, env(safe-area-inset-right));
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    padding-left: max(0.5rem, env(safe-area-inset-left));
+  }
+
+  [class*="fixed"][class*="inset-0"] :where(form) {
+    min-width: 0;
+  }
+
+  [class*="fixed"][class*="inset-0"] :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select, textarea) {
+    min-width: 0;
+    max-width: 100%;
+    font-size: 16px;
+  }
+
+  /* Keep action rows usable without forcing the entire dialog wider. */
+  [class*="fixed"][class*="inset-0"] :where(form > div:last-child, .dialog-actions) {
+    flex-wrap: wrap;
+  }
+
+  .pms-page-header > :where(div:first-child) {
+    min-width: 0;
+    flex: 1 1 12rem;
+  }
+
+  .pms-toolbar {
+    max-width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 0.125rem;
+    scrollbar-width: thin;
+  }
+
+  .pms-toolbar > * {
+    flex-shrink: 0;
+  }
+
+  .pms-table-wrap table {
+    min-width: 38rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .pms-dialog-panel {
+    max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1rem);
+    border-radius: 0.875rem;
+  }
+}
+
+/* Respect reduced-motion preferences across all screens and dialogs. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
