@@ -505,7 +505,7 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
           ? 'checked_in'
           : 'confirmed';
 
-    const key = `${guestBuilding ?? room?.building ?? ''}:${roomNo}|${startIso ?? startDate}|${guest.name}`;
+    const key = `${guestBuilding ?? room?.building ?? ''}:${guestFloor ?? room?.floor ?? ''}:${roomNo}|${startIso ?? startDate}|${guest.name}`;
     const existing = stayByKey.get(key);
     if (existing) {
       if (endIso && endDate > existing.endDate) existing.endDate = endDate;
