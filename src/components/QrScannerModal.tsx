@@ -23,11 +23,12 @@ interface QrScannerModalProps {
 }
 
 export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose }) => {
-  const { language, bookings, confirmCheckInAndCashPayment } = useApp();
+  const { language, bookings, currency, confirmCheckInAndCashPayment } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedScannedBooking, setSelectedScannedBooking] = useState<TimelineBooking | null>(null);
   const [isScanningSimulated, setIsScanningSimulated] = useState(false);
   const [cashAmountReceived, setCashAmountReceived] = useState<number>(0);
+  const [cashValidationError, setCashValidationError] = useState<string | null>(null);
   const [successReceipt, setSuccessReceipt] = useState<{
     booking: TimelineBooking;
     cashSettled: boolean;
@@ -63,6 +64,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
     setTimeout(() => {
       setSelectedScannedBooking(bkg);
       setCashAmountReceived(bkg.totalPrice || 0);
+      setCashValidationError(null);
       setIsScanningSimulated(false);
       setSuccessReceipt(null);
     }, 600);
@@ -72,9 +74,22 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
     if (!selectedScannedBooking) return;
 
     const isCashPending = selectedScannedBooking.paymentStatus === 'pending' && selectedScannedBooking.totalPrice > 0;
-    const res = confirmCheckInAndCashPayment(selectedScannedBooking.id, isCashPending);
+    if (isCashPending && (!Number.isFinite(cashAmountReceived) || cashAmountReceived < selectedScannedBooking.totalPrice)) {
+      setCashValidationError(language === 'fr'
+        ? 'Le montant reçu doit être supérieur ou égal au montant à encaisser.'
+        : language === 'ar'
+        ? 'يجب أن يكون المبلغ المستلم أكبر من أو يساوي المبلغ المستحق.'
+        : 'Cash received must be at least the amount due.');
+      return;
+    }
 
-    const change = Math.max(0, cashAmountReceived - selectedScannedBooking.totalPrice);
+    const res = confirmCheckInAndCashPayment(selectedScannedBooking.id, isCashPending);
+    if (!res.success) {
+      setCashValidationError(res.message);
+      return;
+    }
+
+    const change = isCashPending ? cashAmountReceived - selectedScannedBooking.totalPrice : 0;
     setSuccessReceipt({
       booking: res.booking || selectedScannedBooking,
       cashSettled: isCashPending,
@@ -82,6 +97,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
     setSelectedScannedBooking(null);
+    setCashValidationError(null);
   };
 
   return (
@@ -147,7 +163,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
                 {successReceipt.cashSettled && (
                   <div className="pt-1 border-t border-slate-200 dark:border-slate-800 flex justify-between text-emerald-600 font-bold">
                     <span>Espèces encaissées :</span>
-                    <span>{successReceipt.booking.totalPrice} € (Monnaie : {successReceipt.changeGiven} €)</span>
+                    <span>{successReceipt.booking.totalPrice} {currency} (Monnaie : {successReceipt.changeGiven} {currency})</span>
                   </div>
                 )}
               </div>
@@ -193,24 +209,25 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
                       <Banknote size={15} />
                       <span>Montant Cash à Encaisser :</span>
                     </span>
-                    <span className="text-base font-black">{selectedScannedBooking.totalPrice} €</span>
+                    <span className="text-base font-black">{selectedScannedBooking.totalPrice} {currency}</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  {cashValidationError && <p role="alert" className="text-xs font-semibold text-red-700 dark:text-red-300">{cashValidationError}</p>}
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
                     <div>
-                      <label className="block text-slate-600 dark:text-slate-400 mb-0.5">Espèces reçues (€)</label>
+                      <label className="block text-slate-600 dark:text-slate-400 mb-0.5">Espèces reçues ({currency})</label>
                       <input
                         type="number"
                         min={selectedScannedBooking.totalPrice}
                         value={cashAmountReceived}
-                        onChange={(e) => setCashAmountReceived(Number(e.target.value))}
+                        onChange={(e) => { setCashAmountReceived(Number(e.target.value)); setCashValidationError(null); }}
                         className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-bold"
                       />
                     </div>
                     <div>
                       <label className="block text-slate-600 dark:text-slate-400 mb-0.5">Monnaie rendue</label>
                       <div className="h-8 px-2 bg-emerald-100 dark:bg-emerald-950 border border-emerald-300 rounded-lg font-bold flex items-center text-emerald-800 dark:text-emerald-300">
-                        {Math.max(0, cashAmountReceived - selectedScannedBooking.totalPrice)} €
+                        {Math.max(0, cashAmountReceived - selectedScannedBooking.totalPrice)} {currency}
                       </div>
                     </div>
                   </div>
@@ -218,7 +235,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
               ) : (
                 <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-xl flex items-center gap-2 text-emerald-800 dark:text-emerald-200">
                   <ShieldCheck size={16} />
-                  <span>Dossier déjà entièrement payé en ligne (0 € dû)</span>
+                  <span>Dossier déjà entièrement payé en ligne (0 {currency} dû)</span>
                 </div>
               )}
 
@@ -233,7 +250,8 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
                 <button
                   type="button"
                   onClick={handleValidateCheckIn}
-                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-1.5"
+                  disabled={selectedScannedBooking.paymentStatus === 'pending' && selectedScannedBooking.totalPrice > 0 && (!Number.isFinite(cashAmountReceived) || cashAmountReceived < selectedScannedBooking.totalPrice)}
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <CheckCircle2 size={16} />
                   <span>Valider la Présence & Finaliser l'Entrée</span>
