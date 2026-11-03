@@ -468,8 +468,8 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     // attempting a room lookup; treating "1-1-12064" as building-room
     // leaves "1-12064" as the room number and silently breaks the link.
     const parts = rawRoomRef.split('-').map((part) => part.trim());
-    const hasBuilding = parts.length >= 2 && /^\\d+$/.test(parts[0]);
-    const hasFloor = parts.length >= 3 && /^\\d+$/.test(parts[1]);
+    const hasBuilding = parts.length >= 2 && /^\d+$/.test(parts[0]);
+    const hasFloor = parts.length >= 3 && /^\d+$/.test(parts[1]);
     const guestBuilding = hasBuilding ? Number(parts[0]) : null;
     const guestFloor = hasFloor ? Number(parts[1]) : null;
     const rawRoomNo = hasFloor ? parts.slice(2).join('-') : hasBuilding ? parts.slice(1).join('-') : rawRoomRef;
