@@ -71,3 +71,56 @@ test('IndexedDB transaction errors reject instead of reporting success', async (
   transaction.dispatchEvent(new Event('error'));
   await assert.rejects(completion, /Constraint violation/);
 });
+
+import { mdbSnapshotToPlanning, type MdbSnapshot } from '../src/locks/database/mdbImport';
+
+test('CardLock import recovers buildings missing from BuildingInfo using RoomInfo.BldNo', () => {
+  const snapshot: MdbSnapshot = {
+    fileName: 'CardLock.mdb',
+    fileLastModified: null,
+    importedAt: '2026-11-03T00:00:00.000Z',
+    // Simulate a legacy MDB where BuildingInfo contains only the first building.
+    buildings: [{ no: 1, name: 'Bâtiment Centre' }],
+    rooms: [
+      { building: 1, floor: 1, roomNo: '101', type: 'Double', status: '', price: '10000', cardCount: 1, maxCards: 2 },
+      { building: 2, floor: 2, roomNo: '201', type: 'Suite', status: '', price: '20000', cardCount: 0, maxCards: 2 },
+    ],
+    guests: [],
+    cards: [],
+    systemProfile: null,
+    counts: { cards: 0, guests: 0, rooms: 2, openings: 0 },
+    warnings: [],
+  };
+
+  const planning = mdbSnapshotToPlanning(snapshot);
+  assert.deepEqual(planning.resourceGroups.map((group) => group.id), ['mdb-bld-1', 'mdb-bld-2']);
+  assert.equal(planning.resourceGroups[1].name.fr, 'Bâtiment 2');
+  assert.equal(planning.resourceGroups[1].resources.length, 1);
+});
+
+test('CardLock import uses building-qualified room IDs and links stays to the correct building', () => {
+  const snapshot: MdbSnapshot = {
+    fileName: 'CardLock.mdb',
+    fileLastModified: null,
+    importedAt: '2026-11-03T00:00:00.000Z',
+    buildings: [{ no: 1, name: 'Centre' }, { no: 2, name: 'Plage' }],
+    rooms: [
+      { building: 1, floor: 1, roomNo: '101', type: 'Double', status: '', price: '10000', cardCount: 0, maxCards: 2 },
+      { building: 2, floor: 1, roomNo: '101', type: 'Double', status: '', price: '12000', cardCount: 0, maxCards: 2 },
+    ],
+    guests: [
+      { roomNo: '1-101', name: 'Client Centre', comeTime: '2026-11-04T14:00:00.000Z', goTime: '2026-11-06T11:00:00.000Z', cardId: '1', flag: '' },
+      { roomNo: '2-101', name: 'Client Plage', comeTime: '2026-11-04T14:00:00.000Z', goTime: '2026-11-06T11:00:00.000Z', cardId: '2', flag: '' },
+    ],
+    cards: [],
+    systemProfile: null,
+    counts: { cards: 0, guests: 2, rooms: 2, openings: 0 },
+    warnings: [],
+  };
+
+  const planning = mdbSnapshotToPlanning(snapshot);
+  assert.equal(planning.resourceGroups[0].resources[0].id, 'mdb-rm-1-101');
+  assert.equal(planning.resourceGroups[1].resources[0].id, 'mdb-rm-2-101');
+  assert.equal(planning.bookings[0].resourceId, 'mdb-rm-1-101');
+  assert.equal(planning.bookings[1].resourceId, 'mdb-rm-2-101');
+});
