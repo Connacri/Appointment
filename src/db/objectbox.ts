@@ -11,6 +11,7 @@
  */
 
 import { TimelineBooking, InvoiceRecord, ResourceItem, DomainType } from '../types/booking';
+import { waitForTransactionCompletion } from './indexedDbTransaction';
 
 export interface ObjectBoxQueryOptions<T> {
   where?: (item: T) => boolean;
@@ -212,27 +213,24 @@ class ObjectBoxStore {
     items: T[]
   ): Promise<void> {
     await this.openStore();
-    try {
-      localStorage.setItem(`ob_${boxName}`, JSON.stringify(items));
-    } catch (error) {
-      console.warn('[ObjectBox] Snapshot fallback write failed:', error);
-    }
-    if (!this.idb) return;
+    if (this.idb) {
+      const tx = this.idb.transaction(boxName, 'readwrite');
+      const store = tx.objectStore(boxName);
+      store.clear();
+      for (const item of items) store.put(item);
+      await waitForTransactionCompletion(tx, `replaceAll ${boxName}`);
 
-    await new Promise<void>((resolve, reject) => {
-      let tx: IDBTransaction;
+      // IndexedDB is authoritative. The localStorage snapshot is only a fallback mirror.
       try {
-        tx = this.idb!.transaction(boxName, 'readwrite');
-        const store = tx.objectStore(boxName);
-        store.clear();
-        for (const item of items) store.put(item);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error ?? new Error(`IndexedDB replaceAll failed: ${boxName}`));
-        tx.onabort = () => reject(tx.error ?? new Error(`IndexedDB replaceAll aborted: ${boxName}`));
+        localStorage.setItem(`ob_${boxName}`, JSON.stringify(items));
       } catch (error) {
-        reject(error);
+        console.warn('[ObjectBox] Snapshot fallback mirror failed:', error);
       }
-    });
+      return;
+    }
+
+    // In fallback mode this is the primary store, so failure must reach the caller.
+    localStorage.setItem(`ob_${boxName}`, JSON.stringify(items));
   }
 
   // Put / Upsert
@@ -242,28 +240,32 @@ class ObjectBoxStore {
   ): Promise<void> {
     await this.openStore();
 
-    // Always keep localStorage fallback in sync
-    try {
-      const raw = localStorage.getItem(`ob_${boxName}`);
-      let list: T[] = raw ? JSON.parse(raw) : [];
-      list = list.filter((x) => x.id !== item.id);
-      list.push(item);
-      localStorage.setItem(`ob_${boxName}`, JSON.stringify(list));
-    } catch (e) {
-      console.warn('[ObjectBox] Fallback sync warning:', e);
-    }
+    if (this.idb) {
+      const tx = this.idb.transaction(boxName, 'readwrite');
+      tx.objectStore(boxName).put(item);
+      await waitForTransactionCompletion(tx, `put ${boxName}/${item.id}`);
 
-    if (!this.idb) {
+      // Keep the fallback mirror best-effort; it is never authoritative when IDB is available.
+      try {
+        const raw = localStorage.getItem(`ob_${boxName}`);
+        const list: T[] = raw ? JSON.parse(raw) : [];
+        localStorage.setItem(
+          `ob_${boxName}`,
+          JSON.stringify([...list.filter((entry) => entry.id !== item.id), item])
+        );
+      } catch (error) {
+        console.warn('[ObjectBox] Fallback mirror update failed:', error);
+      }
       return;
     }
 
-    return new Promise((resolve, reject) => {
-      const tx = this.idb!.transaction(boxName, 'readwrite');
-      const store = tx.objectStore(boxName);
-      const req = store.put(item);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-    });
+    // In fallback mode localStorage is the primary store; propagate quota/security errors.
+    const raw = localStorage.getItem(`ob_${boxName}`);
+    const list: T[] = raw ? JSON.parse(raw) : [];
+    localStorage.setItem(
+      `ob_${boxName}`,
+      JSON.stringify([...list.filter((entry) => entry.id !== item.id), item])
+    );
   }
 
   // Remove — guarantees complete deletion from both IDB and fallback store
@@ -273,29 +275,35 @@ class ObjectBoxStore {
   ): Promise<void> {
     await this.openStore();
 
-    // Clean from localStorage fallback
-    try {
-      const raw = localStorage.getItem(`ob_${boxName}`);
-      if (raw) {
-        let list: any[] = JSON.parse(raw);
-        list = list.filter((x) => x.id !== id);
-        localStorage.setItem(`ob_${boxName}`, JSON.stringify(list));
-      }
-    } catch (e) {
-      console.warn('[ObjectBox] Fallback remove error:', e);
-    }
+    if (this.idb) {
+      const tx = this.idb.transaction(boxName, 'readwrite');
+      tx.objectStore(boxName).delete(id);
+      await waitForTransactionCompletion(tx, `remove ${boxName}/${id}`);
 
-    if (!this.idb) {
+      try {
+        const raw = localStorage.getItem(`ob_${boxName}`);
+        if (raw) {
+          const list = JSON.parse(raw) as Array<{ id: string }>;
+          localStorage.setItem(
+            `ob_${boxName}`,
+            JSON.stringify(list.filter((entry) => entry.id !== id))
+          );
+        }
+      } catch (error) {
+        console.warn('[ObjectBox] Fallback mirror remove failed:', error);
+      }
       return;
     }
 
-    return new Promise((resolve, reject) => {
-      const tx = this.idb!.transaction(boxName, 'readwrite');
-      const store = tx.objectStore(boxName);
-      const req = store.delete(id);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-    });
+    // In fallback mode localStorage is the primary store; propagate failures.
+    const raw = localStorage.getItem(`ob_${boxName}`);
+    if (raw) {
+      const list = JSON.parse(raw) as Array<{ id: string }>;
+      localStorage.setItem(
+        `ob_${boxName}`,
+        JSON.stringify(list.filter((entry) => entry.id !== id))
+      );
+    }
   }
 
   // Clear all stores completely (for legal GDPR / Account Deletion purge).
@@ -303,25 +311,18 @@ class ObjectBoxStore {
   public async clearAll(): Promise<void> {
     await this.openStore();
 
+    if (this.idb) {
+      const tx = this.idb.transaction(['bookings', 'invoices', 'resources'], 'readwrite');
+      tx.objectStore('bookings').clear();
+      tx.objectStore('invoices').clear();
+      tx.objectStore('resources').clear();
+      await waitForTransactionCompletion(tx, 'clear all stores');
+    }
+
+    // Clear the fallback only after the authoritative IDB transaction commits.
     for (const boxName of ['bookings', 'invoices', 'resources'] as const) {
       localStorage.removeItem(`ob_${boxName}`);
     }
-    if (!this.idb) return;
-
-    await new Promise<void>((resolve, reject) => {
-      let tx: IDBTransaction;
-      try {
-        tx = this.idb!.transaction(['bookings', 'invoices', 'resources'], 'readwrite');
-        tx.objectStore('bookings').clear();
-        tx.objectStore('invoices').clear();
-        tx.objectStore('resources').clear();
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error ?? new Error('IndexedDB purge transaction failed'));
-        tx.onabort = () => reject(tx.error ?? new Error('IndexedDB purge transaction aborted'));
-      } catch (error) {
-        reject(error);
-      }
-    });
   }
 
   // Get Store Statistics
