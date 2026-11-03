@@ -51,12 +51,12 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
         guest: booking.guestName,
         resource: booking.resourceName,
         sector: booking.sector,
-        amountPaid: booking.totalPrice,
+        amountPaid: booking.payments?.reduce((sum, payment) => sum + payment.amount, 0) || booking.totalPrice,
         currency,
-        paymentMethod: 'CASH',
-        paymentStatus: 'PAID',
+        paymentMethod: booking.payments?.map((payment) => payment.method).join(', ') || 'not_specified',
+        paymentStatus: booking.paymentStatus,
         issuedAt: new Date().toISOString(),
-        secHash: `OMNI-PAY-VERIFIED-${booking.id.slice(-6)}`,
+        reference: booking.id,
       });
 
       QRCode.toDataURL(receiptPayload, {
@@ -82,7 +82,7 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
         total: `${booking.totalPrice} ${currency}`,
         payment: booking.paymentStatus,
         status: booking.status,
-        secHash: `OMNI-${booking.id.slice(-6)}-VERIFIED`,
+        reference: booking.id,
       });
 
       QRCode.toDataURL(payload, {
@@ -254,6 +254,27 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
             </div>
           )}
 
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setDisplayMode('arrival_pass')}
+              aria-pressed={displayMode === 'arrival_pass'}
+              className={`min-h-10 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${displayMode === 'arrival_pass' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300'}`}
+            >
+              Pass d’arrivée
+            </button>
+            <button
+              type="button"
+              onClick={() => setDisplayMode('payment_receipt')}
+              disabled={booking.paymentStatus !== 'paid'}
+              aria-pressed={displayMode === 'payment_receipt'}
+              title={booking.paymentStatus !== 'paid' ? 'Disponible après règlement complet' : 'Afficher le reçu de paiement'}
+              className={`min-h-10 rounded-xl border px-3 py-2 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${displayMode === 'payment_receipt' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300'}`}
+            >
+              Reçu de paiement QR
+            </button>
+          </div>
+
           {/* Interactive QR Code Frame */}
           <div className="flex flex-col items-center justify-center p-4 bg-white dark:bg-slate-950 rounded-3xl border-2 border-dashed border-slate-300 dark:border-slate-700 relative group shadow-inner">
             {qrDataUrl ? (
@@ -277,7 +298,7 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
                   : 'Present this QR Code at the reception desk'}
               </p>
               <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                Signature cryptographique : OMNI-VALID-{booking.id.slice(-6)}
+                Référence de réservation : {booking.id}
               </p>
             </div>
           </div>
