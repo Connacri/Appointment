@@ -627,7 +627,7 @@ export const PlanningTimeline: React.FC = () => {
         <button
           type="button"
           onClick={scrollToToday}
-          className="absolute top-[168px] sm:top-15 right-2 sm:right-6 z-40 px-3 py-1 rounded-full text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/70 shadow-md backdrop-blur-md flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-all cursor-pointer select-none active:scale-95 group"
+          className="absolute top-[42px] sm:top-[42px] right-2 sm:right-6 z-[95] px-3 py-1 rounded-full text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/70 shadow-md backdrop-blur-md flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-all cursor-pointer select-none active:scale-95 group"
           title={language === 'fr' ? 'Centrer la vue sur Aujourd’hui' : language === 'ar' ? 'الانتقال إلى اليوم' : 'Scroll to Today'}
         >
           <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
@@ -745,11 +745,11 @@ export const PlanningTimeline: React.FC = () => {
         </div>
 
         {/* RIGHT AREA: Timeline Grid with Horizontal Scrolling */}
-        <div className="flex-1 flex flex-col min-w-max relative">
+        <div className="flex-1 flex flex-col min-w-max min-h-max relative">
           {/* Live Current Time Line Marker: Dynamic offset relative to timeline's scroll position and container width */}
           {timelineSync.isTodayInRange && (
             <div
-              className="absolute top-0 bottom-0 pointer-events-none z-30 flex flex-col items-center transition-[left] duration-300"
+              className="absolute top-0 bottom-0 min-h-full pointer-events-none z-30 flex flex-col items-center transition-[left] duration-300"
               style={{
                 left: `${timelineSync.absoluteGridX}px`,
                 transform: 'translateX(-50%)',
