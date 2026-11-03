@@ -124,3 +124,39 @@ test('CardLock import uses building-qualified room IDs and links stays to the co
   assert.equal(planning.bookings[0].resourceId, 'mdb-rm-1-101');
   assert.equal(planning.bookings[1].resourceId, 'mdb-rm-2-101');
 });
+
+test('CardLock import preserves building, floor and room type as separate Gantt dimensions', () => {
+  const snapshot: MdbSnapshot = {
+    fileName: 'CardLock.mdb',
+    fileLastModified: null,
+    importedAt: '2026-11-03T00:00:00.000Z',
+    buildings: [{ no: 1, name: 'Bâtiment principal' }, { no: 3, name: 'Annexe' }],
+    rooms: [
+      { building: 1, floor: 1, roomNo: '101', type: 'Single', status: '', price: '8000', cardCount: 0, maxCards: 2 },
+      { building: 1, floor: 1, roomNo: '102', type: 'Double', status: '', price: '12000', cardCount: 0, maxCards: 2 },
+      { building: 1, floor: 2, roomNo: '201', type: 'Suite', status: '', price: '20000', cardCount: 0, maxCards: 2 },
+      { building: 3, floor: 1, roomNo: '101', type: 'Studio', status: '', price: '10000', cardCount: 0, maxCards: 2 },
+    ],
+    guests: [],
+    cards: [],
+    systemProfile: null,
+    counts: { cards: 0, guests: 0, rooms: 4, openings: 0 },
+    warnings: [],
+  };
+
+  const planning = mdbSnapshotToPlanning(snapshot);
+  assert.deepEqual(planning.resourceGroups.map((group) => group.name.fr), ['Bâtiment principal', 'Annexe']);
+  assert.deepEqual(
+    planning.resourceGroups[0].resources.map((room) => [room.name, room.building, room.floor, room.type]),
+    [
+      ['101', '1', '1', 'Single'],
+      ['102', '1', '1', 'Double'],
+      ['201', '1', '2', 'Suite'],
+    ]
+  );
+  assert.deepEqual(
+    planning.resourceGroups[1].resources.map((room) => [room.name, room.building, room.floor, room.type]),
+    [['101', '3', '1', 'Studio']]
+  );
+});
+
