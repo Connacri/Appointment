@@ -335,6 +335,35 @@ export const PlanningTimeline: React.FC = () => {
       .filter((grp) => grp.resources.length > 0);
   }, [currentDomain, resourceGroups, searchQuery, bookings, selectedEstablishmentId]);
 
+  // Gantt hierarchy: building (resource group) > floor > room.
+  // The room type remains visible on each room row.
+  const floorGroupsByGroup = useMemo(() => {
+    const result = new Map<string, Array<{ key: string; label: string; resources: ResourceItem[] }>>();
+    for (const group of filteredGroups) {
+      if (group.sector !== 'hotel') {
+        result.set(group.id, [{ key: 'all', label: '', resources: group.resources }]);
+        continue;
+      }
+      const floors = new Map<string, ResourceItem[]>();
+      for (const resource of group.resources) {
+        const floor = resource.floor?.trim() || '';
+        const items = floors.get(floor) ?? [];
+        items.push(resource);
+        floors.set(floor, items);
+      }
+      result.set(group.id, [...floors.entries()]
+        .sort(([a], [b]) => a.localeCompare(b, language, { numeric: true, sensitivity: 'base' }))
+        .map(([floor, resources]) => ({
+          key: floor || 'unassigned',
+          label: floor
+            ? (language === 'fr' ? `Étage ${floor}` : language === 'ar' ? `الطابق ${floor}` : `Floor ${floor}`)
+            : (language === 'fr' ? 'Étage non renseigné' : language === 'ar' ? 'طابق غير محدد' : 'Floor not specified'),
+          resources,
+        })));
+    }
+    return result;
+  }, [filteredGroups, language]);
+
   // Calculate day-by-day availability per group
   const groupAvailability = useMemo(() => {
     const map: Record<string, Record<string, number>> = {};
@@ -674,33 +703,41 @@ export const PlanningTimeline: React.FC = () => {
                     {getSectorIcon(grp.sector)}
                   </button>
 
-                  {/* Resource Sub-Items */}
-                  {!isCollapsed &&
-                    grp.resources.map((res) => (
-                      <div
-                        key={res.id}
-                        className="h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 px-1.5 sm:px-2.5 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900"
-                      >
-                        <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
-                          {renderHousekeepingTag(res.housekeepingStatus)}
-                          {leftBarMode !== 'mini' && (
-                            <span className="font-semibold text-slate-800 dark:text-slate-200 truncate text-xs sm:text-[13px]">
-                              {res.name}
-                            </span>
-                          )}
-                          {leftBarMode === 'mini' && (
-                            <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-[11px] truncate">
-                              {res.name.replace(/[^0-9]/g, '') || res.name.slice(0, 3)}
-                            </span>
+                  {/* Floor hierarchy and room details */}
+                  {!isCollapsed && (floorGroupsByGroup.get(grp.id) ?? []).map((floorGroup) => (
+                    <React.Fragment key={floorGroup.key}>
+                      {floorGroup.label && (
+                        <div className="h-7 min-h-[28px] max-h-[28px] shrink-0 px-2.5 flex items-center justify-between bg-slate-100 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800">
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 truncate">{floorGroup.label}</span>
+                          <span className="text-[9px] font-mono text-slate-400 shrink-0">{floorGroup.resources.length}</span>
+                        </div>
+                      )}
+                      {floorGroup.resources.map((res) => (
+                        <div
+                          key={res.id}
+                          className="h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 px-1.5 sm:px-2.5 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900"
+                          title={`${res.name} · ${res.type || 'Chambre'} · ${floorGroup.label}`}
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
+                            {renderHousekeepingTag(res.housekeepingStatus)}
+                            {leftBarMode !== 'mini' ? (
+                              <span className="min-w-0 flex flex-col leading-tight">
+                                <span className="font-semibold text-slate-800 dark:text-slate-200 truncate text-xs sm:text-[13px]">{res.name}</span>
+                                <span className="text-[9px] sm:text-[10px] text-slate-400 dark:text-slate-500 truncate">{res.type || (language === 'fr' ? 'Chambre' : 'Room')}</span>
+                              </span>
+                            ) : (
+                              <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-[11px] truncate">
+                                {res.name.replace(/[^0-9]/g, '') || res.name.slice(0, 3)}
+                              </span>
+                            )}
+                          </div>
+                          {leftBarMode === 'normal' && (
+                            <span className="text-[10px] text-slate-400 font-mono tabular-nums shrink-0 hidden sm:inline">{res.pricePerDay} {currency}</span>
                           )}
                         </div>
-                        {leftBarMode === 'normal' && (
-                          <span className="text-[10px] text-slate-400 font-mono tabular-nums shrink-0 hidden sm:inline">
-                            {res.pricePerDay} {currency}
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                      ))}
+                    </React.Fragment>
+                  ))}
                 </div>
               );
             })}
@@ -775,9 +812,32 @@ export const PlanningTimeline: React.FC = () => {
                     })}
                   </div>
 
-                  {/* Individual Resource Rows */}
-                  {!isCollapsed &&
-                    grp.resources.map((res) => {
+                  {/* Floor headers and individual room rows */}
+                  {!isCollapsed && (floorGroupsByGroup.get(grp.id) ?? []).map((floorGroup) => (
+                    <React.Fragment key={floorGroup.key}>
+                      {floorGroup.label && (
+                        <div className="h-7 min-h-[28px] max-h-[28px] shrink-0 flex bg-slate-100/80 dark:bg-slate-850/80 border-b border-slate-200 dark:border-slate-800">
+                          {timelineDays.map((day) => {
+                            const occupied = floorGroup.resources.filter((resource) =>
+                              bookings.some((booking) =>
+                                booking.resourceId === resource.id &&
+                                booking.status !== 'cancelled' &&
+                                booking.startDate <= day.dateStr &&
+                                booking.endDate > day.dateStr
+                              )
+                            ).length;
+                            const available = Math.max(0, floorGroup.resources.length - occupied);
+                            return (
+                              <div key={day.dateStr} style={{ width: `${colWidth}px` }} className="shrink-0 border-r border-slate-200/60 dark:border-slate-800/60 flex items-center justify-center">
+                                <span className={`text-[9px] font-mono font-semibold ${available > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`} title={`${available} chambre(s) disponible(s)`}>
+                                  {available}/{floorGroup.resources.length}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {floorGroup.resources.map((res) => {
                       // Find bookings on this specific resource
                       const resBookings = bookings.filter((b) => b.resourceId === res.id);
 
@@ -953,9 +1013,11 @@ export const PlanningTimeline: React.FC = () => {
                             </div>
                           );
                         })}
-                    </div>
-                  );
-                })}
+                    </React.Fragment>
+                  ))}
+                </div>
+              );
+            })}
               </div>
             </div>
           </div>
