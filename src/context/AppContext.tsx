@@ -47,7 +47,8 @@ export type ActiveAppView =
   | 'pricing'
   | 'billing'
   | 'channels'
-  | 'prousb';
+  | 'prousb'
+  | 'spa';
 
 interface AppContextType {
   language: Language;

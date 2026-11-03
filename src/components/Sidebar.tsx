@@ -18,6 +18,7 @@ import {
   X,
   Coins,
   Globe,
+  Flower2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -32,6 +33,7 @@ export const Sidebar: React.FC = () => {
     currentDomain,
     setCurrentDomain,
     currentRole,
+    setCurrentRole,
     activeSector,
     setActiveSector,
     setIsCockpitOpen,
@@ -151,6 +153,14 @@ export const Sidebar: React.FC = () => {
       domains: ['hotel', 'resort'] as DomainType[],
     },
     {
+      id: 'spa',
+      label: language === 'fr' ? 'Spa & Espace Bien-Être' : language === 'ar' ? 'السبا والعافية' : 'Spa & Wellness',
+      icon: Flower2,
+      view: 'spa' as const,
+      roles: ['manager', 'receptionist', 'client', 'staff'],
+      domains: ['hotel', 'resort'] as DomainType[],
+    },
+    {
       id: 'reports',
       label: language === 'fr' ? 'Rapports d\'Activité' : language === 'ar' ? 'التقارير والإحصائيات' : 'Performance Reports',
       icon: FileText,
@@ -210,8 +220,73 @@ export const Sidebar: React.FC = () => {
         )}
       </div>
 
+      {/* Mobile Domain & Role Switcher inside Drawer */}
+      {isMobileView && (
+        <div className="px-3 py-2.5 border-b border-slate-800/80 bg-slate-950/60 space-y-2 shrink-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase text-slate-400">
+              {language === 'fr' ? 'Secteur :' : language === 'ar' ? 'القطاع:' : 'Sector:'}
+            </span>
+            <div className="flex-1 grid grid-cols-2 gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setCurrentDomain('hotel')}
+                className={`py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  currentDomain === 'hotel'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Hotel size={13} />
+                <span>{language === 'fr' ? 'Hôtel' : language === 'ar' ? 'فندق' : 'Hotel'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentDomain('resort')}
+                className={`py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  currentDomain === 'resort'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Palmtree size={13} />
+                <span>Resort</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase text-slate-400">
+              {language === 'fr' ? 'Rôle :' : language === 'ar' ? 'الدور:' : 'Role:'}
+            </span>
+            <div className="flex-1 flex gap-1 overflow-x-auto p-0.5 bg-slate-900 rounded-lg border border-slate-800">
+              {[
+                { id: 'admin', label: 'Admin' },
+                { id: 'manager', label: language === 'fr' ? 'Gérant' : 'Manager' },
+                { id: 'receptionist', label: language === 'fr' ? 'Réception' : 'Front' },
+                { id: 'staff', label: language === 'fr' ? 'Étage' : 'Staff' },
+                { id: 'client', label: language === 'fr' ? 'Client' : 'Guest' },
+              ].map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => setCurrentRole(r.id as any)}
+                  className={`px-2 py-1 text-[11px] font-semibold rounded whitespace-nowrap cursor-pointer transition-colors ${
+                    currentRole === r.id
+                      ? 'bg-blue-600 text-white font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Navigation List */}
-      <nav aria-label={language === "fr" ? "Navigation principale" : language === "ar" ? "التنقل الرئيسي" : "Main navigation"} className="flex-1 py-4 px-2.5 space-y-1.5 overflow-y-auto">
+      <nav aria-label={language === "fr" ? "Navigation principale" : language === "ar" ? "التنقل الرئيسي" : "Main navigation"} className="flex-1 py-3 px-2.5 space-y-1.5 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeView === item.view;

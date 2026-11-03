@@ -1331,7 +1331,7 @@ export const BookingModal: React.FC = () => {
           </div>
 
           {/* ACTION BUTTONS */}
-          <div className="flex items-center justify-end gap-2 pt-2 flex-wrap">
+          <div className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-3 -mx-5 -mb-5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2 flex-wrap z-10">
             {activeDomain === 'hotel' && (
               <div className="flex items-center gap-2 mr-auto">
                 <button

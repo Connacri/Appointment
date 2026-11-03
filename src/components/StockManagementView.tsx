@@ -109,43 +109,43 @@ export const StockManagementView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-4 sm:space-y-5">
+    <div className="flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-3 sm:space-y-4">
       {/* Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-slate-200 dark:border-slate-800">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Boxes size={22} className="text-blue-500" />
+          <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Boxes size={18} className="text-blue-500 shrink-0" />
             <span>
               {language === 'fr'
-                ? 'Stock, Économat & Consommables Hôteliers'
+                ? 'Stock, Économat & Consommables'
                 : language === 'ar'
-                ? 'المخزون والمستلزمات الفندقية'
-                : 'Hotel Stock & Amenities Inventory'}
+                ? 'المخزون والمستلزمات'
+                : 'Hotel Stock & Supplies'}
             </span>
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1 sm:line-clamp-none">
             {language === 'fr'
-              ? 'Linge de lit, kits d’accueil de bain, produits minibar et réassorts d’étage'
+              ? 'Linge de lit, kits d’accueil, produits minibar et réassorts'
               : 'Linen rotation, bathroom amenities, minibar inventory & room supplies'}
           </p>
         </div>
 
         {/* Global Stock Stats */}
-        <div className="flex items-center gap-3">
-          <div className="px-3.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xs">
             <span className="text-[10px] font-bold text-slate-400 uppercase block">Valeur Économat</span>
-            <span className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">
+            <span className="text-xs sm:text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">
               {totalStockValue.toLocaleString()} {currency}
             </span>
           </div>
 
           {lowStockItems.length > 0 && (
-            <div className="px-3.5 py-1.5 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-xl shadow-xs flex items-center gap-2">
-              <AlertTriangle size={16} className="text-rose-500" />
+            <div className="px-2.5 py-1 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-xl shadow-2xs flex items-center gap-1.5">
+              <AlertTriangle size={14} className="text-rose-500 shrink-0" />
               <div>
-                <span className="text-[10px] font-bold text-rose-500 uppercase block">Alerte Seuil</span>
+                <span className="text-[10px] font-bold text-rose-500 uppercase block">Seuil Bas</span>
                 <span className="text-xs font-bold text-rose-700 dark:text-rose-400 font-mono">
-                  {lowStockItems.length} articles bas
+                  {lowStockItems.length}
                 </span>
               </div>
             </div>

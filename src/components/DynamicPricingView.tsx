@@ -92,52 +92,52 @@ export const DynamicPricingView: React.FC = () => {
   const baseRate = hotelRooms.find((r) => r.type === selectedType)?.pricePerDay || 9000;
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-4 sm:space-y-5">
+    <div className="flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-3 sm:space-y-4">
       {/* Toast */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-semibold flex items-center gap-2 border border-slate-700 animate-fade-in">
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-3.5 py-2 rounded-xl shadow-xl text-xs font-semibold flex items-center gap-2 border border-slate-700 animate-fade-in">
           <Check size={14} className="text-emerald-400" />
           <span>{toastMessage}</span>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-slate-200 dark:border-slate-800">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Coins size={22} className="text-amber-500" />
+          <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Coins size={18} className="text-amber-500 shrink-0" />
             <span>
               {language === 'fr'
-                ? 'Gestion des Tarifs par Date & Yield Management'
+                ? 'Tarifs par Date & Yield Management'
                 : language === 'ar'
-                ? 'إدارة الأسعار حسب التاريخ والعائد'
-                : 'Dynamic Pricing & Yield Management'}
+                ? 'إدارة الأسعار حسب التاريخ'
+                : 'Dynamic Pricing & Yield'}
             </span>
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1 sm:line-clamp-none">
             {language === 'fr'
               ? 'Surcharges saisonnières, tarification événementielle et yield sur mesure'
               : 'Seasonal multipliers, weekend surges, and bespoke yield strategies'}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">Tarif standard de base :</span>
-          <span className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <span className="text-[11px] text-slate-400">Tarif standard :</span>
+          <span className="text-xs sm:text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">
             {baseRate.toLocaleString()} {currency} / nuit
           </span>
         </div>
       </div>
 
       {/* Control Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 sm:p-3 rounded-2xl shadow-2xs">
         {/* Room Type Selector */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <span className="text-xs font-semibold text-slate-500">Catégorie :</span>
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
-            className="px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-900 dark:text-white"
+            className="px-2.5 py-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-900 dark:text-white"
           >
             {roomTypes.map((t) => (
               <option key={t} value={t}>

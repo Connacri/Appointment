@@ -27,6 +27,7 @@ import { ObjectBoxInspectorModal } from './components/ObjectBoxInspectorModal';
 import { QrPassModal } from './components/QrPassModal';
 import { QrScannerModal } from './components/QrScannerModal';
 import { ProUsbLockSystemView } from './components/ProUsbLockSystemView';
+import { SpaManagementView } from './components/SpaManagementView';
 import { EstablishmentSetupModal } from './components/EstablishmentSetupModal';
 import { SupabaseAuthGate } from './services/supabase/SupabaseAuthGate';
 
@@ -86,6 +87,7 @@ const MainLayout: React.FC = () => {
             {activeView === 'reports' && <ReportsView />}
 
             {activeView === 'prousb' && <ProUsbLockSystemView />}
+            {activeView === 'spa' && <SpaManagementView />}
           </main>
         </div>
       </div>

@@ -233,93 +233,95 @@ export const MyBookingsView: React.FC = () => {
       )}
 
       {/* 2. HEADER & ACTION STRIP */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <span>
               {isClientRole
                 ? 'Mes Réservations & Pass QR Code d\'Arrivée'
                 : getTranslation('myBookingsTitle', language)}
             </span>
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {isClientRole
               ? 'Consultez vos réservations, téléchargez votre QR Code et présentez-le à votre arrivée'
               : 'Gestion centralisée des arrivées, scans QR code et encaissements'}
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
           {!isClientRole && (
             <button
               onClick={() => setIsQrScannerOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+              className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
             >
-              <Camera size={15} />
-              <span>Scanner un QR Pass d'Arrivée</span>
+              <Camera size={14} />
+              <span>{language === 'fr' ? 'Scanner QR Pass' : language === 'ar' ? 'مسح الرمز' : 'Scan Pass'}</span>
             </button>
           )}
 
           <button
             onClick={() => setIsNewBookingModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+            className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
           >
-            <Plus size={16} />
+            <Plus size={15} />
             <span>
-              {isClientRole ? 'Nouvelle Réservation en Ligne' : 'Ajouter une Réservation'}
+              {isClientRole
+                ? (language === 'fr' ? 'Réserver en ligne' : 'Book Online')
+                : (language === 'fr' ? 'Ajouter Réservation' : 'Add Booking')}
             </span>
           </button>
         </div>
       </div>
 
       {/* 3. FILTER TABS */}
-      <div className="flex items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto text-xs">
+      <div className="flex items-center gap-1 sm:gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto text-xs no-scrollbar">
         <button
           onClick={() => setFilterTab('all')}
-          className={`px-3 py-1.5 rounded-xl font-medium transition-colors ${
+          className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg font-medium transition-colors shrink-0 cursor-pointer ${
             filterTab === 'all'
               ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-bold'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
           }`}
         >
-          Tous les dossiers ({bookings.length})
+          Tous ({bookings.length})
         </button>
         <button
           onClick={() => setFilterTab('confirmed')}
-          className={`px-3 py-1.5 rounded-xl font-medium transition-colors ${
+          className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg font-medium transition-colors shrink-0 cursor-pointer ${
             filterTab === 'confirmed'
               ? 'bg-sky-600 text-white font-bold'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
           }`}
         >
-          Confirmés (En attente d'arrivée)
+          Confirmés
         </button>
         <button
           onClick={() => setFilterTab('checked_in')}
-          className={`px-3 py-1.5 rounded-xl font-medium transition-colors ${
+          className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg font-medium transition-colors shrink-0 cursor-pointer ${
             filterTab === 'checked_in'
               ? 'bg-emerald-600 text-white font-bold'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
           }`}
         >
-          Présence Validée (Checked-in)
+          Présents (Checked-in)
         </button>
         <button
           onClick={() => setFilterTab('cash_pending')}
-          className={`px-3 py-1.5 rounded-xl font-medium transition-colors ${
+          className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg font-medium transition-colors shrink-0 cursor-pointer ${
             filterTab === 'cash_pending'
               ? 'bg-amber-600 text-white font-bold'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
           }`}
         >
-          À régler en Espèces au comptoir
+          Espèces au comptoir
         </button>
       </div>
 
       {/* 4. BOOKINGS CARDS GRID */}
       {filtered.length === 0 ? (
-        <div className="p-12 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl bg-white dark:bg-slate-900">
-          <Calendar size={36} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+        <div className="p-8 sm:p-12 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl bg-white dark:bg-slate-900">
+          <Calendar size={32} className="mx-auto text-slate-300 dark:text-slate-600 mb-2 sm:mb-3" />
           <h3 className="font-bold text-slate-700 dark:text-slate-200 text-sm">
             Aucun dossier trouvé dans cette vue
           </h3>
@@ -330,13 +332,13 @@ export const MyBookingsView: React.FC = () => {
           </p>
           <button
             onClick={() => setIsNewBookingModalOpen(true)}
-            className="mt-4 px-5 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+            className="mt-3 sm:mt-4 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-xs cursor-pointer"
           >
             Réserver maintenant
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-2.5 sm:gap-4">
           {filtered.map((bkg) => {
             const st = statusConfig[bkg.status] || statusConfig.confirmed;
             const isCashPending = bkg.paymentStatus === 'pending' && bkg.totalPrice > 0;
@@ -345,34 +347,35 @@ export const MyBookingsView: React.FC = () => {
             return (
               <div
                 key={bkg.id}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs hover:shadow-lg transition-all flex flex-col justify-between space-y-4"
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3 sm:space-y-4"
               >
                 <div>
                   {/* Sector Badge & Status */}
-                  <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
                     {getSectorBadge(bkg.sector)}
                     <span
-                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                      className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
                         isCheckedIn
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                          : st.pillBg
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-slate-700 dark:text-slate-300'
                       }`}
                     >
-                      {isCheckedIn ? '✓ Présent (Enregistré)' : st.label[language] || bkg.status}
+                      <span className={`w-2 h-2 rounded-full ${isCheckedIn ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+                      {isCheckedIn ? 'Présent' : st.label[language] || bkg.status}
                     </span>
                   </div>
 
-                  <h3 className="font-extrabold text-slate-900 dark:text-white text-base mb-1 truncate">
+                  <h3 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base mb-1 truncate">
                     {bkg.resourceName}
                   </h3>
 
-                  <div className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 font-semibold mb-3">
-                    <User size={14} className="text-slate-400" />
+                  <div className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 font-semibold mb-2.5 sm:mb-3">
+                    <User size={13} className="text-slate-400" />
                     <span>{bkg.guestName}</span>
                   </div>
 
                   {/* Dates & Details */}
-                  <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-850 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <div className="space-y-1.5 sm:space-y-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-850 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">Dates :</span>
                       <span className="font-mono text-slate-900 dark:text-white font-bold">
@@ -387,12 +390,12 @@ export const MyBookingsView: React.FC = () => {
                       ) : isCashPending ? (
                         <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1">
                           <Banknote size={13} />
-                          <span>Espèces à l'arrivée ({bkg.totalPrice} €)</span>
+                          <span>Espèces ({bkg.totalPrice} €)</span>
                         </span>
                       ) : (
                         <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
                           <ShieldCheck size={13} />
-                          <span>Payé en ligne ({bkg.totalPrice} €)</span>
+                          <span>Payé ({bkg.totalPrice} €)</span>
                         </span>
                       )}
                     </div>
@@ -400,31 +403,31 @@ export const MyBookingsView: React.FC = () => {
                 </div>
 
                 {/* Primary Button: Open QR Pass Modal */}
-                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5 sm:space-y-2">
                   <button
                     type="button"
                     onClick={() => setActiveQrPassBooking(bkg)}
-                    className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-2xl text-xs shadow-md transition-all flex items-center justify-center gap-2 group"
+                    className="w-full h-9 sm:h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl sm:rounded-2xl text-xs shadow-xs transition-all flex items-center justify-center gap-2 group cursor-pointer"
                   >
-                    <QrCode size={16} className="group-hover:scale-110 transition-transform" />
-                    <span>Présenter mon Pass QR Code d'Arrivée</span>
+                    <QrCode size={15} className="group-hover:scale-110 transition-transform" />
+                    <span>Pass QR Code d'Arrivée</span>
                   </button>
 
-                  <div className="flex items-center justify-between text-xs pt-1">
+                  <div className="flex items-center justify-between text-xs pt-0.5">
                     <button
                       type="button"
                       onClick={() => downloadICS(bkg)}
-                      className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition-colors font-medium text-[11px]"
+                      className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition-colors font-medium text-[11px] cursor-pointer"
                       title="Ajouter au calendrier .ICS"
                     >
-                      <Download size={13} />
+                      <Download size={12} />
                       <span>Calendrier .ICS</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setSelectedBooking(bkg)}
-                      className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-semibold text-[11px]"
+                      className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-semibold text-[11px] cursor-pointer"
                     >
                       Détails / Modifier
                     </button>

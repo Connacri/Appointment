@@ -199,26 +199,26 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     >
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full shadow-2xl flex flex-col max-h-[94vh] overflow-hidden">
         {/* Modal Header */}
-        <div className="px-6 py-4.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-blue-50/60 via-indigo-50/40 to-transparent dark:from-blue-950/30 dark:via-slate-900 dark:to-transparent">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
-              <Building2 size={22} />
+        <div className="px-3.5 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-blue-50/60 via-indigo-50/40 to-transparent dark:from-blue-950/30 dark:via-slate-900 dark:to-transparent shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0">
+              <Building2 size={18} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 id="establishment-modal-title" className="text-sm sm:text-base leading-snug font-extrabold text-slate-900 dark:text-white">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 id="establishment-modal-title" className="text-xs sm:text-base leading-snug font-extrabold text-slate-900 dark:text-white">
                   {isFirstLaunch
-                    ? "Bienvenue sur OmniBook — Configuration de votre Établissement"
-                    : "Paramètres de l'Établissement & Coordonnées de Facturation"}
+                    ? "Configuration Établissement"
+                    : "Paramètres & Coordonnées Établissement"}
                 </h2>
                 {isFirstLaunch && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                    1ère Ouverture
+                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                    · 1ère Ouverture
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Ces coordonnées et votre logo seront automatiquement utilisés sur vos devis, factures officielles et documents d'accueil.
+              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
+                Coordonnées et logo pour factures officielles et documents d'accueil.
               </p>
             </div>
           </div>
@@ -227,7 +227,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
             <button
               type="button"
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
             >
               <X size={18} />
             </button>
@@ -235,13 +235,13 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 px-6 bg-slate-50/70 dark:bg-slate-850/50 gap-2 overflow-x-auto text-xs font-semibold">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 px-2 sm:px-6 bg-slate-50/70 dark:bg-slate-850/50 gap-1 sm:gap-2 overflow-x-auto text-xs font-semibold no-scrollbar shrink-0">
           {[
-            { id: 'identity', label: '1. Identité & Type', icon: Building2 },
-            { id: 'logo', label: '2. Logo & Visuel', icon: ImageIcon },
-            { id: 'contact', label: '3. Adresse & Contact', icon: MapPin },
-            { id: 'fiscal', label: '4. Fiscalité & RIB Bancaire', icon: Landmark },
-            { id: 'structure', label: '5. Bâtiments & Chambres', icon: Layers },
+            { id: 'identity', label: '1. Identité', fullLabel: '1. Identité & Type', icon: Building2 },
+            { id: 'logo', label: '2. Logo', fullLabel: '2. Logo & Visuel', icon: ImageIcon },
+            { id: 'contact', label: '3. Contact', fullLabel: '3. Adresse & Contact', icon: MapPin },
+            { id: 'fiscal', label: '4. Fiscalité', fullLabel: '4. Fiscalité & RIB Bancaire', icon: Landmark },
+            { id: 'structure', label: '5. Chambres', fullLabel: '5. Bâtiments & Chambres', icon: Layers },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -253,14 +253,15 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                   setActiveTab(tab.id as any);
                   playClickFeedback();
                 }}
-                className={`py-3 px-3.5 border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
+                className={`py-2.5 sm:py-3 px-2 sm:px-3 border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
                   isActive
                     ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-bold'
                     : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
-                <Icon size={15} />
-                <span>{tab.label}</span>
+                <Icon size={14} />
+                <span className="sm:hidden">{tab.label}</span>
+                <span className="hidden sm:inline">{tab.fullLabel}</span>
               </button>
             );
           })}

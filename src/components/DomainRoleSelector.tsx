@@ -49,7 +49,7 @@ export const DomainRoleSelector: React.FC = () => {
   ];
 
   return (
-    <div className="workspace-contextbar relative z-[500] bg-slate-950 border-b border-slate-800/80 px-3 sm:px-5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs select-none">
+    <div className="workspace-contextbar hidden md:flex relative z-[500] bg-slate-950 border-b border-slate-800/80 px-3 sm:px-5 py-2.5 flex-wrap items-center justify-between gap-3 text-xs select-none">
       {/* Domains Strip */}
       <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">

@@ -73,25 +73,63 @@ export const statusConfig: Record<
 
 export const LegendBar: React.FC = () => {
   const { language } = useApp();
+  const [isMobileExpanded, setIsMobileExpanded] = React.useState(false);
 
   return (
-    <footer className="h-10 bg-slate-50 dark:bg-slate-900/90 border-t border-slate-200 dark:border-slate-800 px-3 flex items-center gap-1.5 overflow-x-auto shrink-0 select-none text-[11px]">
-      <span className="font-semibold text-slate-500 uppercase tracking-wider text-[10px] mr-2 shrink-0">
-        {language === 'fr' ? 'Légende :' : language === 'ar' ? 'دليل الحالات:' : 'Status:'}
-      </span>
+    <>
+      {/* Mobile Floating Mini-Toggle Button */}
+      <div className="sm:hidden fixed bottom-2 right-2 rtl:right-auto rtl:left-2 z-40">
+        <button
+          type="button"
+          onClick={() => setIsMobileExpanded(!isMobileExpanded)}
+          className="px-2.5 py-1 text-[10px] font-bold rounded-full bg-slate-900/90 text-white dark:bg-slate-100 dark:text-slate-900 shadow-md backdrop-blur border border-white/20 transition-all cursor-pointer flex items-center gap-1.5"
+          aria-expanded={isMobileExpanded}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <span>{language === 'fr' ? 'Légende' : language === 'ar' ? 'الدليل' : 'Legend'}</span>
+          <span className="text-[9px] opacity-75">{isMobileExpanded ? '✕' : '▲'}</span>
+        </button>
+      </div>
 
-      {(Object.keys(statusConfig) as BookingStatus[]).map((st) => {
-        const item = statusConfig[st];
-        return (
-          <div
-            key={st}
-            className={`px-2.5 py-1 rounded text-xs font-medium shrink-0 flex items-center gap-1.5 border border-black/5 dark:border-white/5 ${item.pillBg}`}
-          >
-            <span className="w-2 h-2 rounded-full bg-current opacity-80" />
-            <span>{item.label[language] || item.label.en}</span>
-          </div>
-        );
-      })}
-    </footer>
+      {/* Desktop Persistent Legend & Mobile Expanded Drawer */}
+      <footer
+        className={`${
+          isMobileExpanded
+            ? 'fixed bottom-0 inset-x-0 z-50 p-2.5 shadow-2xl animate-in slide-in-from-bottom flex flex-wrap max-h-48'
+            : 'hidden sm:flex h-8'
+        } bg-slate-50/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 px-3 items-center gap-1.5 overflow-x-auto shrink-0 select-none text-[11px] backdrop-blur`}
+      >
+        <div className="flex items-center justify-between w-full sm:w-auto">
+          <span className="font-semibold text-slate-500 uppercase tracking-wider text-[10px] mr-2 shrink-0">
+            {language === 'fr' ? 'Légende :' : language === 'ar' ? 'دليل الحالات:' : 'Status:'}
+          </span>
+          {isMobileExpanded && (
+            <button
+              type="button"
+              onClick={() => setIsMobileExpanded(false)}
+              className="sm:hidden p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              aria-label="Fermer la légende"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap overflow-x-auto">
+          {(Object.keys(statusConfig) as BookingStatus[]).map((st) => {
+            const item = statusConfig[st];
+            return (
+              <div
+                key={st}
+                className={`px-2 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1.5 border border-black/5 dark:border-white/5 ${item.pillBg}`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
+                <span>{item.label[language] || item.label.en}</span>
+              </div>
+            );
+          })}
+        </div>
+      </footer>
+    </>
   );
 };

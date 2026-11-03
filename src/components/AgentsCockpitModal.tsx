@@ -130,22 +130,22 @@ export const AgentsCockpitModal: React.FC = () => {
     >
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] my-auto">
         {/* Header Responsive */}
-        <div className="min-h-16 py-3 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between bg-slate-50 dark:bg-slate-850 gap-3 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
-              <ShieldCheck size={22} />
+        <div className="py-2.5 sm:py-3 border-b border-slate-200 dark:border-slate-800 px-3.5 sm:px-6 flex items-center justify-between bg-slate-50 dark:bg-slate-850 gap-2.5 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+              <ShieldCheck size={18} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-tight">
+                <h2 className="font-bold text-slate-900 dark:text-white text-xs sm:text-base leading-tight">
                   AGENTS.md Autonomous Cockpit
                 </h2>
-                <span className="px-2.5 py-0.5 bg-emerald-500 text-slate-950 font-black rounded-lg text-[11px] shadow-xs">
-                  Non audité
+                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                  · Non audité
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                Contrat d'exploitation autonome, releases continues & matériel WebHID proUSB
+              <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                Contrat d'exploitation autonome, releases & matériel WebHID
               </p>
             </div>
           </div>
@@ -153,66 +153,70 @@ export const AgentsCockpitModal: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsCockpitOpen(false)}
-            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition-colors shrink-0 cursor-pointer"
+            className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-lg sm:rounded-xl transition-colors shrink-0 cursor-pointer"
             title="Fermer la boîte de dialogue (Échap)"
             aria-label="Fermer"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
         {/* Responsive Tab Bar with horizontal swipe */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 bg-slate-100/60 dark:bg-slate-800/40 gap-2 sm:gap-6 text-xs font-semibold overflow-x-auto shrink-0 no-scrollbar">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 px-2 sm:px-6 bg-slate-100/60 dark:bg-slate-800/40 gap-1.5 sm:gap-6 text-xs font-semibold overflow-x-auto shrink-0 no-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab('scorecard')}
-            className={`min-h-[46px] py-2.5 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+            className={`py-2 sm:py-2.5 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ${
               activeTab === 'scorecard'
                 ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
-            <ShieldCheck size={16} />
-            <span>Contrôles de conformité</span>
+            <ShieldCheck size={14} />
+            <span className="sm:hidden">Conformité</span>
+            <span className="hidden sm:inline">Contrôles de conformité</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('releases')}
-            className={`min-h-[46px] py-2.5 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+            className={`py-2 sm:py-2.5 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ${
               activeTab === 'releases'
                 ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
-            <Package size={16} />
-            <span>Releases Automatiques (APK, AAB, EXE)</span>
+            <Package size={14} />
+            <span className="sm:hidden">Releases</span>
+            <span className="hidden sm:inline">Releases Automatiques</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('cicd')}
-            className={`min-h-[46px] py-2.5 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+            className={`py-2 sm:py-2.5 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ${
               activeTab === 'cicd'
                 ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
-            <Smartphone size={16} />
-            <span>Google Play & Android (§16)</span>
+            <Smartphone size={14} />
+            <span className="sm:hidden">Google Play</span>
+            <span className="hidden sm:inline">Google Play & Android</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('secrets')}
-            className={`min-h-[46px] py-2.5 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+            className={`py-2 sm:py-2.5 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ${
               activeTab === 'secrets'
                 ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
-            <Lock size={16} />
-            <span>Secrets & Variables (§2, §15)</span>
+            <Lock size={14} />
+            <span className="sm:hidden">Secrets</span>
+            <span className="hidden sm:inline">Secrets & Variables</span>
           </button>
         </div>
 

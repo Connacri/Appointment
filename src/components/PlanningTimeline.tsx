@@ -143,18 +143,17 @@ export const PlanningTimeline: React.FC = () => {
   // Dynamic day column width adapted to viewport
   const colWidth = useMemo(() => {
     if (isMobileScreen) {
-      // Narrow mode: reduce each day cell width by 50%.
-      return columnZoomMode === 'compact' ? 32 : columnZoomMode === 'wide' ? 96 : 76;
+      return columnZoomMode === 'compact' ? 34 : columnZoomMode === 'wide' ? 80 : 54;
     }
-    return columnZoomMode === 'compact' ? 38 : columnZoomMode === 'wide' ? 144 : 112;
+    return columnZoomMode === 'compact' ? 44 : columnZoomMode === 'wide' ? 144 : 100;
   }, [columnZoomMode, isMobileScreen]);
 
-  // Keep enough height for both weekday and date labels; collapse only after vertical scrolling.
-  const dayHeaderHeightClass = isDayHeaderCollapsed
+  // Keep enough height for both weekday and date labels; collapse only after vertical scrolling or on mobile.
+  const dayHeaderHeightClass = isDayHeaderCollapsed || isMobileScreen
     ? 'h-9 min-h-[36px] max-h-[36px]'
     : columnZoomMode === 'compact'
-      ? 'h-12 min-h-[48px] max-h-[48px]'
-      : 'h-16 md:h-20 min-h-[64px] md:min-h-[80px] max-h-[64px] md:max-h-[80px]';
+      ? 'h-10 min-h-[40px] max-h-[40px]'
+      : 'h-12 md:h-16 min-h-[48px] md:min-h-[64px] max-h-[48px] md:max-h-[64px]';
 
   // Collapsed state for resource groups
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -385,124 +384,123 @@ export const PlanningTimeline: React.FC = () => {
 
   // Left column width classes
   const leftColWidthClass = useMemo(() => {
+    if (isMobileScreen) {
+      return leftBarMode === 'mini' ? 'w-11' : leftBarMode === 'compact' ? 'w-22' : 'w-26';
+    }
     if (leftBarMode === 'mini') return 'w-12 sm:w-16';
     if (leftBarMode === 'compact') return 'w-28 sm:w-32';
     return 'w-44 sm:w-56 md:w-64';
-  }, [leftBarMode]);
+  }, [leftBarMode, isMobileScreen]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-950 relative select-none">
       {/* Responsive Toolbar: one compact, horizontally scrollable row on phones */}
       <div className="w-full min-w-0 shrink-0 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 select-none">
-        <div className="flex min-w-0 flex-row items-center gap-1.5 overflow-x-auto overflow-y-hidden whitespace-nowrap px-2 py-1.5 sm:overflow-visible md:px-3 md:py-1 scrollbar-thin">
+        <div className="flex min-w-0 flex-row items-center gap-1 overflow-x-auto overflow-y-hidden whitespace-nowrap px-1.5 py-1 sm:overflow-visible md:px-3 md:py-1 scrollbar-thin">
+          {/* Quick Date Stepper Navigation & Today */}
+          <div className="flex h-7 shrink-0 items-center gap-0.5 rounded-md border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-800">
+            <button
+              onClick={() => scrollTimeline(-colWidth * 2)}
+              className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-slate-100 active:scale-95 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer"
+              title="Reculer de 2 jours"
+              aria-label="Reculer de deux jours"
+            ><MoveLeft size={12} /></button>
+            <button
+              onClick={scrollToToday}
+              className="h-6 rounded px-1.5 text-[10px] font-bold text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950 cursor-pointer"
+              title="Aller à aujourd'hui"
+            >{language === 'fr' ? "Aujourd'hui" : language === 'ar' ? 'اليوم' : 'Today'}</button>
+            <button
+              onClick={() => scrollTimeline(colWidth * 2)}
+              className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-slate-100 active:scale-95 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer"
+              title="Avancer de 2 jours"
+              aria-label="Avancer de deux jours"
+            ><MoveRight size={12} /></button>
+          </div>
+
+          {/* Date Picker Input */}
+          <div className="flex h-7 w-[116px] sm:w-[136px] shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-850">
+            <CalendarDays size={12} className="shrink-0 text-slate-400" />
+            <input
+              type="date"
+              value={currentBaseDate}
+              onChange={(e) => { if (e.target.value) setCurrentBaseDate(e.target.value); }}
+              className="w-full min-w-0 bg-transparent text-[10px] font-mono text-slate-800 focus:outline-none dark:text-slate-200"
+              title="Aller directement à une date"
+              aria-label="Date du planning"
+            />
+          </div>
+
+          {/* Establishment selector (Hotel sector) */}
+          {currentDomain === 'hotel' && (
+            <select
+              value={selectedEstablishmentId}
+              onChange={(e) => setSelectedEstablishmentId(e.target.value)}
+              className="h-7 w-[124px] sm:w-[170px] max-w-[38vw] shrink-0 rounded-md border border-slate-200 bg-white px-1 text-[10px] font-semibold text-slate-800 shadow-2xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              aria-label={language === 'fr' ? 'Établissement' : 'Establishment'}
+            >
+              <option value="all">🏨 {language === 'fr' ? 'Tous complexes' : 'All hotels'}</option>
+              {establishments.map((h) => (
+                <option key={h.id} value={h.id}>{h.code} – {h.name}</option>
+              ))}
+            </select>
+          )}
+
           {/* Resource label density */}
           <div className="flex shrink-0 items-center gap-1">
             <div className="flex items-center rounded-md border border-slate-200 bg-white p-0.5 shadow-2xs dark:border-slate-700 dark:bg-slate-850">
               <button
                 onClick={() => setLeftBarMode('mini')}
-                className={`min-h-7 rounded px-2 py-1 text-[10px] font-semibold transition-colors ${leftBarMode === 'mini' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
+                className={`h-6 rounded px-1.5 text-[9px] sm:text-[10px] font-semibold transition-colors cursor-pointer ${leftBarMode === 'mini' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
                 title="Mini — largeur minimale"
                 aria-pressed={leftBarMode === 'mini'}
               >Mini</button>
               <button
                 onClick={() => setLeftBarMode('compact')}
-                className={`min-h-7 rounded px-2 py-1 text-[10px] font-semibold transition-colors ${leftBarMode === 'compact' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
+                className={`h-6 rounded px-1.5 text-[9px] sm:text-[10px] font-semibold transition-colors cursor-pointer ${leftBarMode === 'compact' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
                 title="Compact"
                 aria-pressed={leftBarMode === 'compact'}
               >Compact</button>
               <button
                 onClick={() => setLeftBarMode('normal')}
-                className={`hidden min-h-7 rounded px-2 py-1 text-[10px] font-semibold transition-colors sm:block ${leftBarMode === 'normal' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
+                className={`hidden h-6 rounded px-1.5 text-[10px] font-semibold transition-colors sm:block cursor-pointer ${leftBarMode === 'normal' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
                 title="Complet — largeur maximale"
                 aria-pressed={leftBarMode === 'normal'}
               >Complet</button>
             </div>
           </div>
 
-          {/* Establishment selector */}
-          {currentDomain === 'hotel' && (
-            <select
-              value={selectedEstablishmentId}
-              onChange={(e) => setSelectedEstablishmentId(e.target.value)}
-              className="h-8 w-[138px] max-w-[42vw] shrink-0 rounded-md border border-slate-200 bg-white px-1.5 text-[10px] font-semibold text-slate-800 shadow-2xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 sm:w-[190px] sm:max-w-none sm:text-[11px]"
-              aria-label={language === 'fr' ? 'Établissement' : 'Establishment'}
-            >
-              <option value="all">🏨 {language === 'fr' ? 'Tous les complexes' : 'All hotels'}</option>
-              {establishments.map((h) => (
-                <option key={h.id} value={h.id}>{h.code} – {h.name} ({'★'.repeat(h.stars)})</option>
-              ))}
-            </select>
-          )}
-
-          {/* Date */}
-          <div className="flex h-8 w-[132px] shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 dark:border-slate-700 dark:bg-slate-850 sm:w-[148px]">
-            <CalendarDays size={13} className="shrink-0 text-slate-400" />
-            <input
-              type="date"
-              value={currentBaseDate}
-              onChange={(e) => { if (e.target.value) setCurrentBaseDate(e.target.value); }}
-              className="w-full min-w-0 bg-transparent text-[10px] font-mono text-slate-800 focus:outline-none dark:text-slate-200 sm:text-[11px]"
-              title="Aller directement à une date"
-              aria-label="Date du planning"
-            />
-          </div>
-
           {/* Day column zoom */}
-          <div className="flex h-8 shrink-0 items-center rounded-md bg-slate-200 p-0.5 text-[10px] font-semibold dark:bg-slate-800 sm:text-[11px]">
+          <div className="hidden sm:flex h-7 shrink-0 items-center rounded-md bg-slate-200 p-0.5 text-[10px] font-semibold dark:bg-slate-800">
             <button
               onClick={() => setColumnZoomMode('compact')}
-              className={`min-h-7 rounded px-2 transition-colors ${columnZoomMode === 'compact' ? 'bg-white text-blue-600 shadow-xs dark:bg-slate-700 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}
-              title="Zoom étroit — voir plus de jours"
+              className={`h-6 rounded px-2 transition-colors cursor-pointer ${columnZoomMode === 'compact' ? 'bg-white text-blue-600 shadow-xs dark:bg-slate-700 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}
+              title="Zoom étroit"
               aria-pressed={columnZoomMode === 'compact'}
             >Étroit</button>
             <button
               onClick={() => setColumnZoomMode('standard')}
-              className={`min-h-7 rounded px-2 transition-colors ${columnZoomMode === 'standard' ? 'bg-white text-blue-600 shadow-xs dark:bg-slate-700 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}
+              className={`h-6 rounded px-2 transition-colors cursor-pointer ${columnZoomMode === 'standard' ? 'bg-white text-blue-600 shadow-xs dark:bg-slate-700 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}
               title="Zoom normal"
               aria-pressed={columnZoomMode === 'standard'}
             >Normal</button>
-            <button
-              onClick={() => setColumnZoomMode('wide')}
-              className={`hidden min-h-7 rounded px-2 transition-colors md:block ${columnZoomMode === 'wide' ? 'bg-white text-blue-600 shadow-xs dark:bg-slate-700 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}
-              title="Zoom large"
-              aria-pressed={columnZoomMode === 'wide'}
-            >Large</button>
           </div>
 
-          {/* Availability help: icon-only on phones */}
+          {/* Availability help */}
           <button
             type="button"
             onClick={() => setShowAvailabilityHelp(true)}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 sm:w-auto sm:gap-1.5 sm:px-2.5"
+            className="flex h-7 w-7 sm:w-auto shrink-0 items-center justify-center rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 sm:gap-1 sm:px-2 cursor-pointer"
             title={language === 'fr' ? 'Comprendre les disponibilités' : language === 'ar' ? 'فهم أرقام التوفر' : 'Understand availability'}
-            aria-label={language === 'fr' ? 'Comprendre les disponibilités' : 'Availability help'}
+            aria-label="Aide disponibilités"
           >
-            <Info size={14} />
-            <span className="hidden text-[10px] font-semibold sm:inline sm:text-[11px]">{language === 'fr' ? 'Disponibilités' : language === 'ar' ? 'التوفر' : 'Availability'}</span>
+            <Info size={13} />
+            <span className="hidden text-[10px] font-semibold sm:inline">{language === 'fr' ? 'Dispo' : 'Help'}</span>
           </button>
-
-          {/* Timeline navigation */}
-          <div className="flex h-8 shrink-0 items-center gap-0.5 rounded-md border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-800">
-            <button
-              onClick={() => scrollTimeline(-colWidth * 2)}
-              className="flex h-7 w-7 items-center justify-center rounded text-slate-600 transition-colors hover:bg-slate-100 active:scale-95 dark:text-slate-300 dark:hover:bg-slate-700"
-              title="Reculer de 2 jours"
-              aria-label="Reculer de deux jours"
-            ><MoveLeft size={13} /></button>
-            <button
-              onClick={scrollToToday}
-              className="h-7 rounded px-2 text-[10px] font-bold text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950 sm:text-[11px]"
-              title="Aller à aujourd'hui"
-            >{language === 'fr' ? "Aujourd'hui" : language === 'ar' ? 'اليوم' : 'Today'}</button>
-            <button
-              onClick={() => scrollTimeline(colWidth * 2)}
-              className="flex h-7 w-7 items-center justify-center rounded text-slate-600 transition-colors hover:bg-slate-100 active:scale-95 dark:text-slate-300 dark:hover:bg-slate-700"
-              title="Avancer de 2 jours"
-              aria-label="Avancer de deux jours"
-            ><MoveRight size={13} /></button>
-          </div>
         </div>
       </div>
+
+
 
       {showAvailabilityHelp && (
         <div
@@ -649,12 +647,12 @@ export const PlanningTimeline: React.FC = () => {
                     data-gantt-group-toggle="true"
                     aria-expanded={!isCollapsed}
                     aria-label={`${isCollapsed ? 'Développer' : 'Réduire'} ${grp.name[language] || grp.name.en}`}
-                    className="w-full h-10 min-h-[40px] max-h-[40px] shrink-0 px-2 sm:px-2.5 bg-slate-200/80 dark:bg-slate-800/80 flex items-center justify-between cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-800 text-left"
+                    className="w-full h-8 sm:h-9 min-h-[32px] sm:min-h-[36px] max-h-[32px] sm:max-h-[36px] shrink-0 px-2 sm:px-2.5 bg-slate-200/80 dark:bg-slate-800/80 flex items-center justify-between cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-800 text-left"
                   >
                     <div className="flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate">
                       {isCollapsed ? <ChevronRight size={13} className="shrink-0 text-slate-500" /> : <ChevronDown size={13} className="shrink-0 text-slate-500" />}
                       {leftBarMode !== 'mini' && (
-                        <span className="truncate text-[11px] sm:text-xs font-bold">
+                        <span className="truncate text-[10px] sm:text-xs font-bold">
                           {grp.name[language] || grp.name.en}
                         </span>
                       )}
@@ -667,7 +665,7 @@ export const PlanningTimeline: React.FC = () => {
                     grp.resources.map((res) => (
                       <div
                         key={res.id}
-                        className="h-14 sm:h-12 min-h-[56px] sm:min-h-[48px] max-h-[56px] sm:max-h-[48px] shrink-0 px-1.5 sm:px-2.5 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900"
+                        className="h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 px-1.5 sm:px-2.5 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900"
                       >
                         <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
                           {renderHousekeepingTag(res.housekeepingStatus)}
@@ -740,7 +738,7 @@ export const PlanningTimeline: React.FC = () => {
               return (
                 <div key={grp.id} className="flex flex-col">
                   {/* Group Availability Row */}
-                  <div className="h-10 min-h-[40px] max-h-[40px] shrink-0 flex bg-slate-200/60 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 select-none">
+                  <div className="h-7 sm:h-8 min-h-[28px] sm:min-h-[32px] max-h-[28px] sm:max-h-[32px] shrink-0 flex bg-slate-200/60 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 select-none">
                     {timelineDays.map((day) => {
                       const avail = groupAvailability[grp.id]?.[day.dateStr] ?? 0;
                       const isFree = avail > 0;
@@ -748,10 +746,10 @@ export const PlanningTimeline: React.FC = () => {
                         <div
                           key={day.dateStr}
                           style={{ width: `${colWidth}px` }}
-                          className="shrink-0 border-r border-slate-200/60 dark:border-slate-800/60 flex items-center justify-center p-1 h-full"
+                          className="shrink-0 border-r border-slate-200/60 dark:border-slate-800/60 flex items-center justify-center p-0.5 h-full"
                         >
                           <span
-                            className={`w-6 h-5 rounded text-[11px] font-bold font-mono flex items-center justify-center shadow-2xs tabular-nums ${
+                            className={`w-5 h-4.5 rounded text-[10px] font-bold font-mono flex items-center justify-center shadow-2xs tabular-nums ${
                               isFree ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
                             }`}
                             title={`${avail} disponibilité(s) le ${day.dateStr}`}
@@ -772,7 +770,7 @@ export const PlanningTimeline: React.FC = () => {
                       return (
                         <div
                           key={res.id}
-                          className="h-14 sm:h-12 min-h-[56px] sm:min-h-[48px] max-h-[56px] sm:max-h-[48px] shrink-0 flex relative border-b border-slate-200/80 dark:border-slate-800/80 hover:bg-blue-50/20 dark:hover:bg-blue-950/20 transition-colors bg-white dark:bg-slate-900"
+                          className="h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 flex relative border-b border-slate-200/80 dark:border-slate-800/80 hover:bg-blue-50/20 dark:hover:bg-blue-950/20 transition-colors bg-white dark:bg-slate-900"
                         >
                           {/* Background Grid Cells for clicking to add booking */}
                           {timelineDays.map((day) => (
@@ -880,7 +878,7 @@ export const PlanningTimeline: React.FC = () => {
                                   if (!isMobileScreen) schedulePreviewClose();
                                 }}
                                 style={posStyle}
-                                className={`absolute top-2 sm:top-1.5 h-10 sm:h-9 rounded-md px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-sm hover:brightness-105 active:scale-[0.98] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
+                                className={`absolute top-1 sm:top-1.5 h-8 sm:h-9 rounded-md px-1 sm:px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-xs hover:brightness-105 active:scale-[0.98] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
                               >
                                     <div className="flex items-center gap-1.5 truncate min-w-0">
                                       {/* Person icons: if multiple occupants occupy the room, render stacked group of person icons */}

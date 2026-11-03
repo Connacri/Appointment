@@ -168,85 +168,79 @@ export const BillingInvoicingView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-4 sm:space-y-5">
+    <div className="flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-3 sm:space-y-4">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
               {language === 'fr'
-                ? 'Gestion de la Facturation, Devis & Pro Forma'
-                : 'Invoicing, Quotations & Pro Forma Management'}
+                ? 'Facturation, Devis & Pro Forma'
+                : 'Invoicing & Quotations'}
             </h1>
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 uppercase">
-              Certifié NF525 & USALI
+            <span className="hidden sm:inline text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+              · NF525 & USALI
             </span>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1 sm:line-clamp-none">
             {language === 'fr'
-              ? 'Émission de devis, factures d\'acompte, soldes, application de promotions et export PDF officiel'
-              : 'Issue estimates, invoices, pro forma receipts, apply promo discounts and export certified PDF folios'}
+              ? 'Émission de devis, factures, acomptes et export PDF officiel'
+              : 'Issue estimates, invoices, pro forma receipts, and export official folios'}
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
             onClick={() => {
               playClickFeedback();
               setIsEstablishmentModalOpen(true);
             }}
-            className="flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
-            title="Personnaliser le nom de l'hôtel, logo, mentions fiscales et coordonnées pour vos factures"
+            className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3 bg-white dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            title="Coordonnées & logo de l'établissement"
           >
             {establishmentProfile.logoUrl ? (
               <img
                 src={establishmentProfile.logoUrl}
                 alt="Logo"
-                className="w-5 h-5 object-contain rounded shrink-0"
+                className="w-4 h-4 object-contain rounded shrink-0"
               />
             ) : (
-              <Building2 size={16} className="text-blue-600" />
+              <Building2 size={14} className="text-blue-600" />
             )}
-            <span className="truncate max-w-[160px] sm:max-w-[220px]">
-              {establishmentProfile.name || 'Mon Établissement'}
+            <span className="truncate max-w-[120px] sm:max-w-[180px]">
+              {establishmentProfile.name || 'Établissement'}
             </span>
           </button>
 
           <button
             type="button"
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 h-8 sm:h-9 px-3 sm:px-3.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
           >
-            <Plus size={16} />
-            <span>
-              {language === 'fr' ? '+ Nouveau Devis / Facture' : '+ New Quote / Invoice'}
+            <Plus size={15} />
+            <span className="hidden sm:inline">
+              {language === 'fr' ? '+ Nouveau Document' : '+ New Document'}
             </span>
+            <span className="sm:hidden">{language === 'fr' ? 'Nouveau' : 'New'}</span>
           </button>
         </div>
       </div>
 
-      {/* Promotions & Offers Highlights Banner */}
-      <div className="p-4 bg-gradient-to-r from-blue-900/10 via-emerald-900/10 to-purple-900/10 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <Tag size={20} className="text-emerald-500 shrink-0" />
-          <div>
-            <span className="font-bold text-slate-900 dark:text-white text-xs block">
-              {language === 'fr' ? 'Offres & Codes Promo Actifs :' : 'Active Promotional Offers:'}
-            </span>
-            <span className="text-[11px] text-slate-500 dark:text-slate-400">
-              {language === 'fr'
-                ? 'Ces remises s\'appliquent directement lors de la création d\'un devis ou d\'une facture.'
-                : 'These discounts can be applied directly when building quotes or invoices.'}
-            </span>
-          </div>
+      {/* Promotions & Offers Highlights Banner (Desktop only or compact) */}
+      <div className="hidden sm:flex p-3 bg-gradient-to-r from-blue-900/10 via-emerald-900/10 to-purple-900/10 border border-slate-200 dark:border-slate-800 rounded-xl items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2">
+          <Tag size={16} className="text-emerald-500 shrink-0" />
+          <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs">
+            {language === 'fr' ? 'Codes Promo applicables :' : 'Promo Codes:'}
+          </span>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           {initialPromos.map((pr) => (
             <div
               key={pr.code}
-              className="px-2.5 py-1 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-lg text-xs flex items-center gap-1.5 shadow-2xs"
+              className="px-2 py-0.5 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-md text-[11px] flex items-center gap-1 shadow-2xs"
             >
               <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
                 {pr.code}

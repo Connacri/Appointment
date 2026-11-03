@@ -566,6 +566,21 @@ export const translations = {
     en: 'Full-board',
     ar: 'إقامة مع إعاشة كاملة',
   },
+  navSpa: {
+    fr: 'Spa & Espace Bien-Être',
+    en: 'Spa & Wellness Centre',
+    ar: 'السبا والعافية',
+  },
+  spaTitle: {
+    fr: 'Spa, Thalasso & Centre Bien-Être',
+    en: 'Spa & Wellness Centre',
+    ar: 'السبا والمركز الصحي والعلاجي',
+  },
+  spaDesc: {
+    fr: 'Gestion des soins, cabines de massages, hammam traditionnel et facturation sur chambre',
+    en: 'Appointments, wellness cabins, hammam rituals and direct room folio billing',
+    ar: 'إدارة الجلسات العلاجية، كبائن التدليك، الحمام التقليدي والفوترة المباشرة على الغرف',
+  },
 };
 
 export function getTranslation(key: keyof typeof translations, lang: Language): string {

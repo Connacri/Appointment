@@ -112,13 +112,13 @@ export const TasksManagementView: React.FC = () => {
 
   return (
     <div className="flex-1 min-w-0 min-h-0 w-full max-w-full flex flex-col md:flex-row h-full overflow-hidden bg-slate-50 dark:bg-slate-950">
-      {/* Left / Center Tasks Workspace (inspired by f0a8290b850fbd4fd4dbd072137389bc.jpg) */}
-      <div className="flex-1 min-w-0 min-h-0 flex flex-col h-full overflow-hidden p-3 sm:p-4 md:p-6 space-y-4">
+      {/* Left / Center Tasks Workspace */}
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col h-full overflow-hidden p-2.5 sm:p-4 md:p-6 space-y-3 sm:space-y-4">
         {/* Top Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-slate-200 dark:border-slate-800">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white">
+              <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
                 {language === 'fr'
                   ? 'Tâches, Livraisons & Rotations'
                   : language === 'ar'
@@ -126,46 +126,47 @@ export const TasksManagementView: React.FC = () => {
                   : 'Turnaround Tasks & Deliveries'}
               </h1>
               {urgentCount > 0 && (
-                <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 animate-pulse">
-                  <Flame size={12} />
+                <span className="flex items-center gap-1 text-xs font-semibold text-rose-600 dark:text-rose-400">
+                  <Flame size={13} className="text-rose-500" />
                   <span>{urgentCount} {language === 'fr' ? 'Urgentes' : 'Urgent'}</span>
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1 sm:line-clamp-none">
               {language === 'fr'
                 ? 'Coordination des équipes d’étage, gestion des départs et réassorts automatiques'
                 : 'Housekeeping floor coordination, departures turnaround & stock deduction'}
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Onboard Team Avatars Stack (like in f0a8290b850fbd4fd4dbd072137389bc.jpg) */}
-            <div className="hidden sm:flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded-full shadow-sm">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase mr-1">
-                {language === 'fr' ? 'Équipe en service :' : 'Onboard :'}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Onboard Team Avatars Stack (Desktop) */}
+            <div className="hidden sm:flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2.5 py-1 rounded-full shadow-2xs">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase mr-0.5">
+                {language === 'fr' ? 'Équipe :' : 'Team:'}
               </span>
-              <div className="flex -space-x-2 overflow-hidden">
-                <span className="inline-flex items-center justify-center h-6 w-6 rounded-full ring-2 ring-white dark:ring-slate-900 bg-indigo-500 text-white text-[10px] font-bold">
+              <div className="flex -space-x-1.5 overflow-hidden">
+                <span className="inline-flex items-center justify-center h-5 w-5 rounded-full ring-1 ring-white dark:ring-slate-900 bg-indigo-500 text-white text-[9px] font-bold">
                   AM
                 </span>
-                <span className="inline-flex items-center justify-center h-6 w-6 rounded-full ring-2 ring-white dark:ring-slate-900 bg-amber-500 text-white text-[10px] font-bold">
+                <span className="inline-flex items-center justify-center h-5 w-5 rounded-full ring-1 ring-white dark:ring-slate-900 bg-amber-500 text-white text-[9px] font-bold">
                   YA
                 </span>
-                <span className="inline-flex items-center justify-center h-6 w-6 rounded-full ring-2 ring-white dark:ring-slate-900 bg-emerald-500 text-white text-[10px] font-bold">
+                <span className="inline-flex items-center justify-center h-5 w-5 rounded-full ring-1 ring-white dark:ring-slate-900 bg-emerald-500 text-white text-[9px] font-bold">
                   SO
                 </span>
-                <span className="inline-flex items-center justify-center h-6 w-6 rounded-full ring-2 ring-white dark:ring-slate-900 bg-purple-500 text-white text-[10px] font-bold">
+                <span className="inline-flex items-center justify-center h-5 w-5 rounded-full ring-1 ring-white dark:ring-slate-900 bg-purple-500 text-white text-[9px] font-bold">
                   KA
                 </span>
               </div>
             </div>
 
             <button
+              type="button"
               onClick={() => setIsNewTaskOpen(true)}
-              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-1.5 rounded-xl font-medium text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white h-8 sm:h-9 px-3 sm:px-3.5 rounded-xl font-bold text-xs shadow-xs transition-colors cursor-pointer"
             >
-              <Plus size={16} />
+              <Plus size={15} />
               <span>{language === 'fr' ? 'Nouvelle demande' : 'New Task'}</span>
             </button>
           </div>

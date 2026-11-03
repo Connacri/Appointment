@@ -29,12 +29,12 @@ export const ReportsView: React.FC = () => {
   const resortUnits = resourceGroups.filter((group) => group.sector === 'resort').reduce((sum, group) => sum + group.resources.length, 0);
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-4 sm:space-y-5">
+    <div className="flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-3 sm:space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+        <h1 className="text-base sm:text-xl font-bold text-slate-900 dark:text-white">
           {language === 'fr' ? 'Rapports & Indicateurs d\'Activité' : language === 'ar' ? 'التقارير ومؤشرات الأداء' : 'Reports & Performance Metrics'}
         </h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+        <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
           {language === 'fr'
             ? 'Vue analytique des revenus, des capacités configurées et des réservations Hôtel & Resort'
             : 'Active booking value and distribution for Hotel & Resort'}
@@ -42,55 +42,55 @@ export const ReportsView: React.FC = () => {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-4">
-        <div className="min-w-0 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase">Valeur des réservations actives</span>
-            <CreditCard size={18} className="text-blue-500" />
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
+        <div className="min-w-0 p-2.5 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+          <div className="flex items-center justify-between text-slate-400 mb-1 sm:mb-2">
+            <span className="text-[10px] sm:text-xs font-semibold uppercase">Valeur active</span>
+            <CreditCard size={15} className="text-blue-500" />
           </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">
+          <div className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-white truncate">
             {totalBookingValue.toLocaleString()} {currency || 'DA'}
           </div>
-          <span className="text-[11px] text-emerald-600 font-medium mt-1 block">
-            Montant contractuel, non assimilé aux encaissements
+          <span className="text-[10px] text-emerald-600 font-medium mt-0.5 block truncate">
+            Montant contractuel
           </span>
         </div>
 
-        <div className="min-w-0 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase">Réservations actives</span>
-            <CalendarCheck size={18} className="text-emerald-500" />
+        <div className="min-w-0 p-2.5 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+          <div className="flex items-center justify-between text-slate-400 mb-1 sm:mb-2">
+            <span className="text-[10px] sm:text-xs font-semibold uppercase">Réservations</span>
+            <CalendarCheck size={15} className="text-emerald-500" />
           </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">
+          <div className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-white truncate">
             {totalBookings} dossiers
           </div>
-          <span className="text-[11px] text-slate-400 mt-1 block">
-            {confirmedCount} confirmés & enregistrés
+          <span className="text-[10px] text-slate-400 mt-0.5 block truncate">
+            {confirmedCount} confirmés
           </span>
         </div>
 
-        <div className="min-w-0 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase">Unités Hôtel</span>
-            <Bed size={18} className="text-indigo-500" />
+        <div className="min-w-0 p-2.5 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+          <div className="flex items-center justify-between text-slate-400 mb-1 sm:mb-2">
+            <span className="text-[10px] sm:text-xs font-semibold uppercase">Unités Hôtel</span>
+            <Bed size={15} className="text-indigo-500" />
           </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">
+          <div className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-white truncate">
             {hotelUnits}
           </div>
-          <span className="text-[11px] text-emerald-600 font-medium mt-1 block">
+          <span className="text-[10px] text-emerald-600 font-medium mt-0.5 block truncate">
             Unités configurées
           </span>
         </div>
 
-        <div className="min-w-0 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase">Unités Resort</span>
-            <Palmtree size={18} className="text-amber-500" />
+        <div className="min-w-0 p-2.5 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+          <div className="flex items-center justify-between text-slate-400 mb-1 sm:mb-2">
+            <span className="text-[10px] sm:text-xs font-semibold uppercase">Unités Resort</span>
+            <Palmtree size={15} className="text-amber-500" />
           </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">
+          <div className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-white truncate">
             {resortUnits}
           </div>
-          <span className="text-[11px] text-emerald-600 font-medium mt-1 block">
+          <span className="text-[10px] text-emerald-600 font-medium mt-0.5 block truncate">
             Unités configurées
           </span>
         </div>

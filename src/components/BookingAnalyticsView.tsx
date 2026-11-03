@@ -401,38 +401,38 @@ export const BookingAnalyticsView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-5 md:space-y-6">
+    <div className="flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-3 sm:space-y-5 md:space-y-6">
       {/* Analytics Master Switcher Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <div className="flex items-center gap-1 bg-slate-200/80 dark:bg-slate-900 p-1 rounded-xl text-xs font-semibold">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 border-b border-slate-200 dark:border-slate-800 pb-2 sm:pb-3">
+        <div className="flex items-center gap-1 bg-slate-200/80 dark:bg-slate-900 p-1 rounded-xl text-xs font-semibold overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveAnalyticsTab('resources')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all ${
+            className={`flex items-center gap-1.5 h-8 px-2.5 sm:px-3.5 rounded-lg transition-all shrink-0 cursor-pointer ${
               activeAnalyticsTab === 'resources'
                 ? 'bg-white dark:bg-slate-800 text-cyan-600 dark:text-cyan-400 shadow-xs font-bold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Cpu size={15} />
-            <span>⚡ CPU & RAM Builds Agents (D3.js)</span>
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <Cpu size={14} />
+            <span>CPU & RAM</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
           </button>
 
           <button
             onClick={() => setActiveAnalyticsTab('business')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all ${
+            className={`flex items-center gap-1.5 h-8 px-2.5 sm:px-3.5 rounded-lg transition-all shrink-0 cursor-pointer ${
               activeAnalyticsTab === 'business'
                 ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <TrendingUp size={15} />
-            <span>🏨 Plannings & KPIs Métier (Hôtel / Resort)</span>
+            <TrendingUp size={14} />
+            <span>KPIs Métier (Hôtel/Resort)</span>
           </button>
 
           <button
             onClick={() => setActiveAnalyticsTab('all')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all hidden md:flex ${
+            className={`flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg transition-all hidden md:flex shrink-0 cursor-pointer ${
               activeAnalyticsTab === 'all'
                 ? 'bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 shadow-xs font-bold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -443,10 +443,10 @@ export const BookingAnalyticsView: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
+        <div className="flex items-center gap-2 text-[11px] font-mono text-slate-500">
           <span>Engine : D3.js v7.9</span>
           <span>·</span>
-          <span>Runner : Ubuntu 24.04</span>
+          <span>Runner : Ubuntu</span>
         </div>
       </div>
 
@@ -457,23 +457,23 @@ export const BookingAnalyticsView: React.FC = () => {
 
       {/* 2. BUSINESS HOSPITALITY & RESORT ANALYTICS */}
       {(activeAnalyticsTab === 'business' || activeAnalyticsTab === 'all') && (
-        <div className="space-y-6 pt-2">
+        <div className="space-y-4 sm:space-y-6 pt-1 sm:pt-2">
           {/* Header with Title & Action Controls */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-base sm:text-xl font-bold text-slate-900 dark:text-white">
                   {language === 'fr'
                     ? 'Booking Analytics & Optimisation des Plannings'
                     : language === 'ar'
                     ? 'تحليلات الحجوزات وتحسين الجداول'
                     : 'Booking Analytics & Schedule Optimization'}
                 </h1>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 uppercase">
-                  D3.js Data Engine
+                <span className="text-[10px] font-bold font-mono text-blue-600 dark:text-blue-400 uppercase">
+                  · D3.js Engine
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {language === 'fr'
                   ? "Indicateurs USALI (RevPAR, ADR), taux d'occupation hôtelier et performances du Resort"
                   : 'USALI metrics (RevPAR, ADR), lodging occupancy curves and Resort performance'}
@@ -481,29 +481,29 @@ export const BookingAnalyticsView: React.FC = () => {
             </div>
 
             {/* Filter and Export buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               {/* Time range pills */}
               <div className="flex items-center bg-slate-200 dark:bg-slate-800 p-0.5 rounded-lg text-xs font-semibold">
                 {(['7d', '14d', '30d'] as const).map((r) => (
                   <button
                     key={r}
                     onClick={() => setTimeRange(r)}
-                    className={`px-2.5 py-1 rounded transition-colors ${
+                    className={`h-7 px-2 sm:px-2.5 rounded transition-colors cursor-pointer ${
                       timeRange === r
                         ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    {r === '7d' ? '7 Jours' : r === '14d' ? '14 Jours' : '30 Jours'}
+                    {r === '7d' ? '7j' : r === '14d' ? '14j' : '30j'}
                   </button>
                 ))}
               </div>
 
               <button
                 onClick={handleExportCSV}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+                className="flex items-center gap-1.5 h-7 sm:h-8 px-2.5 sm:px-3 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
               >
-                <Download size={14} />
+                <Download size={13} />
                 <span>Export CSV</span>
               </button>
             </div>

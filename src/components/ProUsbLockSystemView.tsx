@@ -737,68 +737,69 @@ export const ProUsbLockSystemView: React.FC = () => {
   return (
     <div className="flex-1 min-w-0 min-h-0 w-full max-w-full flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans">
       {/* Top Banner / Encoder Hardware Status Bar */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
-            <KeyRound size={20} />
+      {/* Top Banner / Encoder Hardware Status Bar */}
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-2.5 sm:px-4 py-2 sm:py-3 flex flex-wrap items-center justify-between gap-2 sm:gap-3 shadow-xs">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0">
+            <KeyRound size={18} />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                proUSB Hotel Lock System
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                  v2026.1
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <span>proUSB Lock System</span>
+                <span className="text-[10px] font-mono text-blue-600 dark:text-blue-400">
+                  · v2026.1
                 </span>
               </h1>
               {usbStatus === 'connected' ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Encodeur USB Connecté (WebHID)
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>WebHID Connecté</span>
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  Encodeur USB Déconnecté
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  <span>Déconnecté</span>
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Contrôle d'accès serrures d'hôtels proUSB · 13 types de cartes · Encodeur HID VID 0x9915 / 0x6868
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
+              Contrôle d'accès serrures d'hôtels proUSB · Encodeur HID VID 0x9915
             </p>
           </div>
         </div>
 
         {/* Global Hardware Action Bar */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             type="button"
             onClick={handleConnectHardware}
             disabled={isConnecting}
-            className="min-h-[38px] px-3.5 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-all flex items-center gap-2 shadow-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="h-8 sm:h-9 px-2.5 sm:px-3 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-all flex items-center gap-1.5 shadow-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
             title="Demande au navigateur l'autorisation d'accéder à l'encodeur proUSB physique via navigator.hid.requestDevice"
           >
-            <Usb size={16} className={isConnecting ? 'animate-pulse' : ''} />
-            <span>{isConnecting ? 'Autorisation USB...' : 'Initialize Hardware (WebHID)'}</span>
+            <Usb size={14} className={isConnecting ? 'animate-pulse' : ''} />
+            <span>{isConnecting ? 'USB...' : 'Connecter USB'}</span>
           </button>
 
           <button
             type="button"
             onClick={handleBuzzerTest}
             disabled={isBuzzerTesting}
-            className="min-h-[38px] px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 text-slate-700 dark:text-slate-200 cursor-pointer"
+            className="h-8 sm:h-9 px-2 sm:px-2.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1 text-slate-700 dark:text-slate-200 cursor-pointer"
             title="Tester le signal sonore physique de l'encodeur (3 bips vérifiés)"
           >
-            <Volume2 size={15} className={isBuzzerTesting ? 'animate-bounce text-amber-500' : 'text-blue-500'} />
-            <span>Test Bip</span>
+            <Volume2 size={14} className={isBuzzerTesting ? 'animate-bounce text-amber-500' : 'text-blue-500'} />
+            <span className="hidden sm:inline">Test Bip</span>
           </button>
 
           <button
             type="button"
             onClick={handleReadCard}
             disabled={isReading}
-            className="min-h-[38px] px-4 py-1.5 text-xs font-bold rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+            className="h-8 sm:h-9 px-2.5 sm:px-3 text-xs font-bold rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
-            <RefreshCw size={15} className={isReading ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={isReading ? 'animate-spin' : ''} />
             <span>Lire Carte</span>
           </button>
         </div>
@@ -807,7 +808,7 @@ export const ProUsbLockSystemView: React.FC = () => {
       {/* Toast Alert */}
       {statusMessage && (
         <div
-          className={`px-4 py-2 text-xs flex items-center justify-between transition-all ${
+          className={`px-3 py-1.5 text-xs flex items-center justify-between transition-all ${
             statusMessage.type === 'success'
               ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-200 border-b border-emerald-200 dark:border-emerald-800'
               : statusMessage.type === 'error'
@@ -817,30 +818,30 @@ export const ProUsbLockSystemView: React.FC = () => {
         >
           <div className="flex items-center gap-2">
             {statusMessage.type === 'success' ? (
-              <CheckCircle2 size={15} className="text-emerald-500" />
+              <CheckCircle2 size={14} className="text-emerald-500" />
             ) : statusMessage.type === 'error' ? (
-              <AlertTriangle size={15} className="text-rose-500" />
+              <AlertTriangle size={14} className="text-rose-500" />
             ) : (
-              <ShieldCheck size={15} className="text-blue-500" />
+              <ShieldCheck size={14} className="text-blue-500" />
             )}
-            <span className="font-medium">{statusMessage.text}</span>
+            <span className="font-medium text-[11px] sm:text-xs">{statusMessage.text}</span>
           </div>
-          <button onClick={() => setStatusMessage(null)} className="text-xs opacity-60 hover:opacity-100">
-            Fermer
+          <button onClick={() => setStatusMessage(null)} className="text-xs opacity-60 hover:opacity-100 cursor-pointer">
+            ✕
           </button>
         </div>
       )}
 
       {/* Navigation Tabs */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 flex gap-1 overflow-x-auto text-xs font-semibold text-slate-500">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-2 sm:px-4 flex gap-1 overflow-x-auto text-xs font-semibold text-slate-500 no-scrollbar">
         {[
-          { id: 'reception', label: '1. Réception & Cartes Invités', icon: KeyRound },
-          { id: 'staff_cards', label: '2. Cartes de Service & Personnel', icon: ShieldCheck },
-          { id: 'commissioning', label: '3. Mise en Service Serrure', icon: Sliders },
-          { id: 'audit_log', label: "4. Journal d'Audit & Ouvertures", icon: History },
-          { id: 'encoder_hardware', label: '5. Encodeur & Console Trames', icon: Terminal },
-          { id: 'settings', label: '6. Options Serrures & Rôles', icon: Settings },
-          { id: 'security', label: '7. Sécurité & Reset Persistant', icon: ShieldCheck },
+          { id: 'reception', label: '1. Invités', fullLabel: '1. Réception & Cartes Invités', icon: KeyRound },
+          { id: 'staff_cards', label: '2. Personnel', fullLabel: '2. Cartes de Service & Personnel', icon: ShieldCheck },
+          { id: 'commissioning', label: '3. Mise en Service', fullLabel: '3. Mise en Service Serrure', icon: Sliders },
+          { id: 'audit_log', label: "4. Audit", fullLabel: "4. Journal d'Audit & Ouvertures", icon: History },
+          { id: 'encoder_hardware', label: '5. Console Hex', fullLabel: '5. Encodeur & Console Trames', icon: Terminal },
+          { id: 'settings', label: '6. Options', fullLabel: '6. Options Serrures & Rôles', icon: Settings },
+          { id: 'security', label: '7. Sécurité', fullLabel: '7. Sécurité & Reset Persistant', icon: ShieldCheck },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -848,14 +849,15 @@ export const ProUsbLockSystemView: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`py-3 px-3.5 border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
+              className={`py-2 sm:py-3 px-2 sm:px-3 border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors shrink-0 cursor-pointer ${
                 isActive
                   ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-bold'
                   : 'border-transparent hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
-              <Icon size={15} />
-              <span>{tab.label}</span>
+              <Icon size={14} />
+              <span className="sm:hidden">{tab.label}</span>
+              <span className="hidden sm:inline">{tab.fullLabel}</span>
             </button>
           );
         })}

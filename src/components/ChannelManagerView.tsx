@@ -260,13 +260,13 @@ export const ChannelManagerView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-4 md:space-y-6">
+    <div className="flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-3 sm:space-y-4 md:space-y-6">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Globe className="text-blue-500 shrink-0" size={22} />
+            <h1 className="text-base sm:text-lg md:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Globe className="text-blue-500 shrink-0" size={20} />
               <span>
                 {language === 'fr'
                   ? 'Channel Manager & Centre d\'Alertes OTA'
@@ -275,11 +275,11 @@ export const ChannelManagerView: React.FC = () => {
                   : 'Channel Manager & OTA Alerts Hub'}
               </span>
             </h1>
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 uppercase shrink-0">
-              2-Way XML & iCal
+            <span className="text-[10px] font-bold font-mono text-blue-600 dark:text-blue-400 uppercase shrink-0">
+              · 2-Way XML & iCal
             </span>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {language === 'fr'
               ? `Synchronisation bidirectionnelle des réservations, disponibilités et tarifs · Domaine : ${currentDomain.toUpperCase()}`
               : language === 'ar'
@@ -292,32 +292,32 @@ export const ChannelManagerView: React.FC = () => {
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setIsAddChannelModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 rounded-lg text-xs font-semibold shadow-xs transition-all"
+            className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
           >
             <Plus size={14} />
-            <span>{language === 'fr' ? 'Connecter un Canal' : language === 'ar' ? 'إضافة قناة' : 'Connect Channel'}</span>
+            <span>{language === 'fr' ? 'Connecter' : language === 'ar' ? 'إضافة قناة' : 'Connect'}</span>
           </button>
 
           <button
             onClick={handleSyncAll}
             disabled={isSyncingAll}
-            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-all disabled:opacity-50"
+            className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw size={14} className={isSyncingAll ? 'animate-spin' : ''} />
-            <span>{isSyncingAll ? (language === 'fr' ? 'Synchro...' : 'Syncing...') : (language === 'fr' ? 'Tout Synchroniser' : 'Sync All')}</span>
+            <span>{isSyncingAll ? (language === 'fr' ? 'Synchro...' : 'Syncing...') : (language === 'fr' ? 'Tout Synchro' : 'Sync All')}</span>
           </button>
         </div>
       </div>
 
       {/* KPI Stats Bar */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 md:gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 md:gap-3">
         {/* Active Channels */}
-        <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+        <div className="p-2.5 sm:p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-1">
-            <span className="text-[11px] font-semibold uppercase">{language === 'fr' ? 'Canaux Connectés' : 'Active Channels'}</span>
-            <Radio size={16} className="text-emerald-500" />
+            <span className="text-[10px] sm:text-[11px] font-semibold uppercase">{language === 'fr' ? 'Canaux Connectés' : 'Active Channels'}</span>
+            <Radio size={14} className="text-emerald-500" />
           </div>
-          <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-white tabular-nums">
+          <div className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-white tabular-nums">
             {domainChannels.filter((c) => c.isActive).length} / {domainChannels.length}
           </div>
           <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold block mt-0.5 truncate">
@@ -326,12 +326,12 @@ export const ChannelManagerView: React.FC = () => {
         </div>
 
         {/* Unresolved Alerts */}
-        <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+        <div className="p-2.5 sm:p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-1">
-            <span className="text-[11px] font-semibold uppercase">{language === 'fr' ? 'Alertes & Conflits' : 'Alerts & Conflicts'}</span>
-            <AlertTriangle size={16} className={criticalCount > 0 ? 'text-rose-500 animate-bounce' : 'text-amber-500'} />
+            <span className="text-[10px] sm:text-[11px] font-semibold uppercase">{language === 'fr' ? 'Alertes & Conflits' : 'Alerts & Conflicts'}</span>
+            <AlertTriangle size={14} className={criticalCount > 0 ? 'text-rose-500 animate-bounce' : 'text-amber-500'} />
           </div>
-          <div className={`text-xl md:text-2xl font-bold font-mono tabular-nums ${criticalCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+          <div className={`text-lg sm:text-xl md:text-2xl font-bold font-mono tabular-nums ${criticalCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
             {activeAlertsCount}
           </div>
           <span className={`text-[10px] font-semibold block mt-0.5 truncate ${criticalCount > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
@@ -340,12 +340,12 @@ export const ChannelManagerView: React.FC = () => {
         </div>
 
         {/* Sync Latency */}
-        <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+        <div className="p-2.5 sm:p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-1">
-            <span className="text-[11px] font-semibold uppercase">{language === 'fr' ? 'Latence Réseau' : 'Sync Latency'}</span>
-            <Clock size={16} className="text-blue-500" />
+            <span className="text-[10px] sm:text-[11px] font-semibold uppercase">{language === 'fr' ? 'Latence Réseau' : 'Sync Latency'}</span>
+            <Clock size={14} className="text-blue-500" />
           </div>
-          <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-white tabular-nums">
+          <div className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-white tabular-nums">
             195 ms
           </div>
           <span className="text-[10px] text-emerald-600 font-semibold block mt-0.5 truncate">
@@ -354,12 +354,12 @@ export const ChannelManagerView: React.FC = () => {
         </div>
 
         {/* Direct Engine Volume */}
-        <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+        <div className="p-2.5 sm:p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-1">
-            <span className="text-[11px] font-semibold uppercase">{language === 'fr' ? 'Part Ventes Directes' : 'Direct Booking Share'}</span>
-            <TrendingUp size={16} className="text-purple-500" />
+            <span className="text-[10px] sm:text-[11px] font-semibold uppercase">{language === 'fr' ? 'Part Ventes Directes' : 'Direct Booking Share'}</span>
+            <TrendingUp size={14} className="text-purple-500" />
           </div>
-          <div className="text-xl md:text-2xl font-bold font-mono text-purple-600 dark:text-purple-400 tabular-nums">
+          <div className="text-lg sm:text-xl md:text-2xl font-bold font-mono text-purple-600 dark:text-purple-400 tabular-nums">
             68.4 %
           </div>
           <span className="text-[10px] text-slate-400 block mt-0.5 truncate">
