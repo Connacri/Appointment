@@ -71,6 +71,7 @@ export const TopBar: React.FC = () => {
     setIsQrScannerOpen,
     setActiveQrPassBooking,
     bookings,
+    clientProfile,
     currency,
     setCurrency,
     tasks,
@@ -87,6 +88,7 @@ export const TopBar: React.FC = () => {
   const [usbDevice, setUsbDevice] = useState<UsbDeviceInfo | null>(lockManager.getDeviceInfo());
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
+  const [quickActionNotice, setQuickActionNotice] = useState<string | null>(null);
   const [isRequestingUsb, setIsRequestingUsb] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
@@ -378,8 +380,27 @@ export const TopBar: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        const latest = bookings[0] || null;
-                        if (latest) setActiveQrPassBooking(latest);
+                        const profileEmail = clientProfile.email.trim().toLowerCase();
+                        const clientBookings = bookings
+                          .filter((booking) =>
+                            booking.sector === currentDomain &&
+                            profileEmail.length > 0 &&
+                            booking.guestEmail.trim().toLowerCase() === profileEmail &&
+                            booking.status !== 'cancelled' &&
+                            booking.status !== 'checked_out'
+                          )
+                          .sort((a, b) => a.startDate.localeCompare(b.startDate));
+                        const nextBooking = clientBookings[0] || null;
+                        if (nextBooking) {
+                          setActiveQrPassBooking(nextBooking);
+                          setQuickActionNotice(null);
+                        } else {
+                          setQuickActionNotice(language === 'fr'
+                            ? 'Aucun séjour actif ou à venir ne correspond à votre profil client.'
+                            : language === 'ar'
+                            ? 'لا توجد إقامة حالية أو قادمة مرتبطة بملفك.'
+                            : 'No active or upcoming stay matches your client profile.');
+                        }
                         setIsMoreMenuOpen(false);
                       }}
                       className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs cursor-pointer"
@@ -505,6 +526,13 @@ export const TopBar: React.FC = () => {
         </div>
         </div>
       </header>
+
+      {quickActionNotice && (
+        <div role="status" className="bg-amber-50 dark:bg-amber-950/70 text-amber-900 dark:text-amber-100 border-b border-amber-200 dark:border-amber-800 px-4 py-2 text-xs flex items-center justify-between gap-3">
+          <span>{quickActionNotice}</span>
+          <button type="button" onClick={() => setQuickActionNotice(null)} aria-label="Fermer" className="p-1 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900"><X size={14} /></button>
+        </div>
+      )}
 
       {/* Ephemeral USB Banner Alert if browser permission needed */}
       {usbNotice && (
