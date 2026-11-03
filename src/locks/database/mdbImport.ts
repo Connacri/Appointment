@@ -462,7 +462,7 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 
   for (const guest of guests) {
     const rawRoomRef = str(guest.roomNo);
-    const buildingMatch = rawRoomRef.match(/^(\\d+)\\s*-\\s*(.+)$/);
+    const buildingMatch = rawRoomRef.match(/^(\d+)\s*-\s*(.+)$/);
     const guestBuilding = buildingMatch ? Number(buildingMatch[1]) : null;
     const roomNo = normalizeRoomNo(buildingMatch ? buildingMatch[2] : rawRoomRef);
     const room = guestBuilding !== null
