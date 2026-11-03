@@ -614,7 +614,7 @@ export const BookingModal: React.FC = () => {
         if (e.target === e.currentTarget) closeModal();
       }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[94dvh] my-auto">
+      <div role="dialog" aria-modal="true" aria-labelledby="booking-dialog-title" className="pms-dialog-panel max-w-2xl w-full flex flex-col max-h-[94dvh] my-auto">
         {/* Modal Dedicated Domain Header */}
         <div className="border-b border-slate-200 dark:border-slate-800 px-5 py-4 flex items-center justify-between bg-slate-50 dark:bg-slate-850 shrink-0">
           <div className="flex items-center gap-3">
@@ -623,7 +623,7 @@ export const BookingModal: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-slate-900 dark:text-white text-base leading-tight">
+                <h3 id="booking-dialog-title" className="font-bold text-slate-900 dark:text-white text-base leading-tight">
                   {sheetTitle[language] || sheetTitle.en}
                 </h3>
                 {isEditing && selectedBooking && (
