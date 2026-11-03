@@ -91,6 +91,7 @@ export interface ImportedRoom {
 }
 
 export interface ImportedGuest {
+  /** Raw GuestInfo.BldRoomNo, commonly formatted as `building-room`. */
   roomNo: string;
   name: string;
   comeTime: string | null;
@@ -279,6 +280,20 @@ export async function parseCardLockMdb(
     maxCards: num(r.MaxCards, 0),
   }));
 
+  // BuildingInfo is not always complete in legacy CardLock databases.
+  // RoomInfo.BldNo is the authoritative fallback: never drop a building
+  // simply because its descriptive row is absent from BuildingInfo.
+  const buildingByNo = new Map<number, ImportedBuilding>();
+  for (const building of buildings) {
+    if (building.no > 0) buildingByNo.set(building.no, building);
+  }
+  for (const room of rooms) {
+    if (room.building > 0 && !buildingByNo.has(room.building)) {
+      buildingByNo.set(room.building, { no: room.building, name: '' });
+    }
+  }
+  const completeBuildings = [...buildingByNo.values()].sort((a, b) => a.no - b.no);
+
   const guests: ImportedGuest[] = read('GuestInfo').map((r) => ({
     roomNo: str(r.BldRoomNo),
     name: str(r.Name),
@@ -316,7 +331,7 @@ export async function parseCardLockMdb(
     fileName,
     fileLastModified: null,
     importedAt: new Date().toISOString(),
-    buildings,
+    buildings: completeBuildings,
     rooms,
     guests,
     cards,
@@ -375,43 +390,47 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
   resourceGroups: ResourceGroup[];
   bookings: TimelineBooking[];
 } {
-  const { buildings, rooms, guests } = snapshot;
+  const { rooms, guests } = snapshot;
 
-  // Index des chambres par numéro normalisé pour lier les séjours.
-  const roomByNo = new Map(rooms.map((r) => [normalizeRoomNo(r.roomNo), r]));
+  // Keep all building rows, and recover missing rows from RoomInfo.BldNo.
+  const buildingByNo = new Map<number, ImportedBuilding>();
+  for (const building of snapshot.buildings) {
+    if (building.no > 0) buildingByNo.set(building.no, building);
+  }
+  for (const room of rooms) {
+    if (room.building > 0 && !buildingByNo.has(room.building)) {
+      buildingByNo.set(room.building, { no: room.building, name: '' });
+    }
+  }
+  const buildings = [...buildingByNo.values()].sort((a, b) => a.no - b.no);
 
-  // Regroupe les chambres par bâtiment.
   const roomsByBuilding = new Map<number, ImportedRoom[]>();
   const roomsWithoutBuilding: ImportedRoom[] = [];
-  for (const r of rooms) {
-    if (r.building && r.building > 0) {
-      const arr = roomsByBuilding.get(r.building) ?? [];
-      arr.push(r);
-      roomsByBuilding.set(r.building, arr);
+  for (const room of rooms) {
+    if (room.building > 0) {
+      const buildingRooms = roomsByBuilding.get(room.building) ?? [];
+      buildingRooms.push(room);
+      roomsByBuilding.set(room.building, buildingRooms);
     } else {
-      roomsWithoutBuilding.push(r);
+      roomsWithoutBuilding.push(room);
     }
   }
 
-  const resourceGroups: ResourceGroup[] = [];
-
-  // Un groupe par bâtiment.
-  for (const b of buildings) {
-    const bRooms = roomsByBuilding.get(b.no) ?? [];
-    resourceGroups.push({
-      id: `mdb-bld-${b.no}`,
+  const resourceGroups: ResourceGroup[] = buildings.map((building) => {
+    const name = building.name.trim() || `Bâtiment ${building.no}`;
+    return {
+      id: `mdb-bld-${building.no}`,
       name: {
-        fr: b.name || `Bâtiment ${b.no}`,
-        en: b.name || `Building ${b.no}`,
-        ar: b.name || `مبنى ${b.no}`,
+        fr: name,
+        en: building.name.trim() || `Building ${building.no}`,
+        ar: building.name.trim() || `مبنى ${building.no}`,
       },
       sector: 'hotel',
       icon: 'Building',
-      resources: bRooms.map((r) => resourceItemFromRoom(r)),
-    });
-  }
+      resources: (roomsByBuilding.get(building.no) ?? []).map(resourceItemFromRoom),
+    };
+  });
 
-  // Groupe pour les chambres sans bâtiment.
   if (roomsWithoutBuilding.length > 0) {
     resourceGroups.push({
       id: 'mdb-rooms-nobld',
@@ -422,43 +441,46 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
       },
       sector: 'hotel',
       icon: 'BedDouble',
-      resources: roomsWithoutBuilding.map((r) => resourceItemFromRoom(r)),
+      resources: roomsWithoutBuilding.map(resourceItemFromRoom),
     });
   }
 
-  // Si aucune chambre ni bâtiment, on crée un groupe vide pour ne pas perdre l'import.
-  if (resourceGroups.length === 0 && rooms.length > 0) {
-    resourceGroups.push({
-      id: 'mdb-rooms',
-      name: {
-        fr: 'Chambres importées',
-        en: 'Imported rooms',
-        ar: 'الغرف المستوردة',
-      },
-      sector: 'hotel',
-      resources: rooms.map((r) => resourceItemFromRoom(r)),
-    });
+  // Resolve rooms by a composite key first. Room numbers can repeat between buildings.
+  const roomByBuildingAndNo = new Map(
+    rooms.map((room) => [`${room.building}:${normalizeRoomNo(room.roomNo)}`, room])
+  );
+  const roomsByNo = new Map<string, ImportedRoom[]>();
+  for (const room of rooms) {
+    const key = normalizeRoomNo(room.roomNo);
+    const matches = roomsByNo.get(key) ?? [];
+    matches.push(room);
+    roomsByNo.set(key, matches);
   }
 
-  // Convertit les séjours clients en réservations du planning.
-  // Clé de déduplication : même chambre + même heure d'arrivée + même client
-  // = un seul séjour (les lignes « Copy » sont des cartes supplémentaires).
   const stayByKey = new Map<string, TimelineBooking>();
   const bookings: TimelineBooking[] = [];
 
-  for (const g of guests) {
-    const roomNo = normalizeRoomNo(g.roomNo);
-    const room = roomByNo.get(roomNo);
-    const resourceId = room ? `mdb-rm-${room.roomNo}` : `mdb-room-${roomNo}`;
+  for (const guest of guests) {
+    const rawRoomRef = str(guest.roomNo);
+    const buildingMatch = rawRoomRef.match(/^(\\d+)\\s*-\\s*(.+)$/);
+    const guestBuilding = buildingMatch ? Number(buildingMatch[1]) : null;
+    const roomNo = normalizeRoomNo(buildingMatch ? buildingMatch[2] : rawRoomRef);
+    const room = guestBuilding !== null
+      ? roomByBuildingAndNo.get(`${guestBuilding}:${roomNo}`)
+      : (roomsByNo.get(roomNo)?.length === 1 ? roomsByNo.get(roomNo)?.[0] : undefined);
+    const resourceId = room
+      ? `mdb-rm-${room.building}-${normalizeRoomNo(room.roomNo)}`
+      : guestBuilding !== null
+        ? `mdb-rm-${guestBuilding}-${roomNo}`
+        : `mdb-room-${roomNo}`;
     const resourceName = room ? room.roomNo : roomNo;
 
-    const startIso = parseAccessDateTime(g.comeTime);
-    const endIso = parseAccessDateTime(g.goTime);
+    const startIso = parseAccessDateTime(guest.comeTime);
+    const endIso = parseAccessDateTime(guest.goTime);
     const startDate = startIso ? startIso.slice(0, 10) : new Date().toISOString().slice(0, 10);
     const endDate = endIso ? endIso.slice(0, 10) : startDate;
-
     const price = room ? parsePrice(room.price) : 0;
-    const flag = g.flag || '';
+    const flag = guest.flag || '';
     const status: TimelineBooking['status'] = /check.?out/i.test(flag)
       ? 'checked_out'
       : /copy/i.test(flag)
@@ -467,11 +489,9 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
           ? 'checked_in'
           : 'confirmed';
 
-    const key = `${roomNo}|${startIso ?? startDate}|${g.name}`;
+    const key = `${guestBuilding ?? room?.building ?? ''}:${roomNo}|${startIso ?? startDate}|${guest.name}`;
     const existing = stayByKey.get(key);
     if (existing) {
-      // Carte « Copy » d'un séjour déjà présent : on étend la durée si besoin
-      // et on compte les copies.
       if (endIso && endDate > existing.endDate) existing.endDate = endDate;
       const copies = Number(existing.customMetadata?.copies ?? 1) + 1;
       existing.customMetadata = { ...existing.customMetadata, copies };
@@ -479,11 +499,11 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     }
 
     const booking: TimelineBooking = {
-      id: `mdb-bkg-${roomNo}-${startDate}-${bookings.length + 1}`,
+      id: `mdb-bkg-${guestBuilding ?? room?.building ?? 'unknown'}-${roomNo}-${startDate}-${bookings.length + 1}`,
       resourceId,
       resourceName,
       sector: 'hotel',
-      guestName: g.name || 'Client',
+      guestName: guest.name || 'Client',
       guestEmail: '',
       guestPhone: '',
       startDate,
@@ -491,15 +511,15 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
       status,
       totalPrice: price,
       paymentStatus: 'pending',
-      notes: `Importé de CardLock.mdb — carte ${g.cardId || '—'}, flag: ${flag || '—'}`,
+      notes: `Importé de CardLock.mdb — carte ${guest.cardId || '—'}, flag: ${flag || '—'}`,
       color: '#2563eb',
       adults: 1,
       customMetadata: {
         source: 'cardlock_mdb',
-        cardId: g.cardId,
+        cardId: guest.cardId,
         flag,
         roomType: room?.type,
-        building: room?.building,
+        building: room?.building ?? guestBuilding,
         floor: room?.floor,
         originalPrice: room?.price,
         cardCount: room?.cardCount,
@@ -515,7 +535,7 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 
 function resourceItemFromRoom(r: ImportedRoom): ResourceItem {
   return {
-    id: `mdb-rm-${r.roomNo}`,
+    id: `mdb-rm-${r.building}-${normalizeRoomNo(r.roomNo)}`,
     name: r.roomNo,
     type: r.type || 'Chambre',
     sector: 'hotel',
