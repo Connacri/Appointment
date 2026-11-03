@@ -172,6 +172,7 @@ export const PlanningTimeline: React.FC = () => {
 
   // Collapsed state for resource groups
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [collapsedFloors, setCollapsedFloors] = useState<Record<string, boolean>>({});
 
   // Hovered / selected booking for floating preview or mobile touch sheet
   const [activePreviewBooking, setActivePreviewBooking] = useState<{
@@ -199,10 +200,12 @@ export const PlanningTimeline: React.FC = () => {
   useEffect(() => () => cancelPreviewClose(), []);
 
   const toggleGroup = (groupId: string) => {
-    setCollapsedGroups((prev) => ({
-      ...prev,
-      [groupId]: !prev[groupId],
-    }));
+    setCollapsedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
+
+  const toggleFloor = (groupId: string, floorKey: string) => {
+    const key = `${groupId}:${floorKey}`;
+    setCollapsedFloors((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   // Smooth scroll helpers
@@ -332,7 +335,7 @@ export const PlanningTimeline: React.FC = () => {
           resources: matchingResources,
         };
       })
-      .filter((grp) => grp.resources.length > 0);
+      .filter((grp) => grp.resources.length > 0 || (currentDomain === 'hotel' && !searchQuery.trim()));
   }, [currentDomain, resourceGroups, searchQuery, bookings, selectedEstablishmentId]);
 
   // Gantt hierarchy: building (resource group) > floor > room.
@@ -707,12 +710,21 @@ export const PlanningTimeline: React.FC = () => {
                   {!isCollapsed && (floorGroupsByGroup.get(grp.id) ?? []).map((floorGroup) => (
                     <React.Fragment key={floorGroup.key}>
                       {floorGroup.label && (
-                        <div className="h-7 min-h-[28px] max-h-[28px] shrink-0 px-2.5 flex items-center justify-between bg-slate-100 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800">
-                          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 truncate">{floorGroup.label}</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleFloor(grp.id, floorGroup.key)}
+                          aria-expanded={!collapsedFloors[`${grp.id}:${floorGroup.key}`]}
+                          aria-label={`${collapsedFloors[`${grp.id}:${floorGroup.key}`] ? 'Développer' : 'Réduire'} ${floorGroup.label}`}
+                          className="h-7 min-h-[28px] max-h-[28px] w-full shrink-0 px-2.5 flex items-center justify-between bg-slate-100 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 hover:bg-slate-200 dark:hover:bg-slate-800 text-left cursor-pointer"
+                        >
+                          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 truncate">
+                            {collapsedFloors[`${grp.id}:${floorGroup.key}`] ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                            {floorGroup.label}
+                          </span>
                           <span className="text-[9px] font-mono text-slate-400 shrink-0">{floorGroup.resources.length}</span>
-                        </div>
+                        </button>
                       )}
-                      {floorGroup.resources.map((res) => (
+                      {!collapsedFloors[`${grp.id}:${floorGroup.key}`] && floorGroup.resources.map((res) => (
                         <div
                           key={res.id}
                           className="h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 px-1.5 sm:px-2.5 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900"
@@ -828,16 +840,16 @@ export const PlanningTimeline: React.FC = () => {
                             ).length;
                             const available = Math.max(0, floorGroup.resources.length - occupied);
                             return (
-                              <div key={day.dateStr} style={{ width: `${colWidth}px` }} className="shrink-0 border-r border-slate-200/60 dark:border-slate-800/60 flex items-center justify-center">
+                              <button key={day.dateStr} type="button" onClick={() => toggleFloor(grp.id, floorGroup.key)} aria-label={`${collapsedFloors[`${grp.id}:${floorGroup.key}`] ? 'Développer' : 'Réduire'} ${floorGroup.label}`} style={{ width: `${colWidth}px` }} className="shrink-0 border-r border-slate-200/60 dark:border-slate-800/60 flex items-center justify-center hover:bg-slate-200/80 dark:hover:bg-slate-700/70 cursor-pointer">
                                 <span className={`text-[9px] font-mono font-semibold ${available > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`} title={`${available} chambre(s) disponible(s)`}>
                                   {available}/{floorGroup.resources.length}
                                 </span>
-                              </div>
+                              </button>
                             );
                           })}
                         </div>
                       )}
-                      {floorGroup.resources.map((res) => {
+                      {!collapsedFloors[`${grp.id}:${floorGroup.key}`] && floorGroup.resources.map((res) => {
                       // Find bookings on this specific resource
                       const resBookings = bookings.filter((b) => b.resourceId === res.id);
 
