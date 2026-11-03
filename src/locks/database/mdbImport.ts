@@ -463,12 +463,27 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 
   for (const guest of guests) {
     const rawRoomRef = str(guest.roomNo);
-    const buildingMatch = rawRoomRef.match(/^(\d+)\s*-\s*(.+)$/);
-    const guestBuilding = buildingMatch ? Number(buildingMatch[1]) : null;
-    const roomNo = normalizeRoomNo(buildingMatch ? buildingMatch[2] : rawRoomRef);
-    const room = guestBuilding !== null
-      ? roomByBuildingAndNo.get(`${guestBuilding}:${roomNo}`)
-      : (roomsByNo.get(roomNo)?.length === 1 ? roomsByNo.get(roomNo)?.[0] : undefined);
+    // CardLock legacy references may be either "building-room" or
+    // "building-floor-room" (e.g. 1-1-12064). Parse all dimensions before
+    // attempting a room lookup; treating "1-1-12064" as building-room
+    // leaves "1-12064" as the room number and silently breaks the link.
+    const parts = rawRoomRef.split('-').map((part) => part.trim());
+    const hasBuilding = parts.length >= 2 && /^\\d+$/.test(parts[0]);
+    const hasFloor = parts.length >= 3 && /^\\d+$/.test(parts[1]);
+    const guestBuilding = hasBuilding ? Number(parts[0]) : null;
+    const guestFloor = hasFloor ? Number(parts[1]) : null;
+    const rawRoomNo = hasFloor ? parts.slice(2).join('-') : hasBuilding ? parts.slice(1).join('-') : rawRoomRef;
+    const roomNo = normalizeRoomNo(rawRoomNo);
+
+    const buildingMatches = guestBuilding !== null
+      ? (roomsByNo.get(roomNo) ?? []).filter((candidate) => candidate.building === guestBuilding)
+      : (roomsByNo.get(roomNo) ?? []);
+    const room = guestFloor !== null
+      ? (buildingMatches.find((candidate) => candidate.floor === guestFloor) ??
+        (buildingMatches.length === 1 ? buildingMatches[0] : undefined))
+      : guestBuilding !== null
+        ? (buildingMatches.length === 1 ? buildingMatches[0] : roomByBuildingAndNo.get(`${guestBuilding}:${roomNo}`))
+        : (buildingMatches.length === 1 ? buildingMatches[0] : undefined);
     const resourceId = room
       ? `mdb-rm-${room.building}-${normalizeRoomNo(room.roomNo)}`
       : guestBuilding !== null
@@ -521,7 +536,7 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
         flag,
         roomType: room?.type,
         building: room?.building ?? guestBuilding,
-        floor: room?.floor,
+        floor: room?.floor ?? guestFloor,
         originalPrice: room?.price,
         cardCount: room?.cardCount,
         maxCards: room?.maxCards,
