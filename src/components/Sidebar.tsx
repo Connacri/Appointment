@@ -195,7 +195,7 @@ export const Sidebar: React.FC = () => {
   };
 
   const renderContent = (isMobileView: boolean) => (
-    <div className="flex flex-col h-full overflow-hidden select-none">
+    <div className={`flex flex-col min-h-full select-none ${isMobileView ? "workspace-sidebar-scroll overflow-y-auto overscroll-y-contain" : "h-full min-h-0 overflow-hidden"}`}>
       {/* Brand Header */}
       <div className="min-h-[68px] border-b border-slate-800/80 px-4 flex items-center justify-between shrink-0 bg-slate-950">
         {(!isCollapsed || isMobileView) && (
@@ -342,7 +342,7 @@ export const Sidebar: React.FC = () => {
         </section>
       )}
       {/* Navigation List */}
-      <nav aria-label={language === "fr" ? "Navigation principale" : language === "ar" ? "التنقل الرئيسي" : "Main navigation"} className="flex-1 py-3 px-2.5 space-y-1.5 overflow-y-auto">
+      <nav aria-label={language === "fr" ? "Navigation principale" : language === "ar" ? "التنقل الرئيسي" : "Main navigation"} className={`py-3 px-2.5 space-y-1.5 ${isMobileView ? "flex-none overflow-visible" : "flex-1 min-h-0 overflow-y-auto overscroll-y-contain"}`}>
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeView === item.view;
@@ -469,7 +469,7 @@ export const Sidebar: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-label={language === 'fr' ? 'Navigation principale' : language === 'ar' ? 'القائمة الرئيسية' : 'Main navigation'}
-            className={`relative z-10 flex h-[100dvh] w-[min(20rem,88vw)] max-w-[88vw] flex-col bg-slate-900 text-slate-300 shadow-2xl overscroll-contain animate-in duration-200 ${
+            className={`relative z-10 flex h-[100dvh] min-h-0 w-[min(20rem,88vw)] max-w-[88vw] flex-col bg-slate-900 text-slate-300 shadow-2xl overscroll-contain animate-in duration-200 ${
               isRtl ? 'mr-auto slide-in-from-right' : 'ml-0 slide-in-from-left'
             }`}
             style={{
