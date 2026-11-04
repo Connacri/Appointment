@@ -70,7 +70,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   const mdbInputRef = useRef<HTMLInputElement>(null);
   const [buildingName, setBuildingName] = useState('Bâtiment principal');
   const [buildingNo, setBuildingNo] = useState('1');
-  const [floorNo, setFloorNo] = useState('0');
+  const [floorNo, setFloorNo] = useState('1');
   const [roomPrefix, setRoomPrefix] = useState('1');
   const [roomStart, setRoomStart] = useState('01');
   const [roomEnd, setRoomEnd] = useState('30');
@@ -832,8 +832,8 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                   <label className="space-y-1"><span className="block font-semibold">Préfixe facultatif</span>
                     <input value={roomPrefix} onChange={(e) => setRoomPrefix(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="Ex. A-" />
                   </label>
-                  <label className="space-y-1"><span className="block font-semibold">Premier numéro de chambre</span>
-                    <input type="number" min="1" value={roomStart} onChange={(e) => setRoomStart(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                  <label className="space-y-1"><span className="block font-semibold">Début de la plage (suffixe)</span>
+                    <input type="text" inputMode="numeric" value={roomStart} onChange={(e) => setRoomStart(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
                   </label>
                   <label className="space-y-1"><span className="block font-semibold">Fin de la plage (suffixe)</span>
                     <input type="text" inputMode="numeric" value={roomEnd} onChange={(e) => setRoomEnd(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
@@ -860,7 +860,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
             <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
               <ShieldCheck size={14} className="text-emerald-500" />
-              <span>Données conservées en local et synchronisées avec vos factures</span>
+              <span>Données enregistrées localement. État de synchronisation affiché séparément.</span>
             </div>
 
             <div className="flex items-center gap-2">
