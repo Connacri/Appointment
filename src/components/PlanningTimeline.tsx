@@ -473,16 +473,15 @@ export const PlanningTimeline: React.FC = () => {
     return (
       <button
         type="button"
-        disabled={status === 'out_of_order'}
         onClick={(e) => {
           e.stopPropagation();
-          if (resourceId && status !== 'out_of_order') {
+          if (resourceId) {
             setSelectedHousekeepingRoom({ id: resourceId, name: resourceName || '', status: status || 'clean' });
           }
         }}
-        className={`relative z-20 w-3.5 h-3.5 rounded-full ${colorClass} shrink-0 ${status === 'out_of_order' ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:scale-125'} transition-all focus:outline-none ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 shadow-2xs pointer-events-auto`}
-        title={status === 'out_of_order' ? `État : ${label}` : `État : ${label} — Cliquez pour choisir un statut`}
-        aria-label={status === 'out_of_order' ? `Chambre ${resourceName || ''} hors service` : `État de la chambre : ${label}. Cliquez pour modifier`}
+        className={`relative z-20 w-3.5 h-3.5 rounded-full ${colorClass} shrink-0 cursor-pointer hover:scale-125 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 shadow-2xs pointer-events-auto`}
+        title={`État : ${label} — Cliquez pour consulter ou modifier le statut`}
+        aria-label={`État de la chambre : ${label}. Cliquez pour consulter ou modifier le statut`}
       />
     );
   };
