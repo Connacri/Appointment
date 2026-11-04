@@ -371,7 +371,7 @@ export const IndexedDbInspectorModal: React.FC<{
                   </tr>)}</tbody>
                 </table>
               </div>
-            </details>
+            </details>}
           </div>}
           {activePanel === 'supabase' && <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-xs font-semibold text-slate-700 dark:text-slate-200 sm:col-span-2">{mt.projectUrl}<input value={supabaseUrl} onChange={e=>setSupabaseUrl(e.target.value)} placeholder="https://xxxxx.supabase.co" className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-normal dark:border-slate-700 dark:bg-slate-950"/></label>
