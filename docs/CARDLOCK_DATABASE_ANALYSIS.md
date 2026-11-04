@@ -2,7 +2,7 @@
 
 ## 1. Fichier examiné et niveau de preuve
 
-Fichier fourni : `CardLock(3).mdb` (Microsoft Access / Jet, 933 888 octets, environ 912 Kio). La structure textuelle du fichier confirme les tables métier listées ci-dessous et plusieurs colonnes. L'application utilise `mdb-reader` pour lire les tables et le nouvel inventaire de l'écran **Base de données locale → Local & CardLock** affiche, pour le fichier réellement sélectionné, le nombre de lignes et les colonnes de chaque table.
+Fichier fourni : `CardLock(3).mdb` (Microsoft Access / Jet, 933 888 octets, environ 912 Kio ; SHA-256 `215282cb644af3505e8e9f24b50fb4f499a1cff9250d6110ccda5df328d480a1`). La structure textuelle du fichier confirme les tables métier listées ci-dessous et plusieurs colonnes. L'application utilise `mdb-reader` pour lire les tables et le nouvel inventaire de l'écran **Base de données locale → Local & CardLock** affiche, pour le fichier réellement sélectionné, le nombre de lignes et les colonnes de chaque table.
 
 **Important :** les noms de tables et les colonnes sont identifiables dans le fichier, mais les relations métier ne sont pas toutes déclarées comme clés étrangères Access. Les liens décrits ici sont des clés métier observées dans les champs et dans les références CardLock ; les champs dont le sens n'est pas démontré sont signalés comme tels. Ne pas traiter les tables système Access comme des tables PMS.
 
