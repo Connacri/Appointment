@@ -578,7 +578,7 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
   for (const guest of guests) {
     const rawRoomRef = str(guest.roomNo);
     const parts = rawRoomRef.split('-').map((part) => part.trim());
-    const compoundRef = parts.length >= 2 && parts.every((part) => /^\\d+$/.test(part));
+    const compoundRef = parts.length >= 2 && parts.every((part) => /^\d+$/.test(part));
     const guestBuilding = compoundRef ? Number(parts[0]) : null;
     const guestFloor = compoundRef && parts.length >= 3 ? Number(parts[1]) : null;
     const rawRoomNo = compoundRef
