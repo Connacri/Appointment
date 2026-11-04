@@ -172,19 +172,19 @@ const tutorials: Tutorial[] = [
         'La carte système est critique : une carte par hôtel selon le constructeur. Ne la distribuez pas comme une carte client.',
         'Ne présentez pas une carte client d’une autre chambre après les trois passages de la carte système.',
         'Le guide indique qu’une réinitialisation par clé mécanique trois fois, carte système trois fois puis carte client une fois efface les données de la serrure. Cette séquence est destructive : ne l’exécutez qu’avec autorisation et procédure constructeur.',
-        'Le test d’une carte avant autorisation ne prouve pas que la serrure est correctement affectée à une chambre.'
+        'Une carte de test peut ouvrir la porte avant l’autorisation, mais elle devient invalide après l’autorisation de la serrure. Utilisez ensuite la carte client émise pour la chambre.'
       ],
       en: [
         'The system card is critical: one per hotel according to the manufacturer. Never distribute it as a guest card.',
         'Do not swipe a guest card for another room after the three system-card swipes.',
         'The guide says that turning the mechanical key three times, swiping the system card three times and then a guest card once clears lock data. This is destructive; perform it only with authorization and the manufacturer procedure.',
-        'Testing a card before authorization does not prove the lock is assigned to the correct room.'
+        'A test card may open a door before authorization, but it becomes invalid after the lock is authorized. Use the guest card issued for that room afterwards.'
       ],
       ar: [
         'بطاقة النظام حساسة للغاية؛ بطاقة واحدة لكل فندق وفق الشركة المصنعة. لا توزعها كبطاقة نزيل.',
         'لا تمرر بطاقة غرفة أخرى بعد تمرير بطاقة النظام ثلاث مرات.',
         'يذكر الدليل أن تدوير المفتاح الميكانيكي ثلاث مرات ثم بطاقة النظام ثلاث مرات ثم بطاقة النزيل مرة واحدة يمسح بيانات القفل. هذا إجراء مدمر؛ لا تنفذه إلا بتفويض ووفق تعليمات الشركة.',
-        'اختبار البطاقة قبل التفويض لا يثبت أن القفل مرتبط بالغرفة الصحيحة.'
+        'قد تفتح بطاقة الاختبار الباب قبل التفويض، لكنها تصبح غير صالحة بعد تفويض القفل. استخدم بعد ذلك بطاقة النزيل الصادرة لتلك الغرفة.'
       ]
     },
     tips: {
