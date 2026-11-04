@@ -1057,7 +1057,9 @@ class LockManager {
     booking: { id: string; guestName: string; unitName?: string; resourceName?: string; startDate: string; endDate: string; buildingNo?: number; floorNo?: number },
     operator: string = 'Admin'
   ): Promise<IssuedCardRecord> {
-    const roomNumber = (booking.unitName || booking.resourceName || '101').replace(/\D/g, '') || '101';
+    const roomSource = booking.unitName || booking.resourceName || '101';
+    const roomSegments = roomSource.split('-').filter(Boolean);
+    const roomNumber = (roomSegments.length > 1 ? roomSegments[roomSegments.length - 1] : roomSource).replace(/\D/g, '') || '101';
     const startParts = booking.startDate.split('-').map(Number);
     const endParts = booking.endDate.split('-').map(Number);
 
