@@ -336,6 +336,7 @@ class LockManager {
       case 0x60: return 'guest';
       case 0x70: return 'checkout';
       case 0x80: return 'group';
+      case 0x90: return 'special';
       case 0xA0: return 'emergency';
       case 0xB0: return 'master';
       case 0xC0: return 'building';
