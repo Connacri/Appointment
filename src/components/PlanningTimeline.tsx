@@ -501,9 +501,9 @@ export const PlanningTimeline: React.FC = () => {
   // Left column width classes
   const leftColWidthClass = useMemo(() => {
     if (isMobileScreen) {
-      return leftBarMode === 'mini' ? 'w-11' : leftBarMode === 'compact' ? 'w-22' : 'w-26';
+      return leftBarMode === 'mini' ? 'w-18' : leftBarMode === 'compact' ? 'w-22' : 'w-26';
     }
-    if (leftBarMode === 'mini') return 'w-12 sm:w-16';
+    if (leftBarMode === 'mini') return 'w-18 sm:w-20';
     if (leftBarMode === 'compact') return 'w-28 sm:w-32';
     return 'w-44 sm:w-56 md:w-64';
   }, [leftBarMode, isMobileScreen]);
@@ -821,7 +821,7 @@ export const PlanningTimeline: React.FC = () => {
                             }`}
                             title={`${res.name} · ${res.type || 'Chambre'} · ${floorGroup.label}${isOutOfOrder ? ' · HORS SERVICE (HS)' : ''}`}
                           >
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
+                            <div className={`flex items-center min-w-0 flex-1 ${leftBarMode === 'mini' ? 'gap-1' : 'gap-1.5 mr-1'}`}>
                               {renderHousekeepingTag(res.housekeepingStatus, res.id, res.name)}
                               {leftBarMode !== 'mini' ? (
                                 <span className="min-w-0 flex flex-col leading-tight">
@@ -833,8 +833,8 @@ export const PlanningTimeline: React.FC = () => {
                                   </span>
                                 </span>
                               ) : (
-                                <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-[11px] truncate">
-                                  {res.name.replace(/[^0-9]/g, '') || res.name.slice(0, 3)}
+                                <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-[10px] whitespace-nowrap shrink-0">
+                                  {res.name}
                                 </span>
                               )}
                               {isOutOfOrder && (
