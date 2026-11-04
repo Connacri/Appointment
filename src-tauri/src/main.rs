@@ -108,22 +108,6 @@ fn secure_secret_set(key: String, value: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn secure_secret_get(key: String) -> Result<Option<String>, String> {
-    validate_secret_key(&key)?;
-    #[cfg(target_os = "windows")]
-    {
-        let entry = keyring::Entry::new(KEYRING_SERVICE, &key).map_err(|e| format!("Windows Credential Manager indisponible : {e}"))?;
-        match entry.get_password() {
-            Ok(value) => Ok(Some(value)),
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(error) => Err(format!("Lecture Credential Manager impossible : {error}")),
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    { Err("Le stockage sécurisé natif est disponible dans le runtime Windows uniquement.".into()) }
-}
-
-#[tauri::command]
 fn secure_secret_exists(key: String) -> Result<bool, String> {
     validate_secret_key(&key)?;
     #[cfg(target_os = "windows")]
@@ -162,7 +146,6 @@ fn main() {
             discover_cardlock_candidates,
             read_cardlock_file,
             secure_secret_set,
-            secure_secret_get,
             secure_secret_exists,
             secure_secret_delete
         ])
