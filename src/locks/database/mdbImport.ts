@@ -336,10 +336,6 @@ export async function parseCardLockMdb(
       }
     }
 
-    if (parsedBld <= 0) {
-      parsedBld = 1;
-    }
-
     return {
       building: parsedBld,
       floor: parsedFlr,
@@ -476,19 +472,18 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     }
   }
 
-  // If still empty, ensure at least Building 1 exists
-  if (buildingByNo.size === 0) {
-    buildingByNo.set(1, { no: 1, name: 'Holiday Inn' });
-  }
-
   const buildings = [...buildingByNo.values()].sort((a, b) => a.no - b.no);
 
   const roomsByBuilding = new Map<number, ImportedRoom[]>();
+  const unassignedRooms: ImportedRoom[] = [];
   for (const room of rooms) {
-    const bldNo = Number.isFinite(room.building) && room.building > 0 ? room.building : (buildings[0]?.no || 1);
-    const buildingRooms = roomsByBuilding.get(bldNo) ?? [];
-    buildingRooms.push(room);
-    roomsByBuilding.set(bldNo, buildingRooms);
+    if (Number.isFinite(room.building) && room.building > 0) {
+      const buildingRooms = roomsByBuilding.get(room.building) ?? [];
+      buildingRooms.push(room);
+      roomsByBuilding.set(room.building, buildingRooms);
+    } else {
+      unassignedRooms.push(room);
+    }
   }
 
   const resourceGroups: ResourceGroup[] = buildings.map((building) => {
@@ -505,6 +500,20 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
       resources: (roomsByBuilding.get(building.no) ?? []).map(resourceItemFromRoom),
     };
   });
+
+  if (unassignedRooms.length > 0) {
+    resourceGroups.push({
+      id: 'mdb-rooms-nobld',
+      name: {
+        fr: 'Chambres sans bâtiment',
+        en: 'Rooms without a building',
+        ar: 'غرف بدون مبنى',
+      },
+      sector: 'hotel',
+      icon: 'Building',
+      resources: unassignedRooms.map(resourceItemFromRoom),
+    });
+  }
 
   // Resolve rooms by a composite key first. Room numbers can repeat between buildings.
   const roomByBuildingAndNo = new Map(
@@ -610,19 +619,14 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 }
 
 function resourceItemFromRoom(r: ImportedRoom): ResourceItem {
-  // Infer floor if missing
-  let floorStr = r.floor > 0 ? String(r.floor) : '';
-  if (!floorStr) {
-    const digits = r.roomNo.replace(/\D/g, '');
-    if (digits.length >= 3) {
-      floorStr = digits[0];
-    } else {
-      floorStr = '1';
-    }
-  }
+  // Infer a floor only when the room number provides an unambiguous leading digit.
+  const inferredFloor = r.roomNo.replace(/\D/g, '').length >= 3
+    ? r.roomNo.replace(/\D/g, '')[0]
+    : undefined;
+  const floor = r.floor > 0 ? String(r.floor) : inferredFloor;
 
   return {
-    id: `mdb-rm-${r.building}-${normalizeRoomNo(r.roomNo)}`,
+    id: `mdb-rm-${r.building || 'unknown'}-${normalizeRoomNo(r.roomNo)}`,
     name: r.roomNo,
     type: r.type || 'Chambre',
     sector: 'hotel',
@@ -635,8 +639,8 @@ function resourceItemFromRoom(r: ImportedRoom): ResourceItem {
           ? 'out_of_order'
           : 'clean') as ResourceItem['housekeepingStatus'],
     capacity: 1,
-    building: String(r.building || 1),
-    floor: floorStr,
+    ...(r.building > 0 ? { building: String(r.building) } : {}),
+    ...(floor ? { floor } : {}),
   };
 }
 
