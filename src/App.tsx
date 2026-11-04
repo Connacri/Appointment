@@ -23,7 +23,7 @@ import { ChannelManagerView } from './components/ChannelManagerView';
 import { TasksManagementView } from './components/TasksManagementView';
 import { StockManagementView } from './components/StockManagementView';
 import { DynamicPricingView } from './components/DynamicPricingView';
-import { ObjectBoxInspectorModal } from './components/ObjectBoxInspectorModal';
+import { IndexedDbInspectorModal } from './components/IndexedDbInspectorModal';
 import { QrPassModal } from './components/QrPassModal';
 import { QrScannerModal } from './components/QrScannerModal';
 import { ProUsbLockSystemView } from './components/ProUsbLockSystemView';
@@ -36,8 +36,8 @@ import { AboutModal } from './components/AboutModal';
 const MainLayout: React.FC = () => {
   const {
     activeView,
-    isObjectBoxOpen,
-    setIsObjectBoxOpen,
+    isIndexedDBOpen,
+    setIsIndexedDBOpen,
     isAboutModalOpen,
     setIsAboutModalOpen,
     activeQrPassBooking,
@@ -99,9 +99,9 @@ const MainLayout: React.FC = () => {
       <BookingModal />
       <AgentsCockpitModal />
       <LegalModal />
-      <ObjectBoxInspectorModal
-        isOpen={isObjectBoxOpen}
-        onClose={() => setIsObjectBoxOpen(false)}
+      <IndexedDbInspectorModal
+        isOpen={isIndexedDBOpen}
+        onClose={() => setIsIndexedDBOpen(false)}
       />
       <QrPassModal
         booking={activeQrPassBooking}
