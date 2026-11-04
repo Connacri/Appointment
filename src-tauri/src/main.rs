@@ -133,6 +133,12 @@ async fn neon_test_connection(connection_string: String) -> Result<NeonConnectio
         .await
         .map_err(|_| "Connexion Neon impossible. Vérifiez l'hôte, les identifiants, TLS et l'accès réseau.".to_string())?;
 
+    let health_check = sqlx::query_scalar::<_, i32>("SELECT 1")
+        .fetch_one(&pool)
+        .await
+        .map_err(|_| "Connexion établie, mais le test SQL SELECT 1 a échoué.".to_string())?;
+    if health_check != 1 { pool.close().await; return Err("Le test SQL de santé a retourné une valeur inattendue.".into()); }
+
     let server_version = sqlx::query_scalar::<_, String>("SHOW server_version")
         .fetch_one(&pool)
         .await
