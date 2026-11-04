@@ -154,6 +154,8 @@ interface AppContextType {
   setHasOnboarded: (done: boolean) => void;
 }
 
+const DEMO_BOOKING_IDS = new Set(initialBookings.map((booking) => booking.id));
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -358,6 +360,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return initialBookings;
   });
+
+  // Only explicit user-created/edited records enter the outbox. Bootstrap mock records are excluded.
+  const persistBookingMutation = (booking: TimelineBooking) => {
+    if (!workspace.activeWorkspaceId || DEMO_BOOKING_IDS.has(booking.id)) return;
+    void indexedDb.putWithOutbox(
+      'bookings',
+      booking,
+      {
+        workspaceId: workspace.activeWorkspaceId,
+        establishmentId: selectedEstablishmentId === 'all' ? undefined : selectedEstablishmentId,
+      },
+      'booking'
+    ).catch((error) => console.error('[Outbox] Booking mutation was not queued:', error));
+  };
 
   const [clientProfile, setClientProfileState] = useState<ClientProfile>(() => {
     const saved = localStorage.getItem('omnibook_client_profile');
@@ -583,9 +599,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 3. Only now instantiate and commit the valid booking
     const newBkg: TimelineBooking = {
       ...bookingData,
-      id: `bkg_${Date.now()}`,
+      id: `bkg_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`,
     };
     setBookings((prev) => [newBkg, ...prev]);
+    persistBookingMutation(newBkg);
 
     // Auto-issue proUSB guest card for hotel/resort bookings
     if (bookingData.sector === 'hotel' || bookingData.sector === 'resort') {
@@ -616,6 +633,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateBooking = (id: string, updates: Partial<TimelineBooking>) => {
+    const existing = bookings.find((booking) => booking.id === id);
+    if (existing) persistBookingMutation({ ...existing, ...updates });
     setBookings((prev) =>
       prev.map((b) => (b.id === id ? { ...b, ...updates } : b))
     );
@@ -625,6 +644,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateBookingStatus = (id: string, status: BookingStatus) => {
+    const existing = bookings.find((booking) => booking.id === id);
+    if (existing) persistBookingMutation({ ...existing, status });
     setBookings((prev) =>
       prev.map((b) => (b.id === id ? { ...b, status } : b))
     );
@@ -634,6 +655,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteBooking = (id: string) => {
+    const existing = bookings.find((booking) => booking.id === id);
+    if (existing && workspace.activeWorkspaceId && !DEMO_BOOKING_IDS.has(id)) {
+      void indexedDb.deleteWithOutbox('bookings', id, {
+        workspaceId: workspace.activeWorkspaceId,
+        establishmentId: selectedEstablishmentId === 'all' ? undefined : selectedEstablishmentId,
+      }, 'booking').catch((error) => console.error('[Outbox] Booking deletion was not queued:', error));
+    }
     setBookings((prev) => prev.filter((b) => b.id !== id));
     if (selectedBooking && selectedBooking.id === id) {
       setSelectedBooking(null);
@@ -644,24 +672,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     bookingId: string,
     receiptNote?: string
   ): { success: boolean; message: string; booking?: TimelineBooking } => {
-    let targetBooking: TimelineBooking | undefined;
+    const currentBooking = bookings.find((booking) => booking.id === bookingId);
+    const targetBooking = currentBooking ? {
+      ...currentBooking,
+      paymentStatus: 'paid' as const,
+      notes: (currentBooking.notes || '') + (receiptNote ||
+        ' [✓ Reçu de paiement acquitté via QR Code - Marqué PAYÉ par le personnel]'),
+    } : undefined;
+    if (targetBooking) persistBookingMutation(targetBooking);
     setBookings((prev) =>
-      prev.map((b) => {
-        if (b.id === bookingId) {
-          const updated: TimelineBooking = {
-            ...b,
-            paymentStatus: 'paid',
-            notes:
-              (b.notes || '') +
-              (receiptNote ||
-                ' [✓ Reçu de paiement acquitté via QR Code - Marqué PAYÉ par le personnel]'),
-          };
-          targetBooking = updated;
-          return updated;
-        }
-        return b;
-      })
+      prev.map((booking) => booking.id === bookingId && targetBooking ? targetBooking : booking)
     );
+
+    if (selectedBooking && selectedBooking.id === bookingId) {
+      setSelectedBooking(targetBooking ?? null);
+    }
+
+    /* legacy updater replaced */
 
     if (selectedBooking && selectedBooking.id === bookingId) {
       setSelectedBooking((prev) =>
@@ -713,6 +740,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : ' [✓ Présence confirmée via QR Code]'),
     };
 
+    persistBookingMutation(updatedBooking);
     setBookings((prev) =>
       prev.map((booking) =>
         booking.id === bookingId ? updatedBooking : booking
