@@ -27,6 +27,7 @@ import {
   Volume2,
   VolumeX,
   Sliders,
+  ShieldCheck,
   User,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
