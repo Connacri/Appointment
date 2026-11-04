@@ -49,7 +49,7 @@ export const PipelineStatusIndicator: React.FC = () => {
     id: 482,
     workflowName: 'Production Signed Release & Cloud Deploy',
     commitHash: '7f3a9d2',
-    commitMessage: 'feat: add booking analytics, objectbox & strict domain RBAC',
+    commitMessage: 'feat: add booking analytics, IndexedDB & strict domain RBAC',
     branch: 'main',
     status: 'success',
     startedAt: 'Il y a 3 minutes',
