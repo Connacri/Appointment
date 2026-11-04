@@ -140,7 +140,7 @@ export const TopBar: React.FC = () => {
   const isRtl = language === 'ar';
 
   return (
-    <header className="w-full bg-[#0a0f1d] text-slate-100 border-b border-slate-800/80 px-2 sm:px-4 py-2 flex items-center justify-between gap-2 sm:gap-3 shrink-0 select-none z-40 relative">
+    <header className="pms-app-topbar w-full bg-[#0a0f1d] text-slate-100 border-b border-slate-800/80 px-2 sm:px-4 py-2 flex flex-wrap md:flex-nowrap items-center justify-between gap-2 sm:gap-3 shrink-0 select-none z-40 relative">
       {/* Toast notice for USB or status */}
       {usbNotice && (
         <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-cyan-500/50 text-cyan-200 text-xs shadow-xl z-50 animate-in fade-in flex items-center gap-2">
@@ -150,7 +150,7 @@ export const TopBar: React.FC = () => {
       )}
 
       {/* LEFT SECTION: Mobile hamburger, Sector pills, Role selector */}
-      <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+      <div className="pms-app-topbar-left flex items-center gap-1.5 sm:gap-3 min-w-0">
         {/* Mobile Sidebar Hamburger Toggle */}
         <button
           type="button"
@@ -207,7 +207,7 @@ export const TopBar: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}
-            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm transition-colors"
+            className="px-2 sm:px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] sm:text-xs font-semibold flex items-center gap-1 cursor-pointer shadow-sm transition-colors"
             title="Changer de rôle actif"
           >
             <CurrentRoleIcon size={14} className="text-amber-300" />
@@ -254,7 +254,7 @@ export const TopBar: React.FC = () => {
       </div>
 
       {/* CENTER SECTION: Clean White Search Input matching szsz.png */}
-      <div className="flex-1 max-w-[160px] sm:max-w-[220px] md:max-w-[280px] lg:max-w-[340px] relative">
+      <div className="pms-app-topbar-search flex-1 max-w-[160px] sm:max-w-[220px] md:max-w-[280px] lg:max-w-[340px] relative">
         <div className="relative flex items-center">
           <Search size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
           <input
@@ -278,7 +278,7 @@ export const TopBar: React.FC = () => {
       </div>
 
       {/* RIGHT SECTION: ObjectBox Sync Status, USB Status, + Nouveau, More ⋮ */}
-      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+      <div className="pms-app-topbar-actions flex items-center gap-1.5 sm:gap-2.5 shrink-0">
         {/* Real-time ObjectBox Sync Status Indicator */}
         <button
           type="button"
@@ -322,7 +322,7 @@ export const TopBar: React.FC = () => {
         <button
           type="button"
           onClick={handlePhysicalUsbClick}
-          className={`h-8 px-2.5 sm:px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+          className={`h-8 px-1.5 sm:px-3 rounded-lg text-[11px] sm:text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs ${
             usbStatus === 'connected'
               ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
               : 'bg-emerald-950/80 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-700/60'
@@ -344,13 +344,13 @@ export const TopBar: React.FC = () => {
             />
           </span>
           <Usb size={13} className="hidden xs:inline" />
-          <span className="whitespace-nowrap">
+          <span className="whitespace-nowrap hidden sm:inline">
             USB • {usbStatus === 'connected' ? 'Prêt' : 'Connecter'}
           </span>
         </button>
 
         {/* Global Currency Switcher */}
-        <div className="h-8 flex items-center bg-slate-900 border border-slate-700/80 rounded-lg px-2 text-xs font-mono font-bold text-amber-400 shadow-2xs">
+        <div className="pms-app-topbar-currency h-8 flex items-center bg-slate-900 border border-slate-700/80 rounded-lg px-1.5 sm:px-2 text-[11px] sm:text-xs font-mono font-bold text-amber-400 shadow-2xs">
           <span className="text-[10px] text-slate-400 mr-1.5 font-sans hidden sm:inline">Devise:</span>
           <select
             value={currency}
@@ -376,7 +376,7 @@ export const TopBar: React.FC = () => {
             setNewBookingInitialSlot(null);
             setIsNewBookingModalOpen(true);
           }}
-          className="h-8 px-2.5 sm:px-3.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+          className="h-8 px-2 sm:px-3.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] sm:text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
           title="Créer une nouvelle réservation"
         >
           <Plus size={15} strokeWidth={2.5} />
