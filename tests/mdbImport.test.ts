@@ -80,5 +80,5 @@ test('keeps unknown housekeeping status unset instead of marking the room clean'
     counts: { cards: 0, guests: 0, rooms: 1, openings: 0 },
   });
   const result = mdbSnapshotToPlanning(source);
-  assert.equal(result.resourceGroups[0].resources[0].housekeepingStatus, undefined);
+  assert.equal(result.resourceGroups[1].resources[0].housekeepingStatus, undefined);
 });
