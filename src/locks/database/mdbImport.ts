@@ -292,7 +292,6 @@ export async function parseCardLockMdb(
   };
 
   const tableCache = new Map<string, Row[]>();
-  const failedTables = new Set<string>();
   const systemObjectNames = new Set(['userdefined', 'summaryinfo', 'accesslayout', 'sysrel', 'scripts', 'reports', 'modules', 'forms', 'dataaccesspages']);
   const tables: MdbTableSummary[] = tableNames.map((name) => {
     const system = name.toLowerCase().startsWith('msys') || systemObjectNames.has(name.toLowerCase());
@@ -300,11 +299,16 @@ export async function parseCardLockMdb(
       const table = db.getTable(name);
       const rows = table.getData();
       tableCache.set(name, rows);
-      const columnReader = table as unknown as { getColumnNames?: () => string[] };
-      const columns = columnReader.getColumnNames?.() ?? Object.keys(rows[0] ?? {});
+      let columns = Object.keys(rows[0] ?? {});
+      try {
+        const columnReader = table as unknown as { getColumnNames?: () => string[] };
+        const reportedColumns = columnReader.getColumnNames?.();
+        if (Array.isArray(reportedColumns)) columns = reportedColumns.map(String);
+      } catch {
+        // Some mdb-reader versions expose columns only through returned rows.
+      }
       return { name, rowCount: rows.length, columns, readable: true, system };
     } catch {
-      failedTables.add(name);
       tableCache.set(name, []);
       return { name, rowCount: 0, columns: [], readable: false, system };
     }
@@ -327,7 +331,6 @@ export async function parseCardLockMdb(
       return rows;
     } catch (error) {
       warnings.push(`Table « ${primaryName} » (${match}) illisible : ${(error as Error).message}`);
-      failedTables.add(match);
       tableCache.set(match, []);
       return [];
     }
