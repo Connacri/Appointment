@@ -106,13 +106,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const value = useMemo(() => ({
     workspaces,
-    activeWorkspaceId,
+    activeWorkspaceId: activeWorkspaceIdState,
     setActiveWorkspaceId,
     refreshWorkspaces,
     createWorkspace,
     loading,
     error,
-  }), [workspaces, activeWorkspaceId, setActiveWorkspaceId, refreshWorkspaces, createWorkspace, loading, error]);
+  }), [workspaces, activeWorkspaceIdState, setActiveWorkspaceId, refreshWorkspaces, createWorkspace, loading, error]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 };
