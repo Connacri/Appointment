@@ -227,17 +227,20 @@ export const IndexedDbInspectorModal: React.FC<{
       const snapshot = await lockManager.importMdb(file);
       const sourceIsOld = snapshot.fileLastModified ? (Date.now() - new Date(snapshot.fileLastModified).getTime()) / 86400000 > 90 : false;
       setMdbTableInventory(snapshot.tableInventory ?? []);
+      let importApplied = false;
       if (snapshot.counts.rooms || snapshot.counts.guests) {
         const { resourceGroups, bookings } = mdbSnapshotToPlanning(snapshot);
-        const currentHotelRooms = resourceGroups.reduce((count, group) => count + (group.sector === 'hotel' ? group.resources.length : 0), 0);
+        const currentHotelRooms = currentResourceGroups.reduce((count, group) => count + (group.sector === 'hotel' ? group.resources.length : 0), 0);
         const replacementWarning = currentHotelRooms > 0 ? `\\n\\nLa structure hôtelière actuelle (${currentHotelRooms} chambres) sera remplacée. Les autres secteurs seront conservés.` : '';
         const importNow = window.confirm(mt.confirm(snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards) + replacementWarning);
         if (importNow) {
           setResourceGroups(current => [...current.filter(group => group.sector !== 'hotel'), ...resourceGroups]);
           setBookings(current => [...current.filter(item => !bookings.some(next => next.id === item.id)), ...bookings]);
+          importApplied = true;
         }
       }
-      setMdbMessage(mt.done(snapshot.buildings.length, snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards, snapshot.warnings.length) + (sourceIsOld ? ` ${mt.stale}` : '') + ` ${snapshot.tableInventory?.length ?? 0} table(s) inspectée(s).`);
+      const importStatus = importApplied ? mt.done(snapshot.buildings.length, snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards, snapshot.warnings.length) : 'Analyse terminée ; aucune donnée du planning n’a été remplacée.';
+      setMdbMessage(importStatus + (sourceIsOld ? ` ${mt.stale}` : '') + ` ${snapshot.tableInventory?.length ?? 0} table(s) inspectée(s).`);
       await loadStatsAndData();
     } catch (err) {
       setMdbMessage(err instanceof Error ? err.message : mt.importError);
@@ -387,7 +390,8 @@ export const IndexedDbInspectorModal: React.FC<{
           </nav>
           {activePanel === 'local' && <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
             <div><p className="text-sm font-semibold text-slate-900 dark:text-white">{mt.localTitle}</p><p className="mt-1 break-all text-[11px] text-slate-500">{mt.localPath}</p><p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">{mt.localWarning}</p></div>
-            <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 text-xs font-bold text-white hover:bg-cyan-600"><Upload size={15}/>{mdbBusy?mt.analyzing:mt.chooseFile}<input className="hidden" type="file" accept=".mdb,application/x-msaccess" disabled={mdbBusy} onChange={event => { const file=event.target.files?.[0] ?? null; void handleMdbImport(file); event.currentTarget.value=''; }}/></label>
+            <button type="button" disabled={mdbBusy} onClick={() => void handleChooseMdb()} className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 text-xs font-bold text-white hover:bg-cyan-600 disabled:opacity-50"><Upload size={15}/>{mdbBusy?mt.analyzing:mt.chooseFile}</button>
+            <input ref={mdbInputRef} className="hidden" type="file" accept=".mdb,application/x-msaccess" disabled={mdbBusy} onChange={event => { const file=event.target.files?.[0] ?? null; void handleMdbImport(file); event.currentTarget.value=''; }}/>
             {mdbMessage && <p role="status" className="text-xs text-slate-600 dark:text-slate-300 sm:col-span-2">{mdbMessage}</p>}
             {mdbTableInventory.length > 0 && <div className="grid gap-2 sm:col-span-2 sm:grid-cols-2">{mdbTableInventory.map(table => <div key={table.name} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] dark:border-slate-800 dark:bg-slate-950"><div className="flex justify-between gap-2 font-semibold"><span>{table.name}</span><span>{table.rowCount} lignes</span></div><p className="mt-1 break-words text-slate-500">{table.columns.join(' · ') || 'Aucune colonne lisible'}</p></div>)}</div>}
           </div>}
