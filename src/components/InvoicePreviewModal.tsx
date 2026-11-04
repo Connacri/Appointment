@@ -472,7 +472,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                   <p>Pénalités de retard : 3 fois le taux d'intérêt légal en vigueur.</p>
                   <p>Indemnité forfaitaire de recouvrement pour frais de gestion : 40 {activeCurrency}.</p>
                   <p className="font-semibold text-slate-500">
-                    Document officiel édité par le logiciel de gestion OmniBook Hospitality.
+                    Document officiel édité par le logiciel de gestion Appointment Hospitality.
                   </p>
                 </div>
 
