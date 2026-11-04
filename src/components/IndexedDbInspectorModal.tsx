@@ -206,7 +206,7 @@ export const IndexedDbInspectorModal: React.FC<{
   }, [isOpen, loadStatsAndData]);
 
   useEffect(() => {
-    if (!isOpen) { setNeonConnectionString(''); return; }
+    if (!isOpen) { setNeonConnectionString(''); setNeonConnectionVerified(false); setNeonServerVersion(null); return; }
     if (!isNativeDesktop()) { setNativeRuntimeLabel('Navigateur web — sélection de fichier uniquement'); setNeonCredentialStored(false); return; }
     void getDesktopRuntimeInfo().then(info => setNativeRuntimeLabel(info?.windowsCredentialManager ? 'Runtime Tauri natif Windows — Credential Manager disponible' : 'Runtime natif — magasin Windows non disponible')).catch(() => setNativeRuntimeLabel('Runtime natif — état non vérifié'));
     void hasNativeSecret('neon.connection_string').then(setNeonCredentialStored).catch(() => setNeonCredentialStored(false));
@@ -438,7 +438,7 @@ export const IndexedDbInspectorModal: React.FC<{
              {neonConnectionVerified && neonServerVersion && <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Connexion réelle vérifiée — PostgreSQL {neonServerVersion} (pas de synchronisation).</p>}
              {neonCredentialStored && <div className="flex flex-wrap items-center gap-2"><p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Credential Manager : secret présent (connexion Neon non vérifiée).</p><button type="button" onClick={()=>void deleteNeonCredential()} className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 dark:border-rose-900 dark:text-rose-300">Supprimer le secret</button></div>}
              {neonCredentialState && <p role="status" className="text-xs text-slate-600 dark:text-slate-300">{neonCredentialState}</p>}
-            <button type="button" onClick={()=>setNeonConnectionString('')} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">{mt.clear}</button>
+            <button type="button" onClick={()=>{setNeonConnectionString('');setNeonConnectionVerified(false);setNeonServerVersion(null);}} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">{mt.clear}</button>
           </div>}
           {activePanel === 'backup' && <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-slate-900 dark:text-white">{mt.backupTitle}</p><p className="mt-1 text-[11px] text-slate-500">{mt.backupHint}</p>{backupMessage && <p role="status" className="mt-2 text-xs text-slate-600 dark:text-slate-300">{backupMessage}</p>}</div><button type="button" onClick={()=>void exportBackup()} className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 text-xs font-bold text-white"><Download size={15}/>{mt.download}</button></div>}
         </div>
