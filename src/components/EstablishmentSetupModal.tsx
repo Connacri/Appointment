@@ -155,15 +155,20 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     setIsImportingMdb(true);
     setStructureMessage('');
     try {
-      const snapshot = await lockManager.importMdb(file);
+      const snapshot = await lockManager.analyzeMdb(file);
       const planning = mdbSnapshotToPlanning(snapshot);
+      setTableInventory(snapshot.tableInventory ?? []);
       const existingHotelRooms = resourceGroups.filter((group) => group.sector === 'hotel')
         .reduce((count, group) => count + group.resources.length, 0);
-      if (existingHotelRooms > 0 && !window.confirm(
+      if (existingHotelRooms > 0 && planning.resourceGroups.length > 0 && !window.confirm(
         `La base CardLock contient ${snapshot.counts.rooms} chambres et ${snapshot.buildings.length} bâtiment(s). Remplacer la structure hôtelière actuelle (${existingHotelRooms} chambres) par celle de CardLock ? Les autres secteurs seront conservés.`
-      )) return;
+      )) {
+        setStructureMessage('Import annulé. Aucune donnée métier n’a été remplacée.');
+        return;
+      }
 
-      setResourceGroups((current) => [
+      lockManager.applyMdbSnapshot(snapshot);
+      if (planning.resourceGroups.length > 0) setResourceGroups((current) => [
         ...current.filter((group) => group.sector !== 'hotel'),
         ...planning.resourceGroups,
       ]);
@@ -172,7 +177,6 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
         const importedIds = new Set(planning.bookings.map((booking) => booking.id));
         return [...prev.filter((booking) => !importedIds.has(booking.id)), ...planning.bookings];
       });
-      setTableInventory(snapshot.tableInventory ?? []);
       const tableSummary = (snapshot.tableInventory ?? [])
         .map((table) => `${table.name} (${table.rowCount})`)
         .join(', ');
