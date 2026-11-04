@@ -82,7 +82,7 @@ Pour affecter une serrure à une chambre :
 4. Immédiatement après, présenter une fois la carte client de cette chambre.
 5. Vérifier les signaux lumineux/sonores et tester l'ouverture.
 
-Ne mélangez jamais les cartes de deux chambres. Le test d'une carte avant autorisation ne prouve pas que la serrure est affectée à la bonne chambre.
+Ne mélangez jamais les cartes de deux chambres. Une carte de test peut ouvrir la porte avant l'autorisation, mais elle devient invalide après l'autorisation de la serrure. Utilisez ensuite la Guest Card émise pour cette chambre.
 
 ## 6. Sauvegarder et restaurer CardLock
 
