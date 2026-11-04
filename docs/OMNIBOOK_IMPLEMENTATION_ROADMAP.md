@@ -1,4 +1,4 @@
-# OmniBook — Plan d'implémentation des installations, spa, événements et accès hardware
+# Appointment — Plan d'implémentation des installations, spa, événements et accès hardware
 
 **Statut :** plan de livraison proposé sur la base de la spécification `OMNIBOOK_FACILITIES_ACCESS_SPEC.md`.  
 **Règle :** ne pas ouvrir plusieurs fronts fonctionnels avant que les fondations offline-first et la disponibilité transactionnelle soient fiables.
