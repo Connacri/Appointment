@@ -41,7 +41,7 @@ import {
 import { PRESET_HOTEL_LOGOS } from '../utils/establishmentDefaults';
 import { playSuccessFeedback, playClickFeedback } from '../utils/audioFeedback';
 import { lockManager } from '../locks/lockManager';
-import { mdbSnapshotToPlanning, MdbTableSummary } from '../locks/database/mdbImport';
+import { mdbSnapshotToPlanning, type MdbTableSummary } from '../locks/database/mdbImport';
 import { generateHotelFloorRooms } from '../utils/hotelStructure';
 import { discoverNativeCardLockFiles, isNativeDesktop, pickNativeCardLockFile, readDiscoveredCardLock } from '../services/desktopRuntime';
 
