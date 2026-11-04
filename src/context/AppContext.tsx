@@ -85,7 +85,7 @@ interface AppContextType {
   setResourceGroups: React.Dispatch<React.SetStateAction<ResourceGroup[]>>;
   updateHousekeepingStatus: (resourceId: string, status: 'clean' | 'cleaning' | 'dirty' | 'out_of_order') => void;
   checkConflict: (resourceId: string, startDate: string, endDate: string, excludeBookingId?: string) => boolean;
-  addBooking: (booking: Omit<TimelineBooking, 'id'>) => { success: boolean; error?: string; booking?: TimelineBooking };
+  addBooking: (booking: Omit<TimelineBooking, 'id'>) => { success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'; booking?: TimelineBooking };
   updateBooking: (id: string, updates: Partial<TimelineBooking>) => void;
   updateBookingStatus: (id: string, status: BookingStatus) => void;
   deleteBooking: (id: string) => void;
@@ -525,7 +525,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addBooking = (
     bookingData: Omit<TimelineBooking, 'id'>
-  ): { success: boolean; error?: string; booking?: TimelineBooking } => {
+  ): { success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'; booking?: TimelineBooking } => {
     // Validate both calendar dates for every reservation sector before changing state.
     if (!isValidCalendarDate(bookingData.startDate) || !isValidCalendarDate(bookingData.endDate)) {
       return {
@@ -537,6 +537,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ? 'تواريخ الحجز غير صالحة.'
             : 'Invalid booking dates.',
       };
+    }
+
+    // A hotel room must be explicitly marked clean (green) before a new stay is accepted.
+    // This is enforced here as the domain boundary, not only in the modal UI.
+    if (bookingData.sector === 'hotel') {
+      const room = resourceGroups.flatMap((group) => group.resources).find((item) => item.id === bookingData.resourceId);
+      if (!room || room.housekeepingStatus !== 'clean') {
+        const statusMessage = language === 'fr'
+          ? 'Réservation refusée : la chambre doit être propre et disponible (statut vert) avant toute réservation.'
+          : language === 'ar'
+            ? 'تم رفض الحجز: يجب أن تكون الغرفة نظيفة ومتاحة (الحالة الخضراء) قبل الحجز.'
+            : 'Booking rejected: the room must be clean and available (green status) before it can be booked.';
+        return { success: false, code: 'room_not_ready', roomName: room?.name ?? bookingData.resourceName, roomStatus: room?.housekeepingStatus, error: statusMessage };
+      }
     }
 
     // 1. Strict date sanity checks before modifying state
@@ -607,6 +621,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Auto-issue proUSB guest card for hotel/resort bookings
     if (bookingData.sector === 'hotel' || bookingData.sector === 'resort') {
+      const bookedResource = resourceGroups.flatMap((group) => group.resources).find((resource) => resource.id === bookingData.resourceId);
       try {
         lockManager
           .issueGuestCardFromBooking(
@@ -614,6 +629,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               id: newBkg.id,
               guestName: bookingData.guestName,
               resourceName: bookingData.resourceName,
+              buildingNo: bookedResource?.building !== undefined ? Number.parseInt(bookedResource.building, 10) : undefined,
+              floorNo: bookedResource?.floor !== undefined ? Number.parseInt(bookedResource.floor, 10) : undefined,
               startDate: bookingData.startDate,
               endDate: bookingData.endDate,
             },
