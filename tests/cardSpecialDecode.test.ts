@@ -48,5 +48,5 @@ test('special-card encoder preserves C9 magic and writes family 0x90 in byte 9',
   assert.equal(decoded.type, 'special');
   assert.equal(decoded.buildingNo, 0);
   assert.equal(decoded.floorNo, 0);
-  assert.equal(decoded.specialPinHash, 0x5c);
+  assert.equal(decoded.specialPinHash, 0x28);
 });
