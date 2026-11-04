@@ -324,7 +324,10 @@ export const ProUsbLockSystemView: React.FC = () => {
     if (availableRoomsList.length > 0 && !availableRoomsList.some((r) => r.roomNumber === guestRoomNumber)) {
       setGuestRoomNumber(availableRoomsList[0].roomNumber);
     }
-  }, [availableFloors, staffAvailableFloors, availableBuildings, availableRoomsList, staffFloorNo, staffBuildingNo, commissionFloor, commissionBuilding, guestRoomNumber]);
+    if (availableRoomsList.length > 0 && !availableRoomsList.some((r) => r.roomNumber === specialRoomNumber)) {
+      setSpecialRoomNumber(availableRoomsList[0].roomNumber);
+    }
+  }, [availableFloors, staffAvailableFloors, availableBuildings, availableRoomsList, staffFloorNo, staffBuildingNo, commissionFloor, commissionBuilding, guestRoomNumber, specialRoomNumber]);
 
   /**
    * L'ID et l'Operator Code affichés par CardLock.exe ne sont pas dans la carte :
@@ -696,14 +699,14 @@ export const ProUsbLockSystemView: React.FC = () => {
         showToast('success', `Carte Spéciale pour chambre ${specialRoomNumber} encodée avec mot de passe !`);
         setCardResult({
           success: true,
-          title: 'Carte Spéciale Sécurisée émise',
-          message: `Carte protégée par mot de passe émise avec succès pour la chambre ${specialRoomNumber} (${specialPurpose}). Cette carte est strictement isolée des passes maîtres, étages et bâtiments.`,
+          title: 'Carte Spéciale 0x90 émise (format expérimental)',
+          message: `Carte 0x90 écrite et relue pour la chambre ${specialRoomNumber} (${specialPurpose}). Le PIN est vérifié par Appointment à la lecture ; la serrure doit être testée pour confirmer le support firmware. L’expiration est suivie localement et n’est pas garantie par la trame spéciale.`,
           details: [
             { label: 'Chambre Spéciale', value: specialRoomNumber },
             { label: 'Titulaire', value: specialHolderName },
             { label: 'Protection', value: 'Marqueur PIN 8 bits — non certifié comme protection cryptographique matérielle' },
             { label: 'Usage / Motif', value: specialPurpose },
-            { label: 'Expire le', value: record.validUntil },
+            { label: 'Validité locale', value: `${record.validUntil} (non garantie par le firmware)` },
             { label: 'Trame (Hex)', value: record.rawHex },
           ],
         });
