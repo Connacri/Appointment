@@ -260,7 +260,8 @@ export const Sidebar: React.FC = () => {
                 <ChevronDown size={15} className={`text-slate-400 transition-transform ${isMobileProfileExpanded ? 'rotate-180' : ''}`} />
               </span>
             </button>
-            {isMobileProfileExpanded && <div className="grid grid-cols-2 gap-1.5">
+            {isMobileProfileExpanded && (
+              <div className="grid grid-cols-2 gap-1.5">
               {[
                 { id: 'admin', label: 'Admin', icon: ShieldCheck },
                 { id: 'manager', label: language === 'fr' ? 'Gérant' : language === 'ar' ? 'مدير' : 'Manager', icon: LayoutDashboard },
