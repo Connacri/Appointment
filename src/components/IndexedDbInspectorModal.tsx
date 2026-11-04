@@ -17,9 +17,18 @@ import {
   ShieldCheck,
   FileJson,
   ChevronDown,
+  Upload,
+  Download,
+  Cloud,
+  Server,
+  ShieldAlert,
+  CheckCircle2,
 } from 'lucide-react';
 import { indexedDb, IndexedDbStoreStats } from '../db/indexedDb';
 import { useApp } from '../context/AppContext';
+import { lockManager } from '../locks/lockManager';
+import { mdbSnapshotToPlanning } from '../locks/database/mdbImport';
+import { createClient } from '@supabase/supabase-js';
 
 type StoreName = 'bookings' | 'invoices' | 'resources';
 
@@ -138,7 +147,7 @@ export const IndexedDbInspectorModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
 }> = ({ isOpen, onClose }) => {
-  const { language } = useApp();
+  const { language, setBookings, setResourceGroups } = useApp();
   const t = COPY[language] || COPY.fr;
   const isRtl = language === 'ar';
   const [stats, setStats] = useState<IndexedDbStoreStats | null>(null);
@@ -149,6 +158,16 @@ export const IndexedDbInspectorModal: React.FC<{
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [activePanel, setActivePanel] = useState<'local' | 'supabase' | 'neon' | 'backup'>('local');
+  const [mdbBusy, setMdbBusy] = useState(false);
+  const [mdbMessage, setMdbMessage] = useState<string | null>(null);
+  const [supabaseUrl, setSupabaseUrl] = useState(() => localStorage.getItem('appointment_supabase_url') || 'https://vkmgakmujipnpjlawjqm.supabase.co');
+  const [publishableKey, setPublishableKey] = useState(() => localStorage.getItem('appointment_supabase_publishable_key') || '');
+  const [anonKey, setAnonKey] = useState(() => localStorage.getItem('appointment_supabase_anon_key') || '');
+  const [supabaseState, setSupabaseState] = useState('Configuration locale non vérifiée');
+  const [neonConnectionString, setNeonConnectionString] = useState('');
+  const [neonNotice, setNeonNotice] = useState('Aucun connecteur serveur Neon n’est installé. La chaîne ne sera pas enregistrée.');
+  const [backupMessage, setBackupMessage] = useState<string | null>(null);
   const limit = 8;
 
   const loadStatsAndData = useCallback(async () => {
@@ -183,6 +202,75 @@ export const IndexedDbInspectorModal: React.FC<{
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  const handleMdbImport = async (file: File | null) => {
+    if (!file) return;
+    setMdbBusy(true);
+    setMdbMessage(null);
+    try {
+      const snapshot = await lockManager.importMdb(file);
+      if (snapshot.fileLastModified) {
+        const ageDays = (Date.now() - new Date(snapshot.fileLastModified).getTime()) / 86400000;
+        if (ageDays > 90) setMdbMessage('Attention : fichier ancien. Vérifiez la copie VirtualStore, qui contient souvent les modifications récentes de CardLock.');
+      }
+      if (snapshot.counts.rooms || snapshot.counts.guests) {
+        const { resourceGroups, bookings } = mdbSnapshotToPlanning(snapshot);
+        const importNow = window.confirm(`CardLock analysé : ${snapshot.counts.rooms} chambres, ${snapshot.counts.guests} séjours et ${snapshot.counts.cards} cartes.\n\nImporter les chambres et séjours dans le planning ?`);
+        if (importNow) {
+          setResourceGroups(current => [...current.filter(group => !group.id.startsWith('mdb-')), ...resourceGroups]);
+          setBookings(current => [...current.filter(item => !bookings.some(next => next.id === item.id)), ...bookings]);
+        }
+      }
+      setMdbMessage(`Import terminé : ${snapshot.buildings.length} bâtiments, ${snapshot.counts.rooms} chambres, ${snapshot.counts.guests} séjours, ${snapshot.counts.cards} cartes.${snapshot.warnings.length ? ` ${snapshot.warnings.length} avertissement(s).` : ''}`);
+      await loadStatsAndData();
+    } catch (err) {
+      setMdbMessage(err instanceof Error ? err.message : 'Import CardLock impossible.');
+    } finally { setMdbBusy(false); }
+  };
+
+  const testSupabase = async () => {
+    const key = publishableKey.trim() || anonKey.trim();
+    if (!/^https:\/\//i.test(supabaseUrl.trim()) || !key) { setSupabaseState('URL HTTPS et clé publique obligatoires'); return; }
+    setSupabaseState('Test en cours…');
+    try {
+      const client = createClient(supabaseUrl.trim(), key, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { error } = await client.from('workspaces').select('id').limit(1);
+      if (error) throw error;
+      setSupabaseState('Connexion API et table workspaces accessibles');
+    } catch (err) { setSupabaseState(err instanceof Error ? err.message : 'Échec de connexion Supabase'); }
+  };
+
+  const saveSupabase = () => {
+    const key = publishableKey.trim() || anonKey.trim();
+    if (!/^https:\/\//i.test(supabaseUrl.trim()) || !key) { setSupabaseState('URL HTTPS et clé publique obligatoires'); return; }
+    localStorage.setItem('appointment_supabase_url', supabaseUrl.trim());
+    localStorage.setItem('appointment_supabase_publishable_key', publishableKey.trim());
+    localStorage.setItem('appointment_supabase_anon_key', anonKey.trim());
+    setSupabaseState('Configuration publique enregistrée. Rechargement pour appliquer au client principal…');
+    window.setTimeout(() => window.location.reload(), 700);
+  };
+
+  const exportBackup = async () => {
+    setBackupMessage('Préparation de la sauvegarde…');
+    try {
+      const stores: Record<string, unknown[]> = { bookings: [], invoices: [], resources: [] };
+      for (const store of Object.keys(stores) as StoreName[]) {
+        let offset = 0;
+        while (true) {
+          const page = await indexedDb.queryStore<unknown>(store, { offset, limit: 500 });
+          stores[store].push(...page.data);
+          offset += page.data.length;
+          if (!page.data.length || offset >= page.total) break;
+        }
+      }
+      const payload = { format: 'appointment-local-backup', version: 1, exportedAt: new Date().toISOString(), stores, cardLockSnapshot: lockManager.getMdbSnapshot() };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = `appointment-backup-${new Date().toISOString().slice(0,10)}.json`; anchor.click();
+      URL.revokeObjectURL(url);
+      setBackupMessage('Sauvegarde téléchargée. Vous pouvez ensuite la joindre à Gmail ou la déposer dans Google Drive.');
+    } catch (err) { setBackupMessage(err instanceof Error ? err.message : 'Échec de la sauvegarde.'); }
+  };
 
   const filteredData = useMemo(() => {
     const term = search.trim().toLocaleLowerCase();
@@ -227,7 +315,7 @@ export const IndexedDbInspectorModal: React.FC<{
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 id="indexeddb-inspector-title" className="truncate text-base font-bold tracking-tight sm:text-lg">{t.title}</h2>
-                  <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300">{t.readonly}</span>
+                  <span className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-cyan-200">Centre de données</span>
                 </div>
                 <p className="mt-1 text-xs text-slate-400">{t.subtitle}</p>
               </div>
@@ -243,9 +331,35 @@ export const IndexedDbInspectorModal: React.FC<{
           </div>
           <div className="relative mt-4 flex items-start gap-2 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.07] px-3 py-2.5 text-[11px] leading-relaxed text-slate-300">
             <ShieldCheck size={15} className="mt-0.5 shrink-0 text-cyan-300" />
-            <p><strong className="text-white">{t.readonly}.</strong> {t.readonlyText}</p>
+            <p><strong className="text-white">Données locales prioritaires.</strong> Importez CardLock, configurez les accès publics Supabase et consultez les états de sauvegarde. Les identifiants PostgreSQL restent côté serveur.</p>
           </div>
         </header>
+
+
+        <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900 sm:px-5">
+          <nav className="flex gap-2 overflow-x-auto pb-2" aria-label="Gestion des données">
+            {([['local','Local & CardLock'],['supabase','Supabase'],['neon','Neon'],['backup','Sauvegarde']] as const).map(([id,label]) => <button key={id} type="button" onClick={() => setActivePanel(id)} className={`shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold ${activePanel===id?'border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-200':'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300'}`}>{label}</button>)}
+          </nav>
+          {activePanel === 'local' && <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div><p className="text-sm font-semibold text-slate-900 dark:text-white">Importer la base proUSB CardLock</p><p className="mt-1 break-all text-[11px] text-slate-500">Chemin attendu : C:\\Program Files (x86)\\proUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb</p><p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">Dans Windows, privilégiez la copie VirtualStore si CardLock.exe modifie la base. Le navigateur demande de sélectionner le fichier ; il ne peut pas lire ce chemin automatiquement.</p></div>
+            <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 text-xs font-bold text-white hover:bg-cyan-600"><Upload size={15}/>{mdbBusy?'Analyse…':'Choisir CardLock.mdb'}<input className="hidden" type="file" accept=".mdb,application/x-msaccess" disabled={mdbBusy} onChange={event => { const file=event.target.files?.[0] ?? null; void handleMdbImport(file); event.currentTarget.value=''; }}/></label>
+            {mdbMessage && <p role="status" className="text-xs text-slate-600 dark:text-slate-300 sm:col-span-2">{mdbMessage}</p>}
+          </div>}
+          {activePanel === 'supabase' && <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-200 sm:col-span-2">Project URL<input value={supabaseUrl} onChange={e=>setSupabaseUrl(e.target.value)} placeholder="https://xxxxx.supabase.co" className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-normal dark:border-slate-700 dark:bg-slate-950"/></label>
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-200">Publishable key<input type="password" autoComplete="off" value={publishableKey} onChange={e=>setPublishableKey(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-normal dark:border-slate-700 dark:bg-slate-950"/></label>
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-200">Anon key (legacy)<input type="password" autoComplete="off" value={anonKey} onChange={e=>setAnonKey(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-normal dark:border-slate-700 dark:bg-slate-950"/></label>
+            <p className="text-[11px] text-slate-500 sm:col-span-2">Ces clés sont publiques et doivent être protégées par RLS. Ne saisissez jamais une service_role key. La clé Publishable est prioritaire ; anon sert de compatibilité historique.</p>
+            <div className="flex flex-wrap items-center gap-2 sm:col-span-2"><button type="button" onClick={()=>void testSupabase()} className="rounded-lg border border-cyan-600 px-3 py-2 text-xs font-semibold text-cyan-700 dark:text-cyan-300">Tester la connexion</button><button type="button" onClick={saveSupabase} className="rounded-lg bg-cyan-700 px-3 py-2 text-xs font-semibold text-white">Enregistrer et appliquer</button><span role="status" className="text-xs text-slate-500">{supabaseState}</span></div>
+          </div>}
+          {activePanel === 'neon' && <div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"><ShieldAlert size={16} className="mt-0.5 shrink-0"/><p><strong>Connexion PostgreSQL côté serveur requise.</strong> Le client web et le lanceur Windows Edge ne peuvent pas ouvrir une connexion PostgreSQL directe de manière sûre. La chaîne ne doit jamais être stockée dans le navigateur.</p></div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">Direct connection string (saisie temporaire uniquement)<input type="password" autoComplete="off" value={neonConnectionString} onChange={e=>setNeonConnectionString(e.target.value)} placeholder="postgresql://user:password@host/db?sslmode=require" className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-normal dark:border-slate-700 dark:bg-slate-950"/></label>
+            <p className="text-[11px] text-slate-500">{neonNotice} Ajoutez ensuite un backend sécurisé avec secret manager, TLS, validation de certificat et endpoints de synchronisation. Aucun test n'est lancé depuis le navigateur.</p>
+            <button type="button" onClick={()=>{setNeonConnectionString('');setNeonNotice('Champ effacé. Le connecteur serveur Neon reste à déployer.');}} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">Effacer la chaîne saisie</button>
+          </div>}
+          {activePanel === 'backup' && <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-slate-900 dark:text-white">Sauvegarde locale exportable</p><p className="mt-1 text-[11px] text-slate-500">Inclut les collections IndexedDB et l’instantané CardLock. Le fichier peut être joint manuellement à Gmail ou importé dans Google Drive. OAuth Gmail/Drive n’est pas encore configuré.</p>{backupMessage && <p role="status" className="mt-2 text-xs text-slate-600 dark:text-slate-300">{backupMessage}</p>}</div><button type="button" onClick={()=>void exportBackup()} className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 text-xs font-bold text-white"><Download size={15}/>Télécharger la sauvegarde</button></div>}
+        </div>
 
         <div className="grid shrink-0 grid-cols-1 gap-2 border-b border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:grid-cols-3 sm:gap-3 sm:px-5 sm:py-4">
           <div className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/70">
