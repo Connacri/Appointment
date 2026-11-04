@@ -8,7 +8,8 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ### Fixed
 - **Import CardLock** : conservation de `BldNo = 0` et `FlrNo = 0`, repli sur `RomID2` puis `RomID` lorsque `RoomNo` est vide, inventaire de toutes les tables Access et refus de créer des chambres depuis les séjours orphelins. Les statuts inconnus restent non renseignés ; les séjours CardLock précédents sont remplacés lors d'un nouvel import.
-- **Inventaire proUSB** : affichage du nombre de lignes, des colonnes et de la nature système/métier de chaque table.
+- **Inventaire proUSB** : affichage du nombre de lignes, des colonnes et de la nature système/métier de chaque table, y compris quand `mdb-reader` n'expose les colonnes que par les lignes retournées.
+- **Traçabilité des releases** : le tag et le titre des releases créées sur `main` dérivent désormais de la version de `package.json` au lieu du `v2.4.0-build.*` codé en dur ; tag, titre et noms d'artefacts sont alignés.
 
 ### Documentation
 - Analyse du schéma CardLock, de ses relations métier et procédure novice d'import ajoutées au README et au Centre d'aide.
