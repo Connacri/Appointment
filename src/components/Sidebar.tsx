@@ -63,7 +63,10 @@ export const Sidebar: React.FC = () => {
 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileProfileExpanded, setIsMobileProfileExpanded] = useState(false);
-  const [isMobilePreferencesExpanded, setIsMobilePreferencesExpanded] = useState(false);\n  const [workspaceFormOpen, setWorkspaceFormOpen] = useState(false);\n  const [workspaceDraft, setWorkspaceDraft] = useState("");\n  const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
+  const [isMobilePreferencesExpanded, setIsMobilePreferencesExpanded] = useState(false);
+  const [workspaceFormOpen, setWorkspaceFormOpen] = useState(false);
+  const [workspaceDraft, setWorkspaceDraft] = useState("");
+  const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
   const isRtl = language === 'ar';
 
   // Keep the page fixed while the mobile navigation drawer is open.
