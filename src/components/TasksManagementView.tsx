@@ -236,7 +236,7 @@ export const TasksManagementView: React.FC = () => {
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 shadow-xs">
           <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
             <span>Cycle de service & Rotations hôtelières (Scope of Work)</span>
-            <span className="text-blue-500 font-mono">OmniBook PMS</span>
+            <span className="text-blue-500 font-mono">Appointment PMS</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
             <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
