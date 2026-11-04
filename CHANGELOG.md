@@ -1,6 +1,6 @@
 # Changelog
 
-Toutes les modifications notables de **OmniBook / Planning Oran** sont documentées dans ce fichier.
+Toutes les modifications notables de **Appointment / Planning Oran** sont documentées dans ce fichier.
 
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le projet respecte le [Semantic Versioning](https://semver.org/lang/fr/).
 
