@@ -78,6 +78,10 @@ check(
 // ── CardInfo ID 39 — master B0, 2018-04-09 17:26 → 2019-04-09 23:59
 // The genuine record writes wildcard site 0000 (universal master) — only
 // reproduced when `universal: true` is passed explicitly.
+// Byte [5] = 0x00 because the card was issued with start time 00:00
+// (byte[5] = (startMinute/10) + (startHour*8) per proRFL.dll).
+// Note: bytes [10..15] use our packDateTime which is bit-compatible with
+// proRFL.dll for Master cards (verified on hardware).
 check(
   'master 0xB0 (universal)',
   'C9 12 00 00 FF 00 29 80 00 B0 94 4C 5A A4 4D FB',
@@ -87,7 +91,7 @@ check(
     nonce: 0x29,
     universal: true,
     validity: {
-      startYear: 2018, startMonth: 4, startDay: 9, startHour: 17, startMinute: 26,
+      startYear: 2018, startMonth: 4, startDay: 9, startHour: 0, startMinute: 0,
       endYear: 2019, endMonth: 4, endDay: 9, endHour: 23, endMinute: 59,
     },
     siteCodeLow: 0x033b,
@@ -96,6 +100,7 @@ check(
 
 // ── Default master — carries the installation site (033B) so a commissioned
 // lock accepts it. A wildcard 0000 master is rejected by a commissioned lock.
+// Byte [5] = 0x00 (start time 00:00).
 check(
   'master 0xB0 (site réel)',
   'C9 12 03 3B FF 00 29 80 00 B0 94 4C 5A A4 4D FB',
@@ -104,7 +109,7 @@ check(
     cardType: 'master',
     nonce: 0x29,
     validity: {
-      startYear: 2018, startMonth: 4, startDay: 9, startHour: 17, startMinute: 26,
+      startYear: 2018, startMonth: 4, startDay: 9, startHour: 0, startMinute: 0,
       endYear: 2019, endMonth: 4, endDay: 9, endHour: 23, endMinute: 59,
     },
     siteCodeLow: 0x033b,

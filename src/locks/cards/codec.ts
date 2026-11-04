@@ -296,7 +296,10 @@ export function encodeMasterCard(params: EncodeMasterCardParams): Uint8Array {
       break;
   }
 
-  card[5] = 0x00;
+  // Byte [5] — encodage de l'heure de début, vérifié contre proRFL.dll (FloorCard/MasterCard) :
+  // byte[5] = (startMinute / 10) + (startHour * 8). Une heure à minuit donne 0x00, ce qui
+  // correspond aux vraies cartes master de CardLock.mdb (byte[5] = 00).
+  card[5] = ((params.validity.startMinute ?? 0) / 10) + ((params.validity.startHour ?? 0) * 8);
   card[6] = params.nonce !== undefined ? params.nonce & 0xff : pseudoRand(index + 29); // Per-card nonce
   card[7] = 0x80;
   card[8] = 0x00;
