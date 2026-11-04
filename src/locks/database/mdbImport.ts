@@ -491,26 +491,28 @@ export function parseAccessDateTime(value: unknown): string | null {
 export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
   resourceGroups: ResourceGroup[];
   bookings: TimelineBooking[];
+  warnings: string[];
 } {
   const { rooms, guests } = snapshot;
+  const warnings: string[] = [];
 
-  // Keep ALL buildings from the snapshot, and recover any building number seen in rooms.
+  // Building 0 and floor 0 are valid source identifiers. Only null means
+  // "missing"; never use truthiness or > 0 to decide whether a dimension exists.
   const buildingByNo = new Map<number, ImportedBuilding>();
   for (const building of snapshot.buildings) {
     if (Number.isFinite(building.no)) buildingByNo.set(building.no, building);
   }
   for (const room of rooms) {
-    if (Number.isFinite(room.building) && room.building > 0 && !buildingByNo.has(room.building)) {
-      buildingByNo.set(room.building, { no: room.building, name: `Bâtiment ${room.building}` });
+    if (room.building !== null && Number.isFinite(room.building) && !buildingByNo.has(room.building)) {
+      buildingByNo.set(room.building, { no: room.building, name: 'Bâtiment ' + room.building });
     }
   }
 
   const buildings = [...buildingByNo.values()].sort((a, b) => a.no - b.no);
-
   const roomsByBuilding = new Map<number, ImportedRoom[]>();
   const unassignedRooms: ImportedRoom[] = [];
   for (const room of rooms) {
-    if (Number.isFinite(room.building) && room.building > 0) {
+    if (room.building !== null) {
       const buildingRooms = roomsByBuilding.get(room.building) ?? [];
       buildingRooms.push(room);
       roomsByBuilding.set(room.building, buildingRooms);
@@ -520,13 +522,13 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
   }
 
   const resourceGroups: ResourceGroup[] = buildings.map((building) => {
-    const name = building.name.trim() || `Bâtiment ${building.no}`;
+    const name = building.name.trim() || 'Bâtiment ' + building.no;
     return {
-      id: `mdb-bld-${building.no}`,
+      id: 'mdb-bld-' + building.no,
       name: {
         fr: name,
-        en: building.name.trim() || `Building ${building.no}`,
-        ar: building.name.trim() || `مبنى ${building.no}`,
+        en: building.name.trim() || 'Building ' + building.no,
+        ar: building.name.trim() || 'مبنى ' + building.no,
       },
       sector: 'hotel',
       icon: 'Building',
@@ -538,23 +540,25 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     resourceGroups.push({
       id: 'mdb-rooms-nobld',
       name: {
-        fr: 'Chambres sans bâtiment',
-        en: 'Rooms without a building',
-        ar: 'غرف بدون مبنى',
+        fr: 'Chambres sans bâtiment identifié',
+        en: 'Rooms without a building identifier',
+        ar: 'غرف دون معرّف مبنى',
       },
       sector: 'hotel',
       icon: 'Building',
       resources: unassignedRooms.map(resourceItemFromRoom),
     });
+    warnings.push(unassignedRooms.length + ' chambre(s) source n’ont pas de BldNo exploitable ; elles restent isolées au lieu d’être attribuées arbitrairement.');
   }
 
-  // Resolve rooms by a composite key first. Room numbers can repeat between buildings.
-  const roomByBuildingAndNo = new Map(
-    rooms.map((room) => [`${room.building}:${normalizeRoomNo(room.roomNo)}`, room])
-  );
+  const roomByBuildingAndNo = new Map<string, ImportedRoom[]>();
   const roomsByNo = new Map<string, ImportedRoom[]>();
   for (const room of rooms) {
     const key = normalizeRoomNo(room.roomNo);
+    const composite = String(room.building ?? 'unassigned') + ':' + key;
+    const byBuilding = roomByBuildingAndNo.get(composite) ?? [];
+    byBuilding.push(room);
+    roomByBuildingAndNo.set(composite, byBuilding);
     const matches = roomsByNo.get(key) ?? [];
     matches.push(room);
     roomsByNo.set(key, matches);
@@ -562,42 +566,55 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 
   const stayByKey = new Map<string, TimelineBooking>();
   const bookings: TimelineBooking[] = [];
+  let unresolvedGuests = 0;
+  let invalidDateGuests = 0;
 
   for (const guest of guests) {
     const rawRoomRef = str(guest.roomNo);
-    // CardLock legacy references may be either "building-room" or
-    // "building-floor-room" (e.g. 1-1-12064). Parse all dimensions before
-    // attempting a room lookup; treating "1-1-12064" as building-room
-    // leaves "1-12064" as the room number and silently breaks the link.
     const parts = rawRoomRef.split('-').map((part) => part.trim());
-    const hasBuilding = parts.length >= 2 && /^\d+$/.test(parts[0]);
-    const hasFloor = parts.length >= 3 && /^\d+$/.test(parts[1]);
-    const guestBuilding = hasBuilding ? Number(parts[0]) : null;
-    const guestFloor = hasFloor ? Number(parts[1]) : null;
-    const rawRoomNo = hasFloor ? parts.slice(2).join('-') : hasBuilding ? parts.slice(1).join('-') : rawRoomRef;
+    const compoundRef = parts.length >= 2 && parts.every((part) => /^\\d+$/.test(part));
+    const guestBuilding = compoundRef ? Number(parts[0]) : null;
+    const guestFloor = compoundRef && parts.length >= 3 ? Number(parts[1]) : null;
+    const rawRoomNo = compoundRef
+      ? (parts.length >= 3 ? parts.slice(2).join('-') : parts.slice(1).join('-'))
+      : rawRoomRef;
     const roomNo = normalizeRoomNo(rawRoomNo);
 
+    const candidates = roomsByNo.get(roomNo) ?? [];
     const buildingMatches = guestBuilding !== null
-      ? (roomsByNo.get(roomNo) ?? []).filter((candidate) => candidate.building === guestBuilding)
-      : (roomsByNo.get(roomNo) ?? []);
-    const room = guestFloor !== null
-      ? (buildingMatches.find((candidate) => candidate.floor === guestFloor) ??
-        (buildingMatches.length === 1 ? buildingMatches[0] : undefined))
-      : guestBuilding !== null
-        ? (buildingMatches.length === 1 ? buildingMatches[0] : roomByBuildingAndNo.get(`${guestBuilding}:${roomNo}`))
-        : (buildingMatches.length === 1 ? buildingMatches[0] : undefined);
-    const resourceId = room
-      ? `mdb-rm-${room.building}-${normalizeRoomNo(room.roomNo)}`
-      : guestBuilding !== null
-        ? `mdb-rm-${guestBuilding}-${roomNo}`
-        : `mdb-room-${roomNo}`;
-    const resourceName = room ? room.roomNo : roomNo;
+      ? candidates.filter((candidate) => candidate.building === guestBuilding)
+      : candidates;
+    let room: ImportedRoom | undefined;
+    if (guestFloor !== null) {
+      room = buildingMatches.find((candidate) => candidate.floor === guestFloor);
+    } else if (guestBuilding !== null) {
+      const exact = roomByBuildingAndNo.get(String(guestBuilding) + ':' + roomNo) ?? [];
+      room = exact.length === 1 ? exact[0] : undefined;
+    } else {
+      room = buildingMatches.length === 1 ? buildingMatches[0] : undefined;
+    }
+
+    // GuestInfo is not a room master. Never synthesize a room from a guest row.
+    if (!room) {
+      unresolvedGuests += 1;
+      continue;
+    }
 
     const startIso = parseAccessDateTime(guest.comeTime);
     const endIso = parseAccessDateTime(guest.goTime);
-    const startDate = startIso ? startIso.slice(0, 10) : new Date().toISOString().slice(0, 10);
-    const endDate = endIso ? endIso.slice(0, 10) : startDate;
-    const price = room ? parsePrice(room.price) : 0;
+    if (!startIso || !endIso) {
+      invalidDateGuests += 1;
+      continue;
+    }
+    const startDate = startIso.slice(0, 10);
+    const endDate = endIso.slice(0, 10);
+    if (endDate <= startDate) {
+      invalidDateGuests += 1;
+      continue;
+    }
+
+    const resourceId = 'mdb-rm-' + (room.building === null ? 'unassigned' : room.building) + '-' + normalizeRoomNo(room.roomNo);
+    const price = parsePrice(room.price);
     const flag = guest.flag || '';
     const status: TimelineBooking['status'] = /check.?out/i.test(flag)
       ? 'checked_out'
@@ -606,20 +623,19 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
         : /walk.?in|check.?in|arriv/i.test(flag)
           ? 'checked_in'
           : 'confirmed';
-
-    const key = `${guestBuilding ?? room?.building ?? ''}:${guestFloor ?? room?.floor ?? ''}:${roomNo}|${startIso ?? startDate}|${guest.name}`;
+    const key = String(room.building ?? '') + ':' + String(room.floor ?? '') + ':' + roomNo + '|' + startIso + '|' + guest.name;
     const existing = stayByKey.get(key);
     if (existing) {
-      if (endIso && endDate > existing.endDate) existing.endDate = endDate;
+      if (endDate > existing.endDate) existing.endDate = endDate;
       const copies = Number(existing.customMetadata?.copies ?? 1) + 1;
       existing.customMetadata = { ...existing.customMetadata, copies };
       continue;
     }
 
     const booking: TimelineBooking = {
-      id: `mdb-bkg-${guestBuilding ?? room?.building ?? 'unknown'}-${roomNo}-${startDate}-${bookings.length + 1}`,
+      id: 'mdb-bkg-' + (room.building ?? 'unknown') + '-' + roomNo + '-' + startDate + '-' + (bookings.length + 1),
       resourceId,
-      resourceName,
+      resourceName: room.roomNo,
       sector: 'hotel',
       guestName: guest.name || 'Client',
       guestEmail: '',
@@ -629,51 +645,50 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
       status,
       totalPrice: price,
       paymentStatus: 'pending',
-      notes: `Importé de CardLock.mdb — carte ${guest.cardId || '—'}, flag: ${flag || '—'}`,
+      notes: 'Importé de CardLock.mdb — carte ' + (guest.cardId || '—') + ', flag: ' + (flag || '—'),
       color: '#2563eb',
       adults: 1,
       customMetadata: {
         source: 'cardlock_mdb',
         cardId: guest.cardId,
         flag,
-        roomType: room?.type,
-        building: room?.building ?? guestBuilding,
-        floor: room?.floor ?? guestFloor,
-        originalPrice: room?.price,
-        cardCount: room?.cardCount,
-        maxCards: room?.maxCards,
+        roomType: room.type,
+        building: room.building,
+        floor: room.floor,
+        originalPrice: room.price,
+        cardCount: room.cardCount,
+        maxCards: room.maxCards,
       },
     };
     stayByKey.set(key, booking);
     bookings.push(booking);
   }
 
-  return { resourceGroups, bookings };
+  if (unresolvedGuests) warnings.push(unresolvedGuests + ' séjour(s) GuestInfo ne correspondent à aucune ligne RoomInfo sans ambiguïté ; aucun logement n’a été créé à partir de ces séjours.');
+  if (invalidDateGuests) warnings.push(invalidDateGuests + ' séjour(s) GuestInfo ignoré(s) : date d’arrivée/de départ absente, invalide ou intervalle nul.');
+  return { resourceGroups, bookings, warnings };
 }
 
 function resourceItemFromRoom(r: ImportedRoom): ResourceItem {
-  // Infer a floor only when the room number provides an unambiguous leading digit.
-  const inferredFloor = r.roomNo.replace(/\D/g, '').length >= 3
-    ? r.roomNo.replace(/\D/g, '')[0]
-    : undefined;
-  const floor = r.floor > 0 ? String(r.floor) : inferredFloor;
+  const normalizedRoomNo = normalizeRoomNo(r.roomNo);
+  const status = r.status.trim().toLowerCase();
+  const housekeepingStatus: ResourceItem['housekeepingStatus'] =
+    status === 'clean' || status === 'propre' ? 'clean'
+      : status === 'dirty' || status === 'sale' ? 'dirty'
+        : status === 'cleaning' || status === 'in cleaning' || status === 'en nettoyage' ? 'cleaning'
+          : status === 'out_of_order' || status === 'out of order' || status === 'hs' ? 'out_of_order'
+            : undefined;
 
   return {
-    id: `mdb-rm-${r.building || 'unknown'}-${normalizeRoomNo(r.roomNo)}`,
+    id: 'mdb-rm-' + (r.building === null ? 'unassigned' : r.building) + '-' + normalizedRoomNo,
     name: r.roomNo,
-    type: r.type || 'Chambre',
+    type: r.type || 'Type non renseigné',
     sector: 'hotel',
-    pricePerDay: parsePrice(r.price) || 123,
-    housekeepingStatus: (r.status && /clean/i.test(r.status)
-      ? 'clean'
-      : /dirty/i.test(r.status)
-        ? 'dirty'
-        : /out.of.order|hs/i.test(r.status)
-          ? 'out_of_order'
-          : 'clean') as ResourceItem['housekeepingStatus'],
+    pricePerDay: parsePrice(r.price),
+    ...(housekeepingStatus ? { housekeepingStatus } : {}),
     capacity: 1,
-    ...(r.building > 0 ? { building: String(r.building) } : {}),
-    ...(floor ? { floor } : {}),
+    ...(r.building !== null ? { building: String(r.building) } : {}),
+    ...(r.floor !== null ? { floor: String(r.floor) } : {}),
   };
 }
 
