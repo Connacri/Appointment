@@ -75,6 +75,15 @@ L'interface est construite avec React 19 et TypeScript. Elle fonctionne comme ap
 | Qualité | TypeScript, tests Node.js |
 | Livraison | GitHub Actions, GitHub Pages, artefacts Android et Windows |
 
+### Import CardLock proUSB
+
+L'import MDB distingue les référentiels de chambres des données de séjour : `BuildingInfo` décrit les bâtiments, `RoomInfo` est la source de vérité des chambres et `GuestInfo` contient les séjours qui doivent être rattachés à une chambre existante. Les références historiques peuvent comporter trois segments (`bâtiment-étage-chambre`, par exemple `2-1-12064`). Les identifiants bâtiment/étage égaux à zéro sont conservés.
+
+L'import inventorie les tables, les colonnes et les volumes, n'ajoute aucune chambre depuis une réservation orpheline et remplace l'instantané CardLock précédent sans conserver les anciennes chambres importées. Les prix et statuts absents ne sont pas remplacés par des valeurs arbitraires.
+
+- [Analyse des tables, champs et relations CardLock](./docs/CARDLOCK_DATABASE_ANALYSIS.md)
+- [Tutoriel novice : analyser et importer CardLock.mdb](./docs/PROUSB_MDB_IMPORT_GUIDE.md)
+
 ### État des données et synchronisation
 
 La version actuelle utilise principalement un stockage local dans le navigateur/appareil. **La synchronisation Supabase distante n'est pas encore implémentée dans cette branche** : aucun client Supabase, schéma distant ni moteur de synchronisation n'est livré actuellement. Le document [SUPABASE_SYNC_PLAN.md](./docs/SUPABASE_SYNC_PLAN.md) décrit les prérequis et l'architecture envisagée.
@@ -155,6 +164,8 @@ Les fichiers téléchargeables et leurs versions sont ceux réellement publiés 
 - [Contrat et consignes de développement](./AGENTS.md)
 - [Plan de synchronisation Supabase](./docs/SUPABASE_SYNC_PLAN.md)
 - [Spécification du système proUSB](./docs/PROUSB_SPECIFICATION.md)
+- [Analyse de la base CardLock (tables et relations)](./docs/CARDLOCK_DATABASE_ANALYSIS.md)
+- [Tutoriel d'import CardLock.mdb](./docs/PROUSB_MDB_IMPORT_GUIDE.md)
 - [Guide des cartes](./README_CARDS.md)
 - [Cartes système](./README_SYSTEM_CARD.md)
 - [Journal des modifications](./CHANGELOG.md)
