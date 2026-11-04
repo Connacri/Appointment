@@ -170,7 +170,7 @@ export const TopBar: React.FC = () => {
         <button
           type="button"
           onClick={() => setCurrentDomain('hotel')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+          className={`px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
             currentDomain === 'hotel'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white bg-slate-900/60'
@@ -380,7 +380,7 @@ export const TopBar: React.FC = () => {
           title="Créer une nouvelle réservation"
         >
           <Plus size={15} strokeWidth={2.5} />
-          <span>{language === 'fr' ? 'Nouveau' : language === 'ar' ? 'حجز جديد' : 'New'}</span>
+          <span className="hidden sm:inline">{language === 'fr' ? 'Nouveau' : language === 'ar' ? 'حجز جديد' : 'New'}</span>
         </button>
 
         {/* More Menu [⋮] */}
