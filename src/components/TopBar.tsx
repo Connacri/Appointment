@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Menu,
-  BookOpen,
   Search,
   Plus,
   Moon,
@@ -372,16 +371,6 @@ export const TopBar: React.FC = () => {
             <option value="CAD" className="bg-slate-900 text-white">🇨🇦 CAD ($)</option>
           </select>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setActiveView('help')}
-          className="h-8 w-8 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white flex items-center justify-center transition-colors"
-          title={language === 'fr' ? 'Centre d’aide et tutoriels' : language === 'ar' ? 'مركز المساعدة والدروس' : 'Help center and tutorials'}
-          aria-label={language === 'fr' ? 'Ouvrir le centre d’aide' : language === 'ar' ? 'فتح مركز المساعدة' : 'Open help center'}
-        >
-          <BookOpen size={15} />
-        </button>
 
         {/* Primary Action Button: + Nouveau */}
         <button
