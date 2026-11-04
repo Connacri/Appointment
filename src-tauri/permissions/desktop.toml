@@ -6,7 +6,6 @@ commands.allow = [
   "discover_cardlock_candidates",
   "read_cardlock_file",
   "secure_secret_set",
-  "secure_secret_get",
   "secure_secret_exists",
   "secure_secret_delete"
 ]
