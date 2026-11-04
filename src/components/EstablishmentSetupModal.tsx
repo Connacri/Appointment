@@ -112,7 +112,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     try {
       const bNo = Number(buildingNo);
       const fNo = Number(floorNo);
-      const existing = resourceGroups.find((group) => group.id === `manual-building-${bNo}`);
+      const existing = resourceGroups.find((group) => group.id === `manual-building-${bNo}` || group.id === `mdb-bld-${bNo}`);
       const result = generateHotelFloorRooms({
         buildingNumber: bNo,
         floorNumber: fNo,
@@ -121,9 +121,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
         end: Number(roomEnd),
         padWidth: roomStart.length,
         excludedFloorNumbers: excludedRoomNumbers.split(',').map((value) => value.trim()).filter(Boolean),
-        existingNames: resourceGroups
-          .filter((group) => group.id === `manual-building-${bNo}`)
-          .flatMap((group) => group.resources.map((room) => room.name)),
+        existingNames: existing?.resources.map((room) => room.name) ?? [],
       });
       if (!buildingName.trim()) throw new Error('Saisissez le nom du bâtiment.');
       if (result.rooms.length === 0) {
@@ -131,8 +129,8 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
         return;
       }
       const nextGroup = {
-        id: `manual-building-${bNo}`,
-        name: { fr: buildingName.trim(), en: buildingName.trim(), ar: buildingName.trim() },
+        id: existing?.id ?? `manual-building-${bNo}`,
+        name: existing?.name ?? { fr: buildingName.trim(), en: buildingName.trim(), ar: buildingName.trim() },
         sector: 'hotel' as const,
         icon: 'Building',
         resources: [...(existing?.resources || []), ...result.rooms],
