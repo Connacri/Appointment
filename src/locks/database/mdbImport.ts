@@ -114,7 +114,7 @@ export interface MdbTableSummary {
 
 export interface MdbSnapshot {
   fileName: string;
-  tables: MdbTableSummary[];
+  tables?: MdbTableSummary[];
   /**
    * `File.lastModified` of the imported file, ISO-8601. `null` when unknown
    * (e.g. snapshot restored from storage). Used to warn when the user picked
@@ -377,7 +377,7 @@ export async function parseCardLockMdb(
     buildingByNo.set(building.no, building);
   }
   for (const room of rooms) {
-    if (room.building >= 0 && !buildingByNo.has(room.building)) {
+    if (room.building > 0 && !buildingByNo.has(room.building)) {
       buildingByNo.set(room.building, { no: room.building, name: `Bâtiment ${room.building}` });
     }
   }
@@ -502,7 +502,7 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     if (Number.isFinite(building.no)) buildingByNo.set(building.no, building);
   }
   for (const room of rooms) {
-    if (Number.isFinite(room.building) && room.building >= 0 && !buildingByNo.has(room.building)) {
+    if (Number.isFinite(room.building) && room.building > 0 && !buildingByNo.has(room.building)) {
       buildingByNo.set(room.building, { no: room.building, name: `Bâtiment ${room.building}` });
     }
   }
@@ -512,7 +512,7 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
   const roomsByBuilding = new Map<number, ImportedRoom[]>();
   const unassignedRooms: ImportedRoom[] = [];
   for (const room of rooms) {
-    if (Number.isFinite(room.building) && room.building >= 0) {
+    if (Number.isFinite(room.building) && room.building > 0) {
       const buildingRooms = roomsByBuilding.get(room.building) ?? [];
       buildingRooms.push(room);
       roomsByBuilding.set(room.building, buildingRooms);
@@ -637,8 +637,8 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
         cardId: guest.cardId,
         flag,
         roomType: room.type,
-        building: room.building >= 0 ? room.building : undefined,
-        floor: room.floor >= 0 ? room.floor : undefined,
+        building: room.building > 0 ? room.building : undefined,
+        floor: room.floor > 0 ? room.floor : undefined,
         originalPrice: room.price,
         cardCount: room.cardCount,
         maxCards: room.maxCards,
@@ -653,13 +653,12 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 }
 
 function resourceIdFromRoom(r: ImportedRoom): string {
-  const building = r.building >= 0 ? String(r.building) : 'unknown';
-  const floor = r.floor >= 0 ? `-f${r.floor}` : '';
-  return `mdb-rm-${building}${floor}-${normalizeRoomNo(r.roomNo)}`;
+  const building = r.building > 0 ? String(r.building) : 'unknown';
+  return `mdb-rm-${building}-${normalizeRoomNo(r.roomNo)}`;
 }
 
 function resourceItemFromRoom(r: ImportedRoom): ResourceItem {
-  const floor = r.floor >= 0 ? String(r.floor) : undefined;
+  const floor = r.floor > 0 ? String(r.floor) : undefined;
   return {
     id: resourceIdFromRoom(r),
     name: r.roomNo,
@@ -674,7 +673,7 @@ function resourceItemFromRoom(r: ImportedRoom): ResourceItem {
           ? 'out_of_order'
           : 'clean') as ResourceItem['housekeepingStatus'],
     capacity: 1,
-    ...(r.building >= 0 ? { building: String(r.building) } : {}),
+    ...(r.building > 0 ? { building: String(r.building) } : {}),
     ...(floor ? { floor } : {}),
   };
 }

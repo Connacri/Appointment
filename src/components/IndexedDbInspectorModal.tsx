@@ -25,6 +25,9 @@ import { indexedDb, IndexedDbStoreStats } from '../db/indexedDb';
 import { useApp } from '../context/AppContext';
 import { lockManager } from '../locks/lockManager';
 import { mdbSnapshotToPlanning } from '../locks/database/mdbImport';
+import { initialResourceGroups } from '../data/mockData';
+
+const DEMO_RESOURCE_GROUP_IDS = new Set(initialResourceGroups.map((group) => group.id));
 import { createClient } from '@supabase/supabase-js';
 
 type StoreName = 'bookings' | 'invoices' | 'resources';
@@ -218,13 +221,20 @@ export const IndexedDbInspectorModal: React.FC<{
     try {
       const snapshot = await lockManager.importMdb(file);
       const sourceIsOld = snapshot.fileLastModified ? (Date.now() - new Date(snapshot.fileLastModified).getTime()) / 86400000 > 90 : false;
-      if (snapshot.counts.rooms || snapshot.counts.guests) {
-        const { resourceGroups, bookings } = mdbSnapshotToPlanning(snapshot);
-        const importNow = window.confirm(mt.confirm(snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards));
-        if (importNow) {
-          setResourceGroups(current => [...current.filter(group => !group.id.startsWith('mdb-')), ...resourceGroups]);
-          setBookings(current => [...current.filter(item => !bookings.some(next => next.id === item.id)), ...bookings]);
-        }
+      if (snapshot.counts.rooms === 0) {
+        throw new Error('Aucune chambre exploitable trouvée dans RoomInfo. L’inventaire existant a été conservé.');
+      }
+      const { resourceGroups, bookings } = mdbSnapshotToPlanning(snapshot);
+      const importNow = window.confirm(mt.confirm(snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards));
+      if (importNow) {
+        setResourceGroups(current => [
+          ...current.filter(group => !group.id.startsWith('mdb-') && !DEMO_RESOURCE_GROUP_IDS.has(group.id)),
+          ...resourceGroups,
+        ]);
+        setBookings(current => [
+          ...current.filter(item => item.customMetadata?.source !== 'cardlock_mdb'),
+          ...bookings,
+        ]);
       }
       setMdbMessage(mt.done(snapshot.buildings.length, snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards, snapshot.warnings.length) + (sourceIsOld ? ` ${mt.stale}` : ''));
       await loadStatsAndData();
