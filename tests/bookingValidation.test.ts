@@ -200,7 +200,7 @@ test('CardLock import does not fabricate building or floor 1 when source fields 
     importedAt: '2026-11-03T00:00:00.000Z',
     buildings: [],
     rooms: [
-      { building: 0, floor: 0, roomNo: 'X01', type: 'Chambre spéciale', status: '', price: '', cardCount: 0, maxCards: 1 },
+      { building: -1, floor: -1, roomNo: 'X01', type: 'Chambre spéciale', status: '', price: '', cardCount: 0, maxCards: 1 },
     ],
     guests: [],
     cards: [],
