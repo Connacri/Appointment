@@ -25,6 +25,7 @@ import { EstablishmentProfile, DEFAULT_ESTABLISHMENT_PROFILE } from '../types/es
 import { indexedDb } from '../db/indexedDb';
 import { useWorkspace } from '../services/supabase/WorkspaceContext';
 import { isValidCalendarDate, shouldMarkPaymentAsPaid } from '../utils/bookingValidation';
+import { isRoomReadyForBooking } from '../utils/roomReadiness';
 import { lockManager } from '../locks/lockManager';
 import {
   audioFeedbackService,
@@ -543,7 +544,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // This is enforced here as the domain boundary, not only in the modal UI.
     if (bookingData.sector === 'hotel') {
       const room = resourceGroups.flatMap((group) => group.resources).find((item) => item.id === bookingData.resourceId);
-      if (!room || room.housekeepingStatus !== 'clean') {
+      if (!room || !isRoomReadyForBooking(room.housekeepingStatus)) {
         const statusMessage = language === 'fr'
           ? 'Réservation refusée : la chambre doit être propre et disponible (statut vert) avant toute réservation.'
           : language === 'ar'
