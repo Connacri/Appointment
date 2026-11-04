@@ -46,7 +46,7 @@ L'interface est construite avec React 19 et TypeScript. Elle fonctionne comme ap
 | **Stock & équipements** | Gérer les articles, les quantités et les mouvements de stock. |
 | **Tarification dynamique** | Définir et appliquer des tarifs par type de ressource et par date. |
 | **Channel Manager** | Accéder à l'espace de gestion des canaux et aux outils de configuration/visualisation des échanges OTA et iCal. Les connexions réelles dépendent des intégrations effectivement configurées. |
-| **Serrures proUSB** | Utiliser les fonctions dédiées aux encodeurs compatibles, aux cartes et à l'import/analyse de données CardLock MDB. L'encodeur physique est identifié automatiquement (numéro `Reader_000016`) via la commande `IniCard` mode 2. |
+| **Serrures proUSB** | Utiliser les fonctions dédiées aux encodeurs compatibles, aux cartes et à l'import/analyse de données CardLock MDB. L'encodeur physique est identifié automatiquement (numéro `Reader_000016` et machine code `5012 14D2`) via la commande `IniCard` mode 2. |
 
 ## Fonctionnalités transversales
 

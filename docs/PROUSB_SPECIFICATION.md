@@ -141,6 +141,28 @@ proUSB, la barre supérieure (`USB • Reader_000016`) et les spécifications de
 l'encodeur. Une commande concurrente ne peut pas consommer la réponse : tous
 les échanges HID sont sérialisés par `withDeviceLock()`.
 
+Le même rapport porte le **machine code** du lecteur, que CardLock affiche sous
+le libellé « Current Reader No. » dans la fenêtre d'enregistrement
+(`CardLock.Exe` VA `0x6D8644`, `Copy(rapportHex, 11, 8)`), c'est-à-dire les
+**octets 5 à 8** du bloc d'identification :
+
+```
+55 21 01 55 39 | 50 12 14 D2 | ...   →  machine code 501214D2 (affiché 5012 14D2)
+                   └─ octets 5..8
+```
+
+`50 12` est un **préfixe constructeur constant** : on le retrouve sur les douze
+enregistrements de `Reg.ini` (familles `M9-`, `proUSB`, `proEM`), quel que soit
+le lecteur. Les octets qui suivent (`14 D2`, puis le reste du numéro de série
+aux octets 7..12) sont **uniques au lecteur** et changent quand on change
+d'encodeur — d'où la consigne du manuel : réenregistrer le logiciel avec le
+nouveau machine code. `Reg.ini` recopie ce code en tête de `SerialNo2`
+(par exemple `SerialNo2: 50129BF78818FFFB` pour un machine code `50129BF7`).
+
+L'application expose cette valeur via `ReaderInfo.machineCode` (8 caractères
+hexadécimaux majuscules) et l'affiche groupée par `formatMachineCode()`
+(`5012 14D2`).
+
 ---
 
 ## 3. Base de données CardLock.mdb
@@ -687,11 +709,32 @@ Chaque entrée contient :
 
 ### 8.2 ReaderInfo (hexadécimal)
 
-Le champ ReaderInfo contient des chaînes ASCII encodées :
+`ReaderInfo` est le dump hexadécimal du bloc d'identification de 36 octets
+renvoyé par `IniCard(port, 2, out)`. Structure observée sur les douze
+enregistrements de `Reg.ini` (2008 → 2023) :
+
+| Octets | Exemple | Sens |
+|---|---|---|
+| 0..2 | `55 21 01` | en-tête fixe du rapport |
+| 3..4 | `55 39` | type/modèle, contrôlé par CardLock (`5239`, `5639`, `5539`) |
+| 5..6 | `50 12` | préfixe constructeur **constant** |
+| 7..12 | `9B F7 88 18 88 18` | numéro de série unique (le dernier mot duplique souvent le précédent) |
+| 13..14 | `0F FF` | jours de licence restants, big-endian (`0x0FFF` = 4095) — recopié dans `Days` |
+| 15..34 | `2D 70 72 6F 4D 39 2D …` | chaîne ASCII du modèle : `-proM9-20121130-14`, `-proUSB20140107`, `-proM9-20210329-14`, … |
+| 35 | `F5`/`55` | octet de contrôle (XOR/checksum) |
+
+Champs dérivés :
+- **machine code** (« Current Reader No. ») = octets 5..8, soit
+  `501214D2` / `5012 14D2` ; `50 12` est fixe, `14 D2` identifie le lecteur.
+- `SerialNo2` dans `Reg.ini` = hex(octets 5..10) + 4 caractères d'état
+  (`FFFB`, `BB8A`, …), le tout suivi de `ErrRDN` en cas d'erreur de dongle.
+- `Days` dans `Reg.ini` = valeur des octets 13..14.
+
+Les chaînes ASCII encodées restent visibles dans le dump :
 - `2D 70 72 6F 4D 39 2D 32 30 31 32 31 31 33 30 2D 31 34` = `-proM9-20121130-14`
 - `2D 70 72 6F 55 53 42 32 30 31 34 30 31 30 37` = `-proUSB20140107`
-- `0xCC 0xCC` : Padding
-- `0x55` : Marqueur de fin
+- `0xCC 0xCC` / `0xFF 0xFF 0xFF` : remplissage
+- Le dernier octet (`0x55`, `0xF5`, `0xA8`, …) est le contrôle du bloc.
 
 ### 8.3 Licence et bridage
 

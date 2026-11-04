@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   READER_INFO_MARKER,
+  formatMachineCode,
   formatReaderLabel,
   parseReaderInfo,
   readerInfoRequest,
@@ -84,4 +85,42 @@ test('parses the -proEM alternate family', () => {
 test('returns null for reports without a known marker', () => {
   assert.equal(parseReaderInfo(reportOf('55 15 01 ACK')), null);
   assert.equal(parseReaderInfo(new Uint8Array(0)), null);
+});
+
+test('reads the machine code ("Current Reader No.") from bytes 5..8', () => {
+  // Real identification block prefix from Reg.ini: 55 21 01 55 39 | 50 12 14 D2
+  const info = parseReaderInfo(
+    reportFromBytes(
+      [0x55, 0x21, 0x01, 0x55, 0x39, 0x50, 0x12, 0x14, 0xd2, 0x00, 0x00, 0x00, 0x00],
+      '-proUSB',
+      ' ',
+      '016',
+      [0x00, 0x00, 0x00],
+      [0x90, 0x99]
+    )
+  );
+  assert.ok(info);
+  assert.equal(info.machineCode, '501214D2');
+  assert.equal(formatMachineCode(info.machineCode), '5012 14D2');
+});
+
+test('reads the machine code from a full Reg.ini report (M9 family)', () => {
+  const report = Uint8Array.from(
+    Buffer.from(
+      '552101553950129BF7881988180FFF2D70726F4D392D32303132313133302D3134CCCCF5',
+      'hex'
+    )
+  );
+  const info = parseReaderInfo(report);
+  assert.ok(info);
+  assert.equal(info.machineCode, '50129BF7');
+  assert.equal(info.marker, 'M9-');
+});
+
+test('formatMachineCode rejects incomplete or malformed codes', () => {
+  assert.equal(formatMachineCode('501214D2'), '5012 14D2');
+  assert.equal(formatMachineCode('501214'), null);
+  assert.equal(formatMachineCode('501214d2'), null);
+  assert.equal(formatMachineCode(null), null);
+  assert.equal(formatMachineCode(undefined), null);
 });

@@ -2146,6 +2146,14 @@ export const ProUsbLockSystemView: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex justify-between py-1.5">
+                    <span className="text-slate-400" title="Current Reader No. (CardLock)">
+                      Machine code :
+                    </span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                      {usbDevice?.machineCode ?? '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1.5">
                     <span className="text-slate-400">Usage Page HID :</span>
                     <span className="font-mono text-slate-800 dark:text-slate-200">0x85FF (Vendor Defined)</span>
                   </div>
@@ -2169,7 +2177,10 @@ export const ProUsbLockSystemView: React.FC = () => {
                       try {
                         const info = await lockManager.refreshReaderInfo();
                         if (info?.encoderNo != null) {
-                          showToast('success', `Encodeur identifié : ${info.text.trim()} (Reader_${String(info.encoderNo).padStart(6, '0')})`);
+                          const machine = info.machineCode
+                            ? ` · ${info.machineCode.slice(0, 4)} ${info.machineCode.slice(4)}`
+                            : '';
+                          showToast('success', `Encodeur identifié : ${info.text.trim()} (Reader_${String(info.encoderNo).padStart(6, '0')}${machine})`);
                         } else {
                           showToast('error', "L'encodeur n'a pas renvoyé son numéro de lecteur.");
                         }

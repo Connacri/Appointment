@@ -353,7 +353,9 @@ export const TopBar: React.FC = () => {
           }`}
           title={
             usbStatus === 'connected'
-              ? 'Encodeur USB proUSB connecté et opérationnel'
+              ? `Encodeur USB proUSB connecté${
+                  usbDevice?.machineCode ? ` — machine code ${usbDevice.machineCode}` : ''
+                }`
               : 'Encodeur USB proUSB — Cliquez pour autoriser WebHID'
           }
         >

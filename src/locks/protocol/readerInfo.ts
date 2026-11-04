@@ -22,8 +22,16 @@
  *   `-proEM` / `EM4305-` / `M9-` families, a 12-character number is read
  *   instead (`32` branch and EM4305 branch of the original routine).
  *
+ *   Independently of the marker, the registration screen shows the
+ *   **machine code** ("Current Reader No.") of the reader: `Copy(hex, 11, 8)`,
+ *   i.e. bytes 5..8 of the identification block (`50 12 14 D2` -> `501214D2`).
+ *   `50 12` is a constant vendor prefix; the following bytes are the unique
+ *   reader serial. CardLock stores the same value at the head of `SerialNo2`
+ *   in `Reg.ini`.
+ *
  * Nothing here is guessed: every offset maps to an instruction of the routine
- * at `CardLock.Exe` VA 0x6CD924.
+ * at `CardLock.Exe` VA 0x6CD924 (marker) and VA 0x6D8644/0x6D8660 (machine
+ * code, `Copy(hex, 11, 8)`).
  */
 
 import { toHex } from './frames';
@@ -39,6 +47,10 @@ const LEGAL_MARKER_HEX = '9099';
 const SPACE_HEX = '20';
 const DIGIT_MARKER_HEX = '32';
 
+/** Delphi `Copy(reportHex, 11, 8)`: machine code starts at byte 5 (0-based). */
+const MACHINE_CODE_POSITION = 11;
+const MACHINE_CODE_LENGTH = 8;
+
 /** Identification command for `IniCard` mode 2 (`AA 01 56 FD`). */
 export const READER_INFO_COMMAND = [0xaa, 0x01, 0x56, 0xfd] as const;
 
@@ -49,6 +61,12 @@ export interface ReaderInfo {
   legal: boolean;
   /** Marker that matched (`-proUSB`, `-proEM`, `EM4305-`, `M9-`). */
   marker: string;
+  /**
+   * Machine code of the reader ("Current Reader No." in CardLock), 8 uppercase
+   * hex characters such as `501214D2`. This is the value `Reg.ini` stores at
+   * the beginning of `SerialNo2`.
+   */
+  machineCode: string | null;
   /** Printable ASCII identification text carried by the report. */
   text: string;
   /** Full uppercase hex dump of the identification report. */
@@ -71,6 +89,15 @@ export function formatReaderLabel(encoderNo: number | null | undefined): string 
     return null;
   }
   return `Reader_${Math.trunc(encoderNo).toString().padStart(6, '0')}`;
+}
+
+/**
+ * Groups a machine code the way it is read on the encoder label:
+ * `501214D2` -> `5012 14D2` (two 16-bit words).
+ */
+export function formatMachineCode(machineCode: string | null | undefined): string | null {
+  if (!machineCode || !/^[0-9A-F]{8}$/.test(machineCode)) return null;
+  return `${machineCode.slice(0, 4)} ${machineCode.slice(4)}`;
 }
 
 function hexToText(hex: string): string {
@@ -126,11 +153,14 @@ export function parseReaderInfo(report: Uint8Array): ReaderInfo | null {
 
   const digits = hexToText(numberHex).replace(/\D/g, '');
   const encoderNo = digits ? Number.parseInt(digits, 10) : null;
+  const machineCodeHex = copyHex(reportHex, MACHINE_CODE_POSITION, MACHINE_CODE_LENGTH);
+  const machineCode = machineCodeHex.length === MACHINE_CODE_LENGTH ? machineCodeHex : null;
 
   return {
     encoderNo: encoderNo !== null && Number.isFinite(encoderNo) ? encoderNo : null,
     legal: copyHex(reportHex, markerPosition + 0x1c, 4) === LEGAL_MARKER_HEX,
     marker: hexToText(markerHex),
+    machineCode,
     text: hexToText(reportHex).replace(/[^\x20-\x7e]/g, '.'),
     reportHex,
   };
@@ -160,7 +190,13 @@ export async function readReaderInfo(
       if (!report) break;
       const info = parseReaderInfo(report);
       if (info) {
-        transport.onLog?.('info', `Encodeur identifié : ${info.text.trim()} (${info.marker})`, report);
+        const detail = [
+          info.marker,
+          info.machineCode ? `machine ${formatMachineCode(info.machineCode)}` : null,
+        ]
+          .filter(Boolean)
+          .join(', ');
+        transport.onLog?.('info', `Encodeur identifié : ${info.text.trim()} (${detail})`, report);
         return info;
       }
     }

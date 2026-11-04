@@ -21,6 +21,7 @@ import {
   PROUSB_VID,
   PROUSB_PID,
   readReaderInfo,
+  formatMachineCode,
   formatReaderLabel,
   type ReaderInfo,
 } from './protocol';
@@ -62,6 +63,8 @@ export interface UsbDeviceInfo {
   encoderNo?: number | null;
   /** `Reader_000016`-style label, `null` while the encoder has not answered. */
   readerLabel?: string | null;
+  /** Machine code of the reader ("Current Reader No."), e.g. `5012 14D2`. */
+  machineCode?: string | null;
   /** True when the encoder reports the proUSB legal (`9099`) marker. */
   legal?: boolean;
 }
@@ -381,6 +384,7 @@ class LockManager {
     const identity = {
       encoderNo: this.readerInfo?.encoderNo ?? null,
       readerLabel: formatReaderLabel(this.readerInfo?.encoderNo),
+      machineCode: formatMachineCode(this.readerInfo?.machineCode),
       legal: this.readerInfo?.legal,
     };
     const dev = (this.webHidTransport as any).device;
