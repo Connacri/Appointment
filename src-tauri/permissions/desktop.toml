@@ -1,0 +1,12 @@
+[[permission]]
+identifier = "allow-appointment-desktop-commands"
+description = "Allow the Appointment frontend to call the explicitly scoped native desktop commands."
+commands.allow = [
+  "desktop_runtime_info",
+  "discover_cardlock_candidates",
+  "read_cardlock_file",
+  "secure_secret_set",
+  "secure_secret_get",
+  "secure_secret_exists",
+  "secure_secret_delete"
+]
