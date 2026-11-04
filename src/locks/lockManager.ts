@@ -253,7 +253,7 @@ class LockManager {
     }
 
     this.notifyStateListeners();
-    console.log('[LockManager] CardLock snapshot applied:', snapshot.counts, snapshot.systemProfile);
+    console.info('[LockManager] CardLock snapshot applied:', snapshot.counts);
     return snapshot;
   }
 
