@@ -12,7 +12,6 @@ import {
   ClipboardList,
   Boxes,
   KeyRound,
-  ShieldCheck,
   CheckCircle2,
   FileText,
   ChevronLeft,
@@ -47,7 +46,6 @@ export const Sidebar: React.FC = () => {
     setCurrentRole,
     activeSector,
     setActiveSector,
-    setIsCockpitOpen,
     setIsLegalModalOpen,
     setIsIndexedDBOpen,
     setIsAboutModalOpen,
@@ -398,24 +396,6 @@ export const Sidebar: React.FC = () => {
             <div className="flex items-center justify-between w-full">
               <span className="truncate">Données locales</span>
               <span className="text-[10px] text-slate-400 font-mono">Navigateur</span>
-            </div>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setIsCockpitOpen(true);
-            setIsSidebarMobileOpen(false);
-          }}
-          className="w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-850 transition-colors cursor-pointer"
-          title="Contrat de développement & Spécifications AGENTS.md"
-        >
-          <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
-          {(!isCollapsed || isMobileView) && (
-            <div className="flex items-center justify-between w-full">
-              <span className="truncate">Spécifications CI/CD</span>
-              <span className="text-[10px] text-emerald-400 font-mono">AGENTS.md</span>
             </div>
           )}
         </button>
