@@ -291,7 +291,7 @@ export const AgentsCockpitModal: React.FC = () => {
                       Signed APK Android
                     </span>
                     <span className="font-mono text-[10px] text-slate-500 block truncate">
-                      Planning-Oran-v2.4.0.apk
+                      Appointment-PMS-v2.4.0.apk
                     </span>
                   </div>
                   <span className="inline-block px-2.5 py-0.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold rounded-md text-[10px]">
@@ -308,7 +308,7 @@ export const AgentsCockpitModal: React.FC = () => {
                       Play Bundle (AAB)
                     </span>
                     <span className="font-mono text-[10px] text-slate-500 block truncate">
-                      Planning-Oran-v2.4.0.aab
+                      Appointment-PMS-v2.4.0.aab
                     </span>
                   </div>
                   <span className="inline-block px-2.5 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold rounded-md text-[10px]">
@@ -325,7 +325,7 @@ export const AgentsCockpitModal: React.FC = () => {
                       Windows Installer (EXE)
                     </span>
                     <span className="font-mono text-[10px] text-slate-500 block truncate">
-                      Planning-Oran-Setup-v2.4.0.exe
+                      Appointment-PMS-Setup-v2.4.0.exe
                     </span>
                   </div>
                   <span className="inline-block px-2.5 py-0.5 bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold rounded-md text-[10px]">

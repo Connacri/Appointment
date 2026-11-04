@@ -16,8 +16,8 @@ APP_ID="${APP_ID:-com.planning.oran}"
 read -rp "Site URL (e.g. https://samuel69tr00.github.io/Appointment): " SITE_URL
 read -rp "Public support email [ramzi.guedouar@gmail.com]: " SUPPORT_EMAIL
 SUPPORT_EMAIL="${SUPPORT_EMAIL:-ramzi.guedouar@gmail.com}"
-read -rp "Developer / organization name (certificate O=) [Planning Oran]: " ORG
-ORG="${ORG:-Planning Oran}"
+read -rp "Developer / organization name (certificate O=) [Appointment PMS]: " ORG
+ORG="${ORG:-Appointment PMS}"
 read -rp "Country code (certificate C=) [DZ]: " CC
 CC="${CC:-DZ}"
 

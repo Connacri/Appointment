@@ -830,11 +830,11 @@ export const ChannelManagerView: React.FC = () => {
           <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2 text-xs">
             <div className="font-bold text-cyan-400">Commande keytool avec votre package com.planning.oran :</div>
             <div className="p-2.5 bg-slate-900 rounded font-mono text-[11px] text-emerald-400 flex items-center justify-between gap-2 overflow-x-auto">
-              <span className="truncate">keytool -genkeypair -v -storetype JKS -keystore planning-oran.keystore -alias oran-release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Planning Oran, OU=Dev, O=Planning, C=DZ"</span>
+              <span className="truncate">keytool -genkeypair -v -storetype JKS -keystore planning-oran.keystore -alias oran-release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Appointment PMS, OU=Dev, O=Appointment PMS, C=DZ"</span>
               <button
                 onClick={() =>
                   copyToClipboard(
-                    'keytool -genkeypair -v -storetype JKS -keystore planning-oran.keystore -alias oran-release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Planning Oran, OU=Dev, O=Planning, C=DZ"',
+                    'keytool -genkeypair -v -storetype JKS -keystore planning-oran.keystore -alias oran-release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Appointment PMS, OU=Dev, O=Appointment PMS, C=DZ"',
                     'keytool-oran'
                   )
                 }
