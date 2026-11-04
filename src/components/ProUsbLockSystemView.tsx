@@ -684,6 +684,8 @@ export const ProUsbLockSystemView: React.FC = () => {
         updateProgress(60, "Écriture radiofréquence (famille 0x90 isolée)...");
         const record = await lockManager.issueSpecialCard({
           roomNumber: specialRoomNumber,
+          buildingNo: availableRoomsList.find((room) => room.roomNumber === specialRoomNumber)?.buildingNo,
+          floorNo: availableRoomsList.find((room) => room.roomNumber === specialRoomNumber)?.floorNo,
           passwordPin: specialPin,
           holderName: specialHolderName,
           operator: 'SuperAdmin',
@@ -2746,7 +2748,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                   className="w-full p-2.5 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-slate-850 font-mono text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500"
                 />
                 <span className="text-[10px] text-slate-400 mt-1 block">
-                  Le mot de passe est crypté et haché dans le secteur sécurisé de la puce RFID.
+                  Le PIN est représenté par une empreinte de 8 bits dans la trame et vérifié par Appointment à la lecture. Ce n’est pas un chiffrement certifié ni une protection matérielle garantie par le firmware de la serrure.
                 </span>
               </div>
 
