@@ -45,11 +45,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         owner_id: row.owner_id,
       }));
       setWorkspaces(options);
-      setActiveWorkspaceIdState((current) => {
-        if (current && options.some((workspace) => workspace.id === current)) return current;
-        localStorage.removeItem(STORAGE_KEY);
-        return '';
-      });
+      const storedWorkspaceId = localStorage.getItem(STORAGE_KEY) ?? '';
+      const validWorkspaceId = options.some((workspace) => workspace.id === storedWorkspaceId)
+        ? storedWorkspaceId
+        : '';
+      if (!validWorkspaceId) localStorage.removeItem(STORAGE_KEY);
+      setActiveWorkspaceIdState(validWorkspaceId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Impossible de charger les espaces de travail.');
     } finally {
