@@ -31,6 +31,7 @@ import { useApp } from '../context/AppContext';
 import { lockManager, UsbConnectionStatus } from '../locks/lockManager';
 import { indexedDb, IndexedDbSyncState } from '../db/indexedDb';
 import { UserRole } from '../types/booking';
+import { useWorkspace } from '../services/supabase/WorkspaceContext';
 
 export const TopBar: React.FC = () => {
   const {
@@ -60,6 +61,10 @@ export const TopBar: React.FC = () => {
     setCurrency,
   } = useApp();
 
+  const { workspaces, activeWorkspaceId, setActiveWorkspaceId, refreshWorkspaces, createWorkspace, loading: workspacesLoading, error: workspaceError } = useWorkspace();
+  const [workspaceFormOpen, setWorkspaceFormOpen] = useState(false);
+  const [workspaceDraft, setWorkspaceDraft] = useState('');
+  const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
   const [usbStatus, setUsbStatus] = useState<UsbConnectionStatus>(lockManager.getStatus());
   const [indexedDbSync, setIndexedDBSync] = useState<IndexedDbSyncState>(indexedDb.getSyncStatus());
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
@@ -253,9 +258,69 @@ export const TopBar: React.FC = () => {
         </div>
       </div>
 
-      {/* CENTER SECTION: Clean White Search Input matching szsz.png */}
-      <div className="pms-app-topbar-search flex-1 max-w-[160px] sm:max-w-[220px] md:max-w-[280px] lg:max-w-[340px] relative">
-        <div className="relative flex items-center">
+      {/* CENTER SECTION: Explicit cloud workspace + search */}
+      <div className="pms-app-topbar-search flex-1 max-w-[160px] sm:max-w-[220px] md:max-w-[420px] relative flex items-center gap-1.5">
+        <div className="relative shrink-0">
+          <select
+            value={activeWorkspaceId}
+            onChange={(event) => setActiveWorkspaceId(event.target.value)}
+            disabled={workspacesLoading || workspaces.length === 0}
+            aria-label="Espace de travail actif"
+            title={workspaceError || 'Espace de travail Supabase actif'}
+            className="h-8 max-w-[112px] sm:max-w-[160px] rounded-lg border border-slate-700 bg-slate-900 px-1.5 text-[10px] sm:text-xs text-slate-100 disabled:opacity-60"
+          >
+            <option value="">{workspacesLoading ? 'Chargement…' : workspaces.length ? 'Choisir espace' : 'Aucun espace'}</option>
+            {workspaces.map((workspace) => (
+              <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => { setWorkspaceFormOpen((open) => !open); setWorkspaceActionError(null); }}
+            className="ml-1 h-8 w-7 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+            title="Créer un espace de travail"
+            aria-label="Créer un espace de travail"
+          >+</button>
+          {workspaceFormOpen && (
+            <form
+              onSubmit={async (event) => {
+                event.preventDefault();
+                setWorkspaceActionError(null);
+                try {
+                  await createWorkspace(workspaceDraft);
+                  setWorkspaceDraft('');
+                  setWorkspaceFormOpen(false);
+                } catch (error) {
+                  setWorkspaceActionError(error instanceof Error ? error.message : 'Échec de création.');
+                }
+              }}
+              className="absolute left-0 top-full z-50 mt-2 w-64 rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-2xl"
+            >
+              <label className="mb-1 block text-[11px] font-semibold text-slate-200">Nom du nouvel espace</label>
+              <input
+                autoFocus
+                value={workspaceDraft}
+                onChange={(event) => setWorkspaceDraft(event.target.value)}
+                maxLength={80}
+                minLength={2}
+                required
+                placeholder="Ex. Mon établissement"
+                className="mb-2 h-8 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 text-xs text-white outline-none focus:border-blue-500"
+              />
+              {(workspaceActionError || workspaceError) && (
+                <p role="alert" className="mb-2 text-[10px] text-rose-300">{workspaceActionError || workspaceError}</p>
+              )}
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setWorkspaceFormOpen(false)} className="rounded-md px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800">Annuler</button>
+                <button type="submit" disabled={workspacesLoading} className="rounded-md bg-blue-600 px-3 py-1 text-[11px] font-semibold text-white disabled:opacity-50">Créer</button>
+              </div>
+            </form>
+          )}
+          {!workspaceFormOpen && workspaceError && (
+            <button type="button" onClick={() => void refreshWorkspaces()} className="ml-1 text-[10px] text-rose-300" title={workspaceError}>!</button>
+          )}
+        </div>
+        <div className="relative flex min-w-0 flex-1 items-center">
           <Search size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
           <input
             type="text"
