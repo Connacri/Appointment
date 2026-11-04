@@ -281,6 +281,7 @@ jobs:
         shell: pwsh
         env:
           WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
           VITE_BASE: ./
         run: |
           $version = node -p "require('./package.json').version"
