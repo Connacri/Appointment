@@ -13,6 +13,7 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ### Documentation
 - Analyse du schéma CardLock, de ses relations métier et procédure novice d'import ajoutées au README et au Centre d'aide.
+- [Release, signature et déploiement](./docs/RELEASE.md) : jobs du pipeline, nommage versionné, secrets (noms uniquement), vérification et dépannage GitHub Pages.
 
 
 ### Added

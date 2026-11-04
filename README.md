@@ -158,6 +158,7 @@ Les artefacts de release utilisent le préfixe `Appointment-PMS` et la version d
 
 - [Contrat et consignes de développement](./AGENTS.md)
 - [Plan de synchronisation Supabase](./docs/SUPABASE_SYNC_PLAN.md)
+- [Release, signature et déploiement](./docs/RELEASE.md)
 - [Analyse des tables et relations CardLock.mdb](./docs/CARDLOCK_DATABASE_ANALYSIS.md)
 - [Tutoriel d'import CardLock.mdb](./docs/PROUSB_MDB_IMPORT_GUIDE.md)
 - [Spécification du système proUSB](./docs/PROUSB_SPECIFICATION.md)
