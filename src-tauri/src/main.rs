@@ -2,7 +2,8 @@
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::Serialize;
-use std::{fs, path::{Path, PathBuf}, time::UNIX_EPOCH};
+use std::{fs, path::{Path, PathBuf}, time::{Duration, UNIX_EPOCH}};
+use sqlx::postgres::PgPoolOptions;
 use tauri::Emitter;
 
 const KEYRING_SERVICE: &str = "com.connacri.appointment";
@@ -93,6 +94,43 @@ fn validate_secret_key(key: &str) -> Result<(), String> {
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NeonConnectionStatus {
+    connected: bool,
+    server_version: String,
+}
+
+#[tauri::command]
+async fn neon_test_connection(connection_string: String) -> Result<NeonConnectionStatus, String> {
+    let normalized = connection_string.trim();
+    if !(normalized.starts_with("postgresql://") || normalized.starts_with("postgres://")) {
+        return Err("Format de chaîne PostgreSQL invalide.".into());
+    }
+    let lower = normalized.to_ascii_lowercase();
+    let tls_required = lower.contains("sslmode=require")
+        || lower.contains("sslmode=verify-ca")
+        || lower.contains("sslmode=verify-full");
+    if !tls_required {
+        return Err("Connexion refusée : ajoutez sslmode=require ou un mode TLS avec vérification de certificat.".into());
+    }
+
+    let pool = PgPoolOptions::new()
+        .max_connections(1)
+        .acquire_timeout(Duration::from_secs(12))
+        .connect(normalized)
+        .await
+        .map_err(|_| "Connexion Neon impossible. Vérifiez l'hôte, les identifiants, TLS et l'accès réseau.".to_string())?;
+
+    let server_version = sqlx::query_scalar::<_, String>("SHOW server_version")
+        .fetch_one(&pool)
+        .await
+        .map_err(|_| "Connexion établie, mais lecture de la version PostgreSQL impossible.".to_string())?;
+    pool.close().await;
+
+    Ok(NeonConnectionStatus { connected: true, server_version })
+}
+
 #[tauri::command]
 fn secure_secret_set(key: String, value: String) -> Result<(), String> {
     validate_secret_key(&key)?;
@@ -145,6 +183,7 @@ fn main() {
             desktop_runtime_info,
             discover_cardlock_candidates,
             read_cardlock_file,
+            neon_test_connection,
             secure_secret_set,
             secure_secret_exists,
             secure_secret_delete
