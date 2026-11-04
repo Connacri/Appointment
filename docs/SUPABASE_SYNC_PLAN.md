@@ -28,7 +28,7 @@ Un événement `beforeunload` ne permet pas de garantir qu'une requête asynchro
 - `src/services/sync/syncEngine.ts` : pull initial, push incrémental, tombstones, retries, backoff, verrou de synchronisation et résolution de conflits.
 - `src/services/sync/syncLifecycle.ts` : bootstrap à l'ouverture, événement online, visibilité, pagehide et flush contrôlé.
 - `src/services/sync/syncRepository.ts` : points d'entrée communs appelés par les mutations CRUD ; aucune synchronisation cachée dispersée dans les composants.
-- `src/db/IndexedDB.ts` : persistance locale de l'outbox et curseurs de synchronisation, avec transactions IndexedDB.
+- `src/db/indexedDb.ts` : persistance locale de l'outbox et curseurs de synchronisation, avec transactions IndexedDB.
 
 ### Flux d'ouverture
 
