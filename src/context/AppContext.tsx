@@ -155,6 +155,7 @@ interface AppContextType {
 }
 
 const DEMO_BOOKING_IDS = new Set(initialBookings.map((booking) => booking.id));
+const DEMO_RESOURCE_IDS = new Set(initialResourceGroups.flatMap((group) => group.resources.map((resource) => resource.id)));
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -363,7 +364,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Only explicit user-created/edited records enter the outbox. Bootstrap mock records are excluded.
   const persistBookingMutation = (booking: TimelineBooking) => {
-    if (!workspace.activeWorkspaceId || DEMO_BOOKING_IDS.has(booking.id)) return;
+    if (!workspace.activeWorkspaceId || DEMO_BOOKING_IDS.has(booking.id) || DEMO_RESOURCE_IDS.has(booking.resourceId)) return;
     void indexedDb.putWithOutbox(
       'bookings',
       booking,
@@ -656,7 +657,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteBooking = (id: string) => {
     const existing = bookings.find((booking) => booking.id === id);
-    if (existing && workspace.activeWorkspaceId && !DEMO_BOOKING_IDS.has(id)) {
+    if (existing && workspace.activeWorkspaceId && !DEMO_BOOKING_IDS.has(id) && !DEMO_RESOURCE_IDS.has(existing.resourceId)) {
       void indexedDb.deleteWithOutbox('bookings', id, {
         workspaceId: workspace.activeWorkspaceId,
         establishmentId: selectedEstablishmentId === 'all' ? undefined : selectedEstablishmentId,
