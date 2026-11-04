@@ -1,0 +1,60 @@
+name: Native Windows Runtime CI
+
+on:
+  pull_request:
+    paths:
+      - "src-tauri/**"
+      - "src/services/desktopRuntime.ts"
+      - "src/components/EstablishmentSetupModal.tsx"
+      - "src/components/IndexedDbInspectorModal.tsx"
+      - "src/locks/database/mdbImport.ts"
+      - "scripts/package-windows.ps1"
+      - "package.json"
+      - ".github/workflows/native-windows-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-windows-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-native-windows:
+    name: Build and test Tauri Windows runtime
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Node dependencies
+        shell: pwsh
+        run: npm install --legacy-peer-deps
+
+      - name: TypeScript checks
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build native Windows installer
+        env:
+          VITE_BASE: ./
+        run: npm run tauri:build
