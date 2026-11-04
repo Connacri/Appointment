@@ -277,9 +277,9 @@ export const TopBar: React.FC = () => {
         </div>
       </div>
 
-      {/* RIGHT SECTION: IndexedDB Sync Status, USB Status, + Nouveau, More ⋮ */}
+      {/* RIGHT SECTION: Local storage status, USB status, + Nouveau, More ⋮ */}
       <div className="pms-app-topbar-actions flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-        {/* Real-time IndexedDB Sync Status Indicator */}
+        {/* Local database activity indicator (not Supabase sync status) */}
         <button
           type="button"
           onClick={() => setIsIndexedDBOpen(true)}
@@ -290,26 +290,26 @@ export const TopBar: React.FC = () => {
               ? 'bg-blue-950/60 border-blue-500/40 text-blue-300 hover:bg-blue-900/60'
               : 'bg-rose-950/60 border-rose-500/40 text-rose-300 hover:bg-rose-900/60'
           }`}
-          title={`Base IndexedDB: ${
+          title={`Stockage local: ${
             indexedDbSync === 'synced'
-              ? 'Synchronisé'
+              ? 'Disponible'
               : indexedDbSync === 'syncing'
-              ? 'Synchronisation en cours...'
-              : 'Hors-ligne'
-          } — Cliquer pour inspecter`}
+              ? 'Écriture locale en cours...'
+              : 'Mode hors ligne'
+          } — Cliquer pour consulter`}
         >
           {indexedDbSync === 'synced' && (
             <>
               <Database size={13} className="text-emerald-300" />
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="hidden sm:inline">Synced</span>
+              <span className="hidden sm:inline">Local</span>
             </>
           )}
           {indexedDbSync === 'syncing' && (
             <>
               <Database size={13} className="text-blue-300" />
               <RefreshCw size={12} className="animate-spin text-blue-400" />
-              <span className="hidden sm:inline">Syncing...</span>
+              <span className="hidden sm:inline">Écriture</span>
             </>
           )}
           {indexedDbSync === 'offline' && (
@@ -471,7 +471,7 @@ export const TopBar: React.FC = () => {
                 <span>Paramètres Établissement</span>
               </button>
 
-              {/* IndexedDB Inspector */}
+              {/* Local data inspector */}
               <button
                 type="button"
                 onClick={() => {
@@ -481,7 +481,7 @@ export const TopBar: React.FC = () => {
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
               >
                 <Database size={14} className="text-emerald-400" />
-                <span>Inspecteur Base IndexedDB</span>
+                <span>Inspecteur des données locales</span>
               </button>
 
               {/* CI/CD & AGENTS.md Specs */}
