@@ -3,7 +3,10 @@
 ## Périmètre livré dans `feat/database-management-center`
 
 - La dialog « Base de données locale » expose des panneaux Local/CardLock, Supabase, Neon et Sauvegarde.
-- L'import CardLock réutilise `lockManager.importMdb` et `mdbSnapshotToPlanning`. L'utilisateur choisit le fichier ; les chambres et séjours sont injectés dans le planning après confirmation.
+- Les deux points d'entrée d'import CardLock utilisent `lockManager.importMdb` et `mdbSnapshotToPlanning`. Le fichier est lu en lecture seule ; le rapport donne les tables et leurs nombres de lignes, puis le nombre de chambres par bâtiment.
+- `BuildingInfo` est conservé, y compris un bâtiment sans chambre ; `RoomInfo` est l'unique source de création des ressources. Les groupes de démonstration sont retirés, les groupes créés manuellement sont conservés et le précédent snapshot CardLock est remplacé.
+- Les séjours `GuestInfo` ne sont importés que s'ils correspondent sans ambiguïté à une chambre `RoomInfo` et ont des dates valides. Les séjours orphelins sont signalés ; aucune chambre, aucun étage, aucun tarif et aucune réservation synthétiques ne sont créés.
+- Le panneau du Centre de données demande confirmation avant d'appliquer les changements ; la configuration de l'établissement applique l'import après sélection du fichier et affiche le rapport.
 - L'URL Supabase et les clés publiques Publishable/Anon sont enregistrées dans le stockage local du navigateur. Le client Supabase principal les relit au démarrage et utilise la clé correspondant à l'URL configurée. Le test vérifie l'accès à la table `workspaces`.
 - Les clés Publishable/Anon sont des clés clientes publiques, pas des secrets. La clé `service_role` ne doit jamais être saisie ici.
 - La chaîne Neon est un champ temporaire en mémoire, effacé à la fermeture de la dialog. Elle n'est ni sauvegardée, ni testée depuis le navigateur.
