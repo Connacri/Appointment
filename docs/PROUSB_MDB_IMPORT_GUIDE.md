@@ -60,5 +60,5 @@ L'import remplace le précédent instantané CardLock (bâtiments/chambres impor
 - [Analyse du schéma et des relations CardLock](./CARDLOCK_DATABASE_ANALYSIS.md)
 - [Guide proUSB et programmation des serrures](../README_SYSTEM_CARD.md)
 - [Spécification technique proUSB](./PROUSB_SPECIFICATION.md)
-- [Procédure de sauvegarde/restauration CardLock](../proUSB data recover process.pdf)
+- Procédure de sauvegarde/restauration : fermer proUSB, choisir la sauvegarde datée `CardLockYYMMDD.mdb`, la renommer `CardLock.mdb` et la replacer dans le dossier du logiciel. Conserver une copie de l'original.
 
