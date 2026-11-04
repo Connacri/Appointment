@@ -263,7 +263,7 @@ export const TopBar: React.FC = () => {
       </div>
 
       {/* CENTER SECTION: Explicit cloud workspace + search */}
-      <div className="pms-app-topbar-search flex-1 max-w-[160px] sm:max-w-[220px] md:max-w-[420px] relative flex items-center gap-1.5">
+      <div className="pms-app-topbar-search flex-1 min-w-[220px] max-w-[320px] sm:max-w-[420px] relative flex items-center gap-1.5">
         <div className="relative shrink-0">
           <select
             value={activeWorkspaceId}
