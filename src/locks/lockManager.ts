@@ -882,7 +882,7 @@ class LockManager {
   }): Promise<IssuedCardRecord> {
     this.assertHotelAccessCardsAllowed();
     if (!params.passwordPin || params.passwordPin.length < 4) {
-      throw new Error('Un mot de passe sécurisé (au moins 4 caractères ou chiffres) est obligatoire pour créer une Carte Spéciale.');
+      throw new Error('Un PIN d’au moins 4 caractères est obligatoire pour créer une Carte Spéciale.');
     }
 
     const validityDays = params.validityDays || 365;
