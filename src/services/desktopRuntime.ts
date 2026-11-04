@@ -75,3 +75,8 @@ export async function deleteNativeSecret(key: string): Promise<void> {
   if (!ALLOWED_SECRET_KEYS.has(key)) throw new Error('Type de credential non autorisé.');
   await invoke('secure_secret_delete', { key });
 }
+
+export async function hasNativeSecret(key: string): Promise<boolean> {
+  if (!isTauri() || !ALLOWED_SECRET_KEYS.has(key)) return false;
+  return invoke<boolean>('secure_secret_exists', { key });
+}
