@@ -225,7 +225,7 @@ export const BookingAnalyticsView: React.FC = () => {
         <Card icon={Building2} label={t('Bâtiments', 'Buildings', 'المباني')} value={activeGroups.length} detail={t('Groupes de chambres configurés', 'Configured room groups', 'مجموعات الغرف المهيأة')} />
         <Card icon={BedDouble} label={t('Chambres exploitables', 'Operational rooms', 'الغرف المتاحة للتشغيل')} value={validRooms.length} detail={t(`${occupiedToday} occupées aujourd’hui`, `${occupiedToday} occupied today`, `${occupiedToday} مشغولة اليوم`)} />
         <Card icon={TrendingUp} label={t('Occupation actuelle', 'Current occupancy', 'الإشغال الحالي')} value={`${occupancyToday}%`} detail={t(`${occupiedToday} / ${validRooms.length} chambres exploitables`, `${occupiedToday} / ${validRooms.length} operational rooms`, `${occupiedToday} / ${validRooms.length} غرفة قابلة للتشغيل`)} tone="green" />
-        <Card icon={Wallet} label={t('CA réservations', 'Booking revenue', 'إيرادات الحجوزات')} value={fmtMoney(periodRevenue)} detail={t('Part estimée des séjours sur la période', 'Prorated booking value for selected period', 'قيمة الإقامات المقدرة خلال الفترة')} tone="purple" />
+        <Card icon={Wallet} label={t('CA réservations', 'Booking revenue', 'إيرادات الحجوزات')} value={periodRevenue} detail={t('Part estimée des séjours sur la période', 'Prorated booking value for selected period', 'قيمة الإقامات المقدرة خلال الفترة')} tone="purple" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -307,9 +307,9 @@ export const BookingAnalyticsView: React.FC = () => {
       <Section icon={FileText} title={t('Facturation & encaissements', 'Billing & collections', 'الفوترة والتحصيل')} subtitle={t('Factures émises, devis, montants encaissés et soldes clients.', 'Issued invoices, quotations, collected amounts and customer balances.', 'الفواتير الصادرة وعروض الأسعار والمبالغ المحصلة وأرصدة العملاء.')}>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70"><div className="text-[10px] text-slate-500">{t('Factures', 'Invoices', 'الفواتير')}</div><div className="mt-1 text-xl font-bold text-slate-900 dark:text-white">{issuedInvoices.length}</div></div>
-          <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70"><div className="text-[10px] text-slate-500">{t('Total facturé TTC', 'Total invoiced', 'إجمالي الفواتير')}</div><div className="mt-1 text-sm font-bold text-slate-900 dark:text-white">{fmtMoney(invoicedTotal)}</div></div>
-          <div className="rounded-xl bg-emerald-50 p-3 dark:bg-emerald-950/30"><div className="text-[10px] text-emerald-700 dark:text-emerald-300">{t('Acomptes encaissés', 'Collected deposits', 'التسبيقات المحصلة')}</div><div className="mt-1 text-sm font-bold text-emerald-700 dark:text-emerald-300">{fmtMoney(collectedTotal)}</div></div>
-          <div className="rounded-xl bg-rose-50 p-3 dark:bg-rose-950/30"><div className="text-[10px] text-rose-700 dark:text-rose-300">{t('Reste à encaisser', 'Outstanding balance', 'المبلغ المتبقي')}</div><div className="mt-1 text-sm font-bold text-rose-700 dark:text-rose-300">{fmtMoney(dueTotal)}</div></div>
+          <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70"><div className="text-[10px] text-slate-500">{t('Total facturé TTC', 'Total invoiced', 'إجمالي الفواتير')}</div><div className="mt-1 text-sm font-bold text-slate-900 dark:text-white">{invoicedTotal}</div></div>
+          <div className="rounded-xl bg-emerald-50 p-3 dark:bg-emerald-950/30"><div className="text-[10px] text-emerald-700 dark:text-emerald-300">{t('Acomptes encaissés', 'Collected deposits', 'التسبيقات المحصلة')}</div><div className="mt-1 text-sm font-bold text-emerald-700 dark:text-emerald-300">{collectedTotal}</div></div>
+          <div className="rounded-xl bg-rose-50 p-3 dark:bg-rose-950/30"><div className="text-[10px] text-rose-700 dark:text-rose-300">{t('Reste à encaisser', 'Outstanding balance', 'المبلغ المتبقي')}</div><div className="mt-1 text-sm font-bold text-rose-700 dark:text-rose-300">{dueTotal}</div></div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-slate-500">
           <span>{paidInvoices.length} {t('factures soldées', 'paid invoices', 'فواتير مسددة')}</span>
