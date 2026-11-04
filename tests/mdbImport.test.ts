@@ -8,7 +8,7 @@ function snapshot(overrides: Partial<MdbSnapshot> = {}): MdbSnapshot {
     importedAt: '2026-11-04T00:00:00.000Z',
     buildings: [{ no: 1, name: 'Bâtiment principal' }, { no: 2, name: 'Annexe' }],
     rooms: [
-      { building: 1, floor: 1, roomNo: '101', type: 'Single', status: '', price: '', cardCount: 0, maxCards: 2 },
+      { building: 1, floor: -1, roomNo: '101', type: 'Single', status: '', price: '', cardCount: 0, maxCards: 2 },
       { building: 2, floor: 2, roomNo: '101', type: 'Double', status: '', price: '8500', cardCount: 1, maxCards: 3 },
     ],
     guests: [
