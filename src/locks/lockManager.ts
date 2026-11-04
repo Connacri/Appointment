@@ -82,6 +82,7 @@ const initialSettings: ProUsbLockSettings = {
   companyName: 'OmniBook Luxury Hotel & Clinic',
   hotelName: 'Grand Hotel Oran',
   skin: 'mxskin20.skn',
+  checkinTime: '14:00:00',
   checkoutTime: '12:00:00',
   vipCheckoutTime: '14:00:00',
   guestAccessBolt: true,
@@ -925,6 +926,10 @@ class LockManager {
     const startParts = booking.startDate.split('-').map(Number);
     const endParts = booking.endDate.split('-').map(Number);
 
+    // Heures d'arrivée/départ paramétrables depuis les réglages verrou proUSB
+    const [ciH, ciM] = (this.settings.checkinTime || '14:00:00').split(':').map(Number);
+    const [coH, coM] = (this.settings.checkoutTime || '12:00:00').split(':').map(Number);
+
     return this.issueGuestCard({
       roomNumber,
       cardIndex: 1,
@@ -934,12 +939,13 @@ class LockManager {
         startYear: startParts[0],
         startMonth: startParts[1],
         startDay: startParts[2],
-        startHour: 14,
+        startHour: ciH,
+        startMinute: ciM ?? 0,
         endYear: endParts[0],
         endMonth: endParts[1],
         endDay: endParts[2],
-        endHour: 12,
-        endMinute: 0,
+        endHour: coH,
+        endMinute: coM ?? 0,
       },
       options: {
         allowDeadbolt: true,

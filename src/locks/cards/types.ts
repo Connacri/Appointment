@@ -253,8 +253,9 @@ export interface ProUsbLockSettings {
   companyName: string;
   hotelName: string;
   skin: string;
-  checkoutTime: string;    // e.g. "12:00:00"
-  vipCheckoutTime: string; // e.g. "14:00:00"
+  checkinTime: string;     // e.g. "14:00:00" — heure d'arrivée par défaut pour les cartes clientes
+  checkoutTime: string;    // e.g. "12:00:00" — heure de départ par défaut (standard)
+  vipCheckoutTime: string; // e.g. "14:00:00" — heure de départ tardif (VIP)
   guestAccessBolt: boolean; // GuestLLock = 1
   alarmForcedPin: boolean;  // BaoJing = 128
   remindCloseDoor: boolean; // TiShi = 152
