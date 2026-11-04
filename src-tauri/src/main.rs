@@ -81,11 +81,11 @@ fn read_cardlock_file(path: String) -> Result<CardLockFileData, String> {
     if !file_path.is_file() {
         return Err("Le fichier CardLock sélectionné est introuvable.".into());
     }
-    if !file_path.file_name().and_then(|name| name.to_str())
-        .map(|name| name.eq_ignore_ascii_case("CardLock.mdb"))
+    if !file_path.extension().and_then(|extension| extension.to_str())
+        .map(|extension| extension.eq_ignore_ascii_case("mdb"))
         .unwrap_or(false)
     {
-        return Err("Sélectionnez le fichier CardLock.mdb.".into());
+        return Err("Sélectionnez un fichier de base Microsoft Access .mdb.".into());
     }
     let metadata = fs::metadata(file_path).map_err(|error| error.to_string())?;
     if metadata.len() == 0 || metadata.len() > MAX_MDB_BYTES {
