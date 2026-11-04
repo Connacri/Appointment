@@ -258,16 +258,7 @@ export const IndexedDbInspectorModal: React.FC<{
   const exportBackup = async () => {
     setBackupMessage(mt.preparing);
     try {
-      const stores: Record<string, unknown[]> = { bookings: [], invoices: [], resources: [] };
-      for (const store of Object.keys(stores) as StoreName[]) {
-        let offset = 0;
-        while (true) {
-          const page = await indexedDb.queryStore<unknown>(store, { offset, limit: 500 });
-          stores[store].push(...page.data);
-          offset += page.data.length;
-          if (!page.data.length || offset >= page.total) break;
-        }
-      }
+      const stores = await indexedDb.exportSnapshot();
       const payload = { format: 'appointment-local-backup', version: 1, exportedAt: new Date().toISOString(), stores, cardLockSnapshot: lockManager.getMdbSnapshot() };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
