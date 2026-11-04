@@ -75,8 +75,10 @@ export interface ImportedCard {
 }
 
 export interface ImportedRoom {
-  building: number;
-  floor: number;
+  /** null means the source row does not identify a building; 0 is a valid ID. */
+  building: number | null;
+  /** null means the source row does not identify a floor; 0 is a valid ID. */
+  floor: number | null;
   roomNo: string;
   type: string;
   status: string;
@@ -105,8 +107,17 @@ export interface ImportedBuilding {
   name: string;
 }
 
+export interface MdbTableSummary {
+  name: string;
+  rowCount: number | null;
+  columns: string[];
+  readable: boolean;
+}
+
 export interface MdbSnapshot {
   fileName: string;
+  /** Inventory of every source table, including tables not yet mapped to PMS entities. */
+  tableInventory?: MdbTableSummary[];
   /**
    * `File.lastModified` of the imported file, ISO-8601. `null` when unknown
    * (e.g. snapshot restored from storage). Used to warn when the user picked
@@ -149,8 +160,14 @@ function toIsoString(value: unknown): string | null {
 }
 
 function num(value: unknown, fallback = 0): number {
-  const n = typeof value === 'number' ? value : parseInt(String(value ?? ''), 10);
+  const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function nullableInt(value: unknown): number | null {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value).trim(), 10);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function str(value: unknown): string {
@@ -251,7 +268,18 @@ export async function parseCardLockMdb(
   }
 
   const tableNames = db.getTableNames();
-  
+  const tableRows = new Map<string, Row[]>();
+  const tableInventory = tableNames.map((name) => {
+    try {
+      const rows = db.getTable(name).getData();
+      tableRows.set(name, rows);
+      return { name, rowCount: rows.length, columns: [...new Set(rows.flatMap((row) => Object.keys(row)))].sort(), readable: true };
+    } catch {
+      warnings.push('Table « ' + name + ' » présente mais illisible.');
+      return { name, rowCount: null, columns: [], readable: false };
+    }
+  });
+
   const findTable = (candidateNames: string[]): string | undefined => {
     for (const name of candidateNames) {
       const match = tableNames.find((t) => t.toLowerCase() === name.toLowerCase());
@@ -261,14 +289,15 @@ export async function parseCardLockMdb(
   };
 
   const getField = (row: Row, candidateKeys: string[]): unknown => {
-    for (const k of candidateKeys) {
-      if (k in row && row[k] !== undefined && row[k] !== null) return row[k];
-    }
     const lowerMap = new Map<string, string>();
-    for (const k of Object.keys(row)) lowerMap.set(k.toLowerCase(), k);
-    for (const k of candidateKeys) {
-      const actual = lowerMap.get(k.toLowerCase());
-      if (actual && row[actual] !== undefined && row[actual] !== null) return row[actual];
+    for (const key of Object.keys(row)) lowerMap.set(key.toLowerCase(), key);
+    for (const candidate of candidateKeys) {
+      const actual = row[candidate] !== undefined ? candidate : lowerMap.get(candidate.toLowerCase());
+      if (!actual) continue;
+      const value = row[actual];
+      // Blank text columns must not mask a populated legacy alias such as RomID.
+      if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) continue;
+      return value;
     }
     return undefined;
   };
@@ -280,7 +309,7 @@ export async function parseCardLockMdb(
       return [];
     }
     try {
-      return db.getTable(match).getData();
+      return tableRows.get(match) ?? db.getTable(match).getData();
     } catch (error) {
       warnings.push(`Table « ${primaryName} » (${match}) illisible : ${(error as Error).message}`);
       return [];
@@ -299,10 +328,11 @@ export async function parseCardLockMdb(
   });
 
   const rawRooms = read('RoomInfo', ['Room', 'Rooms', 'RomInfo', 'tblRoom']);
-  const rooms: ImportedRoom[] = rawRooms.map((r) => {
+  const invalidRoomRows: number[] = [];
+  const rooms: ImportedRoom[] = rawRooms.flatMap((r, index) => {
     const rawBld = getField(r, ['BldNo', 'bldno', 'Bld_No', 'BuildingNo', 'Building', 'Bld', 'bld_no']);
     const rawFlr = getField(r, ['FlrNo', 'flrno', 'Flr_No', 'FloorNo', 'Floor', 'Flr', 'flr_no']);
-    const rawRoomNo = getField(r, ['RoomNo', 'roomno', 'Room_No', 'RomID', 'Room', 'RomNo', 'ID']);
+    const rawRoomNo = getField(r, ['RoomNo', 'Room_No', 'RomID2', 'RomID', 'Room', 'RomNo', 'ID']);
     const rawType = getField(r, ['sType', 'stype', 'RoomType', 'Type', 'type']);
     const rawStatus = getField(r, ['Status', 'status']);
     const rawPrice = getField(r, ['Price', 'price', 'Rate', 'rate']);
@@ -310,18 +340,19 @@ export async function parseCardLockMdb(
     const rawMaxCards = getField(r, ['MaxCards', 'maxcards', 'Max_Cards']);
 
     let roomNumberStr = str(rawRoomNo);
-    let parsedBld = rawBld !== undefined && rawBld !== null && str(rawBld) !== '' ? num(rawBld, 0) : 0;
-    let parsedFlr = rawFlr !== undefined && rawFlr !== null && str(rawFlr) !== '' ? num(rawFlr, 0) : 0;
+    let parsedBld = nullableInt(rawBld);
+    let parsedFlr = nullableInt(rawFlr);
 
-    // Check for building and floor prefixes in room format: e.g. "1-2-205" or "2-101"
+    // Use a compound legacy room reference only when a DB dimension is absent.
+    // Explicit zero identifiers are valid and must never be overwritten.
     const dashMatch = roomNumberStr.match(/^(\d+)-(\d+)(?:-(\d+))?$/);
     if (dashMatch) {
       if (dashMatch[3]) {
-        if (parsedBld <= 0) parsedBld = num(dashMatch[1], 1);
-        if (parsedFlr <= 0) parsedFlr = num(dashMatch[2], 1);
+        if (parsedBld === null) parsedBld = Number(dashMatch[1]);
+        if (parsedFlr === null) parsedFlr = Number(dashMatch[2]);
         roomNumberStr = dashMatch[3];
       } else {
-        if (parsedBld <= 0) parsedBld = num(dashMatch[1], 1);
+        if (parsedBld === null) parsedBld = Number(dashMatch[1]);
         roomNumberStr = dashMatch[2];
       }
     }
@@ -332,17 +363,22 @@ export async function parseCardLockMdb(
     // Display-level inference for 3+ digit room numbers lives in
     // resourceItemFromRoom.
 
-    return {
+    if (!roomNumberStr) {
+      invalidRoomRows.push(index + 1);
+      return [];
+    }
+    return [{
       building: parsedBld,
       floor: parsedFlr,
       roomNo: roomNumberStr,
-      type: str(rawType) || 'Chambre',
+      type: str(rawType),
       status: str(rawStatus),
       price: str(rawPrice),
       cardCount: num(rawCardCount, 0),
       maxCards: num(rawMaxCards, 0),
-    };
+    }];
   });
+  if (invalidRoomRows.length) warnings.push(invalidRoomRows.length + ' ligne(s) RoomInfo sans numéro de chambre exploitable ont été exclues (aucune chambre fictive créée).');
 
   // Never drop a building that exists in BuildingInfo or is referenced in RoomInfo.
   const buildingByNo = new Map<number, ImportedBuilding>();
@@ -350,7 +386,7 @@ export async function parseCardLockMdb(
     buildingByNo.set(building.no, building);
   }
   for (const room of rooms) {
-    if (room.building > 0 && !buildingByNo.has(room.building)) {
+    if (room.building !== null && !buildingByNo.has(room.building)) {
       buildingByNo.set(room.building, { no: room.building, name: `Bâtiment ${room.building}` });
     }
   }
@@ -403,6 +439,7 @@ export async function parseCardLockMdb(
     systemProfile: deriveSystemProfile(cards),
     counts: { cards: cards.length, guests: guests.length, rooms: rooms.length, openings },
     warnings,
+    tableInventory,
   };
 }
 
