@@ -1390,10 +1390,10 @@ This pipeline is the single release path; do not add parallel unsigned paths.
 
 | Artifact | Toolchain | Signed by |
 |---|---|---|
-| `Appointment-PMS-release.apk` | Gradle `assembleRelease` (Capacitor, R8, signed) | Upload keystore from `ANDROID_KEYSTORE_BASE64` |
-| `Appointment-PMS-release.aab` | Gradle `bundleRelease` (Capacitor, R8, signed) | Upload keystore from `ANDROID_KEYSTORE_BASE64` |
-| `Appointment-PMS-Setup.exe` / `Appointment-PMS-v1.0.0.exe` | `scripts/package-windows.ps1` (C# WebView launcher) | Authenticode cert from `WINDOWS_CERT_BASE64` (else CI self-signed) |
-| `Appointment-PMS-Setup-Inno.exe` | Inno Setup `ISCC scripts/installer.iss` | Authenticode cert from `WINDOWS_CERT_BASE64` (else CI self-signed) |
+| `Appointment-PMS-vX.Y.Z.apk` | Gradle `assembleRelease` (Capacitor, R8, signed) | Upload keystore from `ANDROID_KEYSTORE_BASE64` |
+| `Appointment-PMS-vX.Y.Z.aab` | Gradle `bundleRelease` (Capacitor, R8, signed) | Upload keystore from `ANDROID_KEYSTORE_BASE64` |
+| `Appointment-PMS-Setup-vX.Y.Z.exe` | `scripts/package-windows.ps1` (C# WebView launcher) | Authenticode cert from `WINDOWS_CERT_BASE64` (else CI self-signed) |
+| `Appointment-PMS-Setup-Inno-vX.Y.Z.exe` | Inno Setup `ISCC scripts/installer.iss` | Authenticode cert from `WINDOWS_CERT_BASE64` (else CI self-signed) |
 | Website | `npm run build` Ã¢â€ â€™ GitHub Pages | n/a |
 
 All artifacts are published to a GitHub Release with `SHA256SUMS.txt` on tags,

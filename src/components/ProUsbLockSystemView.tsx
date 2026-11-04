@@ -47,6 +47,7 @@ import {
   FileDown,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { initialResourceGroups } from '../data/mockData';
 import {
   lockManager,
   TransportLogEntry,
@@ -75,6 +76,8 @@ import { CardResultDialog, CardResult } from './CardResultDialog';
 import { CardCreationProgressModal } from './CardCreationProgressModal';
 import { isSupabaseConfigured } from '../services/supabase/supabaseClient';
 import { syncCardLockMdbToSupabase } from '../services/supabase/pmsRepository';
+
+const DEMO_RESOURCE_GROUP_IDS = new Set(initialResourceGroups.map((group) => group.id));
 
 export const ProUsbLockSystemView: React.FC = () => {
   const { language, bookings, resourceGroups, setBookings, setResourceGroups } = useApp();
@@ -731,6 +734,10 @@ export const ProUsbLockSystemView: React.FC = () => {
     try {
       const snapshot = await lockManager.importMdb(file);
       setMdbStatus(lockManager.getMdbStatus());
+      if (snapshot.counts.rooms === 0) {
+        showToast('error', 'Aucune chambre exploitable dans RoomInfo. Le planning existant est conservé.');
+        return;
+      }
       const warn = snapshot.warnings.length > 0 ? ` — ${snapshot.warnings.length} avertissement(s)` : '';
 
       // Windows virtualise les écritures de CardLock.exe : la copie de
@@ -768,19 +775,21 @@ export const ProUsbLockSystemView: React.FC = () => {
           `Les bâtiments créés localement seront conservés ; les données précédemment importées de CardLock seront actualisées.`,
         );
         if (wantPlanning) {
-          const { resourceGroups: mdbGroups, bookings: mdbBookings } =
+          const { resourceGroups: mdbGroups, bookings: mdbBookings, buildingStats, skippedGuests, warnings: planningWarnings } =
             mdbSnapshotToPlanning(snapshot);
           setResourceGroups((current) => [
-            ...current.filter((group) => !group.id.startsWith('mdb-')),
+            ...current.filter((group) => !group.id.startsWith('mdb-') && !DEMO_RESOURCE_GROUP_IDS.has(group.id)),
             ...mdbGroups,
           ]);
-          setBookings((current) => {
-            const importedIds = new Set(mdbBookings.map((booking) => booking.id));
-            return [...current.filter((booking) => !importedIds.has(booking.id)), ...mdbBookings];
-          });
+          setBookings((current) => [
+            ...current.filter((booking) => booking.customMetadata?.source !== 'cardlock_mdb'),
+            ...mdbBookings,
+          ]);
+          const buildingSummary = buildingStats.map((building) => 'B' + building.no + '=' + building.rooms).join(' · ');
+          if (planningWarnings.length) showToast('error', planningWarnings.join(' '));
           showToast(
             'success',
-            `Planning mis à jour : ${mdbGroups.length} groupe(s) de ressources, ${mdbBookings.length} réservation(s).`,
+            `Planning mis à jour : ${mdbGroups.length} groupe(s), ${snapshot.counts.rooms} chambres RoomInfo, ${mdbBookings.length} séjour(s), ${skippedGuests} séjour(s) ignoré(s). ${buildingSummary}.`,
           );
 
           // Align with Supabase if configured

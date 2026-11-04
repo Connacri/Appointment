@@ -1,10 +1,18 @@
 # Changelog
 
-Toutes les modifications notables de **Appointment / Planning Oran** sont documentées dans ce fichier.
+Toutes les modifications notables de **Appointment PMS** sont documentées dans ce fichier.
 
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le projet respecte le [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
+
+### Fixed
+- **Import CardLock** : conservation de `BldNo = 0` et `FlrNo = 0`, repli sur `RomID2` puis `RomID` lorsque `RoomNo` est vide, inventaire de toutes les tables Access et refus de créer des chambres depuis les séjours orphelins. Les statuts inconnus restent non renseignés ; les séjours CardLock précédents sont remplacés lors d'un nouvel import.
+- **Inventaire proUSB** : affichage du nombre de lignes, des colonnes et de la nature système/métier de chaque table.
+
+### Documentation
+- Analyse du schéma CardLock, de ses relations métier et procédure novice d'import ajoutées au README et au Centre d'aide.
+
 
 ### Added
 

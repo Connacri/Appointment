@@ -250,6 +250,7 @@ const tutorials: Tutorial[] = [
         'Contrôlez le rapport des tables : nom et nombre de lignes de chaque table métier.',
         'BuildingInfo fournit BldNo et BldName. RoomInfo fournit BldNo, FlrNo, RoomNo/RomID, type, statut, tarif et compteurs de cartes.',
         'Vérifiez le nombre de chambres pour chaque bâtiment. Le bâtiment, l’étage et le numéro sont conservés séparément.',
+        'Les identifiants BldNo = 0 et FlrNo = 0 sont valides ; une valeur zéro ne signifie pas « absent ».',
         'GuestInfo devient un séjour seulement si la chambre exacte existe dans RoomInfo et si les dates sont valides.',
         'CardInfo et Dai décrivent les cartes ; RecordOpen journalise les ouvertures ; OperatorInfo et les journaux ne sont pas des chambres.',
         'Après import, contrôlez les bâtiments, les chambres et les avertissements avant toute nouvelle réservation.'
@@ -260,6 +261,7 @@ const tutorials: Tutorial[] = [
         'Review the table report: name and row count for each business table.',
         'BuildingInfo supplies BldNo and BldName. RoomInfo supplies BldNo, FlrNo, RoomNo/RomID, type, status, rate and card counters.',
         'Verify the room count for every building. Building, floor and room number remain separate.',
+        'BldNo = 0 and FlrNo = 0 are valid identifiers; zero does not mean missing.',
         'GuestInfo becomes a stay only when the exact room exists in RoomInfo and dates are valid.',
         'CardInfo and Dai describe cards; RecordOpen logs openings; OperatorInfo and logs are not rooms.',
         'After import, verify buildings, rooms and warnings before creating bookings.'
@@ -270,6 +272,7 @@ const tutorials: Tutorial[] = [
         'راجع تقرير الجداول: اسم كل جدول وعدد سجلاته.',
         'يوفر BuildingInfo حقلي BldNo وBldName. ويوفر RoomInfo حقول المبنى والطابق ورقم الغرفة والنوع والحالة والسعر وعدّادات البطاقات.',
         'تحقق من عدد الغرف لكل مبنى. يتم حفظ المبنى والطابق ورقم الغرفة كلٌ على حدة.',
+        'القيمتان BldNo = 0 وFlrNo = 0 معرفان صالحان وليستا قيماً مفقودة.',
         'يصبح GuestInfo إقامة فقط عندما توجد الغرفة المطابقة في RoomInfo وتكون التواريخ صحيحة.',
         'تصف CardInfo وDai البطاقات؛ ويسجل RecordOpen عمليات الفتح؛ أما OperatorInfo والسجلات فليست غرفاً.',
         'بعد الاستيراد، راجع المباني والغرف والتحذيرات قبل إنشاء الحجوزات.'
@@ -277,9 +280,9 @@ const tutorials: Tutorial[] = [
     },
     result: { fr: 'L’inventaire reprend les lignes RoomInfo valides ; les séjours orphelins sont signalés et les chambres de démonstration sont retirées.', en: 'Inventory reflects valid RoomInfo rows; orphan stays are reported and demo rooms are removed.', ar: 'يعكس المخزون سجلات RoomInfo الصحيحة؛ ويتم الإبلاغ عن الإقامات غير المرتبطة وإزالة غرف العرض التجريبي.' },
     warnings: {
-      fr: ['Ne déduisez jamais un étage depuis le numéro de chambre.', 'Un séjour sans chambre correspondante ou sans dates valides est ignoré, jamais transformé en chambre fictive.', 'Ne modifiez pas la base proUSB originale depuis Appointment PMS.'],
-      en: ['Never infer a floor from the room number.', 'A stay without a matching room or valid dates is skipped, never turned into a fake room.', 'Do not modify the original proUSB database from Appointment PMS.'],
-      ar: ['لا تستنتج الطابق من رقم الغرفة.', 'يتم تجاهل الإقامة التي لا تطابق غرفة حقيقية أو لا تحتوي على تواريخ صحيحة، ولا تتحول إلى غرفة وهمية.', 'لا تعدّل قاعدة proUSB الأصلية من Appointment PMS.']
+      fr: ['Ne déduisez jamais un étage depuis le numéro de chambre.', 'Un statut RoomInfo inconnu reste non renseigné ; il n’est pas transformé en chambre propre.', 'Un séjour sans chambre correspondante ou sans dates valides est ignoré, jamais transformé en chambre fictive.', 'Ne modifiez pas la base proUSB originale depuis Appointment PMS.'],
+      en: ['Never infer a floor from the room number.', 'An unknown RoomInfo status remains unset; it is not converted to clean.', 'A stay without a matching room or valid dates is skipped, never turned into a fake room.', 'Do not modify the original proUSB database from Appointment PMS.'],
+      ar: ['لا تستنتج الطابق من رقم الغرفة.', 'تبقى حالة RoomInfo غير المعروفة دون تحديد ولا تتحول إلى غرفة نظيفة.', 'يتم تجاهل الإقامة التي لا تطابق غرفة حقيقية أو لا تحتوي على تواريخ صحيحة، ولا تتحول إلى غرفة وهمية.', 'لا تعدّل قاعدة proUSB الأصلية من Appointment PMS.']
     },
     tips: {
       fr: ['Conservez une sauvegarde du MDB.', 'Si le bâtiment 2 manque, comparez BuildingInfo et la distribution des valeurs RoomInfo.BldNo dans le fichier choisi.'],
