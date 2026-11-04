@@ -81,7 +81,7 @@ Appointment PMS est **offline-first** : IndexedDB reste la source de vérité lo
 
 ### Import de la base proUSB CardLock
 
-L'import de `CardLock.mdb` est une lecture de la base historique proUSB. Les bâtiments proviennent de `BuildingInfo` et les chambres de `RoomInfo` ; les séjours `GuestInfo` ne sont associés qu'à une chambre existante avec une référence bâtiment/étage/numéro non ambiguë et des dates valides. Les cartes (`CardInfo`, `Dai`), les ouvertures (`RecordOpen`), les opérateurs et les journaux sont des domaines distincts. Les chambres de démonstration sont écartées lors d'un import réel ; aucune chambre, aucun étage ni aucun tarif par défaut ne doit être inventé. Consultez [l'analyse du schéma CardLock](./docs/CARDLOCK_DATABASE_ANALYSIS.md) et le tutoriel intégré au Centre d'aide.
+L'import de `CardLock.mdb` est une lecture de la base historique proUSB. Les bâtiments proviennent de `BuildingInfo` et les chambres de `RoomInfo` ; les séjours `GuestInfo` ne sont associés qu'à une chambre existante avec une référence bâtiment/étage/numéro non ambiguë et des dates valides. Les cartes (`CardInfo`, `Dai`), les ouvertures (`RecordOpen`), les opérateurs et les journaux sont des domaines distincts. Les chambres de démonstration sont écartées lors d'un import réel ; aucune chambre, aucun étage ni aucun tarif par défaut ne doit être inventé. `BldNo = 0` et `FlrNo = 0` sont des identifiants valides ; si `RoomNo` est vide, le parseur examine `RomID2` puis `RomID`. Consultez [l'analyse du schéma CardLock](./docs/CARDLOCK_DATABASE_ANALYSIS.md), le [tutoriel d'import détaillé](./docs/PROUSB_MDB_IMPORT_GUIDE.md) et le tutoriel intégré au Centre d'aide.
 
 ## Outils IA de développement
 
@@ -159,6 +159,7 @@ Les artefacts de release utilisent le préfixe `Appointment-PMS` et la version d
 - [Contrat et consignes de développement](./AGENTS.md)
 - [Plan de synchronisation Supabase](./docs/SUPABASE_SYNC_PLAN.md)
 - [Analyse des tables et relations CardLock.mdb](./docs/CARDLOCK_DATABASE_ANALYSIS.md)
+- [Tutoriel d'import CardLock.mdb](./docs/PROUSB_MDB_IMPORT_GUIDE.md)
 - [Spécification du système proUSB](./docs/PROUSB_SPECIFICATION.md)
 - [Guide des cartes](./README_CARDS.md)
 - [Cartes système](./README_SYSTEM_CARD.md)
