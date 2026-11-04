@@ -37,7 +37,7 @@ La base IndexedDB est passée en version 3 sans supprimer les stores existants. 
 - Les tentatives peuvent être différées et les ACK marquent l'événement comme synchronisé.
 - `getPendingOutbox(workspaceId)` ne retourne que les événements du workspace demandé.
 - Le CRUD réservation (création, édition, statut, paiement, check-in, suppression) utilise ces primitives seulement lorsqu'un workspace est explicitement actif.
-- Les IDs présents dans `initialBookings` sont explicitement exclus de l'Outbox. Les données initiales `mockData` ne sont pas migrées dans les stores workspace ni mises en file.
+- Les IDs présents dans `initialBookings` et les ressources présentes dans `initialResourceGroups` sont explicitement exclus de l'Outbox. Une réservation liée à une ressource de démonstration n'est pas mise en file. Les données initiales `mockData` ne sont pas migrées dans les stores workspace ni mises en file.
 - Sans workspace actif, les modifications restent locales et ne sont pas mises en file.
 
 **Limite actuelle :** aucun worker réseau ne consomme encore l'Outbox. Les événements restent `pending` jusqu'à ce qu'un Sync Engine les traite. Les autres domaines (ressources, factures, tâches, stocks, tarifs) ne sont pas encore raccordés à ces primitives. Les clés d'idempotence locales ne constituent pas encore une garantie d'idempotence serveur tant que le push n'est pas implémenté.
