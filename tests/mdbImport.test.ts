@@ -51,3 +51,34 @@ test('does not guess when a room number exists in more than one building', () =>
   assert.equal(result.bookings.length, 0);
   assert.equal(result.skippedGuests, 1);
 });
+
+
+test('preserves building 0 and floor 0 as valid CardLock identifiers', () => {
+  const source = snapshot({
+    buildings: [{ no: 0, name: 'Bâtiment zéro' }],
+    rooms: [{ building: 0, floor: 0, roomNo: '007', type: 'Single', status: '', price: '', cardCount: 0, maxCards: 2 }],
+    guests: [{ roomNo: '0-0-007', name: 'Client zéro', comeTime: '2026-11-05T14:00:00.000Z', goTime: '2026-11-07T12:00:00.000Z', cardId: 'C-0', flag: '' }],
+    counts: { cards: 0, guests: 1, rooms: 1, openings: 0 },
+  });
+  const result = mdbSnapshotToPlanning(source);
+  const room = result.resourceGroups[0].resources[0];
+  assert.equal(result.resourceGroups[0].id, 'mdb-bld-0');
+  assert.equal(room.id, 'mdb-rm-0-007');
+  assert.equal(room.building, '0');
+  assert.equal(room.floor, '0');
+  assert.equal(room.housekeepingStatus, undefined);
+  assert.equal(room.pricePerDay, 0);
+  assert.equal(result.bookings.length, 1);
+  assert.equal(result.bookings[0].customMetadata?.building, 0);
+  assert.equal(result.bookings[0].customMetadata?.floor, 0);
+});
+
+test('keeps unknown housekeeping status unset instead of marking the room clean', () => {
+  const source = snapshot({
+    rooms: [{ building: 2, floor: 0, roomNo: '202', type: 'Double', status: 'unknown', price: '0', cardCount: 0, maxCards: 2 }],
+    guests: [],
+    counts: { cards: 0, guests: 0, rooms: 1, openings: 0 },
+  });
+  const result = mdbSnapshotToPlanning(source);
+  assert.equal(result.resourceGroups[0].resources[0].housekeepingStatus, undefined);
+});
