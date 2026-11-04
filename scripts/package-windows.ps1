@@ -55,7 +55,7 @@ if ($env:WINDOWS_CERT_BASE64) {
 
 $signature = Get-AuthenticodeSignature $versionedExe
 $signature | Format-List
-if ($signature.Status -ne "Valid") {
+if ($env:WINDOWS_CERT_BASE64 -and $signature.Status -ne "Valid") {
   throw "Native Windows installer signature verification failed: $($signature.Status)"
 }
 
