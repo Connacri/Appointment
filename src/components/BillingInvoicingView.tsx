@@ -76,6 +76,41 @@ export const BillingInvoicingView: React.FC = () => {
     return true;
   });
 
+  const scopedInvoices = filteredDocs.filter(doc => doc.docType === 'invoice');
+  const paidInvoices = scopedInvoices.filter(doc => doc.status === 'paid');
+  const pendingInvoices = scopedInvoices.filter(doc => ['sent', 'overdue', 'accepted'].includes(doc.status));
+  const sumByCurrency = (docs: InvoiceRecord[], field: 'totalTTC' | 'depositPaid' | 'balanceDue') => {
+    const totals = docs.reduce((result, doc) => {
+      const code = doc.currency || activeCurrency;
+      result[code] = (result[code] || 0) + (doc[field] || 0);
+      return result;
+    }, {} as Record<string, number>);
+    return Object.entries(totals).map(([code, amount]) => {
+      const normalized = code === 'DA' ? 'DZD' : code;
+      try {
+        return new Intl.NumberFormat(language === 'fr' ? 'fr-DZ' : language === 'ar' ? 'ar-DZ' : 'en', {
+          style: 'currency', currency: normalized, maximumFractionDigits: 0,
+        }).format(amount);
+      } catch {
+        return `${Math.round(amount).toLocaleString()} ${code}`;
+      }
+    }).join(' · ') || `0 ${activeCurrency}`;
+  };
+  const invoicedTotal = sumByCurrency(scopedInvoices, 'totalTTC');
+  const collectedTotal = sumByCurrency(scopedInvoices, 'depositPaid');
+  const dueTotal = sumByCurrency(scopedInvoices, 'balanceDue');
+  const monthlyDocumentCounts = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date();
+    date.setDate(1);
+    date.setMonth(date.getMonth() - (5 - index));
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    return {
+      label: new Intl.DateTimeFormat(language === 'fr' ? 'fr-DZ' : language === 'ar' ? 'ar-DZ' : 'en', { month: 'short' }).format(date),
+      count: filteredDocs.filter(doc => doc.issueDate?.slice(0, 7) === key).length,
+    };
+  });
+  const maxMonthlyDocuments = Math.max(1, ...monthlyDocumentCounts.map(item => item.count));
+
   // Calculate new document financials
   const subtotalHT = newItems.reduce((acc, it) => acc + (it.quantity * it.unitPrice) / (1 + it.vatRate / 100), 0);
   const matchedPromo = initialPromos.find((p) => p.code === newSelectedPromo);
@@ -252,6 +287,51 @@ export const BillingInvoicingView: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Analytics overview — derived only from the currently scoped documents */}
+      <section className="space-y-3">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+          {[
+            { label: language === 'fr' ? 'Factures émises' : language === 'ar' ? 'الفواتير الصادرة' : 'Issued invoices', value: scopedInvoices.length, detail: language === 'fr' ? 'Documents comptables' : 'Accounting documents', icon: FileText, tone: 'blue' },
+            { label: language === 'fr' ? 'Montant facturé' : language === 'ar' ? 'إجمالي الفواتير' : 'Invoiced amount', value: invoicedTotal, detail: language === 'fr' ? 'Total TTC, par devise' : 'Gross total, by currency', icon: CreditCard, tone: 'purple' },
+            { label: language === 'fr' ? 'Encaissé' : language === 'ar' ? 'المحصل' : 'Collected', value: collectedTotal, detail: language === 'fr' ? 'Acomptes et paiements enregistrés' : 'Recorded deposits and payments', icon: CheckCircle, tone: 'green' },
+            { label: language === 'fr' ? 'Reste à encaisser' : language === 'ar' ? 'المتبقي للتحصيل' : 'Outstanding', value: dueTotal, detail: language === 'fr' ? `${pendingInvoices.length} facture(s) non soldée(s)` : `${pendingInvoices.length} unpaid invoice(s)`, icon: Clock, tone: 'amber' },
+          ].map((item) => (
+            <div key={item.label} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{item.label}</span>
+                <span className={`rounded-lg p-2 ${item.tone === 'green' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400' : item.tone === 'amber' ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400' : item.tone === 'purple' ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400'}`}>
+                  <item.icon size={17} />
+                </span>
+              </div>
+              <div className="truncate text-lg font-bold text-slate-900 dark:text-white sm:text-xl">{item.value}</div>
+              <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">{item.detail}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+          <div className="mb-4">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">{language === 'fr' ? 'Activité documentaire' : language === 'ar' ? 'نشاط المستندات' : 'Document activity'}</h2>
+            <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{language === 'fr' ? 'Nombre de devis, factures et pro forma par mois (6 derniers mois)' : 'Quotes, invoices and pro forma documents per month (last 6 months)'}</p>
+          </div>
+          {filteredDocs.length ? (
+            <div className="flex h-36 items-end gap-2 sm:gap-4">
+              {monthlyDocumentCounts.map(item => (
+                <div key={item.label} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2">
+                  <span className="text-[10px] font-semibold tabular-nums text-slate-500">{item.count}</span>
+                  <div className="flex h-24 w-full items-end overflow-hidden rounded-t-md bg-slate-100 dark:bg-slate-800">
+                    <div className="w-full rounded-t-md bg-blue-500 transition-all" style={{ height: `${item.count ? Math.max(5, item.count / maxMonthlyDocuments * 100) : 0}%` }} />
+                  </div>
+                  <span className="text-[10px] text-slate-400">{item.label}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="py-8 text-xs text-slate-500">{language === 'fr' ? 'Aucun document correspondant aux filtres.' : 'No documents match the selected filters.'}</p>
+          )}
+        </div>
+      </section>
 
       {/* Filter Tabs */}
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 gap-3">
