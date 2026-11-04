@@ -28,6 +28,7 @@ import { QrPassModal } from './components/QrPassModal';
 import { QrScannerModal } from './components/QrScannerModal';
 import { ProUsbLockSystemView } from './components/ProUsbLockSystemView';
 import { SpaManagementView } from './components/SpaManagementView';
+import { HelpCenterView } from './components/HelpCenterView';
 import { EstablishmentSetupModal } from './components/EstablishmentSetupModal';
 import { SupabaseAuthGate } from './services/supabase/SupabaseAuthGate';
 
@@ -91,6 +92,7 @@ const MainLayout: React.FC = () => {
 
             {activeView === 'prousb' && <ProUsbLockSystemView />}
             {activeView === 'spa' && <SpaManagementView />}
+            {activeView === 'help' && <HelpCenterView />}
           </main>
         </div>
       </div>
