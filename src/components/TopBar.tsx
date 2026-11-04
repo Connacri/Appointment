@@ -31,7 +31,6 @@ import { useApp } from '../context/AppContext';
 import { lockManager, UsbConnectionStatus } from '../locks/lockManager';
 import { indexedDb, IndexedDbSyncState } from '../db/indexedDb';
 import { UserRole } from '../types/booking';
-import { useWorkspace } from '../services/supabase/WorkspaceContext';
 
 export const TopBar: React.FC = () => {
   const {
@@ -59,9 +58,14 @@ export const TopBar: React.FC = () => {
     setActiveView,
     currency,
     setCurrency,
+    workspaces,
+    activeWorkspaceId,
+    setActiveWorkspaceId,
+    refreshWorkspaces,
+    createWorkspace,
+    isWorkspaceLoading: workspacesLoading,
+    workspaceError,
   } = useApp();
-
-  const { workspaces, activeWorkspaceId, setActiveWorkspaceId, refreshWorkspaces, createWorkspace, loading: workspacesLoading, error: workspaceError } = useWorkspace();
   const [workspaceFormOpen, setWorkspaceFormOpen] = useState(false);
   const [workspaceDraft, setWorkspaceDraft] = useState('');
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
