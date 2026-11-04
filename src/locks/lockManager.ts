@@ -206,23 +206,23 @@ class LockManager {
    * Once imported the app works on the very same rooms, guests and cards as
    * CardLock.exe — including byte-for-byte reuse of existing card records.
    */
-  public async importMdb(file: File): Promise<MdbSnapshot> {
+  /** Parse and inspect CardLock without changing the active application state. */
+  public async analyzeMdb(file: File): Promise<MdbSnapshot> {
     const data = await file.arrayBuffer();
     const snapshot = await parseCardLockMdb(data, file.name);
-    // Kept so the UI can flag a frozen `Program Files` copy (Windows writes the
-    // VirtualStore one) without reading the file again.
     snapshot.fileLastModified =
       typeof file.lastModified === 'number' && file.lastModified > 0
         ? new Date(file.lastModified).toISOString()
         : null;
+    return snapshot;
+  }
 
+  /** Apply a previously reviewed CardLock snapshot to the lock manager. */
+  public applyMdbSnapshot(snapshot: MdbSnapshot): MdbSnapshot {
     this.mdbSnapshot = snapshot;
     this.saveMdbSnapshot();
 
-    // Reflect the imported data in the app model. Cards written by this app do
-    // not exist in CardLock.mdb, so they must survive the import: keep the
-    // local ones, replace only the previously imported rows, and de-duplicate
-    // on the 32-hex image.
+    // Keep locally issued cards; replace only previously imported CardLock rows.
     if (snapshot.cards.length > 0) {
       const localCards = this.issuedCards.filter((card) => !card.id.startsWith('mdb-card-'));
       const knownHex = new Set(localCards.map((card) => card.rawHex.toUpperCase()));
@@ -253,8 +253,13 @@ class LockManager {
     }
 
     this.notifyStateListeners();
-    console.log('[LockManager] CardLock.mdb imported:', snapshot.counts, snapshot.systemProfile);
+    console.log('[LockManager] CardLock snapshot applied:', snapshot.counts, snapshot.systemProfile);
     return snapshot;
+  }
+
+  /** Backwards-compatible import: parse then apply immediately. */
+  public async importMdb(file: File): Promise<MdbSnapshot> {
+    return this.applyMdbSnapshot(await this.analyzeMdb(file));
   }
 
   public getMdbSnapshot(): MdbSnapshot | null {
