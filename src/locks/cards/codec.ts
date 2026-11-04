@@ -165,6 +165,8 @@ function randomTail(): [number, number, number] {
 
 export interface EncodeGuestCardParams {
   roomNumber: string; // e.g. "101", "205", "1-101"
+  buildingNo?: number;
+  floorNo?: number;
   cardIndex?: number; // 0..15 (defaults to 1)
   validity: CardValidityWindow;
   options?: {
@@ -190,7 +192,7 @@ export function encodeGuestCard(params: EncodeGuestCardParams): Uint8Array {
   const card = new Uint8Array(16);
   const cleanRoom = params.roomNumber.replace(/^[0-9]+-/, '');
   const roomNum = parseInt(cleanRoom, 10) || 101;
-  const floorNo = Math.floor(roomNum / 100);
+  const floorNo = params.floorNo ?? Math.floor(roomNum / 100);
   const roomMod = roomNum % 100;
   const index = (params.cardIndex ?? 1) & 0x0f;
 
@@ -208,7 +210,7 @@ export function encodeGuestCard(params: EncodeGuestCardParams): Uint8Array {
   card[4] = 0x63 | 0x80; // Constant sentinel 99 with high bit set = 0xE3
   card[5] = (roomMod & 0x7f) | 0x80; // room mod 100 e.g. room 1 -> 0x81, room 5 -> 0x85
   card[6] = (floorNo & 0x7f) | 0x80; // floor div 100 e.g. floor 1 -> 0x81, floor 2 -> 0x82
-  card[7] = 0x01; // Card sequence / nights indicator
+  card[7] = (params.buildingNo ?? 1) & 0x0f; // Building identifier (CardLock BldNo)
   card[8] = params.options?.openPublicDoor ? 0x01 : 0x00;
   card[9] = 0x60 | index; // 0x60 family + card index
 
