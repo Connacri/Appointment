@@ -71,6 +71,7 @@ export const TopBar: React.FC = () => {
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
   const [usbStatus, setUsbStatus] = useState<UsbConnectionStatus>(lockManager.getStatus());
   const [indexedDbSync, setIndexedDBSync] = useState<IndexedDbSyncState>(indexedDb.getSyncStatus());
+  const [pendingPushCount, setPendingPushCount] = useState(0);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
@@ -93,6 +94,24 @@ export const TopBar: React.FC = () => {
     });
     return unsub;
   }, []);
+
+  // Live, workspace-scoped count of due local outbox events. This is not a remote ACK.
+  useEffect(() => {
+    let active = true;
+    const refreshOutbox = async () => {
+      if (!activeWorkspaceId) { setPendingPushCount(0); return; }
+      try {
+        const pending = await indexedDb.getPendingOutbox(activeWorkspaceId, 1000);
+        if (active) setPendingPushCount(pending.length);
+      } catch {
+        if (active) setPendingPushCount(0);
+      }
+    };
+    void refreshOutbox();
+    const timer = window.setInterval(() => void refreshOutbox(), 5000);
+    window.addEventListener('focus', refreshOutbox);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refreshOutbox); };
+  }, [activeWorkspaceId]);
 
   // Click outside listener for dropdowns
   useEffect(() => {
@@ -314,6 +333,12 @@ export const TopBar: React.FC = () => {
             </>
           )}
         </button>
+
+        <div className="flex h-7 sm:h-8 items-center gap-1 sm:gap-2 rounded-lg border border-amber-500/30 bg-amber-950/30 px-1.5 sm:px-2 text-[9px] sm:text-[10px] font-semibold text-amber-200" title="Push = événements locaux prêts à être envoyés. Pull distant non disponible tant que le moteur bidirectionnel n'est pas déployé.">
+          <span>P {pendingPushCount}</span>
+          <span className="text-amber-400/70">·</span>
+          <span>R —</span>
+        </div>
 
         {/* USB Hardware Button matching szsz.png (🟢 USB • Prêt) */}
         <button
