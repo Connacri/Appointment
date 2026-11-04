@@ -1,0 +1,23 @@
+[package]
+name = "appointment-desktop"
+version = "1.2.0"
+description = "Appointment native Windows desktop runtime"
+authors = ["Connacri"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+base64 = "0.22"
+keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
