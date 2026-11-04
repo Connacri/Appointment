@@ -19,6 +19,14 @@ struct CardLockCandidate {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct CardLockFileData {
+    content_base64: String,
+    modified_unix_ms: Option<u128>,
+    size_bytes: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DesktopRuntimeInfo {
     native: bool,
     filesystem: bool,
@@ -68,7 +76,7 @@ fn discover_cardlock_candidates() -> Vec<CardLockCandidate> {
 }
 
 #[tauri::command]
-fn read_cardlock_file(path: String) -> Result<String, String> {
+fn read_cardlock_file(path: String) -> Result<CardLockFileData, String> {
     let file_path = Path::new(&path);
     if !file_path.is_file() {
         return Err("Le fichier CardLock sélectionné est introuvable.".into());
@@ -83,8 +91,11 @@ fn read_cardlock_file(path: String) -> Result<String, String> {
     if metadata.len() == 0 || metadata.len() > MAX_MDB_BYTES {
         return Err("Taille CardLock.mdb invalide (maximum 512 Mo).".into());
     }
+    let modified_unix_ms = metadata.modified().ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis());
     let bytes = fs::read(file_path).map_err(|error| format!("Lecture CardLock impossible : {error}"))?;
-    Ok(STANDARD.encode(bytes))
+    Ok(CardLockFileData { content_base64: STANDARD.encode(bytes), modified_unix_ms, size_bytes: metadata.len() })
 }
 
 fn validate_secret_key(key: &str) -> Result<(), String> {
