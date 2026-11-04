@@ -1,8 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+// Public client configuration defaults to the Appointment Supabase project.
+// Environment variables override these defaults for staging, local development,
+// previews, or another deployment target. Never use a service_role key here.
+const DEFAULT_SUPABASE_URL = 'https://vkmgakmujipnpjlawjqm.supabase.co';
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_yIVkxXo_x--f6FWt5zua1w_GzqI5XNv';
+
+const supabaseUrl =
+  (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || DEFAULT_SUPABASE_URL;
+const supabasePublishableKey =
+  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() ||
+  DEFAULT_SUPABASE_PUBLISHABLE_KEY;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKey);
 
@@ -11,7 +20,7 @@ if (!isSupabaseConfigured) {
 }
 
 export const supabase = isSupabaseConfigured
-  ? createClient<Database>(supabaseUrl!, supabasePublishableKey!, {
+  ? createClient<Database>(supabaseUrl, supabasePublishableKey, {
       auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true },
       db: { schema: 'public' },
     })
