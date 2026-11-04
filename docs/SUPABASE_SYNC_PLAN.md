@@ -21,13 +21,26 @@ Le schéma public possède 16 tables avec RLS activée. Les entités mutables pr
 ## Ordre de livraison
 
 1. Sélecteur et onboarding workspace/établissement, sans sélectionner arbitrairement le premier workspace.
-2. Outbox IndexedDB durable, transactionnelle avec chaque CRUD local.
+2. Étendre l'Outbox transactionnelle actuellement activée sur le CRUD des réservations à toutes les entités métier.
 3. Sync Engine : bootstrap, pull incrémental, push, retry/backoff, verrou multi-onglet, curseurs.
 4. Contrats et repositories complets pour guests, bookings, ressources, tâches, stocks, tarifs et audit.
 5. Repository financier pour factures, lignes et paiements, avec immutabilité et idempotence.
 6. Tests multi-workspace RLS, retry, offline/online, suppression, conflit et concurrence.
 7. Extension Facility/Spa/Events/Rentals/Access Control selon les décisions métier validées.
 
+## Implémentation Outbox livrée — étape partielle
+
+La base IndexedDB est passée en version 3 sans supprimer les stores existants. Elle crée les stores `outbox`, `tombstones` et `workspaceEntities` (clé composite workspace/entité/ID). La mise à niveau crée ces stores vides : elle ne transforme et n'envoie aucun enregistrement existant.
+
+- `putWithOutbox` et `deleteWithOutbox` englobent l'instantané local workspace-scoped, l'événement Outbox et le tombstone dans une seule transaction IndexedDB.
+- Chaque événement porte `workspaceId`, `establishmentId` facultatif, entité, ID, opération, version, payload et clé d'idempotence déterministe.
+- Les tentatives peuvent être différées et les ACK marquent l'événement comme synchronisé.
+- `getPendingOutbox(workspaceId)` ne retourne que les événements du workspace demandé.
+- Le CRUD réservation (création, édition, statut, paiement, check-in, suppression) utilise ces primitives seulement lorsqu'un workspace est explicitement actif.
+- Les IDs présents dans `initialBookings` sont explicitement exclus de l'Outbox. Les données initiales `mockData` ne sont pas migrées dans les stores workspace ni mises en file.
+- Sans workspace actif, les modifications restent locales et ne sont pas mises en file.
+
+**Limite actuelle :** aucun worker réseau ne consomme encore l'Outbox. Les événements restent `pending` jusqu'à ce qu'un Sync Engine les traite. Les autres domaines (ressources, factures, tâches, stocks, tarifs) ne sont pas encore raccordés à ces primitives. Les clés d'idempotence locales ne constituent pas encore une garantie d'idempotence serveur tant que le push n'est pas implémenté.
 ## Contraintes de sécurité et de cohérence
 
 - Toutes les requêtes distantes doivent inclure le workspace ciblé ; RLS demeure la frontière de sécurité.
