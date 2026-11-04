@@ -223,10 +223,21 @@ export const IndexedDbInspectorModal: React.FC<{
         const importNow = window.confirm(mt.confirm(snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards));
         if (importNow) {
           setResourceGroups(current => [...current.filter(group => !group.id.startsWith('mdb-')), ...resourceGroups]);
-          setBookings(current => [...current.filter(item => !bookings.some(next => next.id === item.id)), ...bookings]);
+          setBookings(current => [
+            ...current.filter(item => item.customMetadata?.source !== 'cardlock_mdb'),
+            ...bookings,
+          ]);
         }
       }
-      setMdbMessage(mt.done(snapshot.buildings.length, snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards, snapshot.warnings.length) + (sourceIsOld ? ` ${mt.stale}` : ''));
+      const planningWarnings = snapshot.counts.rooms || snapshot.counts.guests
+        ? mdbSnapshotToPlanning(snapshot).warnings
+        : [];
+      const warningCount = snapshot.warnings.length + planningWarnings.length;
+      setMdbMessage(
+        mt.done(snapshot.buildings.length, snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards, warningCount) +
+        (snapshot.tableInventory?.length ? ` ${snapshot.tableInventory.length} tables inventoriées.` : '') +
+        (sourceIsOld ? ` ${mt.stale}` : '')
+      );
       await loadStatsAndData();
     } catch (err) {
       setMdbMessage(err instanceof Error ? err.message : mt.importError);
