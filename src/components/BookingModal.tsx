@@ -1652,7 +1652,7 @@ export const BookingModal: React.FC = () => {
           </div>
 
           {/* ACTION BUTTONS */}
-          <div className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 z-10">
+          <div className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-end gap-2 z-10">
             {activeDomain === 'hotel' && (
               <div className="flex items-center gap-2 w-full sm:w-auto sm:mr-auto">
                 <button
@@ -1712,7 +1712,7 @@ export const BookingModal: React.FC = () => {
                     updateBookingStatus(selectedBooking.id, 'checked_in');
                     closeModal();
                   }}
-                  className="min-h-11 flex-1 sm:flex-none justify-center px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                  className="min-h-11 flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto sm:flex-none justify-center px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <CheckCircle2 size={14} />
                   <span>{language === 'fr' ? 'Check-in' : 'Check-in'}</span>
@@ -1724,7 +1724,7 @@ export const BookingModal: React.FC = () => {
                     generateTurnoverTasksForCheckout(selectedBooking.resourceName);
                     closeModal();
                   }}
-                  className="min-h-11 flex-1 sm:flex-none justify-center px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                  className="min-h-11 flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto sm:flex-none justify-center px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
                   title="Effectue le départ et génère les tâches de remise en état chambre"
                 >
                   <Sparkles size={14} />
@@ -1735,13 +1735,13 @@ export const BookingModal: React.FC = () => {
             <button
               type="button"
               onClick={closeModal}
-              className="min-h-11 flex-1 sm:flex-none px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold transition-colors text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-slate-400"
+              className="min-h-11 flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto sm:flex-none px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold transition-colors text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-slate-400"
             >
               {language === 'fr' ? 'Annuler' : language === 'ar' ? 'إلغاء' : 'Cancel'}
             </button>
             <button
               type="submit"
-              className="min-h-11 flex-[2] sm:flex-none justify-center px-4 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="min-h-11 flex-[2] basis-[calc(50%-0.25rem)] sm:basis-auto sm:flex-none justify-center px-4 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <CheckCircle2 size={16} />
               <span>
