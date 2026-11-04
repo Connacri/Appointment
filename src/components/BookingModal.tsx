@@ -35,7 +35,9 @@ import { downloadICS } from '../utils/icsExport';
 import { lockManager } from '../locks/lockManager';
 import { CardResultDialog, CardResult } from './CardResultDialog';
 import { CardCreationProgressModal } from './CardCreationProgressModal';
-import { KeyRound, Loader2 } from 'lucide-react';
+import { ALGERIA_69_WILAYAS } from '../data/algeriaWilayas';
+import { HOSPITALITY_MEAL_PLANS, DIETARY_PREFERENCES } from '../data/mealPlans';
+import { KeyRound, Loader2, Utensils, UtensilsCrossed, ShieldAlert, Award, FileSpreadsheet } from 'lucide-react';
 
 export const BookingModal: React.FC = () => {
   const {
@@ -91,8 +93,22 @@ export const BookingModal: React.FC = () => {
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending' | 'partial'>('paid');
   const [conflictError, setConflictError] = useState<string | null>(null);
 
+  const todayIso = new Date().toISOString().split('T')[0];
+
   // Tenant Nationality & Police Declaration State (Algérien vs Étranger)
   const [guestType, setGuestType] = useState<'algerian' | 'foreigner'>('algerian');
+  // Formulaire de réservation pièces requises : cni, passport, permis de conduire, autorisation spéciale avec descriptif, passport diplomatique, passport spécial, document officiel
+  const [idPieceType, setIdPieceType] = useState<
+    | 'cni'
+    | 'passport'
+    | 'driving_license'
+    | 'special_authorization'
+    | 'diplomatic_passport'
+    | 'special_passport'
+    | 'official_document'
+  >('cni');
+  const [idPieceNumber, setIdPieceNumber] = useState('');
+  const [specialAuthorizationDesc, setSpecialAuthorizationDesc] = useState('');
   const [algerianIdType, setAlgerianIdType] = useState<'cni' | 'nin'>('cni');
   const [algerianIdNumber, setAlgerianIdNumber] = useState('');
   const [wilayaOfOrigin, setWilayaOfOrigin] = useState('31 - Oran');
@@ -101,9 +117,15 @@ export const BookingModal: React.FC = () => {
   const [visaNumber, setVisaNumber] = useState('');
   const [entryDateInCountry, setEntryDateInCountry] = useState('');
   const [showPoliceSheetModal, setShowPoliceSheetModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+
+  // Formule de Pension & Restauration (inspiré Booking & Airbnb)
+  const [selectedMealPlanId, setSelectedMealPlanId] = useState<string>('bb');
+  const [selectedDietary, setSelectedDietary] = useState<string[]>(['halal']);
+  const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
 
   // Multi-Currency Payment State (DZD, EUR, USD, RMB, GBP, SAR)
-  const [paymentCurrency, setPaymentCurrency] = useState<string>('DA');
+  const [paymentCurrency, setPaymentCurrency] = useState<string>(currency || 'DA');
   const [paymentMethodType, setPaymentMethodType] = useState<
     'cash_dzd' | 'cib' | 'edahabia' | 'cash_forex' | 'card_international' | 'bank_transfer'
   >('cash_dzd');
@@ -171,14 +193,24 @@ export const BookingModal: React.FC = () => {
         setGuestType('algerian');
       }
 
-      setAlgerianIdNumber(selectedBooking.identityNumber || '');
-      setWilayaOfOrigin(selectedBooking.wilayaOfOrigin || '31 - Oran');
+      // Hydrate identity piece
+      if (selectedBooking.idPieceType) {
+        setIdPieceType(selectedBooking.idPieceType as any);
+      } else if (selectedBooking.guestType === 'foreigner') {
+        setIdPieceType('passport');
+      } else {
+        setIdPieceType('cni');
+      }
+      setIdPieceNumber(selectedBooking.idPieceNumber || selectedBooking.identityNumber || selectedBooking.passportNumber || '');
+      setSpecialAuthorizationDesc(selectedBooking.specialAuthorizationDesc || '');
+      setAlgerianIdNumber(selectedBooking.identityNumber || selectedBooking.idPieceNumber || '');
+      setWilayaOfOrigin(selectedBooking.wilayaOfOrigin || selectedBooking.wilaya || '31 - Oran');
       setForeignNationality(
         selectedBooking.nationality && selectedBooking.nationality !== 'Algérienne'
           ? selectedBooking.nationality
           : 'Française'
       );
-      setPassportNumber(selectedBooking.passportNumber || '');
+      setPassportNumber(selectedBooking.passportNumber || selectedBooking.idPieceNumber || '');
       setVisaNumber(selectedBooking.visaNumber || '');
       setEntryDateInCountry(selectedBooking.entryDateInCountry || '');
       setPaymentCurrency(selectedBooking.paymentCurrency || currency || 'DA');
@@ -186,6 +218,14 @@ export const BookingModal: React.FC = () => {
         (selectedBooking.paymentMethodType as any) ||
           (selectedBooking.guestType === 'foreigner' ? 'card_international' : 'cash_dzd')
       );
+
+      // Hydrate meal plan and dietary preferences
+      if (selectedBooking.mealPlan) {
+        setSelectedMealPlanId(selectedBooking.mealPlan);
+      }
+      if (selectedBooking.mealPlanDietPreferences && selectedBooking.mealPlanDietPreferences.length > 0) {
+        setSelectedDietary(selectedBooking.mealPlanDietPreferences);
+      }
 
       // Hydrate custom metadata if present
       const meta = selectedBooking.customMetadata || {};
@@ -252,12 +292,18 @@ export const BookingModal: React.FC = () => {
       setPaymentStatus('paid');
       setConflictError(null);
       setGuestType('algerian');
+      setIdPieceType('cni');
+      setIdPieceNumber('');
+      setSpecialAuthorizationDesc('');
       setAlgerianIdNumber('');
       setWilayaOfOrigin('31 - Oran');
       setForeignNationality('Française');
       setPassportNumber('');
       setVisaNumber('');
       setEntryDateInCountry('');
+      setSelectedMealPlanId('bb');
+      setSelectedDietary(['halal']);
+      setSelectedExtras([]);
       setPaymentCurrency(currency || 'DA');
       setPaymentMethodType('cash_dzd');
     }
@@ -362,49 +408,59 @@ export const BookingModal: React.FC = () => {
   const { totalPrice, priceBreakdown } = useMemo(() => {
     const baseDaily = currentResource?.pricePerDay || 0;
 
+    const activeMealPlan = HOSPITALITY_MEAL_PLANS.find((m) => m.id === selectedMealPlanId);
+    const mealRate = activeMealPlan ? activeMealPlan.pricePerPersonDay : 0;
+    const mealPlanName = activeMealPlan ? activeMealPlan.shortBadge : 'Pension';
+
+    const extrasTotal = selectedExtras.reduce((acc, extraId) => {
+      if (extraId === 'grab_go') return acc + 12 * (activeDomain === 'hotel' ? hotelAdults : resortOccupants) * calculatedDays;
+      if (extraId === 'picnic') return acc + 20 * (activeDomain === 'hotel' ? hotelAdults : resortOccupants);
+      if (extraId === 'romantic') return acc + 65;
+      if (extraId === 'private_chef') return acc + 95;
+      return acc;
+    }, 0);
+
     if (activeDomain === 'hotel') {
       const roomBase = calculatedDays * (baseDaily || 95);
-      const mealRate =
-        hotelMealPlan === 'breakfast' ? 15 : hotelMealPlan === 'half_board' ? 38 : hotelMealPlan === 'full_board' ? 58 : 0;
       const mealTotal = mealRate * hotelAdults * calculatedDays;
       const babyBedTotal = hotelOptionBabyBed ? 10 * calculatedDays : 0;
       const petTotal = hotelOptionPet ? 15 * calculatedDays : 0;
       const giftTotal = hotelOptionWelcomeGift ? 35 : 0;
       const touristTax = 2.5 * hotelAdults * calculatedDays;
-      const total = roomBase + mealTotal + babyBedTotal + petTotal + giftTotal + touristTax;
+      const total = roomBase + mealTotal + extrasTotal + babyBedTotal + petTotal + giftTotal + touristTax;
       return {
         totalPrice: Math.round(total),
-        priceBreakdown: `${calculatedDays} nuit(s) × ${baseDaily || 95}€ + repas (${mealTotal}€) + taxe séjour (${touristTax.toFixed(2)}€)`,
+        priceBreakdown: `${calculatedDays} nuit(s) × ${baseDaily || 95}€ + ${mealPlanName} (${mealTotal}€) + options (${babyBedTotal + petTotal + giftTotal + extrasTotal}€) + taxe séjour (${touristTax.toFixed(2)}€)`,
       };
     }
 
     if (activeDomain === 'resort') {
       const villaBase = calculatedDays * (baseDaily || 280);
-      const formulaPrice =
-        resortFormula === 'all_inclusive' ? 95 : resortFormula === 'half_board' ? 55 : 75;
+      const formulaPrice = mealRate > 0 ? mealRate : (resortFormula === 'all_inclusive' ? 95 : resortFormula === 'half_board' ? 55 : 75);
       const formulaTotal = formulaPrice * resortOccupants * calculatedDays;
       const poolTotal = resortOptionPrivatePool ? 40 * calculatedDays : 0;
       const cabanaTotal = resortOptionBeachCabana ? 30 * calculatedDays : 0;
       const transferTotal = resortOptionVipTransfer ? 85 : 0;
       const buggyTotal = resortOptionGolfBuggy ? 25 * calculatedDays : 0;
-      const total = villaBase + formulaTotal + poolTotal + cabanaTotal + transferTotal + buggyTotal;
+      const total = villaBase + formulaTotal + extrasTotal + poolTotal + cabanaTotal + transferTotal + buggyTotal;
       return {
         totalPrice: Math.round(total),
-        priceBreakdown: `${calculatedDays} nuit(s) × ${baseDaily || 280}€ + formule (${formulaTotal}€) + services VIP (${poolTotal + cabanaTotal + transferTotal + buggyTotal}€)`,
+        priceBreakdown: `${calculatedDays} nuit(s) × ${baseDaily || 280}€ + formule ${mealPlanName} (${formulaTotal}€) + services VIP & extras (${poolTotal + cabanaTotal + transferTotal + buggyTotal + extrasTotal}€)`,
       };
     }
 
-    const fallbackTotal = calculatedDays * (baseDaily || 95);
+    const fallbackTotal = calculatedDays * (baseDaily || 95) + mealRate * calculatedDays + extrasTotal;
     return {
       totalPrice: fallbackTotal,
-      priceBreakdown: `${calculatedDays} jour(s) × ${baseDaily || 95}€`,
+      priceBreakdown: `${calculatedDays} jour(s) × ${baseDaily || 95}€ + ${mealPlanName}`,
     };
   }, [
     activeDomain,
     currentResource,
     calculatedDays,
     hotelAdults,
-    hotelMealPlan,
+    selectedMealPlanId,
+    selectedExtras,
     hotelOptionBabyBed,
     hotelOptionPet,
     hotelOptionWelcomeGift,
@@ -475,7 +531,17 @@ export const BookingModal: React.FC = () => {
     const computedOriginalAmount = Math.round(totalPrice * (ratesFromEur[paymentCurrency] || 1));
     const computedRateToDzd = ratesFromEur['DA'] / (ratesFromEur[paymentCurrency] || 1);
 
+    const currentUserName = `${currentRole.toUpperCase()} (${clientProfile?.name || 'Réception'})`;
+    const nowIso = new Date().toISOString();
+
     if (isEditing && selectedBooking) {
+      const historyEntry = {
+        timestamp: nowIso,
+        modifiedBy: currentUserName,
+        changes: `Mise à jour: ${guestName}, Dates: ${startDate} au ${endDate}, Statut: ${status}, Pension: ${selectedMealPlanId.toUpperCase()}, Pièce: ${idPieceType}`,
+      };
+      const updatedHistory = [...(selectedBooking.modificationHistory || []), historyEntry];
+
       updateBooking(selectedBooking.id, {
         resourceId,
         resourceName: currentResource?.name || selectedBooking.resourceName,
@@ -493,11 +559,20 @@ export const BookingModal: React.FC = () => {
         guestType,
         nationality: guestType === 'algerian' ? 'Algérienne' : foreignNationality,
         identityType: guestType === 'algerian' ? algerianIdType : 'passport',
-        identityNumber: guestType === 'algerian' ? algerianIdNumber : passportNumber,
-        passportNumber: guestType === 'foreigner' ? passportNumber : undefined,
+        identityNumber: idPieceNumber || (guestType === 'algerian' ? algerianIdNumber : passportNumber),
+        idPieceType,
+        idPieceNumber: idPieceNumber || (guestType === 'algerian' ? algerianIdNumber : passportNumber),
+        specialAuthorizationDesc: idPieceType === 'special_authorization' ? specialAuthorizationDesc : undefined,
+        passportNumber: guestType === 'foreigner' ? (passportNumber || idPieceNumber) : undefined,
         visaNumber: guestType === 'foreigner' ? visaNumber : undefined,
         entryDateInCountry: guestType === 'foreigner' ? entryDateInCountry : undefined,
         wilayaOfOrigin: guestType === 'algerian' ? wilayaOfOrigin : undefined,
+        wilaya: wilayaOfOrigin,
+        mealPlan: selectedMealPlanId as any,
+        mealPlanDietPreferences: selectedDietary,
+        lastModifiedAt: nowIso,
+        lastModifiedBy: currentUserName,
+        modificationHistory: updatedHistory,
         paymentCurrency,
         originalCurrencyAmount: computedOriginalAmount,
         currencyRateToDzd: computedRateToDzd,
@@ -507,6 +582,14 @@ export const BookingModal: React.FC = () => {
       setSelectedBooking(null);
       setIsNewBookingModalOpen(false);
     } else {
+      const initialHistory = [
+        {
+          timestamp: nowIso,
+          modifiedBy: currentUserName,
+          changes: `Création du dossier de réservation (${startDate} au ${endDate || startDate})`,
+        },
+      ];
+
       const res = addBooking({
         resourceId: resourceId || domainResources[0]?.id || 'res_1',
         resourceName: currentResource?.name || 'Ressource',
@@ -526,11 +609,20 @@ export const BookingModal: React.FC = () => {
         guestType,
         nationality: guestType === 'algerian' ? 'Algérienne' : foreignNationality,
         identityType: guestType === 'algerian' ? algerianIdType : 'passport',
-        identityNumber: guestType === 'algerian' ? algerianIdNumber : passportNumber,
-        passportNumber: guestType === 'foreigner' ? passportNumber : undefined,
+        identityNumber: idPieceNumber || (guestType === 'algerian' ? algerianIdNumber : passportNumber),
+        idPieceType,
+        idPieceNumber: idPieceNumber || (guestType === 'algerian' ? algerianIdNumber : passportNumber),
+        specialAuthorizationDesc: idPieceType === 'special_authorization' ? specialAuthorizationDesc : undefined,
+        passportNumber: guestType === 'foreigner' ? (passportNumber || idPieceNumber) : undefined,
         visaNumber: guestType === 'foreigner' ? visaNumber : undefined,
         entryDateInCountry: guestType === 'foreigner' ? entryDateInCountry : undefined,
         wilayaOfOrigin: guestType === 'algerian' ? wilayaOfOrigin : undefined,
+        wilaya: wilayaOfOrigin,
+        mealPlan: selectedMealPlanId as any,
+        mealPlanDietPreferences: selectedDietary,
+        lastModifiedAt: nowIso,
+        lastModifiedBy: currentUserName,
+        modificationHistory: initialHistory,
         paymentCurrency,
         originalCurrencyAmount: computedOriginalAmount,
         currencyRateToDzd: computedRateToDzd,
@@ -659,6 +751,80 @@ export const BookingModal: React.FC = () => {
             <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
               <AlertCircle size={16} className="shrink-0" />
               <span className="font-semibold">{conflictError}</span>
+            </div>
+          )}
+
+          {/* Traceability & Modification details (Audit trail) */}
+          {isEditing && selectedBooking && (
+            <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200/80 dark:border-blue-800/80 rounded-xl space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <Clock size={15} className="text-blue-600 dark:text-blue-400" />
+                  <span className="font-bold text-slate-800 dark:text-slate-100">
+                    Détails du Dossier & Traçabilité
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 font-bold text-blue-700 dark:text-blue-300">
+                    #{selectedBooking.id.substring(0, 8)}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowHistoryModal(!showHistoryModal)}
+                  className="px-2 py-1 text-[11px] font-semibold bg-white dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-slate-700 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-slate-700 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet size={13} />
+                  <span>
+                    {showHistoryModal
+                      ? 'Masquer Historique'
+                      : `Historique (${(selectedBooking.modificationHistory?.length || 0) + (selectedBooking.lastModifiedAt ? 1 : 0)})`}
+                  </span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300 pt-1 border-t border-blue-200/50 dark:border-blue-900/40">
+                <div>
+                  <span className="text-slate-400 font-medium">Dernière modification : </span>
+                  <span className="font-semibold text-slate-900 dark:text-white">
+                    {selectedBooking.lastModifiedAt
+                      ? new Date(selectedBooking.lastModifiedAt).toLocaleString(language === 'fr' ? 'fr-FR' : 'en-US', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : 'Création initiale'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-medium">Modifié par : </span>
+                  <span className="font-semibold text-slate-900 dark:text-white">
+                    {selectedBooking.lastModifiedBy || 'Réception'}
+                  </span>
+                </div>
+              </div>
+
+              {showHistoryModal && selectedBooking.modificationHistory && selectedBooking.modificationHistory.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-blue-200/50 dark:border-blue-900/40 space-y-1.5 max-h-36 overflow-y-auto">
+                  <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                    Historique des modifications :
+                  </div>
+                  {selectedBooking.modificationHistory.slice().reverse().map((h, idx) => (
+                    <div
+                      key={idx}
+                      className="p-1.5 bg-white/80 dark:bg-slate-900/80 rounded-lg border border-slate-200/70 dark:border-slate-800 text-[11px] flex items-start justify-between gap-2"
+                    >
+                      <div>
+                        <span className="font-bold text-slate-800 dark:text-slate-200 mr-2">{h.modifiedBy}</span>
+                        <span className="text-slate-600 dark:text-slate-400">{h.changes}</span>
+                      </div>
+                      <span className="font-mono text-[10px] text-slate-400 shrink-0">
+                        {new Date(h.timestamp).toLocaleDateString()} {new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -810,109 +976,123 @@ export const BookingModal: React.FC = () => {
                 </button>
               </div>
 
-              {guestType === 'algerian' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+              <div className="space-y-2 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
-                      {language === 'fr' ? 'Type de Pièce' : 'Document Type'}
+                      {language === 'fr' ? 'Type de Pièce d\'Identité *' : 'ID Document Type *'}
                     </label>
                     <select
-                      value={algerianIdType}
-                      onChange={(e) => setAlgerianIdType(e.target.value as 'cni' | 'nin')}
-                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                      value={idPieceType}
+                      onChange={(e) => {
+                        const val = e.target.value as any;
+                        setIdPieceType(val);
+                        if (val === 'cni') setAlgerianIdType('cni');
+                      }}
+                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-semibold text-xs"
                     >
-                      <option value="cni">CNI Biométrique</option>
-                      <option value="nin">NIN (Numéro d'Identification Nationale)</option>
+                      <option value="cni">🪪 CNI (Carte Nationale d'Identité)</option>
+                      <option value="passport">🛂 Passeport Ordinaire</option>
+                      <option value="driving_license">🚗 Permis de Conduire</option>
+                      <option value="special_authorization">📜 Autorisation Spéciale (avec descriptif)</option>
+                      <option value="diplomatic_passport">🏛️ Passeport Diplomatique</option>
+                      <option value="special_passport">⭐ Passeport Spécial / Service</option>
+                      <option value="official_document">📄 Document Officiel d'État</option>
                     </select>
                   </div>
+
                   <div>
                     <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
-                      {language === 'fr' ? 'N° Pièce Identité' : 'ID Number'}
+                      {language === 'fr' ? 'N° de la Pièce *' : 'Document Number *'}
                     </label>
                     <input
                       type="text"
-                      value={algerianIdNumber}
-                      onChange={(e) => setAlgerianIdNumber(e.target.value)}
-                      placeholder="Ex: 1102938491029"
-                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs"
+                      value={idPieceNumber}
+                      onChange={(e) => {
+                        setIdPieceNumber(e.target.value);
+                        setAlgerianIdNumber(e.target.value);
+                        setPassportNumber(e.target.value);
+                      }}
+                      placeholder="Ex: 1102938491029 / 21EF98124"
+                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs font-bold"
                     />
                   </div>
+
                   <div>
                     <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
-                      {language === 'fr' ? 'Wilaya de Résidence' : 'Wilaya'}
+                      {guestType === 'algerian' ? 'Wilaya de Résidence (69 Wilayas) *' : 'Nationalité *'}
                     </label>
-                    <select
-                      value={wilayaOfOrigin}
-                      onChange={(e) => setWilayaOfOrigin(e.target.value)}
-                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
-                    >
-                      <option value="31 - Oran">31 - Oran</option>
-                      <option value="16 - Alger">16 - Alger</option>
-                      <option value="25 - Constantine">25 - Constantine</option>
-                      <option value="09 - Blida">09 - Blida</option>
-                      <option value="13 - Tlemcen">13 - Tlemcen</option>
-                      <option value="15 - Tizi Ouzou">15 - Tizi Ouzou</option>
-                      <option value="19 - Sétif">19 - Sétif</option>
-                      <option value="23 - Annaba">23 - Annaba</option>
-                      <option value="35 - Boumerdès">35 - Boumerdès</option>
-                      <option value="06 - Béjaïa">06 - Béjaïa</option>
-                      <option value="47 - Ghardaïa">47 - Ghardaïa</option>
-                      <option value="30 - Ouargla">30 - Ouargla</option>
-                      <option value="Autre Wilaya">Autre Wilaya</option>
-                    </select>
+                    {guestType === 'algerian' ? (
+                      <select
+                        value={wilayaOfOrigin}
+                        onChange={(e) => setWilayaOfOrigin(e.target.value)}
+                        className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
+                      >
+                        {ALGERIA_69_WILAYAS.map((w) => (
+                          <option key={w.code} value={`${w.code} - ${w.nameFr}`}>
+                            {w.code} - {w.nameFr} ({w.nameAr})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={foreignNationality}
+                        onChange={(e) => setForeignNationality(e.target.value)}
+                        placeholder="Ex: Française, Tunisienne, Chinoise..."
+                        className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
+                      />
+                    )}
                   </div>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
-                  <div>
-                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
-                      {language === 'fr' ? 'Nationalité' : 'Nationality'}
+
+                {/* Conditional Description for Special Authorization */}
+                {idPieceType === 'special_authorization' && (
+                  <div className="p-2.5 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl space-y-1">
+                    <label className="block font-bold text-amber-900 dark:text-amber-200 text-xs flex items-center gap-1.5">
+                      <ShieldAlert size={14} className="text-amber-600" />
+                      <span>Descriptif de l'Autorisation Spéciale (Motif, autorité émettrice, référence dérogation) *</span>
                     </label>
-                    <input
-                      type="text"
-                      value={foreignNationality}
-                      onChange={(e) => setForeignNationality(e.target.value)}
-                      placeholder="Ex: Française, Espagnole, Chinoise..."
-                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
+                    <textarea
+                      rows={2}
+                      required
+                      value={specialAuthorizationDesc}
+                      onChange={(e) => setSpecialAuthorizationDesc(e.target.value)}
+                      placeholder="Ex: Autorisation spéciale préfectorale n° 2026/419 émise par la Wilaya d'Oran - Mission officielle d'inspection..."
+                      className="w-full p-2 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
                     />
                   </div>
-                  <div>
-                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
-                      {language === 'fr' ? 'N° Passeport' : 'Passport Number'}
-                    </label>
-                    <input
-                      type="text"
-                      value={passportNumber}
-                      onChange={(e) => setPassportNumber(e.target.value)}
-                      placeholder="Ex: 21EF98124"
-                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs uppercase"
-                    />
+                )}
+
+                {/* Foreigner Visa & Entry Fields */}
+                {guestType === 'foreigner' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <div>
+                      <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                        {language === 'fr' ? 'N° Visa Entrée Algérie' : 'Algerian Visa Number'}
+                      </label>
+                      <input
+                        type="text"
+                        value={visaNumber}
+                        onChange={(e) => setVisaNumber(e.target.value)}
+                        placeholder="Ex: VZ-2026/09"
+                        className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                        {language === 'fr' ? "Date d'Entrée sur le Territoire" : 'Entry Date'}
+                      </label>
+                      <input
+                        type="date"
+                        value={entryDateInCountry}
+                        onChange={(e) => setEntryDateInCountry(e.target.value)}
+                        className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
-                      {language === 'fr' ? 'N° Visa Algérie' : 'Visa Number'}
-                    </label>
-                    <input
-                      type="text"
-                      value={visaNumber}
-                      onChange={(e) => setVisaNumber(e.target.value)}
-                      placeholder="Ex: VZ-2026/09"
-                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs uppercase"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
-                      {language === 'fr' ? "Date d'Entrée" : 'Entry Date'}
-                    </label>
-                    <input
-                      type="date"
-                      value={entryDateInCountry}
-                      onChange={(e) => setEntryDateInCountry(e.target.value)}
-                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
-                    />
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 
@@ -968,18 +1148,157 @@ export const BookingModal: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Formule de Pension</label>
-                <select
-                  value={hotelMealPlan}
-                  onChange={(e) => setHotelMealPlan(e.target.value as any)}
-                  className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                >
-                  <option value="room_only">Hébergement seul (Room Only)</option>
-                  <option value="breakfast">Petit-déjeuner buffet inclus (+15€ / pers / jour)</option>
-                  <option value="half_board">Demi-pension gourmande (+38€ / pers / jour)</option>
-                  <option value="full_board">Pension complète (+58€ / pers / jour)</option>
-                </select>
+              {/* Formule de Pension & Restauration (Inspiré Booking & Airbnb) */}
+              <div className="space-y-2 pt-1 border-t border-blue-200/50 dark:border-blue-900/40">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-700 dark:text-slate-300 text-xs flex items-center gap-1.5">
+                    <UtensilsCrossed size={14} className="text-amber-500" />
+                    <span>Formule de Pension & Restauration (Standard Booking / Airbnb)</span>
+                  </label>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200">
+                    {HOSPITALITY_MEAL_PLANS.find((p) => p.id === selectedMealPlanId)?.shortBadge || 'BB'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {HOSPITALITY_MEAL_PLANS.map((plan) => {
+                    const isSelected = selectedMealPlanId === plan.id;
+                    const priceInDzd = Math.round(plan.pricePerPersonDay * 145.5);
+                    return (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        onClick={() => setSelectedMealPlanId(plan.id)}
+                        className={`p-2 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-950/60 ring-2 ring-blue-500 shadow-xs'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                              isSelected
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
+                            {plan.shortBadge}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                            {plan.pricePerPersonDay === 0
+                              ? 'Inclus'
+                              : paymentCurrency === 'DA'
+                              ? `+${priceInDzd} DA/j`
+                              : `+${plan.pricePerPersonDay} €/j`}
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-semibold text-slate-900 dark:text-slate-100 leading-snug line-clamp-1">
+                          {plan.name[language] || plan.name.fr}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Selected Plan Description */}
+                {(() => {
+                  const currentPlan = HOSPITALITY_MEAL_PLANS.find((p) => p.id === selectedMealPlanId);
+                  if (!currentPlan) return null;
+                  return (
+                    <div className="p-2 bg-slate-100/70 dark:bg-slate-900/60 rounded-lg text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
+                      <p className="italic">{currentPlan.description[language] || currentPlan.description.fr}</p>
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {currentPlan.includedItems.map((item, idx) => (
+                          <span
+                            key={idx}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium text-slate-700 dark:text-slate-300"
+                          >
+                            ✓ {item}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Dietary preferences */}
+                <div className="space-y-1 pt-1">
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
+                    Régimes & Préférences Alimentaires :
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {DIETARY_PREFERENCES.map((diet) => {
+                      const isChecked = selectedDietary.includes(diet.id);
+                      return (
+                        <button
+                          key={diet.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDietary(
+                              isChecked
+                                ? selectedDietary.filter((id) => id !== diet.id)
+                                : [...selectedDietary, diet.id]
+                            );
+                          }}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                            isChecked
+                              ? 'bg-emerald-600 text-white shadow-xs'
+                              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          {diet.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Airbnb & Booking Style Extras */}
+                <div className="space-y-1 pt-1">
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
+                    Extras Expérientiels Booking & Airbnb :
+                  </span>
+                  <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                    {[
+                      { id: 'grab_go', label: '🥡 Grab & Go (Petit-déj emporté)', price: '+12€/p' },
+                      { id: 'picnic', label: '🧺 Panier Pique-Nique Excursion', price: '+20€/p' },
+                      { id: 'romantic', label: '🕯️ Dîner Romantique Chandelles VIP', price: '+65€' },
+                      { id: 'private_chef', label: '👨‍🍳 Barbecue & Chef Privé en Villa', price: '+95€' },
+                    ].map((extra) => {
+                      const isChecked = selectedExtras.includes(extra.id);
+                      return (
+                        <label
+                          key={extra.id}
+                          className={`flex items-center justify-between p-1.5 rounded-lg border cursor-pointer select-none ${
+                            isChecked
+                              ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 font-semibold'
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 truncate">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                setSelectedExtras(
+                                  isChecked
+                                    ? selectedExtras.filter((id) => id !== extra.id)
+                                    : [...selectedExtras, extra.id]
+                                );
+                              }}
+                              className="rounded text-blue-600"
+                            />
+                            <span className="truncate">{extra.label}</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 shrink-0 ml-1">
+                            {extra.price}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
@@ -1115,12 +1434,14 @@ export const BookingModal: React.FC = () => {
           {/* 4. DATES & SCHEDULE */}
           <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                {language === 'fr' ? "Date d'arrivée / Début" : 'Start / Check-in Date'}
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                <span>{language === 'fr' ? "Date d'arrivée / Début *" : 'Start / Check-in Date *'}</span>
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-normal">≥ Aujourd'hui</span>
               </label>
               <input
                 type="date"
                 required
+                min={todayIso}
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 className="w-full h-9 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
@@ -1128,14 +1449,14 @@ export const BookingModal: React.FC = () => {
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                {language === 'fr'
-                  ? 'Date de départ / Fin'
-                  : 'End / Check-out Date'}
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                <span>{language === 'fr' ? 'Date de départ / Fin *' : 'End / Check-out Date *'}</span>
+                <span className="text-[10px] text-slate-400 font-normal">Min: Arrivée</span>
               </label>
               <input
                 type="date"
                 required
+                min={startDate || todayIso}
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="w-full h-9 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"

@@ -131,25 +131,32 @@ export const PlanningTimeline: React.FC = () => {
     media.addEventListener('change', handleChange);
     return () => media.removeEventListener('change', handleChange);
   }, []);
+  const lastScrollLeftRef = useRef(0);
   const handleTimelineScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const el = event.currentTarget;
-    setIsDayHeaderCollapsed(el.scrollTop > 48);
-    if (edgeLoadLockRef.current) return;
+    const currentScrollLeft = el.scrollLeft;
+    // CRITICAL: only process horizontal expansion if scrollLeft actually changed (not vertical scroll)
+    const isHorizontalScroll = Math.abs(currentScrollLeft - lastScrollLeftRef.current) > 3;
+    lastScrollLeftRef.current = currentScrollLeft;
+
+    if (!isHorizontalScroll || edgeLoadLockRef.current) return;
+
     const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
-    const raw = el.scrollLeft;
+    const raw = currentScrollLeft;
     const position = isRTL ? Math.max(0, Math.min(maxScroll, Math.abs(raw))) : Math.max(0, Math.min(maxScroll, raw));
-    // In RTL, scrollLeft grows negatively from the logical start in Chromium.
     const distanceToStart = position;
     const distanceToEnd = maxScroll - position;
     const chunkDays = 31;
-    if (distanceToStart < 700) {
+
+    // Only prepend if user has scrolled very close to the left start (< 150px)
+    if (distanceToStart < 150) {
       edgeLoadLockRef.current = true;
       pendingPrependWidthRef.current = chunkDays * colWidth;
       const [year, month, day] = timelineWindowStart.split('-').map(Number);
       const earlier = new Date(year, month - 1, day - chunkDays);
       setTimelineWindowStart([earlier.getFullYear(), String(earlier.getMonth() + 1).padStart(2, '0'), String(earlier.getDate()).padStart(2, '0')].join('-'));
       setTimelineWindowDays((count) => count + chunkDays);
-    } else if (distanceToEnd < 700) {
+    } else if (distanceToEnd < 150) {
       edgeLoadLockRef.current = true;
       setTimelineWindowDays((count) => count + chunkDays);
       window.requestAnimationFrame(() => { edgeLoadLockRef.current = false; });
@@ -164,12 +171,10 @@ export const PlanningTimeline: React.FC = () => {
     return columnZoomMode === 'compact' ? 44 : columnZoomMode === 'wide' ? 144 : 100;
   }, [columnZoomMode, isMobileScreen]);
 
-  // Keep enough height for both weekday and date labels; collapse only after vertical scrolling or on mobile.
-  const dayHeaderHeightClass = isDayHeaderCollapsed || isMobileScreen
-    ? 'h-9 min-h-[36px] max-h-[36px]'
-    : columnZoomMode === 'compact'
-      ? 'h-10 min-h-[40px] max-h-[40px]'
-      : 'h-12 md:h-16 min-h-[48px] md:min-h-[64px] max-h-[48px] md:max-h-[64px]';
+  // Stable day header height to prevent vertical jitter during scroll
+  const dayHeaderHeightClass = isMobileScreen
+    ? 'h-10 min-h-[40px] max-h-[40px]'
+    : 'h-12 min-h-[48px] max-h-[48px]';
 
   // Collapsed state for resource groups
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -270,13 +275,11 @@ export const PlanningTimeline: React.FC = () => {
     direction: language === 'ar' ? 'rtl' : 'ltr',
   });
 
-  const todayStr = timelineSync.todayDateStr;
-
   const timelineDays = useMemo(() => {
     const [y, m, d] = timelineWindowStart.split('-').map(Number);
     const dates: { dateStr: string; dayNum: number; dayName: string; isWeekend: boolean; isToday: boolean }[] = [];
 
-    const realTodayStr = todayStr;
+    const realTodayStr = timelineSync.todayDateStr;
 
     const dayFormatter = new Intl.DateTimeFormat(
       language === 'fr' ? 'fr-FR' : language === 'ar' ? 'ar-EG' : 'en-US',
@@ -310,6 +313,7 @@ export const PlanningTimeline: React.FC = () => {
   const todayIndex = timelineSync.todayIndex;
   const currentTimeStr = timelineSync.currentTimeStr;
   const currentHourFraction = timelineSync.currentHourFraction;
+  const realTodayStr = timelineSync.todayDateStr;
 
   // Filter resource groups strictly by currentDomain (NEVER MIX) & searchQuery & establishment
   const filteredGroups = useMemo(() => {
@@ -862,17 +866,17 @@ export const PlanningTimeline: React.FC = () => {
 
         {/* RIGHT AREA: Timeline Grid with Horizontal Scrolling */}
         <div className="flex-1 flex flex-col min-w-max min-h-max relative">
-          {/* Live Current Time Line Marker: Dynamic offset relative to timeline's scroll position and container width */}
+          {/* Live Current Time Line Marker: Exact coordinate on timeline canvas */}
           {timelineSync.isTodayInRange && (
             <div
-              className="absolute top-0 bottom-0 min-h-full pointer-events-none z-30 flex flex-col items-center transition-[left] duration-300"
+              className="absolute top-0 bottom-0 min-h-full pointer-events-none z-30 flex flex-col items-center"
               style={{
                 left: `${timelineSync.absoluteGridX}px`,
                 transform: 'translateX(-50%)',
               }}
             >
-              {/* Floating Pill Time Badge */}
-              <div className={`sticky ${isDayHeaderCollapsed ? "top-9" : "top-16 md:top-20"} -mt-3.5 z-40 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono text-white bg-rose-600 shadow-md shadow-rose-600/50 whitespace-nowrap flex items-center gap-1.5 border-2 border-white dark:border-slate-900 select-none`}>
+              {/* Floating Pill Time Badge anchored smoothly */}
+              <div className="sticky top-1 z-40 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono text-white bg-rose-600 shadow-md shadow-rose-600/50 whitespace-nowrap flex items-center gap-1.5 border-2 border-white dark:border-slate-900 select-none">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                 <span>{timelineSync.currentTimeStr}</span>
               </div>
@@ -971,13 +975,13 @@ export const PlanningTimeline: React.FC = () => {
                             key={res.id}
                             className={`h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 flex relative border-b border-slate-200/80 dark:border-slate-800/80 transition-colors ${
                               isOutOfOrder
-                                ? 'bg-slate-200/50 dark:bg-slate-850/60'
+                                ? 'bg-slate-200 dark:bg-slate-800/90 pointer-events-none select-none cursor-not-allowed opacity-90'
                                 : 'bg-white dark:bg-slate-900 hover:bg-blue-50/20 dark:hover:bg-blue-950/20'
                             }`}
                           >
                             {/* Background Grid Cells for clicking to add booking */}
                             {timelineDays.map((day) => {
-                              const isPast = day.dateStr < todayStr;
+                              const isPast = day.dateStr < realTodayStr;
                               const isCellDisabled = isOutOfOrder || isPast;
 
                               return (
@@ -1004,16 +1008,16 @@ export const PlanningTimeline: React.FC = () => {
                                   }
                                   title={
                                     isOutOfOrder
-                                      ? `Chambre ${res.name} hors service (HS)`
+                                      ? `Chambre ${res.name} hors service (HS) — ligne désactivée`
                                       : isPast
                                       ? `Date passée (${day.dateStr}) — réservations antérieures désactivées`
                                       : `Créer une réservation • ${res.name} • ${day.dateStr}`
                                   }
                                   className={`relative shrink-0 border-r border-slate-100 dark:border-slate-800/40 h-full p-0 transition-colors ${
                                     isOutOfOrder
-                                      ? 'bg-slate-200/80 dark:bg-slate-800/70 cursor-not-allowed opacity-60'
+                                      ? 'bg-slate-200/95 dark:bg-slate-800/90 cursor-not-allowed pointer-events-none select-none opacity-80'
                                       : isPast
-                                      ? 'bg-slate-100/70 dark:bg-slate-900/40 cursor-not-allowed opacity-40'
+                                      ? 'bg-slate-100/90 dark:bg-slate-900/60 cursor-not-allowed pointer-events-none opacity-40 select-none'
                                       : `cursor-pointer hover:bg-blue-50/70 dark:hover:bg-blue-950/35 active:bg-blue-100 dark:active:bg-blue-900/40 ${
                                           day.isWeekend ? 'bg-slate-50/30 dark:bg-slate-900/20' : ''
                                         }`

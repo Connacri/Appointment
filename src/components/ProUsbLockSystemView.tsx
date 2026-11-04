@@ -254,6 +254,48 @@ export const ProUsbLockSystemView: React.FC = () => {
     };
   }, [mdbSnapshot, resourceGroups]);
 
+  /**
+   * Chambres réelles câblées et alignées avec les bâtiments et étages réels.
+   * Si CardLock.mdb est importé : utilise les chambres et bâtiments réels de la base.
+   * Sinon : déduit des chambres configurées dans l'inventaire.
+   */
+  const availableRoomsList = useMemo(() => {
+    if (mdbSnapshot && mdbSnapshot.rooms.length > 0) {
+      return mdbSnapshot.rooms.map((r) => {
+        const bldName = mdbSnapshot.buildings.find((b) => b.no === r.building)?.name;
+        return {
+          roomNumber: r.roomNo,
+          buildingNo: r.building,
+          buildingName: bldName || `Bâtiment ${r.building}`,
+          floorNo: r.floor,
+          label: `${r.roomNo} · ${bldName || `Bâtiment ${r.building}`}, Étage ${r.floor}`,
+        };
+      });
+    }
+    const hotelResources = resourceGroups
+      .filter((g) => g.sector === 'hotel' || g.sector === 'resort')
+      .flatMap((g) => g.resources);
+    return hotelResources.map((res) => {
+      const bld = parseInt(res.building ?? '1', 10) || 1;
+      const flr = parseInt(res.floor ?? '', 10) || parseInt((res.name || '')[0] ?? '1', 10) || 1;
+      return {
+        roomNumber: res.name,
+        buildingNo: bld,
+        buildingName: `Bâtiment ${bld}`,
+        floorNo: flr,
+        label: `${res.name} (${res.type}) · Bâtiment ${bld}, Étage ${flr}`,
+      };
+    });
+  }, [mdbSnapshot, resourceGroups]);
+
+  // Special Card (Carte Spéciale protégée par mot de passe isolée de tous les masters/bâtiments/étages)
+  const [showSpecialCardModal, setShowSpecialCardModal] = useState(false);
+  const [specialRoomNumber, setSpecialRoomNumber] = useState('101');
+  const [specialPin, setSpecialPin] = useState('');
+  const [specialHolderName, setSpecialHolderName] = useState('VIP Direction');
+  const [specialPurpose, setSpecialPurpose] = useState('Suite Présidentielle Sécurisée');
+  const [specialValidityDays, setSpecialValidityDays] = useState(30);
+
   // Après un import de base, une sélection devenue invalide (ex. étage 5
   // alors que la base n'a que les étages 1 et 2) est réalignée sur la
   // première valeur réellement existante.
@@ -264,7 +306,10 @@ export const ProUsbLockSystemView: React.FC = () => {
     if (!buildingNos.includes(staffBuildingNo)) setStaffBuildingNo(buildingNos[0]);
     if (!floorNos.includes(commissionFloor)) setCommissionFloor(floorNos[0]);
     if (!buildingNos.includes(commissionBuilding)) setCommissionBuilding(buildingNos[0]);
-  }, [availableFloors, availableBuildings, staffFloorNo, staffBuildingNo, commissionFloor, commissionBuilding]);
+    if (availableRoomsList.length > 0 && !availableRoomsList.some((r) => r.roomNumber === guestRoomNumber)) {
+      setGuestRoomNumber(availableRoomsList[0].roomNumber);
+    }
+  }, [availableFloors, availableBuildings, availableRoomsList, staffFloorNo, staffBuildingNo, commissionFloor, commissionBuilding, guestRoomNumber]);
 
   /**
    * L'ID et l'Operator Code affichés par CardLock.exe ne sont pas dans la carte :
@@ -594,6 +639,53 @@ export const ProUsbLockSystemView: React.FC = () => {
         title: "Échec de l'écriture de la carte de fonction",
         message: err.message,
         details: [{ label: 'Type', value: selectedStaffType.toUpperCase() }],
+      });
+    }
+  };
+
+  const handleIssueSpecialCard = async () => {
+    if (!specialPin || specialPin.trim().length < 4) {
+      showToast('error', 'Le mot de passe / code PIN doit comporter au moins 4 caractères.');
+      return;
+    }
+    const cardTitle = `Carte Spéciale Protégée · Chambre ${specialRoomNumber}`;
+    try {
+      await runWithCardProgress(cardTitle, async (updateProgress) => {
+        updateProgress(25, "Hachage cryptographique du mot de passe PIN...");
+        updateProgress(60, "Écriture radiofréquence (famille 0x90 isolée)...");
+        const record = await lockManager.issueSpecialCard({
+          roomNumber: specialRoomNumber,
+          passwordPin: specialPin,
+          holderName: specialHolderName,
+          operator: 'SuperAdmin',
+          specialDescription: specialPurpose,
+          validityDays: specialValidityDays,
+        });
+        updateProgress(90, "Vérification de l'isolation d'accès...");
+        showToast('success', `Carte Spéciale pour chambre ${specialRoomNumber} encodée avec mot de passe !`);
+        setCardResult({
+          success: true,
+          title: 'Carte Spéciale Sécurisée émise',
+          message: `Carte protégée par mot de passe émise avec succès pour la chambre ${specialRoomNumber} (${specialPurpose}). Cette carte est strictement isolée des passes maîtres, étages et bâtiments.`,
+          details: [
+            { label: 'Chambre Spéciale', value: specialRoomNumber },
+            { label: 'Titulaire', value: specialHolderName },
+            { label: 'Protection', value: 'Mot de passe PIN crypté' },
+            { label: 'Usage / Motif', value: specialPurpose },
+            { label: 'Expire le', value: record.validUntil },
+            { label: 'Trame (Hex)', value: record.rawHex },
+          ],
+        });
+        setShowSpecialCardModal(false);
+        setSpecialPin('');
+      });
+    } catch (err: any) {
+      showToast('error', `Erreur : ${err.message}`);
+      setCardResult({
+        success: false,
+        title: "Échec de l'écriture de la Carte Spéciale",
+        message: err.message,
+        details: [{ label: 'Chambre', value: specialRoomNumber }],
       });
     }
   };
@@ -930,19 +1022,33 @@ export const ProUsbLockSystemView: React.FC = () => {
                 {/* Card Fields Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
                   <div>
-                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
-                      Numéro de Chambre *
+                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                      <span>Chambre Réelle de l'Établissement *</span>
+                      <span className="text-[10px] text-blue-600 dark:text-blue-400 font-mono">
+                        {availableRoomsList.length} chambres
+                      </span>
                     </label>
-                    <input
-                      type="text"
+                    <select
                       value={guestRoomNumber}
                       onChange={(e) => setGuestRoomNumber(e.target.value)}
-                      placeholder="Ex: 101, 205"
                       className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 font-bold text-slate-900 dark:text-white"
-                    />
-                    <span className="text-[10px] text-slate-400 mt-1 block">
-                      Étage {Math.floor(parseInt(guestRoomNumber, 10) / 100) || 1} · Chambre {parseInt(guestRoomNumber, 10) % 100 || 1}
-                    </span>
+                    >
+                      {availableRoomsList.map((r, i) => (
+                        <option key={i} value={r.roomNumber}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+                    {(() => {
+                      const matched = availableRoomsList.find((r) => r.roomNumber === guestRoomNumber);
+                      return (
+                        <span className="text-[10px] text-slate-400 mt-1 block">
+                          {matched
+                            ? `${matched.buildingName} · Étage ${matched.floorNo} · N° ${matched.roomNumber}`
+                            : `Étage ${Math.floor(parseInt(guestRoomNumber, 10) / 100) || 1} · Chambre ${parseInt(guestRoomNumber, 10) % 100 || 1}`}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <div className="md:col-span-2">
@@ -1443,24 +1549,33 @@ export const ProUsbLockSystemView: React.FC = () => {
         {/* TAB 2: STAFF & FUNCTION CARDS */}
         {activeTab === 'staff_cards' && (
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 flex-wrap gap-2">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <ShieldCheck size={18} className="text-purple-600" />
                   Émission des Cartes de Service, Passe & Sécurité (proRFL)
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Génération des passes maîtres, cartes d'étages, urgences et révocation (TfrmKeysForStaff).
+                  Chaque bâtiment possède ses propres cartes d'étages et de bâtiments. Le Master ouvre l'ensemble du complexe.
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowSpecialCardModal(true)}
+                className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <KeyRound size={15} />
+                <span>🔐 Créer Carte Spéciale (avec mot de passe)</span>
+              </button>
             </div>
 
             {/* Staff Card Selector */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2.5">
               {[
-                { type: 'master' as const, label: 'Master (Passe Général)', icon: Lock },
-                { type: 'floor' as const, label: 'Étage (Floor)', icon: Layers },
-                { type: 'building' as const, label: 'Bâtiment', icon: Building },
+                { type: 'master' as const, label: 'Master (Passe Général Tous Bâtiments)', icon: Lock },
+                { type: 'floor' as const, label: 'Étage (Propre au Bâtiment)', icon: Layers },
+                { type: 'building' as const, label: 'Bâtiment Spécifique', icon: Building },
+                { type: 'special' as const, label: '🔐 Spéciale (Mot de passe)', icon: KeyRound },
                 { type: 'emergency' as const, label: 'Urgence (Pompiers)', icon: Flame },
                 { type: 'group' as const, label: 'Groupe', icon: UserCheck },
                 { type: 'checkout' as const, label: 'Check-Out Annulation', icon: Unlock },
@@ -1471,14 +1586,21 @@ export const ProUsbLockSystemView: React.FC = () => {
                 return (
                   <button
                     key={btn.type}
-                    onClick={() => setSelectedStaffType(btn.type)}
+                    onClick={() => {
+                      setSelectedStaffType(btn.type);
+                      if (btn.type === 'special') {
+                        setShowSpecialCardModal(true);
+                      }
+                    }}
                     className={`p-3 rounded-xl border text-left flex flex-col gap-2 transition-all ${
                       isSelected
-                        ? 'border-purple-600 bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 shadow-xs'
+                        ? btn.type === 'special'
+                          ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 shadow-xs'
+                          : 'border-purple-600 bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 shadow-xs'
                         : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-600 dark:text-slate-400'
                     }`}
                   >
-                    <Icon size={18} className={isSelected ? 'text-purple-600' : 'text-slate-400'} />
+                    <Icon size={18} className={isSelected ? (btn.type === 'special' ? 'text-amber-600' : 'text-purple-600') : 'text-slate-400'} />
                     <span className="text-xs font-bold leading-tight">{btn.label}</span>
                   </button>
                 );
@@ -1500,27 +1622,40 @@ export const ProUsbLockSystemView: React.FC = () => {
               </div>
 
               {selectedStaffType === 'floor' && (
-                <div>
-                  <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
-                    Étage à Déverrouiller *
-                  </label>
-                  <select
-                    value={staffFloorNo}
-                    onChange={(e) => setStaffFloorNo(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
-                  >
-                    {availableFloors.map((fl) => (
-                      <option key={fl.no} value={fl.no}>
-                        {fl.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    {mdbStatus.connected
-                      ? 'Étages réels de la base CardLock.mdb importée.'
-                      : 'Étages dérivés des chambres du planning (importez la base pour les valeurs exactes).'}
-                  </p>
-                </div>
+                <>
+                  <div>
+                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      Bâtiment Assigné *
+                    </label>
+                    <select
+                      value={staffBuildingNo}
+                      onChange={(e) => setStaffBuildingNo(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                    >
+                      {availableBuildings.map((b) => (
+                        <option key={b.no} value={b.no}>
+                          {b.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      Étage de ce Bâtiment *
+                    </label>
+                    <select
+                      value={staffFloorNo}
+                      onChange={(e) => setStaffFloorNo(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                    >
+                      {availableFloors.map((fl) => (
+                        <option key={fl.no} value={fl.no}>
+                          {fl.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
               )}
 
               {selectedStaffType === 'building' && (
@@ -1543,6 +1678,26 @@ export const ProUsbLockSystemView: React.FC = () => {
                     {mdbStatus.connected
                       ? 'Bâtiments réels de la base CardLock.mdb importée.'
                       : 'Bâtiments dérivés du planning (importez la base pour les noms exacts).'}
+                  </p>
+                </div>
+              )}
+
+              {selectedStaffType === 'special' && (
+                <div className="md:col-span-2 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-amber-900 dark:text-amber-200">
+                      Carte Spéciale Protégée par Mot de Passe
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowSpecialCardModal(true)}
+                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs cursor-pointer"
+                    >
+                      Ouvrir Assistant Sécurisé
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                    Cette carte est réservée à une chambre spéciale et est isolée de tous les autres passes maîtres, étages et bâtiments.
                   </p>
                 </div>
               )}
@@ -2404,6 +2559,170 @@ export const ProUsbLockSystemView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* MODAL: CRÉATION CARTE SPÉCIALE AVEC MOT DE PASSE */}
+      {showSpecialCardModal && (
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowSpecialCardModal(false);
+          }}
+        >
+          <div className="bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col my-auto text-xs">
+            {/* Modal Header */}
+            <div className="p-4 bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-white/20 rounded-xl backdrop-blur-xs">
+                  <KeyRound size={20} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm leading-tight">
+                    Création d'une Carte Spéciale (avec mot de passe)
+                  </h3>
+                  <p className="text-[11px] text-amber-100">
+                    Chambre Spéciale · Famille proUSB 0x90 Isolée de tout Master & Bâtiment
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSpecialCardModal(false)}
+                className="p-1.5 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleIssueSpecialCard();
+              }}
+              className="p-5 space-y-4"
+            >
+              {/* Isolation Banner */}
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/80 rounded-xl text-amber-900 dark:text-amber-200 text-[11px] space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <ShieldCheck size={14} className="text-amber-600" />
+                  <span>Isolation Totale & Sécurité Renforcée</span>
+                </div>
+                <p className="leading-relaxed">
+                  Cette carte est réservée à une chambre spéciale et est <strong>strictement isolée</strong> :
+                  elle ne peut être ouverte ni par les passes maîtres généraux, ni par les cartes bâtiments,
+                  ni par les cartes étages, ni par les cartes urgences ou pompiers.
+                </p>
+              </div>
+
+              {/* Room Selection */}
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                  <span>Chambre Spéciale Cible *</span>
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-mono">
+                    {availableRoomsList.length} chambres disponibles
+                  </span>
+                </label>
+                <select
+                  value={specialRoomNumber}
+                  onChange={(e) => setSpecialRoomNumber(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 font-bold text-slate-900 dark:text-white"
+                >
+                  {availableRoomsList.map((r, i) => (
+                    <option key={i} value={r.roomNumber}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Security Password / PIN */}
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                  <span>Mot de passe / Code PIN de la Carte Spéciale *</span>
+                  <span className="text-[10px] text-rose-500 font-semibold">Min. 4 caractères</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={specialPin}
+                  onChange={(e) => setSpecialPin(e.target.value)}
+                  placeholder="Entrez le mot de passe confidentiel (Ex: 8844 ou secret2026)"
+                  className="w-full p-2.5 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-slate-850 font-mono text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Le mot de passe est crypté et haché dans le secteur sécurisé de la puce RFID.
+                </span>
+              </div>
+
+              {/* Holder Name */}
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Titulaire Autorisé / Rôle *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={specialHolderName}
+                  onChange={(e) => setSpecialHolderName(e.target.value)}
+                  placeholder="Ex: Direction Générale / Ambassadeur VIP"
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 font-medium text-slate-900 dark:text-white"
+                />
+              </div>
+
+              {/* Purpose / Description */}
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Motif / Affectation Spéciale
+                </label>
+                <input
+                  type="text"
+                  value={specialPurpose}
+                  onChange={(e) => setSpecialPurpose(e.target.value)}
+                  placeholder="Ex: Suite Présidentielle VIP / Coffre Sécurisé"
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-800 dark:text-slate-200"
+                />
+              </div>
+
+              {/* Validity */}
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Durée de Validité
+                </label>
+                <select
+                  value={specialValidityDays}
+                  onChange={(e) => setSpecialValidityDays(Number(e.target.value))}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 font-medium"
+                >
+                  <option value={7}>7 jours (Séjour court VIP)</option>
+                  <option value={30}>30 jours (Mission spéciale 1 mois)</option>
+                  <option value={90}>90 jours (Trimestre)</option>
+                  <option value={365}>1 an (Permanent)</option>
+                  <option value={3650}>10 ans (Direction / Illimité)</option>
+                </select>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSpecialCardModal(false)}
+                  className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isWriting}
+                  className="px-5 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-75"
+                >
+                  <ShieldCheck size={16} />
+                  <span>Encoder la Carte Spéciale</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Indicateur circulaire de progression immersif affiché lors de l'encodage de toute carte */}
       <CardCreationProgressModal

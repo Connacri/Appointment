@@ -56,6 +56,8 @@ export const TopBar: React.FC = () => {
     setIsLegalModalOpen,
     setIsAboutModalOpen,
     setActiveView,
+    currency,
+    setCurrency,
   } = useApp();
 
   const [usbStatus, setUsbStatus] = useState<UsbConnectionStatus>(lockManager.getStatus());
@@ -346,6 +348,26 @@ export const TopBar: React.FC = () => {
             USB • {usbStatus === 'connected' ? 'Prêt' : 'Connecter'}
           </span>
         </button>
+
+        {/* Global Currency Switcher */}
+        <div className="h-8 flex items-center bg-slate-900 border border-slate-700/80 rounded-lg px-2 text-xs font-mono font-bold text-amber-400 shadow-2xs">
+          <span className="text-[10px] text-slate-400 mr-1.5 font-sans hidden sm:inline">Devise:</span>
+          <select
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
+            className="bg-transparent text-amber-400 font-bold focus:outline-none cursor-pointer"
+            title="Changer la devise globale de l'établissement"
+          >
+            <option value="DZD" className="bg-slate-900 text-white">🇩🇿 DZD (DA)</option>
+            <option value="DA" className="bg-slate-900 text-white">🇩🇿 DA</option>
+            <option value="EUR" className="bg-slate-900 text-white">🇪🇺 EUR (€)</option>
+            <option value="USD" className="bg-slate-900 text-white">🇺🇸 USD ($)</option>
+            <option value="GBP" className="bg-slate-900 text-white">🇬🇧 GBP (£)</option>
+            <option value="SAR" className="bg-slate-900 text-white">🇸🇦 SAR (﷼)</option>
+            <option value="RMB" className="bg-slate-900 text-white">🇨🇳 RMB (¥)</option>
+            <option value="CAD" className="bg-slate-900 text-white">🇨🇦 CAD ($)</option>
+          </select>
+        </div>
 
         {/* Primary Action Button: + Nouveau */}
         <button

@@ -739,6 +739,80 @@ class LockManager {
   }
 
   /**
+   * Issues a Special Password-Protected Card for a dedicated special room.
+   * Completely isolated from all standard master passes, building passes, floor passes,
+   * emergency passes, or fire passes.
+   */
+  public async issueSpecialCard(params: {
+    roomNumber: string;
+    buildingNo?: number;
+    floorNo?: number;
+    holderName: string;
+    operator: string;
+    passwordPin: string;
+    specialDescription?: string;
+    validityDays?: number;
+  }): Promise<IssuedCardRecord> {
+    if (!params.passwordPin || params.passwordPin.length < 4) {
+      throw new Error('Un mot de passe sécurisé (au moins 4 caractères ou chiffres) est obligatoire pour créer une Carte Spéciale.');
+    }
+
+    const validityDays = params.validityDays || 365;
+    const now = new Date();
+    const end = new Date(now.getTime() + validityDays * 24 * 3600 * 1000);
+
+    const recordBytes = encodeGuestCard({
+      roomNumber: params.roomNumber,
+      cardIndex: 9,
+      validity: {
+        startYear: now.getFullYear(),
+        startMonth: now.getMonth() + 1,
+        startDay: now.getDate(),
+        startHour: 0,
+        endYear: end.getFullYear(),
+        endMonth: end.getMonth() + 1,
+        endDay: end.getDate(),
+        endHour: 23,
+        endMinute: 59,
+      },
+      options: {
+        allowDeadbolt: true,
+        coverCardsBefore: true,
+        openPublicDoor: false,
+      },
+      siteCodeLow: this.getSiteCode(),
+    });
+
+    // Custom isolate tag and pin signature
+    recordBytes[0] = 0x90 | (recordBytes[0] & 0x0f);
+    let pinHash = 0;
+    for (let i = 0; i < params.passwordPin.length; i++) {
+      pinHash = (pinHash + params.passwordPin.charCodeAt(i) * 31) & 0xff;
+    }
+    recordBytes[13] = pinHash;
+
+    const decoded = await this.writeAndVerifyCard(recordBytes);
+
+    const newRecord: IssuedCardRecord = {
+      id: `special-${Date.now()}`,
+      rawHex: decoded.rawHex,
+      type: 'special',
+      cardIndex: 9,
+      roomNumber: params.roomNumber,
+      holderName: `${params.holderName} (🔐 Spéciale - ${params.specialDescription || 'Accès Restreint'})`,
+      operator: params.operator,
+      issuedAt: new Date().toISOString(),
+      status: 'active',
+      validUntil: `${String(end.getDate()).padStart(2, '0')}/${String(end.getMonth() + 1).padStart(2, '0')}/${end.getFullYear()} 23:59`,
+    };
+
+    this.issuedCards.unshift(newRecord);
+    this.saveIssuedCards();
+    this.notifyStateListeners();
+    return newRecord;
+  }
+
+  /**
    * Writes a genuine proUSB system (configuration) card.
    *
    * Bytes [2..3] (site), [4..5] (~site), [6..8] (header) and [10..12] (issue

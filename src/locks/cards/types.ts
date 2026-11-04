@@ -20,7 +20,8 @@ export type ProUsbCardType =
   | 'emergency'   // 0xA0: Emergency pass (opens deadbolt)
   | 'master'      // 0xB0: Hotel master card (opens all rooms)
   | 'building'    // 0xC0: Building pass (opens all rooms in building)
-  | 'floor';      // 0xD0: Floor pass (opens all rooms on floor)
+  | 'floor'       // 0xD0: Floor pass (opens all rooms on floor)
+  | 'special';    // 0x90: Special password-protected room card outside all masters/building passes
 
 export interface ProUsbCardTypeMeta {
   type: ProUsbCardType;
@@ -149,6 +150,15 @@ export const PROUSB_CARD_TYPES: Record<ProUsbCardType, ProUsbCardTypeMeta> = {
     badgeColor: 'red',
     isStaffCard: true,
     isCommissioningCard: true,
+  },
+  special: {
+    type: 'special',
+    typeFamilyByte: 0x90,
+    label: { fr: 'Carte Spéciale Protégée (Mot de passe)', en: 'Special Protected Card', ar: 'بطاقة خاصة محمية بكلمة مرور' },
+    description: { fr: 'Accès sécurisé pour chambre spéciale, isolée de tout master, pass bâtiment ou pass pompier', en: 'Secure isolated special room card requiring PIN/password authentication', ar: 'بطاقة معزولة بكلمة سر للغرف الخاصة خارج كل الماسترات' },
+    badgeColor: 'emerald',
+    isStaffCard: true,
+    isCommissioningCard: false,
   },
   reset: {
     type: 'reset',
