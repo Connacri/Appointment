@@ -27,52 +27,6 @@ const overlapNights = (start: string, end: string, from: string, toExclusive: st
   return dayDiff(a, b);
 };
 
-type ChartPoint = { label: string; value: number };
-
-const TrendLine: React.FC<{
-  title: string;
-  subtitle: string;
-  points: ChartPoint[];
-  color?: string;
-  suffix?: string;
-  emptyLabel: string;
-}> = ({ title, subtitle, points, color = '#2563eb', suffix = '', emptyLabel }) => {
-  const values = points.map(point => point.value);
-  const max = Math.max(1, ...values);
-  const min = Math.min(0, ...values);
-  const range = Math.max(1, max - min);
-  const x = (index: number) => points.length <= 1 ? 24 : 24 + index * (352 / (points.length - 1));
-  const y = (value: number) => 112 - ((value - min) / range) * 88;
-  const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(point.value)}`).join(' ');
-
-  return (
-    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-      <div className="mb-3">
-        <h2 className="text-sm font-bold text-slate-900 dark:text-white">{title}</h2>
-        <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{subtitle}</p>
-      </div>
-      {points.length ? (
-        <>
-          <div className="flex items-baseline gap-2">
-            <strong className="text-2xl font-bold tabular-nums text-slate-900 dark:text-white">{points[points.length - 1].value.toLocaleString()}</strong>
-            <span className="text-xs text-slate-500">{suffix}</span>
-          </div>
-          <svg viewBox="0 0 400 142" role="img" aria-label={title} className="mt-2 h-36 w-full overflow-visible">
-            {[24, 68, 112].map(lineY => <line key={lineY} x1="24" x2="376" y1={lineY} y2={lineY} stroke="currentColor" opacity="0.10" strokeDasharray="3 4" />)}
-            <path d={path} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-            {points.map((point, index) => <circle key={point.label} cx={x(index)} cy={y(point.value)} r={points.length > 24 ? 1.8 : 3} fill={color} />)}
-          </svg>
-          <div className="flex justify-between gap-2 text-[10px] text-slate-400">
-            <span>{points[0].label}</span>
-            {points.length > 2 && <span>{points[Math.floor((points.length - 1) / 2)].label}</span>}
-            <span>{points[points.length - 1].label}</span>
-          </div>
-        </>
-      ) : <p className="py-8 text-xs text-slate-500">{emptyLabel}</p>}
-    </section>
-  );
-};
-
 type BookingTrendPoint = { label: string; occupancy: number; arrivals: number };
 
 const BookingTrendPanel: React.FC<{
