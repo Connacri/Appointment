@@ -223,7 +223,7 @@ export const ProUsbLockSystemView: React.FC = () => {
 
     // Preserve the original CardLock identifiers: BldNo/FlrNo zero is valid.
     if (buildingNumbers.length === 0 && !mdbSnapshot) buildingNumbers.push(1);
-    const buildingNames = new Map(mdbBuildings.map((building) => [building.no, building.name]));
+    const buildingNames = new Map<number, string>(mdbBuildings.map((building) => [building.no, building.name] as const));
     const availableBuildings = buildingNumbers.map((no) => ({
       no,
       label: buildingNames.get(no)
@@ -324,7 +324,7 @@ export const ProUsbLockSystemView: React.FC = () => {
     if (availableRoomsList.length > 0 && !availableRoomsList.some((r) => r.roomNumber === guestRoomNumber)) {
       setGuestRoomNumber(availableRoomsList[0].roomNumber);
     }
-  }, [availableFloors, availableBuildings, availableRoomsList, staffFloorNo, staffBuildingNo, commissionFloor, commissionBuilding, guestRoomNumber]);
+  }, [availableFloors, staffAvailableFloors, availableBuildings, availableRoomsList, staffFloorNo, staffBuildingNo, commissionFloor, commissionBuilding, guestRoomNumber]);
 
   /**
    * L'ID et l'Operator Code affichés par CardLock.exe ne sont pas dans la carte :
