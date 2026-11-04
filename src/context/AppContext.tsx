@@ -85,7 +85,7 @@ interface AppContextType {
   setResourceGroups: React.Dispatch<React.SetStateAction<ResourceGroup[]>>;
   updateHousekeepingStatus: (resourceId: string, status: 'clean' | 'cleaning' | 'dirty' | 'out_of_order') => void;
   checkConflict: (resourceId: string, startDate: string, endDate: string, excludeBookingId?: string) => boolean;
-  addBooking: (booking: Omit<TimelineBooking, 'id'>) => { success: boolean; error?: string; booking?: TimelineBooking };
+  addBooking: (booking: Omit<TimelineBooking, 'id'>) => { success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'; booking?: TimelineBooking };
   updateBooking: (id: string, updates: Partial<TimelineBooking>) => void;
   updateBookingStatus: (id: string, status: BookingStatus) => void;
   deleteBooking: (id: string) => void;
