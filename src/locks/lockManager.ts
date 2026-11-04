@@ -889,6 +889,8 @@ class LockManager {
 
     const recordBytes = encodeGuestCard({
       roomNumber: params.roomNumber,
+      buildingNo: params.buildingNo,
+      floorNo: params.floorNo,
       cardIndex: 9,
       validity: {
         startYear: now.getFullYear(),
@@ -1052,7 +1054,7 @@ class LockManager {
    * Issues a Guest Card from a booking (auto-integration with planning)
    */
   public async issueGuestCardFromBooking(
-    booking: { id: string; guestName: string; unitName?: string; resourceName?: string; startDate: string; endDate: string },
+    booking: { id: string; guestName: string; unitName?: string; resourceName?: string; startDate: string; endDate: string; buildingNo?: number; floorNo?: number },
     operator: string = 'Admin'
   ): Promise<IssuedCardRecord> {
     const roomNumber = (booking.unitName || booking.resourceName || '101').replace(/\D/g, '') || '101';
@@ -1065,6 +1067,8 @@ class LockManager {
 
     return this.issueGuestCard({
       roomNumber,
+      buildingNo: booking.buildingNo,
+      floorNo: booking.floorNo,
       cardIndex: 1,
       holderName: booking.guestName,
       operator,
