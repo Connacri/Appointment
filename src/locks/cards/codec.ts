@@ -239,6 +239,26 @@ export function encodeGuestCard(params: EncodeGuestCardParams): Uint8Array {
   return card;
 }
 
+export interface EncodeSpecialCardParams extends EncodeGuestCardParams {
+  passwordPin: string;
+}
+
+/**
+ * Appointment's experimental 0x90 card format. Byte 0 remains the C9 record
+ * marker; byte 9 carries the card family and byte 13 carries the app PIN marker.
+ * The 8-bit marker is not a cryptographic or firmware-enforced password.
+ */
+export function encodeSpecialCard(params: EncodeSpecialCardParams): Uint8Array {
+  const pin = params.passwordPin.trim();
+  if (pin.length < 4) throw new Error('Le PIN de la carte spéciale doit contenir au moins 4 caractères.');
+  const card = encodeGuestCard({ ...params, cardIndex: params.cardIndex ?? 9 });
+  card[9] = PROUSB_CARD_TYPES.special.typeFamilyByte | ((params.cardIndex ?? 9) & 0x0f);
+  let pinHash = 0;
+  for (let i = 0; i < pin.length; i += 1) pinHash = (pinHash + pin.charCodeAt(i) * 31) & 0xff;
+  card[13] = pinHash;
+  return card;
+}
+
 export interface EncodeMasterCardParams {
   cardIndex?: number;
   validity: CardValidityWindow;
