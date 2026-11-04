@@ -411,3 +411,73 @@
     padding-inline: 0.5rem;
   }
 }
+
+
+/* App-level top bar: two deliberate rows on phones, with full-size touch targets. */
+@media (max-width: 767px) {
+  .pms-app-topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+    gap: 0.375rem;
+    padding: 0.5rem max(0.5rem, env(safe-area-inset-left));
+  }
+  .pms-app-topbar-left {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    gap: 0.375rem;
+  }
+  .pms-app-topbar-left > button,
+  .pms-app-topbar-left > div > button {
+    min-height: 2.25rem;
+    padding-inline: 0.55rem;
+    white-space: nowrap;
+  }
+  .pms-app-topbar-search {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+  .pms-app-topbar-actions {
+    grid-column: 2;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-end;
+    gap: 0.25rem;
+  }
+  .pms-app-topbar-actions > button,
+  .pms-app-topbar-actions > div > button,
+  .pms-app-topbar-currency {
+    height: 2.25rem;
+    min-width: 2.25rem;
+    padding-inline: 0.4rem;
+    justify-content: center;
+  }
+  .pms-app-topbar-actions > button[title^="Base ObjectBox"],
+  .pms-app-topbar-actions > button[title^="Encodeur USB"] {
+    width: 2.25rem;
+  }
+  .pms-app-topbar-currency select {
+    max-width: 3.5rem;
+    font-size: 0.6875rem;
+  }
+  .pms-app-topbar-actions > button[title="Créer une nouvelle réservation"] {
+    padding-inline: 0.5rem;
+  }
+}
+@media (max-width: 380px) {
+  .pms-app-topbar {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    padding-inline: 0.375rem;
+  }
+  .pms-app-topbar-left { gap: 0.25rem; }
+  .pms-app-topbar-left > button,
+  .pms-app-topbar-left > div > button {
+    padding-inline: 0.4rem;
+    font-size: 0.6875rem;
+  }
+  .pms-app-topbar-actions { gap: 0.2rem; }
+}
