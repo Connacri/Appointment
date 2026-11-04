@@ -20,6 +20,11 @@ import {
   Globe,
   Flower2,
   Info,
+  Sun,
+  Moon,
+  Volume2,
+  VolumeX,
+  Sliders,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -41,6 +46,13 @@ export const Sidebar: React.FC = () => {
     setIsLegalModalOpen,
     setIsObjectBoxOpen,
     setIsAboutModalOpen,
+    setIsEstablishmentModalOpen,
+    currency,
+    setCurrency,
+    theme,
+    setTheme,
+    isSoundEnabled,
+    toggleSound,
     isSidebarMobileOpen,
     setIsSidebarMobileOpen,
   } = useApp();
@@ -287,6 +299,47 @@ export const Sidebar: React.FC = () => {
         </div>
       )}
 
+      {/* Mobile preferences: compact controls kept out of the operational header. */}
+      {isMobileView && (
+        <section className="px-3 py-3 border-b border-slate-800/80 bg-slate-900/70 space-y-2 shrink-0">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{language === "fr" ? "Préférences" : language === "ar" ? "التفضيلات" : "Preferences"}</span>
+            <span className="text-[10px] text-slate-500">{language.toUpperCase()}</span>
+          </div>
+          <div className="grid grid-cols-[auto_1fr] items-center gap-2">
+            <span className="text-[11px] text-slate-400">{language === "fr" ? "Langue" : language === "ar" ? "اللغة" : "Language"}</span>
+            <div className="grid grid-cols-3 gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1">
+              {(["fr", "en", "ar"] as const).map((locale) => (
+                <button key={locale} type="button" onClick={() => setLanguage(locale)} className={"min-h-8 rounded-md text-[11px] font-bold transition-colors " + (language === locale ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white")}>
+                  {locale === "ar" ? "العربية" : locale.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 text-[11px] text-slate-300">
+              <span>{language === "fr" ? "Devise" : language === "ar" ? "العملة" : "Currency"}</span>
+              <select value={currency} onChange={(event) => setCurrency(event.target.value)} className="max-w-[5.5rem] min-w-0 bg-transparent text-right text-[11px] font-bold text-amber-300 outline-none">
+                <option value="DZD">DZD (DA)</option><option value="DA">DA</option><option value="EUR">EUR (€)</option><option value="USD">USD ($)</option><option value="GBP">GBP (£)</option><option value="SAR">SAR</option><option value="RMB">RMB (¥)</option><option value="CAD">CAD ($)</option>
+              </select>
+            </label>
+            <button type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-950 px-2 text-[11px] text-slate-300 hover:bg-slate-800">
+              {theme === "dark" ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} className="text-blue-400" />}
+              {theme === "dark" ? (language === "fr" ? "Mode clair" : "Light mode") : (language === "fr" ? "Mode sombre" : "Dark mode")}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={toggleSound} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-950 px-2 text-[11px] text-slate-300 hover:bg-slate-800">
+              {isSoundEnabled ? <Volume2 size={14} className="text-emerald-400" /> : <VolumeX size={14} className="text-slate-500" />}
+              {isSoundEnabled ? (language === "fr" ? "Sons activés" : "Sound on") : (language === "fr" ? "Sons désactivés" : "Sound off")}
+            </button>
+            <button type="button" onClick={() => { setIsEstablishmentModalOpen(true); setIsSidebarMobileOpen(false); }} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-950 px-2 text-[11px] text-slate-300 hover:bg-slate-800">
+              <Sliders size={14} className="text-blue-400" />
+              {language === "fr" ? "Établissement" : language === "ar" ? "المؤسسة" : "Property"}
+            </button>
+          </div>
+        </section>
+      )}
       {/* Navigation List */}
       <nav aria-label={language === "fr" ? "Navigation principale" : language === "ar" ? "التنقل الرئيسي" : "Main navigation"} className="flex-1 py-3 px-2.5 space-y-1.5 overflow-y-auto">
         {navItems.map((item) => {
