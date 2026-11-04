@@ -344,6 +344,7 @@ export const Sidebar: React.FC = () => {
               {language === "fr" ? "Établissement" : language === "ar" ? "المؤسسة" : "Property"}
             </button>
             </div>
+            </div>
           )}
         </section>
       )}
