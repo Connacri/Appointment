@@ -216,3 +216,43 @@ test('CardLock import does not fabricate building or floor 1 when source fields 
   assert.equal(planning.resourceGroups[0].resources[0].type, 'Chambre spéciale');
 });
 
+
+
+test('CardLock import preserves building 0 and floor 0 as real identifiers', () => {
+  const snapshot: MdbSnapshot = {
+    fileName: 'CardLock.mdb', fileLastModified: null, importedAt: '2026-11-04T00:00:00.000Z',
+    buildings: [{ no: 0, name: 'Building Zero' }, { no: 2, name: 'Building Two' }],
+    rooms: [
+      { building: 0, floor: 0, roomNo: '0007', type: 'Single', status: '', price: '', cardCount: 0, maxCards: 2 },
+      { building: 2, floor: 0, roomNo: '0008', type: 'Double', status: 'unknown', price: '0', cardCount: 0, maxCards: 2 },
+    ],
+    guests: [
+      { roomNo: '0-0-0007', name: 'Guest zero', comeTime: '2026-11-04T14:00:00.000Z', goTime: '2026-11-06T11:00:00.000Z', cardId: 'A', flag: '' },
+    ], cards: [], systemProfile: null,
+    counts: { cards: 0, guests: 1, rooms: 2, openings: 0 }, warnings: [],
+  };
+  const planning = mdbSnapshotToPlanning(snapshot);
+  assert.deepEqual(planning.resourceGroups.map((group) => group.id), ['mdb-bld-0', 'mdb-bld-2']);
+  assert.equal(planning.resourceGroups[0].resources[0].id, 'mdb-rm-0-0007');
+  assert.equal(planning.resourceGroups[0].resources[0].building, '0');
+  assert.equal(planning.resourceGroups[0].resources[0].floor, '0');
+  assert.equal(planning.resourceGroups[0].resources[0].pricePerDay, 0);
+  assert.equal(planning.resourceGroups[0].resources[0].housekeepingStatus, undefined);
+  assert.equal(planning.bookings[0].resourceId, 'mdb-rm-0-0007');
+});
+
+test('CardLock import never manufactures rooms from orphan GuestInfo rows', () => {
+  const snapshot: MdbSnapshot = {
+    fileName: 'CardLock.mdb', fileLastModified: null, importedAt: '2026-11-04T00:00:00.000Z',
+    buildings: [{ no: 1, name: 'Main' }],
+    rooms: [{ building: 1, floor: 1, roomNo: '101', type: 'Double', status: '', price: '', cardCount: 0, maxCards: 2 }],
+    guests: [
+      { roomNo: '2-999', name: 'Orphan Guest', comeTime: '2026-11-04T14:00:00.000Z', goTime: '2026-11-06T11:00:00.000Z', cardId: 'X', flag: '' },
+    ], cards: [], systemProfile: null,
+    counts: { cards: 0, guests: 1, rooms: 1, openings: 0 }, warnings: [],
+  };
+  const planning = mdbSnapshotToPlanning(snapshot);
+  assert.equal(planning.resourceGroups.reduce((count, group) => count + group.resources.length, 0), 1);
+  assert.equal(planning.bookings.length, 0);
+  assert.match(planning.warnings.join(' '), /aucun logement n’a été créé/);
+});
