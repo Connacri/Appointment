@@ -19,6 +19,12 @@ Read-only is the safe default for a production-linked project. It lets an agent 
 
 If a task explicitly requires a database write, migration, Edge Function deployment or another mutation, request the owner's approval first and use a separately reviewed, temporary write-enabled MCP connection. Do not commit personal access tokens, OAuth tokens, service-role keys or other credentials in this repository.
 
+## Application runtime configuration
+
+The application client also has safe defaults for the Appointment Supabase project in `src/services/supabase/supabaseClient.ts`. The values in `.env.example` match those defaults. Deployment-specific `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` values override them.
+
+The browser/mobile client uses only the publishable key. Never replace it with a Supabase secret key or legacy service-role key. A publishable key is expected to be visible in a client application; authorization must be enforced by database grants and Row Level Security (RLS).
+
 ## Connect ChatGPT
 
 The repository configuration does not automatically register a connector in a ChatGPT account. To connect ChatGPT:
