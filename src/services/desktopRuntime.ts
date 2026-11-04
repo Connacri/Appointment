@@ -75,3 +75,13 @@ export async function hasNativeSecret(key: string): Promise<boolean> {
   if (!isTauri() || !ALLOWED_SECRET_KEYS.has(key)) return false;
   return invoke<boolean>('secure_secret_exists', { key });
 }
+
+export interface NeonConnectionStatus {
+  connected: boolean;
+  serverVersion: string;
+}
+
+export async function testNativeNeonConnection(connectionString: string): Promise<NeonConnectionStatus> {
+  if (!isTauri()) throw new Error('Le test PostgreSQL réel nécessite Appointment Desktop natif.');
+  return invoke<NeonConnectionStatus>('neon_test_connection', { connectionString });
+}
