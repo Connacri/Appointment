@@ -19,7 +19,7 @@ Dix tables métier sont identifiées : `BuildingInfo`, `RoomInfo`, `GuestInfo`, 
 | `CaoZuoInfo` | Colonnes inventoriées à l'import | Table historique d'opérations ; sémantique détaillée non raccordée au modèle PMS. |
 | `LogInfo` | Colonnes inventoriées à l'import | Table historique de journalisation ; sémantique détaillée non raccordée au modèle PMS. |
 
-Les versions proUSB peuvent différer. Les colonnes affichées par l'analyse du fichier importé sont la référence pour ce fichier précis.
+Les versions proUSB peuvent différer. Le parseur capture les noms de colonnes du premier enregistrement de chaque table lisible ; l'interface affiche actuellement le nom de la table et son nombre de lignes. Les colonnes documentées ci-dessus restent à confirmer sur le fichier exact si sa version diffère.
 
 ## Relations métier
 ```mermaid
