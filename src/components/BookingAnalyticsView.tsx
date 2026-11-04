@@ -1,8 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Building2, BedDouble, Users, TrendingUp, Package, ArrowDownRight,
-  ArrowUpRight, FileText, CircleAlert, CheckCircle2, Clock3, Boxes,
-  CalendarDays, Sparkles, Wallet, Ban, Activity,
+  Building2, BedDouble, TrendingUp, Package, FileText, CheckCircle2,
+  Boxes, Wallet, Activity,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { InvoiceRecord } from '../types/booking';
@@ -81,11 +80,18 @@ export const BookingAnalyticsView: React.FC = () => {
   const occupiedRoomNights = activeBookings.reduce((sum, booking) =>
     sum + overlapNights(booking.startDate, booking.endDate, from, toExclusive), 0);
   const periodOccupancy = roomNightsAvailable ? Math.min(100, Math.round(occupiedRoomNights / roomNightsAvailable * 100)) : 0;
-  const periodRevenue = activeBookings.reduce((sum, booking) => {
+  const periodRevenueByCurrency = activeBookings.reduce((totals, booking) => {
     const totalNights = Math.max(1, dayDiff(booking.startDate, booking.endDate));
     const nightsInPeriod = overlapNights(booking.startDate, booking.endDate, from, toExclusive);
-    return sum + (booking.totalPrice * nightsInPeriod / totalNights);
-  }, 0);
+    const code = booking.paymentCurrency || currency;
+    totals[code] = (totals[code] || 0) + (booking.totalPrice * nightsInPeriod / totalNights);
+    return totals;
+  }, {} as Record<string, number>);
+  const formatBreakdown = (totals: Record<string, number>) => {
+    const entries = Object.entries(totals).filter(([, amount]) => amount !== 0);
+    return entries.length ? entries.map(([code, amount]) => fmtMoney(amount, code)).join(' · ') : fmtMoney(0); 
+  };
+  const periodRevenue = formatBreakdown(periodRevenueByCurrency);
   const fmtMoney = (amount: number, code = currency) => {
     const normalized = code === 'DA' ? 'DZD' : code;
     try {
@@ -138,9 +144,15 @@ export const BookingAnalyticsView: React.FC = () => {
   const quotes = periodInvoices.filter(invoice => invoice.docType === 'quote');
   const paidInvoices = issuedInvoices.filter(invoice => invoice.status === 'paid');
   const outstanding = issuedInvoices.filter(invoice => ['sent', 'overdue', 'accepted'].includes(invoice.status));
-  const invoicedTotal = issuedInvoices.reduce((sum, invoice) => sum + invoice.totalTTC, 0);
-  const collectedTotal = issuedInvoices.reduce((sum, invoice) => sum + invoice.depositPaid, 0);
-  const dueTotal = issuedInvoices.reduce((sum, invoice) => sum + invoice.balanceDue, 0);
+  const sumInvoiceCurrencies = (field: 'totalTTC' | 'depositPaid' | 'balanceDue') =>
+    issuedInvoices.reduce((totals, invoice) => {
+      const code = invoice.currency || currency;
+      totals[code] = (totals[code] || 0) + invoice[field];
+      return totals;
+    }, {} as Record<string, number>);
+  const invoicedTotal = formatBreakdown(sumInvoiceCurrencies('totalTTC'));
+  const collectedTotal = formatBreakdown(sumInvoiceCurrencies('depositPaid'));
+  const dueTotal = formatBreakdown(sumInvoiceCurrencies('balanceDue'));
   const unpaidCount = outstanding.length;
   const housekeepingCounts = rooms.reduce((counts, room) => {
     const status = room.housekeepingStatus || 'clean';
