@@ -18,7 +18,7 @@
 
 **Un PMS hôtelier et resort conçu pour centraliser les réservations et les opérations quotidiennes.**
 
-[Application Web](https://connacri.github.io/Appointment/) · [Téléchargements](https://github.com/Connacri/Appointment/releases) · [Signaler un problème](https://github.com/Connacri/Appointment/issues)
+[README français](./README.fr.md) · [README العربية](./README.ar.md) · [Application Web](https://connacri.github.io/Appointment/) · [Téléchargements](https://github.com/Connacri/Appointment/releases) · [Signaler un problème](https://github.com/Connacri/Appointment/issues)
 
 </div>
 
