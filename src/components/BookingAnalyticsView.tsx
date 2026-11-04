@@ -430,15 +430,21 @@ export const BookingAnalyticsView: React.FC = () => {
       blue: 'bg-sky-50 text-sky-700 ring-sky-100 dark:bg-sky-950/50 dark:text-sky-300 dark:ring-sky-900/60',
     };
     const accent = tone === 'green' ? 'bg-emerald-500' : tone === 'amber' ? 'bg-amber-500' : tone === 'purple' ? 'bg-violet-500' : 'bg-sky-500';
+    const surfaces: Record<string, string> = {
+      green: 'from-emerald-50/90 via-white to-white dark:from-emerald-950/35 dark:via-slate-900 dark:to-slate-900',
+      amber: 'from-amber-50/90 via-white to-white dark:from-amber-950/30 dark:via-slate-900 dark:to-slate-900',
+      purple: 'from-violet-50/90 via-white to-white dark:from-violet-950/35 dark:via-slate-900 dark:to-slate-900',
+      blue: 'from-sky-50/90 via-white to-white dark:from-sky-950/35 dark:via-slate-900 dark:to-slate-900',
+    };
     return (
-      <article className="group relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 sm:p-4">
+      <article className={`group relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br ${surfaces[tone] || surfaces.blue} p-3 shadow-[0_2px_8px_rgba(15,23,42,0.045)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-4`}>
         <span className={`absolute inset-x-0 top-0 h-0.5 ${accent}`} />
         <div className="flex items-start justify-between gap-2">
           <span className="min-w-0 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:text-[11px]">{label}</span>
           <span className={`shrink-0 rounded-xl p-2 ring-1 ${tones[tone] || tones.blue}`}><Icon size={17} strokeWidth={1.9} /></span>
         </div>
-        <div className="mt-2 min-w-0 truncate text-[clamp(1.2rem,2vw,1.65rem)] font-bold leading-tight tracking-tight text-slate-950 dark:text-white tabular-nums">{value}</div>
-        <p className="mt-1.5 min-h-4 text-[10px] leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[11px]">{detail}</p>
+        <div className="mt-2 min-h-8 min-w-0 break-words text-[clamp(1.25rem,5vw,1.65rem)] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white tabular-nums sm:truncate">{value}</div>
+        <p className="mt-1 min-h-4 text-[10px] leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[11px]">{detail}</p>
       </article>
     );
   };
@@ -465,8 +471,8 @@ export const BookingAnalyticsView: React.FC = () => {
   );
 
   return (
-    <div className="min-w-0 w-full flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[#f4f7fb] p-2.5 dark:bg-[#080f1c] sm:space-y-5 sm:p-5 lg:p-6">
-      <header className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+    <div className="min-w-0 w-full flex-1 space-y-3 overflow-y-auto overscroll-contain bg-[#f4f7fb] px-2.5 pb-5 pt-2.5 dark:bg-[#080f1c] sm:space-y-5 sm:p-5 lg:p-6">
+      <header className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div className="min-w-0">
           <div className="mb-1.5 flex items-center gap-2">
             <span className="rounded-xl bg-sky-50 p-2 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"><Activity size={18} /></span>
@@ -487,7 +493,7 @@ export const BookingAnalyticsView: React.FC = () => {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6 sm:gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
         <Card icon={Building2} label={t('Bâtiments', 'Buildings', 'المباني')} value={activeGroups.length} detail={t('Groupes configurés', 'Configured groups', 'المجموعات المهيأة')} />
         <Card icon={BedDouble} label={t('Chambres', 'Rooms', 'الغرف')} value={validRooms.length} detail={t('Hors service exclues', 'Out of order excluded', 'باستثناء خارج الخدمة')} />
         <Card icon={Activity} label={t('Occupées', 'Occupied', 'مشغولة')} value={occupiedToday} detail={t('Aujourd’hui', 'Today', 'اليوم')} tone="green" />
