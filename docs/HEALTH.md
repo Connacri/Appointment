@@ -9,7 +9,7 @@ Score: **100/100** (Refreshed: October 2026)
 | Compliance (Play + Legal) | 15 | 15 | Mandatory legal pages `/privacy/` and `/delete-account/` present in FR, EN, AR with `dir="rtl"` and working deletion portal without placeholders (§19.3). |
 | i18n + RTL | 10 | 10 | French, English, Arabic (RTL) supported across navigation, Planning Gantt, Channel Manager, Modals, and legal pages. |
 | Responsive + Accessibility | 10 | 10 | Fluid layout, mobile-first Planning Gantt with Mini/Compact/Normal modes, touch action sheet for smartphone tap, WCAG AA contrast. |
-| Performance | 10 | 10 | Vite 8 + React 19 fast bundle, ObjectBox IndexedDB local caching, zero runtime bloat. |
+| Performance | 10 | 10 | Vite 8 + React 19 fast bundle, IndexedDB IndexedDB local caching, zero runtime bloat. |
 | Tests & Compilation | 10 | 10 | TypeScript strict typing passes with 0 errors (`tsc --noEmit`), build succeeded. |
 | Documentation | 5 | 5 | AGENTS.md, README.md, scripts/bootstrap-secrets.sh, docs/HEALTH.md all synchronized. |
 
