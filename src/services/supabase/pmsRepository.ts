@@ -26,7 +26,7 @@ export async function listWorkspaces() {
 
 export async function listEstablishments(workspaceId: WorkspaceId): Promise<HotelEstablishment[]> {
   const db = requireSupabase();
-  const { data, error } = await db.from('establishments').select('*').eq('workspace_id', workspaceId).eq('is_active', true).order('name');
+  const { data, error } = await db.from('establishments').select('*').eq('workspace_id', workspaceId).eq('is_active', true).is('deleted_at', null).order('name');
   if (error) throw new Error(error.message);
   return (data ?? []).map((r: any) => ({ id:r.id, code:r.code, name:r.name, city:r.city ?? '', stars:r.stars, taxRate:Number(r.tax_rate), checkInTime:r.check_in_time.slice(0,5), checkOutTime:r.check_out_time.slice(0,5), facilities:r.facilities ?? [] }));
 }
@@ -38,7 +38,7 @@ export async function saveEstablishment(workspaceId: WorkspaceId, item: HotelEst
 
 export async function listResourceGroups(workspaceId: WorkspaceId, establishmentId?: string): Promise<ResourceGroup[]> {
   const db = requireSupabase();
-  let q = db.from('resource_groups').select('*,resources(*)').eq('workspace_id',workspaceId).order('sort_order');
+  let q = db.from('resource_groups').select('*,resources(*)').eq('workspace_id',workspaceId).is('deleted_at',null).order('sort_order');
   if (establishmentId) q = q.eq('establishment_id',establishmentId);
   const {data,error} = await q;
   if (error) throw new Error(error.message);
@@ -79,7 +79,7 @@ export async function deleteBooking(id: string) {
 
 export async function listTasks(workspaceId: WorkspaceId, establishmentId: string): Promise<PmsTask[]> {
   const db = requireSupabase();
-  const {data,error} = await db.from('pms_tasks').select('*').eq('workspace_id',workspaceId).eq('establishment_id',establishmentId).order('task_date');
+  const {data,error} = await db.from('pms_tasks').select('*').eq('workspace_id',workspaceId).eq('establishment_id',establishmentId).is('deleted_at',null).order('task_date');
   if (error) throw new Error(error.message);
   return (data ?? []).map((r:any)=>({id:r.id,room:r.room ?? '',typeId:r.type_id ?? '',typeName:r.type_name,category:r.category,assignee:r.assignee ?? '',date:r.task_date,status:r.status,priority:r.priority,note:r.note ?? undefined,subtasks:r.subtasks ?? [],tools:r.tools ?? [],consumedItems:r.consumed_items ?? [],completedBy:r.completed_by ?? undefined,completedAt:r.completed_at ?? undefined}));
 }
@@ -91,7 +91,7 @@ export async function saveTask(workspaceId: WorkspaceId, establishmentId: string
 
 export async function listStockItems(workspaceId: WorkspaceId, establishmentId: string): Promise<StockItem[]> {
   const db = requireSupabase();
-  const {data,error} = await db.from('stock_items').select('*').eq('workspace_id',workspaceId).eq('establishment_id',establishmentId).order('category');
+  const {data,error} = await db.from('stock_items').select('*').eq('workspace_id',workspaceId).eq('establishment_id',establishmentId).is('deleted_at',null).order('category');
   if (error) throw new Error(error.message);
   return (data ?? []).map((r:any)=>({id:r.id,category:r.category,name:r.name,unit:r.unit,quantity:Number(r.quantity),minThreshold:Number(r.min_threshold),unitCost:Number(r.unit_cost)}));
 }
