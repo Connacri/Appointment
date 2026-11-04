@@ -347,7 +347,8 @@ class LockManager {
   }
 
   public isHotelRecommissioningRequired(): boolean {
-    return localStorage.getItem('appointment_prousb_recommissioning_required') === 'true'\n      || localStorage.getItem('appointment_prousb_previous_site') !== null;
+    return localStorage.getItem('appointment_prousb_recommissioning_required') === 'true'
+      || localStorage.getItem('appointment_prousb_previous_site') !== null;
   }
 
   public canConfirmHotelRecommissioning(): boolean {
