@@ -79,7 +79,7 @@ export interface IssuedCardRecord {
 }
 
 const initialSettings: ProUsbLockSettings = {
-  companyName: 'OmniBook Luxury Hotel & Clinic',
+  companyName: 'Appointment Luxury Hotel & Clinic',
   hotelName: 'Grand Hotel Oran',
   skin: 'mxskin20.skn',
   checkinTime: '14:00:00',
