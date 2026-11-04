@@ -37,7 +37,7 @@ export interface IndexedDbStoreStats {
 export type IndexedDbSyncState = 'synced' | 'syncing' | 'offline';
 
 class IndexedDbStore {
-  private dbName = 'OmniBook_IndexedDB_Store';
+  // Preserve the legacy database identifier so existing browser data remains accessible.\n  private dbName = 'OmniBook_ObjectBox_Store';
   private dbVersion = 2;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
