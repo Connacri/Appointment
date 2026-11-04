@@ -1,0 +1,88 @@
+name: Neon Preview Branches
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - closed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-preview-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  create-or-refresh:
+    name: Create or refresh Neon preview branch
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate Neon configuration
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$NEON_API_KEY" || -z "$NEON_PROJECT_ID" ]]; then
+            echo "::error::NEON_API_KEY secret and NEON_PROJECT_ID variable are required."
+            exit 1
+          fi
+
+      - name: Set 14-day branch expiration
+        id: expiration
+        run: |
+          set -euo pipefail
+          echo "expires_at=$(date -u --date='+14 days' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
+      - name: Create or reuse Neon branch
+        id: neon
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch_name: preview/pr-${{ github.event.pull_request.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          expires_at: ${{ steps.expiration.outputs.expires_at }}
+
+      - name: Report preview branch status
+        env:
+          BRANCH_ID: ${{ steps.neon.outputs.branch_id }}
+          BRANCH_CREATED: ${{ steps.neon.outputs.created }}
+        run: |
+          set -euo pipefail
+          echo "Neon preview branch provisioned for PR #${{ github.event.pull_request.number }}."
+          echo "Branch ID: $BRANCH_ID"
+          echo "Created in this run: $BRANCH_CREATED"
+
+  delete-preview:
+    name: Delete Neon preview branch
+    if: >-
+      github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate Neon configuration
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$NEON_API_KEY" || -z "$NEON_PROJECT_ID" ]]; then
+            echo "::error::NEON_API_KEY secret and NEON_PROJECT_ID variable are required."
+            exit 1
+          fi
+
+      - name: Delete Neon preview branch
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: preview/pr-${{ github.event.pull_request.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
