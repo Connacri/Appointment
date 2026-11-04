@@ -12,6 +12,7 @@ import {
   Boxes,
   KeyRound,
   ShieldCheck,
+  CheckCircle2,
   FileText,
   ChevronLeft,
   ChevronRight,
