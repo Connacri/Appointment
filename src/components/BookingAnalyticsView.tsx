@@ -113,6 +113,7 @@ export const BookingAnalyticsView: React.FC = () => {
     booking.endDate > from
   );
   const validRooms = rooms.filter(room => room.housekeepingStatus !== 'out_of_order');
+  const validRoomIds = new Set(validRooms.map(room => room.id));
   const occupiedTodayIds = new Set(bookings.filter(booking =>
     booking.sector === currentDomain &&
     booking.status !== 'cancelled' &&
@@ -232,8 +233,7 @@ export const BookingAnalyticsView: React.FC = () => {
   })).filter(status => status.count > 0);
 
   const floorStats = rooms.reduce((stats, room) => {
-    const group = activeGroups.find(item => item.id === rooms.find(candidate => candidate.id === room.id)?.groupId);
-    const building = room.building?.trim() || group?.name?.[language] || room.groupName;
+    const building = room.building?.trim() || room.groupName;
     const floor = room.floor?.trim() || t('Étage non renseigné', 'Floor not specified', 'الطابق غير محدد');
     const key = `${building}::${floor}`;
     if (!stats[key]) stats[key] = { key, building, floor, total: 0, occupied: 0, outOfOrder: 0 };
@@ -260,7 +260,7 @@ export const BookingAnalyticsView: React.FC = () => {
         const occupiedIds = new Set(bookings.filter(booking =>
           booking.sector === currentDomain &&
           !['cancelled', 'out_of_order', 'booking_offer'].includes(booking.status) &&
-          booking.startDate <= key && booking.endDate > key
+          booking.startDate <= key && booking.endDate > key && validRoomIds.has(booking.resourceId)
         ).map(booking => booking.resourceId));
         occupiedPercentTotal += validRooms.length ? Math.min(100, occupiedIds.size / validRooms.length * 100) : 0;
         measuredDays += 1;
@@ -421,7 +421,7 @@ export const BookingAnalyticsView: React.FC = () => {
         <TrendLine
           title={t('Sorties de stock dans le temps', 'Inventory issues over time', 'حركات صرف المخزون عبر الزمن')}
           subtitle={t('Unités sorties selon les mouvements de stock enregistrés.', 'Units issued from recorded stock movements.', 'الوحدات المصروفة وفق حركات المخزون المسجلة.')}
-          points={stockMovementTrend}
+          points={periodMovements.length ? stockMovementTrend : []}
           suffix={t('unités', 'units', 'وحدات')}
           color="#d97706"
           emptyLabel={t('Aucun mouvement de stock enregistré.', 'No stock movements recorded.', 'لا توجد حركات مخزون مسجلة.')}
