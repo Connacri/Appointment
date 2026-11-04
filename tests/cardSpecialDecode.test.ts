@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { decodeCardRecord, encodeMasterCard } from '../src/locks/cards/codec.ts';
+import { decodeCardRecord, encodeMasterCard, encodeGuestCard } from '../src/locks/cards/codec.ts';
 
 test('building and floor cards preserve zero-based CardLock identifiers', () => {
   const validity = {
@@ -24,4 +24,15 @@ test('special 0x90 card is decoded as a room card without treating PIN byte as e
   assert.equal(decoded.specialPinHash, 0x5a);
   assert.equal(decoded.endIsUnknown, true);
   assert.equal(decoded.validity, undefined);
+});
+
+test('guest card encoder preserves explicit zero-based building and floor values', () => {
+  const bytes = encodeGuestCard({
+    roomNumber: '101', buildingNo: 0, floorNo: 0, siteCodeLow: 0x033b,
+    validity: { startYear: 2026, startMonth: 11, startDay: 4, startHour: 8, endYear: 2026, endMonth: 11, endDay: 7, endHour: 12 },
+  });
+  const decoded = decodeCardRecord(bytes);
+  assert.equal(decoded.buildingNo, 0);
+  assert.equal(decoded.floorNo, 0);
+  assert.equal(decoded.roomNumber, '1');
 });
