@@ -45,7 +45,7 @@ export const Sidebar: React.FC = () => {
     setActiveSector,
     setIsCockpitOpen,
     setIsLegalModalOpen,
-    setIsObjectBoxOpen,
+    setIsIndexedDBOpen,
     setIsAboutModalOpen,
     setIsEstablishmentModalOpen,
     currency,
@@ -366,21 +366,21 @@ export const Sidebar: React.FC = () => {
         })}
       </nav>
 
-      {/* Sidebar Footer: ObjectBox DB, AGENTS.md Cockpit & Legal */}
+      {/* Sidebar Footer: IndexedDB, AGENTS.md Cockpit & Legal */}
       <div className="p-3 border-t border-slate-800/80 space-y-1.5 bg-slate-950 shrink-0">
         <button
           type="button"
           onClick={() => {
-            setIsObjectBoxOpen(true);
+            setIsIndexedDBOpen(true);
             setIsSidebarMobileOpen(false);
           }}
           className="w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-850 transition-colors cursor-pointer"
-          title="Inspecteur ObjectBox Embedded DB Engine"
+          title="Inspecteur IndexedDB database"
         >
           <Database size={16} className="text-cyan-400 shrink-0" />
           {(!isCollapsed || isMobileView) && (
             <div className="flex items-center justify-between w-full">
-              <span className="truncate">Base ObjectBox</span>
+              <span className="truncate">Base IndexedDB</span>
               <span className="text-[10px] text-slate-400 font-mono">Embarquée</span>
             </div>
           )}
