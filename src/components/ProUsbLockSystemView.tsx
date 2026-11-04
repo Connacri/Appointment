@@ -56,6 +56,7 @@ import {
 import {
   mdbSnapshotToPlanning,
 } from '../locks/database/mdbImport';
+import { getCardLockBuildingNumbers, getCardLockFloorNumbers } from '../locks/cards/scope';
 import {
   PROUSB_CARD_TYPES,
   ProUsbCardType,
@@ -207,58 +208,45 @@ export const ProUsbLockSystemView: React.FC = () => {
    * Ne propose JAMAIS de bâtiment/étage inexistant.
    */
   const { availableBuildings, availableFloors } = useMemo(() => {
-    const buildings = new Map<number, number>(); // no → nb de chambres
-    const floors = new Map<number, number>();
+    const hotelResources = resourceGroups
+      .filter((g) => g.sector === 'hotel')
+      .flatMap((g) => g.resources);
+    const mdbBuildings = mdbSnapshot?.buildings ?? [];
+    const mdbRooms = mdbSnapshot?.rooms ?? [];
+    const buildingNumbers = mdbSnapshot
+      ? getCardLockBuildingNumbers(mdbBuildings, mdbRooms)
+      : [...new Set(hotelResources
+          .map((resource) => Number.parseInt(resource.building ?? '', 10))
+          .filter((number) => Number.isInteger(number) && number >= 0))].sort((a, b) => a - b);
 
-    if (mdbSnapshot && mdbSnapshot.rooms.length > 0) {
-      for (const r of mdbSnapshot.rooms) {
-        if (r.building > 0) buildings.set(r.building, (buildings.get(r.building) ?? 0) + 1);
-        if (r.floor > 0) floors.set(r.floor, (floors.get(r.floor) ?? 0) + 1);
-      }
-    } else {
-      // Repli : ressources hôtelières du planning (sans base importée).
-      const hotelResources = resourceGroups
-        .filter((g) => g.sector === 'hotel')
-        .flatMap((g) => g.resources);
-      for (const res of hotelResources) {
-        const bld = parseInt(res.building ?? '', 10);
-        if (Number.isFinite(bld) && bld > 0) {
-          buildings.set(bld, (buildings.get(bld) ?? 0) + 1);
-        }
-        const flr = parseInt(res.floor ?? '', 10);
-        const flrFromName = Number.isFinite(flr) && flr > 0 ? flr : parseInt((res.name || '')[0] ?? '', 10);
-        if (Number.isFinite(flrFromName) && flrFromName > 0) {
-          floors.set(flrFromName, (floors.get(flrFromName) ?? 0) + 1);
-        }
-      }
-    }
+    // Preserve the original CardLock identifiers: BldNo/FlrNo zero is valid.
+    if (buildingNumbers.length === 0 && !mdbSnapshot) buildingNumbers.push(1);
+    const buildingNames = new Map(mdbBuildings.map((building) => [building.no, building.name]));
+    const availableBuildings = buildingNumbers.map((no) => ({
+      no,
+      label: buildingNames.get(no)
+        ? `${buildingNames.get(no)} (Bâtiment ${no} — ${mdbRooms.filter((room) => room.building === no).length} chambres)`
+        : `Bâtiment ${no}`,
+    }));
 
-    // Repli final : jamais de liste vide (l'utilisateur doit pouvoir encoder).
-    if (buildings.size === 0) buildings.set(1, 0);
-    if (floors.size === 0) floors.set(1, 0);
+    const floorNumbers = mdbSnapshot
+      ? getCardLockFloorNumbers(mdbRooms, commissionBuilding)
+      : [...new Set(hotelResources
+          .filter((resource) => Number.parseInt(resource.building ?? '', 10) === commissionBuilding)
+          .map((resource) => {
+            const explicit = Number.parseInt(resource.floor ?? '', 10);
+            return Number.isInteger(explicit) && explicit >= 0
+              ? explicit
+              : Number.parseInt((resource.name || '')[0] ?? '', 10);
+          })
+          .filter((number) => Number.isInteger(number) && number >= 0))].sort((a, b) => a - b);
+    const availableFloors = floorNumbers.map((no) => ({
+      no,
+      label: no === 0 ? 'Rez-de-chaussée (0)' : `Étage ${no}`,
+    }));
 
-    const bldNames = new Map<number, string>();
-    if (mdbSnapshot) {
-      for (const b of mdbSnapshot.buildings) bldNames.set(b.no, b.name);
-    }
-
-    return {
-      availableBuildings: [...buildings.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([no, count]) => ({
-          no,
-          label: bldNames.get(no)
-            ? `${bldNames.get(no)} (Bâtiment ${no} — ${count} chambres)`
-            : `Bâtiment ${no}${count ? ` — ${count} chambres` : ''}`,
-        })),
-      availableFloors: [...floors.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([no, count]) => ({
-          no,
-          label: `Étage ${no}${count ? ` — ${count} chambres` : ''}`,
-        })),
-    };
-  }, [mdbSnapshot, resourceGroups]);
+    return { availableBuildings, availableFloors };
+  }, [mdbSnapshot, resourceGroups, commissionBuilding]);
 
   /**
    * Chambres réelles câblées et alignées avec les bâtiments et étages réels.
@@ -310,8 +298,8 @@ export const ProUsbLockSystemView: React.FC = () => {
     const buildingNos = availableBuildings.map((b) => b.no);
     if (!floorNos.includes(staffFloorNo)) setStaffFloorNo(floorNos[0]);
     if (!buildingNos.includes(staffBuildingNo)) setStaffBuildingNo(buildingNos[0]);
-    if (!floorNos.includes(commissionFloor)) setCommissionFloor(floorNos[0]);
-    if (!buildingNos.includes(commissionBuilding)) setCommissionBuilding(buildingNos[0]);
+    if (floorNos.length > 0 && !floorNos.includes(commissionFloor)) setCommissionFloor(floorNos[0]);
+    if (buildingNos.length > 0 && !buildingNos.includes(commissionBuilding)) setCommissionBuilding(buildingNos[0]);
     if (availableRoomsList.length > 0 && !availableRoomsList.some((r) => r.roomNumber === guestRoomNumber)) {
       setGuestRoomNumber(availableRoomsList[0].roomNumber);
     }
@@ -1984,7 +1972,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                   <span className="ml-auto text-[9px] bg-amber-100 text-amber-800 dark:bg-amber-950 px-1.5 rounded">RÔLES + RESTRICTIONS</span>
                 </div>
                 <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                  Créez des groupes selon les étages du planning Gantt. Restrictions : groupe = seulement chambres assignées; étage = tout l'étage; bâtiment = tout le bâtiment; master = tout l'établissement.
+                  Groupe = chambres assignées ; bâtiment = bâtiment sélectionné ; master = tout l'établissement. La carte Étage proUSB encode uniquement le numéro d'étage : si plusieurs bâtiments possèdent le même étage, la serrure peut appliquer ce niveau dans chacun d'eux.
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <button onClick={() => handleIssueCommissioning('group_set')} disabled={isWriting} className="py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs">Groupe Config (0x50)</button>
