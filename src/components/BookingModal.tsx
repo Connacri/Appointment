@@ -32,6 +32,7 @@ import { BookingStatus, DomainType, TimelineBooking, ResourceItem } from '../typ
 import { domainConfigs } from '../data/mockData';
 import { statusConfig } from './LegendBar';
 import { downloadICS } from '../utils/icsExport';
+import { isRoomReadyForBooking } from '../utils/roomReadiness';
 import { lockManager } from '../locks/lockManager';
 import { CardResultDialog, CardResult } from './CardResultDialog';
 import { CardCreationProgressModal } from './CardCreationProgressModal';
@@ -502,7 +503,7 @@ export const BookingModal: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const isChangingRoom = !isEditing || selectedBooking?.resourceId !== resourceId;
-    if (activeDomain === 'hotel' && isChangingRoom && (!currentResource || currentResource.housekeepingStatus !== 'clean')) {
+    if (activeDomain === 'hotel' && isChangingRoom && (!currentResource || !isRoomReadyForBooking(currentResource.housekeepingStatus))) {
       setRoomStatusAlert({ roomName: currentResource?.name ?? '—', status: currentResource?.housekeepingStatus });
       return;
     }
