@@ -1,0 +1,158 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use serde::Serialize;
+use std::{fs, path::{Path, PathBuf}, time::UNIX_EPOCH};
+use tauri::Emitter;
+
+const KEYRING_SERVICE: &str = "com.connacri.appointment";
+const MAX_MDB_BYTES: u64 = 512 * 1024 * 1024;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CardLockCandidate {
+    path: String,
+    modified_unix_ms: Option<u128>,
+    size_bytes: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopRuntimeInfo {
+    native: bool,
+    filesystem: bool,
+    windows_credential_manager: bool,
+    runtime: &'static str,
+}
+
+fn candidate_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    paths.push(PathBuf::from(r"C:\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb"));
+    paths.push(PathBuf::from(r"C:\Program Files\proUSB lock system\CardLock.mdb"));
+
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        paths.push(PathBuf::from(local_app_data).join(r"VirtualStore\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb"));
+        paths.push(PathBuf::from(local_app_data).join(r"VirtualStore\Program Files\proUSB lock system\CardLock.mdb"));
+    }
+    paths
+}
+
+#[tauri::command]
+fn desktop_runtime_info() -> DesktopRuntimeInfo {
+    DesktopRuntimeInfo {
+        native: true,
+        filesystem: true,
+        windows_credential_manager: cfg!(target_os = "windows"),
+        runtime: "tauri-windows-native",
+    }
+}
+
+#[tauri::command]
+fn discover_cardlock_candidates() -> Vec<CardLockCandidate> {
+    candidate_paths()
+        .into_iter()
+        .filter_map(|path| {
+            let metadata = fs::metadata(&path).ok()?;
+            if !metadata.is_file() { return None; }
+            let modified_unix_ms = metadata.modified().ok()
+                .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+                .map(|duration| duration.as_millis());
+            Some(CardLockCandidate {
+                path: path.to_string_lossy().into_owned(),
+                modified_unix_ms,
+                size_bytes: metadata.len(),
+            })
+        })
+        .collect()
+}
+
+#[tauri::command]
+fn read_cardlock_file(path: String) -> Result<String, String> {
+    let file_path = Path::new(&path);
+    if !file_path.is_file() {
+        return Err("Le fichier CardLock sélectionné est introuvable.".into());
+    }
+    if !file_path.file_name().and_then(|name| name.to_str())
+        .map(|name| name.eq_ignore_ascii_case("CardLock.mdb"))
+        .unwrap_or(false)
+    {
+        return Err("Sélectionnez le fichier CardLock.mdb.".into());
+    }
+    let metadata = fs::metadata(file_path).map_err(|error| error.to_string())?;
+    if metadata.len() == 0 || metadata.len() > MAX_MDB_BYTES {
+        return Err("Taille CardLock.mdb invalide (maximum 512 Mo).".into());
+    }
+    let bytes = fs::read(file_path).map_err(|error| format!("Lecture CardLock impossible : {error}"))?;
+    Ok(STANDARD.encode(bytes))
+}
+
+fn validate_secret_key(key: &str) -> Result<(), String> {
+    match key {
+        "supabase.publishable_key" | "supabase.anon_key" | "neon.connection_string" | "google.refresh_token" => Ok(()),
+        _ => Err("Identifiant de credential non autorisé.".into()),
+    }
+}
+
+#[tauri::command]
+fn secure_secret_set(key: String, value: String) -> Result<(), String> {
+    validate_secret_key(&key)?;
+    if value.trim().is_empty() { return Err("Une valeur non vide est requise.".into()); }
+    #[cfg(target_os = "windows")]
+    {
+        let entry = keyring::Entry::new(KEYRING_SERVICE, &key).map_err(|e| format!("Windows Credential Manager indisponible : {e}"))?;
+        entry.set_password(&value).map_err(|e| format!("Écriture Credential Manager impossible : {e}"))?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    { let _ = value; Err("Le stockage sécurisé natif est disponible dans le runtime Windows uniquement.".into()) }
+}
+
+#[tauri::command]
+fn secure_secret_get(key: String) -> Result<Option<String>, String> {
+    validate_secret_key(&key)?;
+    #[cfg(target_os = "windows")]
+    {
+        let entry = keyring::Entry::new(KEYRING_SERVICE, &key).map_err(|e| format!("Windows Credential Manager indisponible : {e}"))?;
+        match entry.get_password() {
+            Ok(value) => Ok(Some(value)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(error) => Err(format!("Lecture Credential Manager impossible : {error}")),
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    { Err("Le stockage sécurisé natif est disponible dans le runtime Windows uniquement.".into()) }
+}
+
+#[tauri::command]
+fn secure_secret_delete(key: String) -> Result<(), String> {
+    validate_secret_key(&key)?;
+    #[cfg(target_os = "windows")]
+    {
+        let entry = keyring::Entry::new(KEYRING_SERVICE, &key).map_err(|e| format!("Windows Credential Manager indisponible : {e}"))?;
+        match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(error) => Err(format!("Suppression Credential Manager impossible : {error}")),
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    { Err("Le stockage sécurisé natif est disponible dans le runtime Windows uniquement.".into()) }
+}
+
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            desktop_runtime_info,
+            discover_cardlock_candidates,
+            read_cardlock_file,
+            secure_secret_set,
+            secure_secret_get,
+            secure_secret_delete
+        ])
+        .setup(|app| {
+            let _ = app.emit("appointment://desktop-ready", true);
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("Appointment native runtime failed");
+}
