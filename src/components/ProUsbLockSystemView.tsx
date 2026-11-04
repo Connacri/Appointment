@@ -136,6 +136,7 @@ export const ProUsbLockSystemView: React.FC = () => {
 
   // CardLock.mdb (original software database)
   const [mdbStatus, setMdbStatus] = useState(lockManager.getMdbStatus());
+  const [hotelRecommissioningRequired, setHotelRecommissioningRequired] = useState(lockManager.isHotelRecommissioningRequired());
   const [isImportingMdb, setIsImportingMdb] = useState(false);
   const [usbStatus, setUsbStatus] = useState(lockManager.getStatus());
   const [usbDevice, setUsbDevice] = useState<UsbDeviceInfo | null>(() => lockManager.getDeviceInfo());
@@ -153,6 +154,7 @@ export const ProUsbLockSystemView: React.FC = () => {
       setAuditRecords(lockManager.getAuditRecords());
       setLockSettings(lockManager.getSettings());
       setMdbStatus(lockManager.getMdbStatus());
+      setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
     });
 
     return () => {
@@ -449,9 +451,10 @@ export const ProUsbLockSystemView: React.FC = () => {
           details.push(`Intégrité: ${decoded.siteComplementOk ? 'OK' : 'INVALIDE (~site attendu)'}`);
         }
         if (decoded.roomNumber) details.push(`Chambre: ${decoded.roomNumber}`);
+        if (decoded.type === 'special') details.push('Carte spéciale 0x90 : marqueur PIN lu ; la protection réelle dépend du firmware de la serrure.');
         if (v) {
           details.push(`${decoded.endIsUnknown ? 'Émise le' : 'Début'}: ${fmt(v.startYear, v.startMonth, v.startDay, v.startHour, v.startMinute ?? 0)}`);
-          if (decoded.endIsUnknown) details.push('Expiration: aucune (carte système)');
+          if (decoded.endIsUnknown) details.push(decoded.type === 'special' ? 'Expiration : non encodée dans cette variante spéciale' : 'Expiration: aucune (carte système)');
           else details.push(`Expiration: ${fmt(v.endYear, v.endMonth, v.endDay, v.endHour, v.endMinute ?? 0)}`);
         }
         details.push(
@@ -645,7 +648,7 @@ export const ProUsbLockSystemView: React.FC = () => {
     const cardTitle = `Carte Spéciale Protégée · Chambre ${specialRoomNumber}`;
     try {
       await runWithCardProgress(cardTitle, async (updateProgress) => {
-        updateProgress(25, "Hachage cryptographique du mot de passe PIN...");
+        updateProgress(25, "Préparation du marqueur PIN de la carte spéciale...");
         updateProgress(60, "Écriture radiofréquence (famille 0x90 isolée)...");
         const record = await lockManager.issueSpecialCard({
           roomNumber: specialRoomNumber,
@@ -664,7 +667,7 @@ export const ProUsbLockSystemView: React.FC = () => {
           details: [
             { label: 'Chambre Spéciale', value: specialRoomNumber },
             { label: 'Titulaire', value: specialHolderName },
-            { label: 'Protection', value: 'Mot de passe PIN crypté' },
+            { label: 'Protection', value: 'Marqueur PIN 8 bits — non certifié comme protection cryptographique matérielle' },
             { label: 'Usage / Motif', value: specialPurpose },
             { label: 'Expire le', value: record.validUntil },
             { label: 'Trame (Hex)', value: record.rawHex },
@@ -1845,7 +1848,8 @@ export const ProUsbLockSystemView: React.FC = () => {
                     onClick={() => {
                       lockManager.clearMdb();
                       setMdbStatus(lockManager.getMdbStatus());
-                      showToast('info', 'Base CardLock.mdb déconnectée — mode autonome.');
+                      setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
+                      showToast('info', 'Identité CardLock déconnectée. Les cartes d’accès sont suspendues jusqu’à la reprogrammation du nouvel hôtel.');
                     }}
                     className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
@@ -1854,6 +1858,22 @@ export const ProUsbLockSystemView: React.FC = () => {
                   </button>
                 )}
               </div>
+              {hotelRecommissioningRequired && (
+                <div role="alert" className="mt-3 rounded-xl border border-amber-400 bg-amber-50 dark:bg-amber-950/40 p-3 space-y-2 text-xs">
+                  <strong className="text-amber-900 dark:text-amber-200">Reprogrammation obligatoire après changement d’hôtel</strong>
+                  <p className="text-amber-800 dark:text-amber-300">Les cartes client, spéciales, étage et bâtiment sont suspendues. Importez une base CardLock avec un code système différent, puis présentez les cartes Reset, Room Set et Time Set à chaque serrure. Les anciennes cartes ne sont pas révoquées à distance : elles cessent d’être reconnues uniquement après reprogrammation physique de chaque serrure.</p>
+                  <button type="button" disabled={!lockManager.canConfirmHotelRecommissioning()} onClick={() => {
+                    if (!window.confirm('Confirmez-vous avoir physiquement reprogrammé toutes les serrures de cet hôtel avec la nouvelle identité système ?')) return;
+                    try {
+                      lockManager.confirmHotelRecommissioning();
+                      setHotelRecommissioningRequired(false);
+                      showToast('success', 'Migration clôturée. Les nouvelles cartes d’accès peuvent être émises.');
+                    } catch (error) {
+                      showToast('error', error instanceof Error ? error.message : 'Validation impossible.');
+                    }
+                  }} className="px-3 py-2 rounded-lg bg-amber-700 text-white font-bold disabled:opacity-40 disabled:cursor-not-allowed">Confirmer la reprogrammation physique de toutes les serrures</button>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -2455,7 +2475,8 @@ export const ProUsbLockSystemView: React.FC = () => {
                 onClick={() => {
                   if (window.confirm('Effacer toutes les donnees proUSB persistantes ?')) {
                     lockManager.clearPersistedData();
-                    showToast('success', 'Donnees proUSB effacees.');
+                    setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
+                    showToast('success', 'Données proUSB effacées. La migration des serrures reste protégée.');
                   }
                 }}
                 className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white font-bold rounded-lg text-xs transition-colors"
