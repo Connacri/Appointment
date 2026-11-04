@@ -5,6 +5,7 @@ commands.allow = [
   "desktop_runtime_info",
   "discover_cardlock_candidates",
   "read_cardlock_file",
+  "neon_test_connection",
   "secure_secret_set",
   "secure_secret_exists",
   "secure_secret_delete"
