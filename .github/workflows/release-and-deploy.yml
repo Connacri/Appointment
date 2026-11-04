@@ -295,7 +295,6 @@ jobs:
             dist-windows\Planning-Oran-Setup.exe
             dist-windows\Planning-Oran-Setup-v*.exe
             dist-windows\Planning-Oran-Windows-v*.zip
-            dist-windows\Planning-Oran-Setup-Inno.exe
           retention-days: 30
 
   # ============================================================
@@ -367,7 +366,6 @@ jobs:
           fi
 
           WIN_SETUP=$(find release-assets/windows -type f \( -name "Planning-Oran-Setup.exe" -o -name "Planning-Oran-Setup-v*.exe" \) 2>/dev/null | head -n 1)
-          WIN_INNO=$(find release-assets/windows -type f \( -name "Planning-Oran-Setup-Inno.exe" -o -name "Planning-Oran-Setup-Inno-v*.exe" \) 2>/dev/null | head -n 1)
 
           if [[ -n "$WIN_SETUP" ]]; then
             cp "$WIN_SETUP" "release-final/Planning-Oran-Setup-v$VERSION.exe"
