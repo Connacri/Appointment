@@ -16,6 +16,7 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   X,
   Coins,
   Globe,
@@ -61,6 +62,8 @@ export const Sidebar: React.FC = () => {
   } = useApp();
 
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileProfileExpanded, setIsMobileProfileExpanded] = useState(false);
+  const [isMobilePreferencesExpanded, setIsMobilePreferencesExpanded] = useState(false);
   const isRtl = language === 'ar';
 
   // Keep the page fixed while the mobile navigation drawer is open.
@@ -241,15 +244,23 @@ export const Sidebar: React.FC = () => {
       {isMobileView && (
         <div className="px-3 py-2.5 border-b border-slate-800/80 bg-slate-950/60 space-y-2 shrink-0">
           <section className="rounded-xl border border-slate-800 bg-slate-900/80 p-2.5 space-y-2">
-            <div className="flex items-center justify-between gap-2 px-0.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <button
+              type="button"
+              aria-expanded={isMobileProfileExpanded}
+              onClick={() => setIsMobileProfileExpanded((expanded) => !expanded)}
+              className="flex w-full min-h-9 items-center justify-between gap-2 px-0.5 text-left"
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
                 {language === 'fr' ? 'Profil de travail' : language === 'ar' ? 'ملف العمل' : 'Work profile'}
               </span>
-              <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-300">
-                {language === 'fr' ? 'Actif' : language === 'ar' ? 'نشط' : 'Active'} · {currentRole === 'admin' ? 'Admin' : currentRole === 'manager' ? (language === 'fr' ? 'Gérant' : 'Manager') : currentRole === 'receptionist' ? (language === 'fr' ? 'Réception' : 'Front desk') : currentRole === 'staff' ? (language === 'fr' ? 'Étage' : 'Staff') : (language === 'fr' ? 'Client' : 'Guest')}
+              <span className="flex items-center gap-2">
+                <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-300">
+                  {currentRole === 'admin' ? 'Admin' : currentRole === 'manager' ? (language === 'fr' ? 'Gérant' : 'Manager') : currentRole === 'receptionist' ? (language === 'fr' ? 'Réception' : 'Front desk') : currentRole === 'staff' ? (language === 'fr' ? 'Étage' : 'Staff') : (language === 'fr' ? 'Client' : 'Guest')}
+                </span>
+                <ChevronDown size={15} className={`text-slate-400 transition-transform ${isMobileProfileExpanded ? 'rotate-180' : ''}`} />
               </span>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
+            </button>
+            {isMobileProfileExpanded && <div className="grid grid-cols-2 gap-1.5">
               {[
                 { id: 'admin', label: 'Admin', icon: ShieldCheck },
                 { id: 'manager', label: language === 'fr' ? 'Gérant' : language === 'ar' ? 'مدير' : 'Manager', icon: LayoutDashboard },
@@ -277,18 +288,27 @@ export const Sidebar: React.FC = () => {
                   </button>
                 );
               })}
-            </div>
+            </div>}
           </section>
         </div>
       )}
 
-      {/* Mobile preferences: compact controls kept out of the operational header. */}
+      {/* Mobile preferences: collapsed by default to keep navigation visible. */}
       {isMobileView && (
-        <section className="px-3 py-3 border-b border-slate-800/80 bg-slate-900/70 space-y-2 shrink-0">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{language === "fr" ? "Préférences" : language === "ar" ? "التفضيلات" : "Preferences"}</span>
-            <span className="text-[10px] text-slate-500">{language.toUpperCase()}</span>
-          </div>
+        <section className="px-3 py-2 border-b border-slate-800/80 bg-slate-900/70 space-y-2 shrink-0">
+          <button
+            type="button"
+            aria-expanded={isMobilePreferencesExpanded}
+            onClick={() => setIsMobilePreferencesExpanded((expanded) => !expanded)}
+            className="flex w-full min-h-9 items-center justify-between gap-2"
+          >
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">{language === "fr" ? "Préférences" : language === "ar" ? "التفضيلات" : "Preferences"}</span>
+            <span className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-500">{language.toUpperCase()}</span>
+              <ChevronDown size={15} className={`text-slate-400 transition-transform ${isMobilePreferencesExpanded ? 'rotate-180' : ''}`} />
+            </span>
+          </button>
+          {isMobilePreferencesExpanded && <div className="space-y-2">
           <div className="grid grid-cols-[auto_1fr] items-center gap-2">
             <span className="text-[11px] text-slate-400">{language === "fr" ? "Langue" : language === "ar" ? "اللغة" : "Language"}</span>
             <div className="grid grid-cols-3 gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1">
@@ -320,7 +340,7 @@ export const Sidebar: React.FC = () => {
               <Sliders size={14} className="text-blue-400" />
               {language === "fr" ? "Établissement" : language === "ar" ? "المؤسسة" : "Property"}
             </button>
-          </div>
+          </div>}
         </section>
       )}
       {/* Navigation List */}
