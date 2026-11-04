@@ -317,15 +317,21 @@ export async function parseCardLockMdb(
   };
 
   const rawBuildings = read('BuildingInfo', ['Building', 'Buildings', 'BldInfo', 'tblBuilding']);
-  const buildings: ImportedBuilding[] = rawBuildings.map((r, idx) => {
+  const invalidBuildingRows: number[] = [];
+  const buildings: ImportedBuilding[] = rawBuildings.flatMap((r, idx) => {
     const noVal = getField(r, ['BldNo', 'bldno', 'Bld_No', 'BuildingNo', 'BuildingID', 'ID', 'No']);
     const nameVal = getField(r, ['BldName', 'bldname', 'Bld_Name', 'BuildingName', 'Name', 'Description']);
-    const buildingNumber = noVal !== undefined ? num(noVal, idx + 1) : idx + 1;
-    return {
+    const buildingNumber = nullableInt(noVal);
+    if (buildingNumber === null) {
+      invalidBuildingRows.push(idx + 1);
+      return [];
+    }
+    return [{
       no: buildingNumber,
       name: str(nameVal) || `Bâtiment ${buildingNumber}`,
-    };
+    }];
   });
+  if (invalidBuildingRows.length) warnings.push(invalidBuildingRows.length + ' ligne(s) BuildingInfo sans BldNo valide ont été exclues ; aucun bâtiment numéroté artificiellement.');
 
   const rawRooms = read('RoomInfo', ['Room', 'Rooms', 'RomInfo', 'tblRoom']);
   const invalidRoomRows: number[] = [];
