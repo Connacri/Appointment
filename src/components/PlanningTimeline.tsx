@@ -270,11 +270,13 @@ export const PlanningTimeline: React.FC = () => {
     direction: language === 'ar' ? 'rtl' : 'ltr',
   });
 
+  const todayStr = timelineSync.todayDateStr;
+
   const timelineDays = useMemo(() => {
     const [y, m, d] = timelineWindowStart.split('-').map(Number);
     const dates: { dateStr: string; dayNum: number; dayName: string; isWeekend: boolean; isToday: boolean }[] = [];
 
-    const realTodayStr = timelineSync.todayDateStr;
+    const realTodayStr = todayStr;
 
     const dayFormatter = new Intl.DateTimeFormat(
       language === 'fr' ? 'fr-FR' : language === 'ar' ? 'ar-EG' : 'en-US',
@@ -975,7 +977,7 @@ export const PlanningTimeline: React.FC = () => {
                           >
                             {/* Background Grid Cells for clicking to add booking */}
                             {timelineDays.map((day) => {
-                              const isPast = day.dateStr < realTodayStr;
+                              const isPast = day.dateStr < todayStr;
                               const isCellDisabled = isOutOfOrder || isPast;
 
                               return (
