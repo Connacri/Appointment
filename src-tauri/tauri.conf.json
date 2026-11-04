@@ -28,16 +28,25 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "category": "Business",
     "shortDescription": "Hotel and property management system",
     "longDescription": "Appointment hotel management with native Windows file access and secure credential storage.",
     "windows": {
       "nsis": {
         "installMode": "both",
-        "languages": ["English", "French", "Arabic"],
+        "languages": [
+          "English",
+          "French",
+          "Arabic"
+        ],
         "displayLanguageSelector": true
       }
-    }
+    },
+    "icon": [
+      "../assets/icon.png"
+    ]
   }
 }
