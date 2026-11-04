@@ -3,14 +3,9 @@ name: Quality Checks
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main, master]
   push:
     branches:
-      - main
-      - master
-      - 'fix/**'
-      - 'feature/**'
-      - 'feat/**'
+      - '**'
 
 permissions:
   contents: read
@@ -20,8 +15,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  validate:
-    name: Typecheck, regression tests and production build
+  typecheck:
+    name: TypeScript typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run TypeScript typecheck
+        run: npm run typecheck
+
+  regression-tests:
+    name: Regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run regression tests
+        run: npm run test
+
+  production-build:
+    name: Production build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -36,13 +69,38 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Typecheck
-        run: npm run lint
-
-      - name: Regression tests
-        run: npm run test
-
-      - name: Production build
+      - name: Build production application
         run: npm run build
         env:
           VITE_BASE: ./
+
+  ci-summary:
+    name: CI required checks summary
+    runs-on: ubuntu-latest
+    needs:
+      - typecheck
+      - regression-tests
+      - production-build
+    if: ${{ always() }}
+    steps:
+      - name: Report check results
+        env:
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+          TEST_RESULT: ${{ needs.regression-tests.result }}
+          BUILD_RESULT: ${{ needs.production-build.result }}
+        run: |
+          {
+            echo "## CI quality checks"
+            echo ""
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| TypeScript typecheck | $TYPECHECK_RESULT |"
+            echo "| Regression tests | $TEST_RESULT |"
+            echo "| Production build | $BUILD_RESULT |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$TYPECHECK_RESULT" != "success" || "$TEST_RESULT" != "success" || "$BUILD_RESULT" != "success" ]]; then
+            echo "::error::At least one required quality check did not succeed."
+            exit 1
+          fi
+          echo "All required quality checks succeeded."
