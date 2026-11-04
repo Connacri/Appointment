@@ -375,13 +375,13 @@ export const Sidebar: React.FC = () => {
             setIsSidebarMobileOpen(false);
           }}
           className="w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-850 transition-colors cursor-pointer"
-          title="Inspecteur IndexedDB database"
+          title="Consulter les données enregistrées localement"
         >
           <Database size={16} className="text-cyan-400 shrink-0" />
           {(!isCollapsed || isMobileView) && (
             <div className="flex items-center justify-between w-full">
-              <span className="truncate">Base IndexedDB</span>
-              <span className="text-[10px] text-slate-400 font-mono">Embarquée</span>
+              <span className="truncate">Données locales</span>
+              <span className="text-[10px] text-slate-400 font-mono">Navigateur</span>
             </div>
           )}
         </button>
