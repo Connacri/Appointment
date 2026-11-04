@@ -41,7 +41,9 @@ import {
 import { PRESET_HOTEL_LOGOS } from '../utils/establishmentDefaults';
 import { playSuccessFeedback, playClickFeedback } from '../utils/audioFeedback';
 import { lockManager } from '../locks/lockManager';
-import { mdbSnapshotToPlanning } from '../locks/database/mdbImport';
+import { mdbSnapshotToPlanning, MdbTableSummary } from '../locks/database/mdbImport';
+import { generateHotelFloorRooms } from '../utils/hotelStructure';
+import { discoverNativeCardLockFiles, isNativeDesktop, pickNativeCardLockFile, readDiscoveredCardLock } from '../services/desktopRuntime';
 
 interface EstablishmentSetupModalProps {
   isOpen: boolean;
@@ -69,9 +71,11 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   const [buildingName, setBuildingName] = useState('Bâtiment principal');
   const [buildingNo, setBuildingNo] = useState('1');
   const [floorNo, setFloorNo] = useState('0');
-  const [roomPrefix, setRoomPrefix] = useState('');
-  const [roomStart, setRoomStart] = useState('101');
-  const [roomCount, setRoomCount] = useState('10');
+  const [roomPrefix, setRoomPrefix] = useState('1');
+  const [roomStart, setRoomStart] = useState('01');
+  const [roomEnd, setRoomEnd] = useState('30');
+  const [excludedRoomNumbers, setExcludedRoomNumbers] = useState('13');
+  const [tableInventory, setTableInventory] = useState<MdbTableSummary[]>([]);
   const [structureMessage, setStructureMessage] = useState('');
   const [isImportingMdb, setIsImportingMdb] = useState(false);
 
@@ -105,77 +109,107 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   };
 
   const handleCreateRooms = () => {
-    const bNo = Number(buildingNo);
-    const fNo = Number(floorNo);
-    const start = Number(roomStart);
-    const count = Number(roomCount);
-    if (!buildingName.trim() || !Number.isInteger(bNo) || bNo < 1 || !Number.isInteger(fNo) || fNo < 0 ||
-        !Number.isInteger(start) || start < 1 || !Number.isInteger(count) || count < 1 || count > 300) {
-      setStructureMessage('Vérifiez le bâtiment, l’étage et la plage de numéros (1 à 300 chambres).');
-      return;
-    }
-    const groupId = `manual-building-${bNo}`;
-    const existing = resourceGroups.find((group) => group.id === groupId);
-    const existingNumbers = new Set((existing?.resources || []).map((room) => room.name));
-    const additions = Array.from({ length: count }, (_, index) => {
-      const number = String(start + index);
-      return {
-        id: `manual-room-${bNo}-${fNo}-${number}`,
-        name: `${roomPrefix.trim()}${number}`,
-        type: 'Chambre',
+    try {
+      const bNo = Number(buildingNo);
+      const fNo = Number(floorNo);
+      const existing = resourceGroups.find((group) => group.id === `manual-building-${bNo}`);
+      const result = generateHotelFloorRooms({
+        buildingNumber: bNo,
+        floorNumber: fNo,
+        prefix: roomPrefix.trim(),
+        start: Number(roomStart),
+        end: Number(roomEnd),
+        padWidth: roomStart.length,
+        excludedFloorNumbers: excludedRoomNumbers.split(',').map((value) => value.trim()).filter(Boolean),
+        existingNames: resourceGroups
+          .filter((group) => group.id === `manual-building-${bNo}`)
+          .flatMap((group) => group.resources.map((room) => room.name)),
+      });
+      if (!buildingName.trim()) throw new Error('Saisissez le nom du bâtiment.');
+      if (result.rooms.length === 0) {
+        setStructureMessage(`Aucune chambre créée. ${result.excluded.length} numéro(s) exclu(s), ${result.duplicates.length} doublon(s).`);
+        return;
+      }
+      const nextGroup = {
+        id: `manual-building-${bNo}`,
+        name: { fr: buildingName.trim(), en: buildingName.trim(), ar: buildingName.trim() },
         sector: 'hotel' as const,
-        pricePerDay: 0,
-        housekeepingStatus: 'clean' as const,
-        capacity: 1,
-        building: String(bNo),
-        floor: String(fNo),
+        icon: 'Building',
+        resources: [...(existing?.resources || []), ...result.rooms],
       };
-    }).filter((room) => !existingNumbers.has(room.name));
-    if (additions.length === 0) {
-      setStructureMessage('Aucune chambre créée : ces numéros existent déjà dans ce bâtiment.');
-      return;
+      setResourceGroups((prev) => existing
+        ? prev.map((group) => group.id === nextGroup.id ? nextGroup : group)
+        : [...prev, nextGroup]);
+      const excluded = result.excluded.length ? ` Numéros exclus : ${result.excluded.join(', ')}.` : '';
+      const duplicates = result.duplicates.length ? ` Doublons ignorés : ${result.duplicates.join(', ')}.` : '';
+      setStructureMessage(`${result.rooms.length} chambre(s) ajoutée(s) dans ${buildingName}, étage ${fNo}.${excluded}${duplicates}`);
+      playSuccessFeedback();
+    } catch (error) {
+      setStructureMessage(error instanceof Error ? error.message : 'Paramètres de numérotation invalides.');
     }
-    const nextGroup = {
-      id: groupId,
-      name: { fr: buildingName.trim(), en: buildingName.trim(), ar: buildingName.trim() },
-      sector: 'hotel' as const,
-      icon: 'Building',
-      resources: [...(existing?.resources || []), ...additions],
-    };
-    setResourceGroups((prev) => existing
-      ? prev.map((group) => group.id === groupId ? nextGroup : group)
-      : [...prev, nextGroup]);
-    setStructureMessage(`${additions.length} chambre(s) ajoutée(s) à ${buildingName}, étage ${fNo}.`);
-    playSuccessFeedback();
   };
 
-  const handleMdbImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const applyMdbFile = async (file: File) => {
     setIsImportingMdb(true);
     setStructureMessage('');
     try {
       const snapshot = await lockManager.importMdb(file);
       const planning = mdbSnapshotToPlanning(snapshot);
-      if (planning.resourceGroups.length) {
-        // Replace the previous MDB snapshot but preserve buildings created locally.
-        setResourceGroups((current) => [
-          ...current.filter((group) => !group.id.startsWith('mdb-')),
-          ...planning.resourceGroups,
-        ]);
-        setSelectedEstablishmentId('all');
-      }
+      const existingHotelRooms = resourceGroups.filter((group) => group.sector === 'hotel')
+        .reduce((count, group) => count + group.resources.length, 0);
+      if (existingHotelRooms > 0 && !window.confirm(
+        `La base CardLock contient ${snapshot.counts.rooms} chambres et ${snapshot.buildings.length} bâtiment(s). Remplacer la structure hôtelière actuelle (${existingHotelRooms} chambres) par celle de CardLock ? Les autres secteurs seront conservés.`
+      )) return;
+
+      setResourceGroups((current) => [
+        ...current.filter((group) => group.sector !== 'hotel'),
+        ...planning.resourceGroups,
+      ]);
+      setSelectedEstablishmentId('all');
       if (planning.bookings.length) setBookings((prev) => {
         const importedIds = new Set(planning.bookings.map((booking) => booking.id));
         return [...prev.filter((booking) => !importedIds.has(booking.id)), ...planning.bookings];
       });
-      setStructureMessage(`Import réussi : ${snapshot.counts.rooms} chambres, ${snapshot.buildings.length} bâtiment(s), ${snapshot.counts.guests} séjour(s), ${snapshot.counts.cards} carte(s).${snapshot.warnings.length ? ' Avertissements : ' + snapshot.warnings.join(' ') : ''}`);
+      setTableInventory(snapshot.tableInventory ?? []);
+      const tableSummary = (snapshot.tableInventory ?? [])
+        .map((table) => `${table.name} (${table.rowCount})`)
+        .join(', ');
+      setStructureMessage(
+        `Import CardLock terminé : ${snapshot.counts.rooms} chambres, ${snapshot.buildings.length} bâtiment(s), ${snapshot.counts.guests} séjour(s), ${snapshot.counts.cards} carte(s). ${snapshot.tableInventory?.length ?? 0} table(s) lue(s) : ${tableSummary}.${snapshot.warnings.length ? ' Avertissements : ' + snapshot.warnings.join(' ') : ''}`
+      );
       playSuccessFeedback();
     } catch (error) {
       setStructureMessage(`Échec de l’import : ${error instanceof Error ? error.message : 'fichier illisible'}`);
     } finally {
       setIsImportingMdb(false);
-      event.target.value = '';
+    }
+  };
+
+  const handleMdbImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) await applyMdbFile(file);
+    event.target.value = '';
+  };
+
+  const handleChooseCardLock = async () => {
+    if (!isNativeDesktop()) {
+      mdbInputRef.current?.click();
+      return;
+    }
+    try {
+      const candidates = await discoverNativeCardLockFiles();
+      if (candidates.length) {
+        const newest = [...candidates].sort((a, b) => (b.modifiedUnixMs ?? 0) - (a.modifiedUnixMs ?? 0))[0];
+        const modified = newest.modifiedUnixMs ? new Date(newest.modifiedUnixMs).toLocaleString() : 'date inconnue';
+        if (window.confirm(`Une base CardLock a été détectée :\n${newest.path}\nDernière modification : ${modified}\n\nImporter cette base ?`)) {
+          await applyMdbFile(await readDiscoveredCardLock(newest));
+          return;
+        }
+      }
+      const selected = await pickNativeCardLockFile();
+      if (selected) await applyMdbFile(selected);
+    } catch (error) {
+      setStructureMessage(error instanceof Error ? error.message : 'Impossible d’ouvrir CardLock.mdb.');
     }
   };
 
@@ -762,13 +796,13 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                   <Database size={17} /> Importer la base proUSB CardLock.mdb
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Sélectionnez la base existante depuis Windows. Pour importer les données à jour, privilégiez la copie VirtualStore si elle existe. L’application ne peut pas accéder seule à un chemin local Windows.
+                  Appointment Desktop peut détecter les chemins proUSB habituels et comparer leur date de modification. Dans le navigateur, sélectionnez le fichier manuellement. La copie VirtualStore peut être plus récente que celle de Program Files.
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 break-all">
                   Cible habituelle : C:\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb
                 </p>
                 <input ref={mdbInputRef} type="file" accept=".mdb,application/x-msaccess" onChange={handleMdbImport} className="hidden" />
-                <button type="button" disabled={isImportingMdb} onClick={() => mdbInputRef.current?.click()}
+                <button type="button" disabled={isImportingMdb} onClick={() => void handleChooseCardLock()}
                   className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 disabled:opacity-60">
                   <Upload size={15} /> {isImportingMdb ? 'Analyse de la base en cours…' : 'Choisir CardLock.mdb'}
                 </button>
@@ -785,7 +819,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                   <Building2 size={17} /> Créer la structure manuellement
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Créez un bâtiment, choisissez son étage et générez une plage de chambres. Les numéros déjà présents dans ce bâtiment sont ignorés.
+                  Créez un bâtiment, puis ajoutez ses étages. Définissez un préfixe (ex. 1), un début et une fin (ex. 01 à 30). Les numéros exclus sont appliqués à chaque étage ; le 13 est ignoré par défaut.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label className="space-y-1"><span className="block font-semibold">Nom du bâtiment</span>
@@ -803,18 +837,23 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                   <label className="space-y-1"><span className="block font-semibold">Premier numéro de chambre</span>
                     <input type="number" min="1" value={roomStart} onChange={(e) => setRoomStart(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
                   </label>
-                  <label className="space-y-1"><span className="block font-semibold">Nombre de chambres à créer</span>
-                    <input type="number" min="1" max="300" value={roomCount} onChange={(e) => setRoomCount(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                  <label className="space-y-1"><span className="block font-semibold">Fin de la plage (suffixe)</span>
+                    <input type="text" inputMode="numeric" value={roomEnd} onChange={(e) => setRoomEnd(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                  </label>
+                  <label className="space-y-1 sm:col-span-2"><span className="block font-semibold">Numéros à exclure sur chaque étage (séparés par des virgules)</span>
+                    <input value={excludedRoomNumbers} onChange={(e) => setExcludedRoomNumbers(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="13" />
+                    <span className="block text-[11px] font-normal text-slate-500">Par défaut, le suffixe 13 est exclu : avec le préfixe 1, la chambre 113 n’est pas créée.</span>
                   </label>
                 </div>
                 <button type="button" onClick={handleCreateRooms} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-2">
                   <Plus size={15} /> Créer les chambres
                 </button>
                 <div className="text-xs text-slate-500 dark:text-slate-400">
-                  Structure actuelle : {resourceGroups.length} bâtiment(s) / groupe(s), {resourceGroups.reduce((total, group) => total + group.resources.length, 0)} chambre(s).
+                  Structure actuelle : {resourceGroups.filter((group) => group.sector === 'hotel').length} bâtiment(s), {resourceGroups.filter((group) => group.sector === 'hotel').reduce((total, group) => total + group.resources.length, 0)} chambre(s).
                 </div>
               </section>
 
+              {tableInventory.length > 0 && <section className="rounded-xl border border-emerald-200 dark:border-emerald-900 p-3 space-y-2"><h4 className="font-bold text-sm">Tables CardLock lues ({tableInventory.length})</h4><div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{tableInventory.map((table) => <div key={table.name} className="rounded-lg bg-slate-50 dark:bg-slate-800 px-3 py-2"><div className="flex justify-between gap-2"><span className="font-semibold">{table.name}</span><span className="tabular-nums">{table.rowCount} lignes</span></div><p className="mt-1 text-[10px] text-slate-500 break-words">{table.columns.join(' · ') || 'Aucune colonne lisible'}</p></div>)}</div></section>}
               {structureMessage && <div role="status" className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3 text-xs text-slate-700 dark:text-slate-200">{structureMessage}</div>}
             </div>
           )}
