@@ -219,6 +219,7 @@ export const IndexedDbInspectorModal: React.FC<{
     if (!file) return;
     setMdbBusy(true);
     setMdbMessage(null);
+    setMdbTables([]);
     try {
       const snapshot = await lockManager.importMdb(file);
       setMdbTables(snapshot.tables ?? []);
