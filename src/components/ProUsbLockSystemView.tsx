@@ -997,10 +997,10 @@ export const ProUsbLockSystemView: React.FC = () => {
                   </span>
                 </div>
 
-                {/* OmniBook Reservation Picker Shortcut */}
+                {/* Appointment Reservation Picker Shortcut */}
                 <div className="bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 rounded-xl p-3.5">
                   <label className="block text-xs font-semibold text-blue-950 dark:text-blue-200 mb-1.5 flex items-center justify-between">
-                    <span>Lier à une réservation OmniBook existante (Remplissage Automatique) :</span>
+                    <span>Lier à une réservation Appointment existante (Remplissage Automatique) :</span>
                     <span className="text-[10px] text-blue-600 dark:text-blue-400 font-mono">
                       {bookings.length} réservations en base
                     </span>
@@ -2551,7 +2551,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                     <span>Système d'Accès Libre et Permanent (Zéro Bridage Vendeur)</span>
                   </div>
                   <p className="text-[11px] leading-relaxed text-emerald-800 dark:text-emerald-300">
-                    Dans le logiciel Delphi original, une licence commerciale expirait après un compte à rebours de jours (<code>Reg.ini</code>). Dans votre application OmniBook, l'accès à l'encodeur USB HID fonctionne en direct sans aucun code de licence ni restriction de durée.
+                    Dans le logiciel Delphi original, une licence commerciale expirait après un compte à rebours de jours (<code>Reg.ini</code>). Dans votre application Appointment, l'accès à l'encodeur USB HID fonctionne en direct sans aucun code de licence ni restriction de durée.
                   </p>
                 </div>
               </div>
