@@ -6,13 +6,12 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
-  Clock3,
   Layers3,
   Users,
   Wrench,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import type { BookingStatus, ResourceItem, TimelineBooking } from '../types/booking';
+import type { BookingStatus, TimelineBooking } from '../types/booking';
 
 type Period = 7 | 30 | 90;
 
