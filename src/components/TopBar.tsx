@@ -109,7 +109,8 @@ export const TopBar: React.FC = () => {
     void refreshOutbox();
     const timer = window.setInterval(() => void refreshOutbox(), 5000);
     window.addEventListener('focus', refreshOutbox);
-    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refreshOutbox); };
+    window.addEventListener('appointment:outbox-updated', refreshOutbox);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refreshOutbox); window.removeEventListener('appointment:outbox-updated', refreshOutbox); };
   }, [activeWorkspaceId]);
 
   // Click outside listener for dropdowns
@@ -333,8 +334,8 @@ export const TopBar: React.FC = () => {
           )}
         </button>
 
-        <div className="flex h-7 sm:h-8 items-center gap-1 sm:gap-2 rounded-lg border border-amber-500/30 bg-amber-950/30 px-1.5 sm:px-2 text-[9px] sm:text-[10px] font-semibold text-amber-200" title="P = événements locaux en attente. R = Pull distant non déployé.">
-          <span>P {pendingPushCount}</span><span className="text-amber-400/70">·</span><span>R —</span>
+        <div className="flex h-7 sm:h-8 items-center gap-1 sm:gap-2 rounded-lg border border-amber-500/30 bg-amber-950/30 px-1.5 sm:px-2 text-[9px] sm:text-[10px] font-semibold text-amber-200" title="Push = événements locaux en attente d’envoi, sans accusé serveur. Pull = indisponible tant que le moteur distant n’est pas déployé.">
+          <span>Push {pendingPushCount}</span><span className="text-amber-400/70">·</span><span>Pull —</span>
         </div>
 
         {/* USB Hardware Button matching szsz.png (🟢 USB • Prêt) */}
