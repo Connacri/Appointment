@@ -1,6 +1,6 @@
 # ProUSB Hotel Lock System — Spécification Technique Complète
 
-> Reverse Engineering Dossier — Document de référence pour la reconstruction dans React/OmniBook
+> Reverse Engineering Dossier — Document de référence pour la reconstruction dans React/Appointment PMS
 > Source : Logiciel original `CardLock.Exe` (Delphi/VCL, x86 PE) + `CardLock.mdb` (Access/Jet)
 > Date de l'analyse : Octobre 2026
 
@@ -597,7 +597,7 @@ Octet 36:  Séquence (0-32)
 ┌─────────────────────────────────────────────────────────────┐
 │  1. SÉLECTION DE LA RÉSERVATION                            │
 │                                                             │
-│  - Choisir une réservation dans le planning OmniBook       │
+│  - Choisir une réservation dans le planning Appointment PMS       │
 │  - Extraction automatique : chambre, client, dates         │
 │  - Ou saisie manuelle des paramètres                       │
 └──────────────────────┬──────────────────────────────────────┘
