@@ -460,7 +460,7 @@ export const PlanningTimeline: React.FC = () => {
         ? 'bg-amber-500 hover:bg-amber-400 ring-amber-300'
         : status === 'dirty'
         ? 'bg-rose-500 hover:bg-rose-400 ring-rose-300'
-        : 'bg-slate-400 hover:bg-slate-300 ring-slate-400';
+        : 'bg-rose-600 hover:bg-rose-500 ring-rose-400';
 
     const label =
       status === 'clean'
@@ -1229,7 +1229,7 @@ export const PlanningTimeline: React.FC = () => {
                     { value: 'clean', fr: 'Propre', en: 'Clean', ar: 'جاهزة', style: 'border-emerald-200 hover:bg-emerald-50 dark:border-emerald-900 dark:hover:bg-emerald-950/40', dot: 'bg-emerald-500' },
                     { value: 'cleaning', fr: 'En cours de nettoyage', en: 'Cleaning', ar: 'قيد التنظيف', style: 'border-amber-200 hover:bg-amber-50 dark:border-amber-900 dark:hover:bg-amber-950/40', dot: 'bg-amber-500' },
                     { value: 'dirty', fr: 'À nettoyer', en: 'Dirty', ar: 'تحتاج تنظيف', style: 'border-rose-200 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950/40', dot: 'bg-rose-500' },
-                    { value: 'out_of_order', fr: 'Hors service / Maintenance', en: 'Out of order / Maintenance', ar: 'خارج الخدمة / صيانة', style: 'border-slate-300 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800', dot: 'bg-slate-400' },
+                    { value: 'out_of_order', fr: 'Hors service / Maintenance', en: 'Out of order / Maintenance', ar: 'خارج الخدمة / صيانة', style: 'border-rose-300 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950/40', dot: 'bg-rose-600' },
                   ] as const).map((option) => (
                     <button
                       key={option.value}
@@ -1251,39 +1251,49 @@ export const PlanningTimeline: React.FC = () => {
           )}
 
           {timelineNotice && (() => {
-            const roomTone = timelineNotice.roomStatus === 'clean'
-              ? { panel: 'border-emerald-300 dark:border-emerald-800', icon: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300', accent: 'bg-emerald-500', label: language === 'fr' ? 'Chambre propre' : language === 'ar' ? 'غرفة نظيفة' : 'Clean room' }
-              : timelineNotice.roomStatus === 'cleaning'
-              ? { panel: 'border-amber-300 dark:border-amber-800', icon: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300', accent: 'bg-amber-500', label: language === 'fr' ? 'Nettoyage en cours' : language === 'ar' ? 'قيد التنظيف' : 'Cleaning' }
-              : timelineNotice.roomStatus === 'dirty'
-              ? { panel: 'border-rose-300 dark:border-rose-800', icon: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', accent: 'bg-rose-500', label: language === 'fr' ? 'À nettoyer' : language === 'ar' ? 'تحتاج تنظيف' : 'Needs cleaning' }
-              : { panel: 'border-rose-300 dark:border-rose-800', icon: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', accent: 'bg-rose-600', label: language === 'fr' ? 'Hors service · critique' : language === 'ar' ? 'خارج الخدمة · حرج' : 'Out of service · Critical' };
-            const tone = timelineNotice.roomName
-              ? roomTone
-              : timelineNotice.tone === 'danger'
-              ? { panel: 'border-rose-300 dark:border-rose-800', icon: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', accent: 'bg-rose-500', label: language === 'fr' ? 'Critique' : language === 'ar' ? 'حرج' : 'Critical' }
+            const isRoomAlert = Boolean(timelineNotice.roomName);
+            const roomStatus = timelineNotice.roomStatus || 'out_of_order';
+            const roomStyle = roomStatus === 'clean'
+              ? { panel: 'border-emerald-300 dark:border-emerald-800', icon: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300', accent: 'bg-emerald-500', statusLabel: language === 'fr' ? 'Propre' : language === 'ar' ? 'نظيفة' : 'Clean' }
+              : roomStatus === 'cleaning'
+              ? { panel: 'border-amber-300 dark:border-amber-800', icon: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300', accent: 'bg-amber-500', statusLabel: language === 'fr' ? 'Nettoyage en cours' : language === 'ar' ? 'قيد التنظيف' : 'Cleaning' }
+              : roomStatus === 'dirty'
+              ? { panel: 'border-rose-300 dark:border-rose-800', icon: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', accent: 'bg-rose-500', statusLabel: language === 'fr' ? 'À nettoyer' : language === 'ar' ? 'تحتاج تنظيف' : 'Needs cleaning' }
+              : { panel: 'border-rose-400 dark:border-rose-800', icon: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300', accent: 'bg-rose-600', statusLabel: language === 'fr' ? 'Hors service' : language === 'ar' ? 'خارج الخدمة' : 'Out of service' };
+            const severity = isRoomAlert || timelineNotice.tone === 'danger'
+              ? { label: language === 'fr' ? 'Critique' : language === 'ar' ? 'حرج' : 'Critical', badge: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' }
               : timelineNotice.tone === 'warning'
-              ? { panel: 'border-amber-300 dark:border-amber-800', icon: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300', accent: 'bg-amber-500', label: language === 'fr' ? 'Attention' : language === 'ar' ? 'تنبيه' : 'Warning' }
-              : { panel: 'border-blue-300 dark:border-blue-800', icon: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300', accent: 'bg-blue-500', label: language === 'fr' ? 'Information' : language === 'ar' ? 'معلومة' : 'Information' };
+              ? { label: language === 'fr' ? 'Attention' : language === 'ar' ? 'تنبيه' : 'Warning', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' }
+              : { label: language === 'fr' ? 'Information' : language === 'ar' ? 'معلومة' : 'Information', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' };
+            const panel = isRoomAlert
+              ? roomStyle
+              : { panel: 'border-blue-300 dark:border-blue-800', icon: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300', accent: 'bg-blue-500', statusLabel: language === 'fr' ? 'Règle de réservation' : language === 'ar' ? 'قاعدة الحجز' : 'Booking rule' };
             return (
               <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 backdrop-blur-[2px] p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setTimelineNotice(null); }}>
-                <section role="alertdialog" aria-modal="true" aria-labelledby="timeline-notice-title" className={`w-full max-w-sm overflow-hidden rounded-2xl border-2 bg-white shadow-2xl dark:bg-slate-900 ${tone.panel}`}>
-                  <div className={`h-1.5 w-full ${tone.accent}`} />
+                <section role="alertdialog" aria-modal="true" aria-labelledby="timeline-notice-title" className={`w-full max-w-sm overflow-hidden rounded-2xl border bg-white shadow-2xl dark:bg-slate-900 ${panel.panel}`}>
+                  <div className={`h-1.5 w-full ${panel.accent}`} />
                   <div className="p-4 sm:p-5">
                     <div className="flex items-start gap-3">
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone.icon}`}>
-                        <AlertCircle size={21} />
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${panel.icon}`}>
+                        {isRoomAlert ? <Bed size={21} /> : <CalendarDays size={21} />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="mb-1 flex flex-wrap items-center gap-2">
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tone.icon}`}>{tone.label}</span>
-                          {timelineNotice.roomName && <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{timelineNotice.roomName}</span>}
+                        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${severity.badge}`}>{severity.label}</span>
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${panel.icon}`}>{panel.statusLabel}</span>
                         </div>
                         <h2 id="timeline-notice-title" className="text-base font-bold text-slate-900 dark:text-white">{timelineNotice.title}</h2>
                         <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{timelineNotice.message}</p>
                       </div>
                       <button type="button" onClick={() => setTimelineNotice(null)} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200" aria-label={language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}><X size={18} /></button>
                     </div>
+                    {isRoomAlert && (
+                      <div className="mt-4 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50/80 px-3 py-2.5 dark:border-rose-900/70 dark:bg-rose-950/30">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-rose-600" />
+                        <span className="text-xs font-semibold text-rose-900 dark:text-rose-200">{language === 'fr' ? 'Chambre concernée' : language === 'ar' ? 'الغرفة المعنية' : 'Affected room'}</span>
+                        <span className="ml-auto truncate text-sm font-bold text-rose-900 dark:text-rose-100">{timelineNotice.roomName}</span>
+                      </div>
+                    )}
                     <div className="mt-5 flex justify-end">
                       <button type="button" autoFocus onClick={() => setTimelineNotice(null)} className="min-h-10 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">{language === 'fr' ? 'Compris' : language === 'ar' ? 'حسناً' : 'Got it'}</button>
                     </div>
