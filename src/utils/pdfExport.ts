@@ -348,8 +348,8 @@ export function exportInvoicePDF(
       ? 'Pénalités de retard : 3 fois le taux d\'intérêt légal en vigueur · Indemnité forfaitaire de recouvrement : 40 ' + currencySymbol
       : 'Late interest: 3x statutory rate · Recovery indemnity: 40 ' + currencySymbol,
     isFr
-      ? `Système certifié OmniBook Hospitality — Document comptable officiel émis pour ${doc.customerName}`
-      : `OmniBook Hospitality System — Official accounting invoice issued for ${doc.customerName}`,
+      ? `Système certifié Appointment Hospitality — Document comptable officiel émis pour ${doc.customerName}`
+      : `Appointment Hospitality System — Official accounting invoice issued for ${doc.customerName}`,
   ], 14, footerY + 5);
 
   // Save the PDF
