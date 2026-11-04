@@ -87,7 +87,7 @@ const BookingTrendPanel: React.FC<{
             </div>
             <div className="text-right text-[10px] text-slate-400">{t('Points de mesure', 'Data points', 'نقاط القياس')}: {points.length}</div>
           </div>
-          <div className="relative w-full" onMouseLeave={() => setHoveredIndex(null)} onMouseMove={(event) => {
+          <div className="relative w-full" style={{ touchAction: 'pan-y' }} onPointerLeave={() => setHoveredIndex(null)} onPointerMove={(event) => {
             const rect = event.currentTarget.getBoundingClientRect();
             const viewX = ((event.clientX - rect.left) / Math.max(1, rect.width)) * width;
             const rawIndex = points.length <= 1 ? 0 : Math.round((viewX - left) / (right - left) * (points.length - 1));
@@ -158,7 +158,7 @@ const TrendLine: React.FC<{
         <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{subtitle}</p>
       </div>
       {points.length ? (
-        <div className="relative" onMouseLeave={() => setActiveIndex(null)} onMouseMove={event => {
+        <div className="relative" style={{ touchAction: 'pan-y' }} onPointerLeave={() => setActiveIndex(null)} onPointerMove={event => {
           const rect = event.currentTarget.getBoundingClientRect();
           const px = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * 900;
           const index = points.length <= 1 ? 0 : Math.round((px - left) / (right - left) * (points.length - 1));
