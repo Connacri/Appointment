@@ -351,6 +351,8 @@ export const BookingModal: React.FC = () => {
           id: selectedBooking?.id || `draft-${Date.now()}`,
           guestName: guestName || selectedBooking?.guestName || 'Client',
           resourceName: currentResource?.name || resourceNameFallback,
+          buildingNo: currentResource?.building !== undefined ? Number.parseInt(currentResource.building, 10) : undefined,
+          floorNo: currentResource?.floor !== undefined ? Number.parseInt(currentResource.floor, 10) : undefined,
           startDate,
           endDate,
         },
