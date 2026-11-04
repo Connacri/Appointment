@@ -24,9 +24,9 @@ import {
 import { indexedDb, IndexedDbStoreStats } from '../db/indexedDb';
 import { useApp } from '../context/AppContext';
 import { lockManager } from '../locks/lockManager';
-import { mdbSnapshotToPlanning } from '../locks/database/mdbImport';
+import { mdbSnapshotToPlanning, MdbTableSummary } from '../locks/database/mdbImport';
 import { createClient } from '@supabase/supabase-js';
-import { discoverNativeCardLockFiles, isNativeDesktop, pickNativeCardLockFile, readDiscoveredCardLock, setNativeSecret } from '../services/desktopRuntime';
+import { discoverNativeCardLockFiles, getDesktopRuntimeInfo, hasNativeSecret, isNativeDesktop, pickNativeCardLockFile, readDiscoveredCardLock, setNativeSecret } from '../services/desktopRuntime';
 
 type StoreName = 'bookings' | 'invoices' | 'resources';
 
@@ -173,6 +173,9 @@ export const IndexedDbInspectorModal: React.FC<{
   const [supabaseState, setSupabaseState] = useState('Configuration locale non vérifiée');
   const [neonConnectionString, setNeonConnectionString] = useState('');
   const [neonCredentialState, setNeonCredentialState] = useState<string | null>(null);
+  const [neonCredentialStored, setNeonCredentialStored] = useState(false);
+  const [nativeRuntimeLabel, setNativeRuntimeLabel] = useState('Navigateur web — sélection de fichier uniquement');
+  const [mdbTableInventory, setMdbTableInventory] = useState<MdbTableSummary[]>([]);
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
   const limit = 8;
 
@@ -201,7 +204,10 @@ export const IndexedDbInspectorModal: React.FC<{
   }, [isOpen, loadStatsAndData]);
 
   useEffect(() => {
-    if (!isOpen) setNeonConnectionString('');
+    if (!isOpen) { setNeonConnectionString(''); return; }
+    if (!isNativeDesktop()) { setNativeRuntimeLabel('Navigateur web — sélection de fichier uniquement'); setNeonCredentialStored(false); return; }
+    void getDesktopRuntimeInfo().then(info => setNativeRuntimeLabel(info?.windowsCredentialManager ? 'Runtime Tauri natif Windows — Credential Manager disponible' : 'Runtime natif — magasin Windows non disponible')).catch(() => setNativeRuntimeLabel('Runtime natif — état non vérifié'));
+    void hasNativeSecret('neon.connection_string').then(setNeonCredentialStored).catch(() => setNeonCredentialStored(false));
   }, [isOpen]);
 
   useEffect(() => {
@@ -220,15 +226,18 @@ export const IndexedDbInspectorModal: React.FC<{
     try {
       const snapshot = await lockManager.importMdb(file);
       const sourceIsOld = snapshot.fileLastModified ? (Date.now() - new Date(snapshot.fileLastModified).getTime()) / 86400000 > 90 : false;
+      setMdbTableInventory(snapshot.tableInventory ?? []);
       if (snapshot.counts.rooms || snapshot.counts.guests) {
         const { resourceGroups, bookings } = mdbSnapshotToPlanning(snapshot);
-        const importNow = window.confirm(mt.confirm(snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards));
+        const currentHotelRooms = resourceGroups.reduce((count, group) => count + (group.sector === 'hotel' ? group.resources.length : 0), 0);
+        const replacementWarning = currentHotelRooms > 0 ? `\\n\\nLa structure hôtelière actuelle (${currentHotelRooms} chambres) sera remplacée. Les autres secteurs seront conservés.` : '';
+        const importNow = window.confirm(mt.confirm(snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards) + replacementWarning);
         if (importNow) {
-          setResourceGroups(current => [...current.filter(group => !group.id.startsWith('mdb-')), ...resourceGroups]);
+          setResourceGroups(current => [...current.filter(group => group.sector !== 'hotel'), ...resourceGroups]);
           setBookings(current => [...current.filter(item => !bookings.some(next => next.id === item.id)), ...bookings]);
         }
       }
-      setMdbMessage(mt.done(snapshot.buildings.length, snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards, snapshot.warnings.length) + (sourceIsOld ? ` ${mt.stale}` : ''));
+      setMdbMessage(mt.done(snapshot.buildings.length, snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards, snapshot.warnings.length) + (sourceIsOld ? ` ${mt.stale}` : '') + ` ${snapshot.tableInventory?.length ?? 0} table(s) inspectée(s).`);
       await loadStatsAndData();
     } catch (err) {
       setMdbMessage(err instanceof Error ? err.message : mt.importError);
@@ -367,7 +376,7 @@ export const IndexedDbInspectorModal: React.FC<{
           </div>
           <div className="relative mt-4 flex items-start gap-2 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.07] px-3 py-2.5 text-[11px] leading-relaxed text-slate-300">
             <ShieldCheck size={15} className="mt-0.5 shrink-0 text-cyan-300" />
-            <p><strong className="text-white">Données locales prioritaires.</strong> Importez CardLock, configurez les accès publics Supabase et consultez les états de sauvegarde. Les identifiants PostgreSQL restent côté serveur.</p>
+            <p><strong className="text-white">Données locales prioritaires.</strong> Import CardLock, configuration Supabase et sauvegardes. {nativeRuntimeLabel}. Le stockage d’un secret n’est jamais assimilé à une connexion active.</p>
           </div>
         </header>
 
@@ -380,6 +389,7 @@ export const IndexedDbInspectorModal: React.FC<{
             <div><p className="text-sm font-semibold text-slate-900 dark:text-white">{mt.localTitle}</p><p className="mt-1 break-all text-[11px] text-slate-500">{mt.localPath}</p><p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">{mt.localWarning}</p></div>
             <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 text-xs font-bold text-white hover:bg-cyan-600"><Upload size={15}/>{mdbBusy?mt.analyzing:mt.chooseFile}<input className="hidden" type="file" accept=".mdb,application/x-msaccess" disabled={mdbBusy} onChange={event => { const file=event.target.files?.[0] ?? null; void handleMdbImport(file); event.currentTarget.value=''; }}/></label>
             {mdbMessage && <p role="status" className="text-xs text-slate-600 dark:text-slate-300 sm:col-span-2">{mdbMessage}</p>}
+            {mdbTableInventory.length > 0 && <div className="grid gap-2 sm:col-span-2 sm:grid-cols-2">{mdbTableInventory.map(table => <div key={table.name} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] dark:border-slate-800 dark:bg-slate-950"><div className="flex justify-between gap-2 font-semibold"><span>{table.name}</span><span>{table.rowCount} lignes</span></div><p className="mt-1 break-words text-slate-500">{table.columns.join(' · ') || 'Aucune colonne lisible'}</p></div>)}</div>}
           </div>}
           {activePanel === 'supabase' && <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-xs font-semibold text-slate-700 dark:text-slate-200 sm:col-span-2">{mt.projectUrl}<input value={supabaseUrl} onChange={e=>setSupabaseUrl(e.target.value)} placeholder="https://xxxxx.supabase.co" className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-normal dark:border-slate-700 dark:bg-slate-950"/></label>
@@ -393,6 +403,7 @@ export const IndexedDbInspectorModal: React.FC<{
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">{mt.neonLabel}<input type="password" autoComplete="off" value={neonConnectionString} onChange={e=>setNeonConnectionString(e.target.value)} placeholder={mt.neonPlaceholder} className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-normal dark:border-slate-700 dark:bg-slate-950"/></label>
             <p className="text-[11px] text-slate-500">{mt.neonNotice}</p>
              <button type="button" onClick={()=>void saveNeonCredential()} disabled={!neonConnectionString.trim()} className="rounded-lg bg-cyan-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Stocker dans Windows Credential Manager</button>
+             {neonCredentialStored && <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Credential Manager : secret présent (connexion Neon non vérifiée).</p>}
              {neonCredentialState && <p role="status" className="text-xs text-slate-600 dark:text-slate-300">{neonCredentialState}</p>}
             <button type="button" onClick={()=>setNeonConnectionString('')} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">{mt.clear}</button>
           </div>}
