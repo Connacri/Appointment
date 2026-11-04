@@ -36,6 +36,7 @@ import {
   EncodeMasterCardParams,
   EncodeCommissioningCardParams,
   encodeGuestCard,
+  encodeSpecialCard,
   encodeMasterCard,
   encodeCommissioningCard,
   encodeSystemCard,
@@ -888,11 +889,12 @@ class LockManager {
     const now = new Date();
     const end = new Date(now.getTime() + validityDays * 24 * 3600 * 1000);
 
-    const recordBytes = encodeGuestCard({
+    const recordBytes = encodeSpecialCard({
       roomNumber: params.roomNumber,
       buildingNo: params.buildingNo,
       floorNo: params.floorNo,
       cardIndex: 9,
+      passwordPin: params.passwordPin,
       validity: {
         startYear: now.getFullYear(),
         startMonth: now.getMonth() + 1,
@@ -911,14 +913,6 @@ class LockManager {
       },
       siteCodeLow: this.getSiteCode(),
     });
-
-    // Custom isolate tag and pin signature
-    recordBytes[0] = 0x90 | (recordBytes[0] & 0x0f);
-    let pinHash = 0;
-    for (let i = 0; i < params.passwordPin.length; i++) {
-      pinHash = (pinHash + params.passwordPin.charCodeAt(i) * 31) & 0xff;
-    }
-    recordBytes[13] = pinHash;
 
     const decoded = await this.writeAndVerifyCard(recordBytes);
 
