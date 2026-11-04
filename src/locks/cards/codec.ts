@@ -165,6 +165,8 @@ function randomTail(): [number, number, number] {
 
 export interface EncodeGuestCardParams {
   roomNumber: string; // e.g. "101", "205", "1-101"
+  buildingNo?: number;
+  floorNo?: number;
   cardIndex?: number; // 0..15 (defaults to 1)
   validity: CardValidityWindow;
   options?: {
@@ -190,7 +192,7 @@ export function encodeGuestCard(params: EncodeGuestCardParams): Uint8Array {
   const card = new Uint8Array(16);
   const cleanRoom = params.roomNumber.replace(/^[0-9]+-/, '');
   const roomNum = parseInt(cleanRoom, 10) || 101;
-  const floorNo = Math.floor(roomNum / 100);
+  const floorNo = params.floorNo ?? Math.floor(roomNum / 100);
   const roomMod = roomNum % 100;
   const index = (params.cardIndex ?? 1) & 0x0f;
 
@@ -208,7 +210,7 @@ export function encodeGuestCard(params: EncodeGuestCardParams): Uint8Array {
   card[4] = 0x63 | 0x80; // Constant sentinel 99 with high bit set = 0xE3
   card[5] = (roomMod & 0x7f) | 0x80; // room mod 100 e.g. room 1 -> 0x81, room 5 -> 0x85
   card[6] = (floorNo & 0x7f) | 0x80; // floor div 100 e.g. floor 1 -> 0x81, floor 2 -> 0x82
-  card[7] = 0x01; // Card sequence / nights indicator
+  card[7] = (params.buildingNo ?? 1) & 0x0f; // Building identifier (CardLock BldNo)
   card[8] = params.options?.openPublicDoor ? 0x01 : 0x00;
   card[9] = 0x60 | index; // 0x60 family + card index
 
@@ -234,6 +236,26 @@ export function encodeGuestCard(params: EncodeGuestCardParams): Uint8Array {
   card[14] = e1;
   card[15] = e2;
 
+  return card;
+}
+
+export interface EncodeSpecialCardParams extends EncodeGuestCardParams {
+  passwordPin: string;
+}
+
+/**
+ * Appointment's experimental 0x90 card format. Byte 0 remains the C9 record
+ * marker; byte 9 carries the card family and byte 13 carries the app PIN marker.
+ * The 8-bit marker is not a cryptographic or firmware-enforced password.
+ */
+export function encodeSpecialCard(params: EncodeSpecialCardParams): Uint8Array {
+  const pin = params.passwordPin.trim();
+  if (pin.length < 4) throw new Error('Le PIN de la carte spéciale doit contenir au moins 4 caractères.');
+  const card = encodeGuestCard({ ...params, cardIndex: params.cardIndex ?? 9 });
+  card[9] = PROUSB_CARD_TYPES.special.typeFamilyByte | ((params.cardIndex ?? 9) & 0x0f);
+  let pinHash = 0;
+  for (let i = 0; i < pin.length; i += 1) pinHash = (pinHash + pin.charCodeAt(i) * 31) & 0xff;
+  card[13] = pinHash;
   return card;
 }
 
@@ -745,8 +767,8 @@ export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedPro
     } else {
       notes.push("Date d'émission illisible (octets [10..12]) : aucune date n'est affichée.");
     }
-  } else if (type === 'guest') {
-    // GuestCard: [5] = room (low 7 bits), [6] = floor, [7] = building.
+  } else if (type === 'guest' || type === 'special') {
+    // Guest and custom 0x90 Special cards share the room/floor bytes.
     const roomMod = bytes[5] & 0x7f;
     const floor = bytes[6] & 0x7f;
     decoded.buildingNo = bytes[7] & 0x0f;
@@ -759,15 +781,25 @@ export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedPro
     const start = unpackStamp(bytes[10], bytes[11], bytes[12], {
       refYear: new Date().getFullYear(),
     });
-    const end = start
-      ? unpackStamp(bytes[13], bytes[14], bytes[15], {
-          refYear: start.year,
-          notBeforeYear: start.year,
-        })
-      : null;
-    if (start) decoded.validity = stampToValidity(start, end);
-    if (!start) notes.push('Début de validité illisible (octets [10..12]) : aucune date affichée.');
-    else if (!end) notes.push('Fin de validité illisible (octets [13..15]) : seule la date de début est affichée.');
+    if (type === 'special') {
+      // Appointment's 0x90 variant reserves byte [13] for its PIN marker,
+      // so it must never be interpreted as the end-of-stay timestamp.
+      decoded.specialPinHash = bytes[13];
+      decoded.endIsUnknown = true;
+      if (start) decoded.issuedAt = formatIso(start);
+      else notes.push('Date de création illisible (octets [10..12]).');
+      notes.push('Carte spéciale 0x90 : le marqueur PIN sur un octet n’est pas une protection cryptographique certifiée par le firmware.');
+    } else {
+      const end = start
+        ? unpackStamp(bytes[13], bytes[14], bytes[15], {
+            refYear: start.year,
+            notBeforeYear: start.year,
+          })
+        : null;
+      if (start) decoded.validity = stampToValidity(start, end);
+      if (!start) notes.push('Début de validité illisible (octets [10..12]) : aucune date affichée.');
+      else if (!end) notes.push('Fin de validité illisible (octets [13..15]) : seule la date de début est affichée.');
+    }
   } else if (type === 'master' || type === 'floor' || type === 'building' || type === 'emergency') {
     if (type === 'floor') decoded.floorNo = bytes[4];
     if (type === 'building') decoded.buildingNo = bytes[4];

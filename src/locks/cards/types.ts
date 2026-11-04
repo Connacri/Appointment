@@ -154,8 +154,8 @@ export const PROUSB_CARD_TYPES: Record<ProUsbCardType, ProUsbCardTypeMeta> = {
   special: {
     type: 'special',
     typeFamilyByte: 0x90,
-    label: { fr: 'Carte Spéciale Protégée (Mot de passe)', en: 'Special Protected Card', ar: 'بطاقة خاصة محمية بكلمة مرور' },
-    description: { fr: 'Accès sécurisé pour chambre spéciale, isolée de tout master, pass bâtiment ou pass pompier', en: 'Secure isolated special room card requiring PIN/password authentication', ar: 'بطاقة معزولة بكلمة سر للغرف الخاصة خارج كل الماسترات' },
+    label: { fr: 'Carte Spéciale 0x90 (PIN logiciel)', en: 'Special 0x90 Card (app PIN)', ar: 'بطاقة خاصة 0x90 (رمز داخل التطبيق)' },
+    description: { fr: 'Format Appointment expérimental : vérification du marqueur PIN dans l’application ; compatibilité d’ouverture et protection matérielle non confirmées.', en: 'Experimental Appointment format: PIN marker is checked by the app; lock opening compatibility and hardware enforcement are unverified.', ar: 'تنسيق تجريبي من Appointment: يتحقق التطبيق من رمز PIN؛ توافق القفل والحماية المادية غير مؤكدين.' },
     badgeColor: 'emerald',
     isStaffCard: true,
     isCommissioningCard: false,
@@ -227,6 +227,8 @@ export interface DecodedProUsbCard {
   buildingNo?: number;
   floorNo?: number;
   roomNumber?: string;
+  /** Byte [13] on the custom 0x90 card family; not a cryptographic verifier. */
+  specialPinHash?: number;
   roomMod100?: number;
   roomDiv100?: number;
   validity?: CardValidityWindow;

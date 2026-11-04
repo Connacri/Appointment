@@ -32,6 +32,7 @@ import { BookingStatus, DomainType, TimelineBooking, ResourceItem } from '../typ
 import { domainConfigs } from '../data/mockData';
 import { statusConfig } from './LegendBar';
 import { downloadICS } from '../utils/icsExport';
+import { isRoomReadyForBooking } from '../utils/roomReadiness';
 import { lockManager } from '../locks/lockManager';
 import { CardResultDialog, CardResult } from './CardResultDialog';
 import { CardCreationProgressModal } from './CardCreationProgressModal';
@@ -92,6 +93,7 @@ export const BookingModal: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending' | 'partial'>('paid');
   const [conflictError, setConflictError] = useState<string | null>(null);
+  const [roomStatusAlert, setRoomStatusAlert] = useState<{ roomName: string; status: ResourceItem['housekeepingStatus'] } | null>(null);
 
   const todayIso = new Date().toISOString().split('T')[0];
 
@@ -350,6 +352,8 @@ export const BookingModal: React.FC = () => {
           id: selectedBooking?.id || `draft-${Date.now()}`,
           guestName: guestName || selectedBooking?.guestName || 'Client',
           resourceName: currentResource?.name || resourceNameFallback,
+          buildingNo: currentResource?.building !== undefined ? Number.parseInt(currentResource.building, 10) : undefined,
+          floorNo: currentResource?.floor !== undefined ? Number.parseInt(currentResource.floor, 10) : undefined,
           startDate,
           endDate,
         },
@@ -498,6 +502,11 @@ export const BookingModal: React.FC = () => {
   // Submitting form
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const isChangingRoom = !isEditing || selectedBooking?.resourceId !== resourceId;
+    if (activeDomain === 'hotel' && isChangingRoom && (!currentResource || !isRoomReadyForBooking(currentResource.housekeepingStatus))) {
+      setRoomStatusAlert({ roomName: currentResource?.name ?? '—', status: currentResource?.housekeepingStatus });
+      return;
+    }
     if (!guestName.trim()) return;
     setConflictError(null);
 
@@ -631,7 +640,11 @@ export const BookingModal: React.FC = () => {
       });
 
       if (!res.success && res.error) {
-        setConflictError(res.error);
+        if (res.code === 'room_not_ready') {
+          setRoomStatusAlert({ roomName: res.roomName ?? currentResource?.name ?? '—', status: res.roomStatus });
+        } else {
+          setConflictError(res.error);
+        }
         return;
       }
       setIsNewBookingModalOpen(false);
@@ -1951,6 +1964,21 @@ export const BookingModal: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {roomStatusAlert && (
+        <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/70 p-4" role="alertdialog" aria-modal="true" aria-labelledby="room-status-alert-title">
+          <div className="w-full max-w-md rounded-2xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-3">
+            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400"><AlertCircle size={22} /><h3 id="room-status-alert-title" className="font-extrabold text-base">{language === 'ar' ? 'لا يمكن إنشاء الحجز' : language === 'en' ? 'Reservation blocked' : 'Réservation impossible'}</h3></div>
+            <p className="text-sm text-slate-700 dark:text-slate-200">{language === 'ar' ? 'يجب أن تكون الغرفة نظيفة ومتاحة (الحالة الخضراء) قبل إنشاء الحجز.' : language === 'en' ? 'The room must be clean and available (green status) before a reservation can be created.' : 'La chambre doit être propre et disponible (statut vert) avant de créer une réservation.'}</p>
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 text-sm space-y-1">
+              <div><strong>{language === 'ar' ? 'الغرفة' : language === 'en' ? 'Room' : 'Chambre'} :</strong> {roomStatusAlert.roomName}</div>
+              <div><strong>{language === 'ar' ? 'الحالة' : language === 'en' ? 'Status' : 'Statut'} :</strong> {roomStatusAlert.status === 'cleaning' ? (language === 'en' ? 'Cleaning' : language === 'ar' ? 'قيد التنظيف' : 'Nettoyage en cours') : roomStatusAlert.status === 'dirty' ? (language === 'en' ? 'Dirty' : language === 'ar' ? 'متسخة' : 'Sale') : roomStatusAlert.status === 'out_of_order' ? (language === 'en' ? 'Out of order' : language === 'ar' ? 'خارج الخدمة' : 'Hors service') : (language === 'en' ? 'Unconfirmed' : language === 'ar' ? 'غير مؤكدة' : 'Non confirmée')}</div>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{language === 'ar' ? 'اطلب من التدبير المنزلي تحديث حالة الغرفة إلى نظيفة بعد contrôle.' : language === 'en' ? 'Ask housekeeping to update the room to Clean after inspection.' : 'Demandez au service d’étage de contrôler la chambre puis de passer son statut à « Propre ».'}</p>
+            <div className="flex justify-end"><button type="button" onClick={() => setRoomStatusAlert(null)} className="px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold text-sm">{language === 'ar' ? 'حسنًا' : language === 'en' ? 'Understood' : 'Compris'}</button></div>
           </div>
         </div>
       )}

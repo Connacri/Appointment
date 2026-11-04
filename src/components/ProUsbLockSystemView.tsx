@@ -121,14 +121,14 @@ export const ProUsbLockSystemView: React.FC = () => {
   // Staff Card Form State
   const [selectedStaffType, setSelectedStaffType] = useState<ProUsbCardType>('master');
   const [staffHolderName, setStaffHolderName] = useState('Gouvernante Générale');
-  const [staffFloorNo, setStaffFloorNo] = useState(1);
-  const [staffBuildingNo, setStaffBuildingNo] = useState(1);
+  const [staffFloorNo, setStaffFloorNo] = useState(0);
+  const [staffBuildingNo, setStaffBuildingNo] = useState(0);
   const [staffValidityDays, setStaffValidityDays] = useState(365);
 
   // Commissioning Form State
   const [commissionRoom, setCommissionRoom] = useState('101');
-  const [commissionFloor, setCommissionFloor] = useState(1);
-  const [commissionBuilding, setCommissionBuilding] = useState(1);
+  const [commissionFloor, setCommissionFloor] = useState(0);
+  const [commissionBuilding, setCommissionBuilding] = useState(0);
   const [commissionValidityDays, setCommissionValidityDays] = useState(365);
   const [commissionValidityHour, setCommissionValidityHour] = useState(12);
   // Carte système universelle : site 0000 → acceptée par une serrure de
@@ -137,6 +137,7 @@ export const ProUsbLockSystemView: React.FC = () => {
 
   // CardLock.mdb (original software database)
   const [mdbStatus, setMdbStatus] = useState(lockManager.getMdbStatus());
+  const [hotelRecommissioningRequired, setHotelRecommissioningRequired] = useState(lockManager.isHotelRecommissioningRequired());
   const [isImportingMdb, setIsImportingMdb] = useState(false);
   const [usbStatus, setUsbStatus] = useState(lockManager.getStatus());
   const [usbDevice, setUsbDevice] = useState<UsbDeviceInfo | null>(() => lockManager.getDeviceInfo());
@@ -154,6 +155,7 @@ export const ProUsbLockSystemView: React.FC = () => {
       setAuditRecords(lockManager.getAuditRecords());
       setLockSettings(lockManager.getSettings());
       setMdbStatus(lockManager.getMdbStatus());
+      setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
     });
 
     return () => {
@@ -222,12 +224,12 @@ export const ProUsbLockSystemView: React.FC = () => {
 
     // Preserve the original CardLock identifiers: BldNo/FlrNo zero is valid.
     if (buildingNumbers.length === 0 && !mdbSnapshot) buildingNumbers.push(1);
-    const buildingNames = new Map(mdbBuildings.map((building) => [building.no, building.name]));
+    const buildingNames = new Map<number, string>(mdbBuildings.map((building) => [building.no, building.name] as const));
     const availableBuildings = buildingNumbers.map((no) => ({
       no,
       label: buildingNames.get(no)
         ? `${buildingNames.get(no)} (Bâtiment ${no} — ${mdbRooms.filter((room) => room.building === no).length} chambres)`
-        : `Bâtiment ${no}`,
+        : `Bâtiment ${no + (mdbSnapshot ? 1 : 0)}${mdbSnapshot ? ` (ID ${no})` : ''}`,
     }));
 
     const floorNumbers = mdbSnapshot
@@ -248,6 +250,24 @@ export const ProUsbLockSystemView: React.FC = () => {
 
     return { availableBuildings, availableFloors };
   }, [mdbSnapshot, resourceGroups, commissionBuilding]);
+
+  const staffAvailableFloors = useMemo(() => {
+    if (mdbSnapshot && mdbSnapshot.rooms.length > 0) {
+      return getCardLockFloorNumbers(mdbSnapshot.rooms, staffBuildingNo).map((no) => ({
+        no,
+        label: no === 0 ? 'Rez-de-chaussée (0)' : `Étage ${no}`,
+      }));
+    }
+    const rooms = resourceGroups
+      .filter((group) => group.sector === 'hotel')
+      .flatMap((group) => group.resources)
+      .filter((resource) => Number.parseInt(resource.building ?? '', 10) === staffBuildingNo);
+    const floors = [...new Set(rooms.map((resource) => {
+      const explicit = Number.parseInt(resource.floor ?? '', 10);
+      return Number.isInteger(explicit) && explicit >= 0 ? explicit : Number.parseInt((resource.name || '')[0] ?? '', 10);
+    }).filter((no) => Number.isInteger(no) && no >= 0))].sort((a, b) => a - b);
+    return floors.map((no) => ({ no, label: no === 0 ? 'Rez-de-chaussée (0)' : `Étage ${no}` }));
+  }, [mdbSnapshot, resourceGroups, staffBuildingNo]);
 
   /**
    * Chambres réelles câblées et alignées avec les bâtiments et étages réels.
@@ -296,15 +316,19 @@ export const ProUsbLockSystemView: React.FC = () => {
   // première valeur réellement existante.
   useEffect(() => {
     const floorNos = availableFloors.map((f) => f.no);
+    const staffFloorNos = staffAvailableFloors.map((f) => f.no);
     const buildingNos = availableBuildings.map((b) => b.no);
-    if (!floorNos.includes(staffFloorNo)) setStaffFloorNo(floorNos[0]);
-    if (!buildingNos.includes(staffBuildingNo)) setStaffBuildingNo(buildingNos[0]);
+    if (staffFloorNos.length > 0 && !staffFloorNos.includes(staffFloorNo)) setStaffFloorNo(staffFloorNos[0]);
+    if (buildingNos.length > 0 && !buildingNos.includes(staffBuildingNo)) setStaffBuildingNo(buildingNos[0]);
     if (floorNos.length > 0 && !floorNos.includes(commissionFloor)) setCommissionFloor(floorNos[0]);
     if (buildingNos.length > 0 && !buildingNos.includes(commissionBuilding)) setCommissionBuilding(buildingNos[0]);
     if (availableRoomsList.length > 0 && !availableRoomsList.some((r) => r.roomNumber === guestRoomNumber)) {
       setGuestRoomNumber(availableRoomsList[0].roomNumber);
     }
-  }, [availableFloors, availableBuildings, availableRoomsList, staffFloorNo, staffBuildingNo, commissionFloor, commissionBuilding, guestRoomNumber]);
+    if (availableRoomsList.length > 0 && !availableRoomsList.some((r) => r.roomNumber === specialRoomNumber)) {
+      setSpecialRoomNumber(availableRoomsList[0].roomNumber);
+    }
+  }, [availableFloors, staffAvailableFloors, availableBuildings, availableRoomsList, staffFloorNo, staffBuildingNo, commissionFloor, commissionBuilding, guestRoomNumber, specialRoomNumber]);
 
   /**
    * L'ID et l'Operator Code affichés par CardLock.exe ne sont pas dans la carte :
@@ -450,9 +474,23 @@ export const ProUsbLockSystemView: React.FC = () => {
           details.push(`Intégrité: ${decoded.siteComplementOk ? 'OK' : 'INVALIDE (~site attendu)'}`);
         }
         if (decoded.roomNumber) details.push(`Chambre: ${decoded.roomNumber}`);
+        if (decoded.type === 'special') {
+          const pin = window.prompt('Carte spéciale 0x90 détectée. Saisissez le PIN pour vérifier le marqueur logiciel.');
+          if (pin !== null) {
+            let pinHash = 0;
+            for (let i = 0; i < pin.length; i += 1) pinHash = (pinHash + pin.charCodeAt(i) * 31) & 0xff;
+            if (pinHash !== decoded.specialPinHash) {
+              showToast('error', 'PIN incorrect : la carte a été lue, mais la vérification logicielle a échoué.');
+              return;
+            }
+            details.push('PIN logiciel vérifié (empreinte 8 bits).');
+          } else {
+            details.push('PIN logiciel non vérifié.');
+          }
+        }
         if (v) {
           details.push(`${decoded.endIsUnknown ? 'Émise le' : 'Début'}: ${fmt(v.startYear, v.startMonth, v.startDay, v.startHour, v.startMinute ?? 0)}`);
-          if (decoded.endIsUnknown) details.push('Expiration: aucune (carte système)');
+          if (decoded.endIsUnknown) details.push(decoded.type === 'special' ? 'Expiration : non encodée dans cette variante spéciale' : 'Expiration: aucune (carte système)');
           else details.push(`Expiration: ${fmt(v.endYear, v.endMonth, v.endDay, v.endHour, v.endMinute ?? 0)}`);
         }
         details.push(
@@ -646,10 +684,12 @@ export const ProUsbLockSystemView: React.FC = () => {
     const cardTitle = `Carte Spéciale Protégée · Chambre ${specialRoomNumber}`;
     try {
       await runWithCardProgress(cardTitle, async (updateProgress) => {
-        updateProgress(25, "Hachage cryptographique du mot de passe PIN...");
+        updateProgress(25, "Préparation du marqueur PIN de la carte spéciale...");
         updateProgress(60, "Écriture radiofréquence (famille 0x90 isolée)...");
         const record = await lockManager.issueSpecialCard({
           roomNumber: specialRoomNumber,
+          buildingNo: availableRoomsList.find((room) => room.roomNumber === specialRoomNumber)?.buildingNo,
+          floorNo: availableRoomsList.find((room) => room.roomNumber === specialRoomNumber)?.floorNo,
           passwordPin: specialPin,
           holderName: specialHolderName,
           operator: 'SuperAdmin',
@@ -660,14 +700,14 @@ export const ProUsbLockSystemView: React.FC = () => {
         showToast('success', `Carte Spéciale pour chambre ${specialRoomNumber} encodée avec mot de passe !`);
         setCardResult({
           success: true,
-          title: 'Carte Spéciale Sécurisée émise',
-          message: `Carte protégée par mot de passe émise avec succès pour la chambre ${specialRoomNumber} (${specialPurpose}). Cette carte est strictement isolée des passes maîtres, étages et bâtiments.`,
+          title: 'Carte Spéciale 0x90 émise (format expérimental)',
+          message: `Carte 0x90 écrite et relue pour la chambre ${specialRoomNumber} (${specialPurpose}). Le PIN est vérifié par Appointment à la lecture ; la serrure doit être testée pour confirmer le support firmware. L’expiration est suivie localement et n’est pas garantie par la trame spéciale.`,
           details: [
             { label: 'Chambre Spéciale', value: specialRoomNumber },
             { label: 'Titulaire', value: specialHolderName },
-            { label: 'Protection', value: 'Mot de passe PIN crypté' },
+            { label: 'Protection', value: 'Marqueur PIN 8 bits — non certifié comme protection cryptographique matérielle' },
             { label: 'Usage / Motif', value: specialPurpose },
-            { label: 'Expire le', value: record.validUntil },
+            { label: 'Validité locale', value: `${record.validUntil} (non garantie par le firmware)` },
             { label: 'Trame (Hex)', value: record.rawHex },
           ],
         });
@@ -1649,7 +1689,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                       onChange={(e) => setStaffFloorNo(Number(e.target.value))}
                       className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
                     >
-                      {availableFloors.map((fl) => (
+                      {staffAvailableFloors.map((fl) => (
                         <option key={fl.no} value={fl.no}>
                           {fl.label}
                         </option>
@@ -1846,7 +1886,8 @@ export const ProUsbLockSystemView: React.FC = () => {
                     onClick={() => {
                       lockManager.clearMdb();
                       setMdbStatus(lockManager.getMdbStatus());
-                      showToast('info', 'Base CardLock.mdb déconnectée — mode autonome.');
+                      setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
+                      showToast('info', 'Identité CardLock déconnectée. Les cartes d’accès sont suspendues jusqu’à la reprogrammation du nouvel hôtel.');
                     }}
                     className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
@@ -1855,6 +1896,22 @@ export const ProUsbLockSystemView: React.FC = () => {
                   </button>
                 )}
               </div>
+              {hotelRecommissioningRequired && (
+                <div role="alert" className="mt-3 rounded-xl border border-amber-400 bg-amber-50 dark:bg-amber-950/40 p-3 space-y-2 text-xs">
+                  <strong className="text-amber-900 dark:text-amber-200">Reprogrammation obligatoire après changement d’hôtel</strong>
+                  <p className="text-amber-800 dark:text-amber-300">Les cartes client, spéciales, étage et bâtiment sont suspendues. Importez une base CardLock avec un code système différent, puis présentez les cartes Reset, Room Set et Time Set à chaque serrure. Les anciennes cartes ne sont pas révoquées à distance : elles cessent d’être reconnues uniquement après reprogrammation physique de chaque serrure.</p>
+                  <button type="button" disabled={!lockManager.canConfirmHotelRecommissioning()} onClick={() => {
+                    if (!window.confirm('Confirmez-vous avoir physiquement reprogrammé toutes les serrures de cet hôtel avec la nouvelle identité système ?')) return;
+                    try {
+                      lockManager.confirmHotelRecommissioning();
+                      setHotelRecommissioningRequired(false);
+                      showToast('success', 'Migration clôturée. Les nouvelles cartes d’accès peuvent être émises.');
+                    } catch (error) {
+                      showToast('error', error instanceof Error ? error.message : 'Validation impossible.');
+                    }
+                  }} className="px-3 py-2 rounded-lg bg-amber-700 text-white font-bold disabled:opacity-40 disabled:cursor-not-allowed">Confirmer la reprogrammation physique de toutes les serrures</button>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -1978,8 +2035,8 @@ export const ProUsbLockSystemView: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2">
                   <button onClick={() => handleIssueCommissioning('group_set')} disabled={isWriting} className="py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs">Groupe Config (0x50)</button>
                   <button onClick={() => handleIssueCommissioning('group')} disabled={isWriting} className="py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs">Carte Groupe (0x80)</button>
-                  <button onClick={() => handleIssueCommissioning('floor')} disabled={isWriting} className="py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg text-xs">Carte Étage (0xD0)</button>
-                  <button onClick={() => handleIssueCommissioning('building')} disabled={isWriting} className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs">Carte Bâtiment (0xC0)</button>
+                  <button onClick={() => handleIssueCommissioning('floor')} disabled={isWriting || availableFloors.length === 0} className="py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg text-xs">Carte Étage (0xD0)</button>
+                  <button onClick={() => handleIssueCommissioning('building')} disabled={isWriting || availableBuildings.length === 0} className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs">Carte Bâtiment (0xC0)</button>
                   <button onClick={() => handleIssueCommissioning('master')} disabled={isWriting} className="py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs col-span-2">Passe Général Master (0xB0)</button>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[10px] text-amber-800 dark:text-amber-200">
@@ -2458,7 +2515,8 @@ export const ProUsbLockSystemView: React.FC = () => {
                 onClick={() => {
                   if (window.confirm('Effacer toutes les donnees proUSB persistantes ?')) {
                     lockManager.clearPersistedData();
-                    showToast('success', 'Donnees proUSB effacees.');
+                    setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
+                    showToast('success', 'Données proUSB effacées. La migration des serrures reste protégée.');
                   }
                 }}
                 className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white font-bold rounded-lg text-xs transition-colors"
@@ -2626,7 +2684,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                     Création d'une Carte Spéciale (avec mot de passe)
                   </h3>
                   <p className="text-[11px] text-amber-100">
-                    Chambre Spéciale · Famille proUSB 0x90 Isolée de tout Master & Bâtiment
+                    Carte spéciale 0x90 · PIN vérifié dans Appointment ; compatibilité serrure à confirmer
                   </p>
                 </div>
               </div>
@@ -2696,7 +2754,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                   className="w-full p-2.5 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-slate-850 font-mono text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500"
                 />
                 <span className="text-[10px] text-slate-400 mt-1 block">
-                  Le mot de passe est crypté et haché dans le secteur sécurisé de la puce RFID.
+                  Le PIN est représenté par une empreinte de 8 bits dans la trame et vérifié par Appointment à la lecture. Ce n’est pas un chiffrement certifié ni une protection matérielle garantie par le firmware de la serrure.
                 </span>
               </div>
 

@@ -36,6 +36,7 @@ import {
   EncodeMasterCardParams,
   EncodeCommissioningCardParams,
   encodeGuestCard,
+  encodeSpecialCard,
   encodeMasterCard,
   encodeCommissioningCard,
   encodeSystemCard,
@@ -237,6 +238,33 @@ class LockManager {
         ? new Date(file.lastModified).toISOString()
         : null;
 
+    const nextSiteCode = snapshot.systemProfile
+      ? ((snapshot.systemProfile.site[0] << 8) | snapshot.systemProfile.site[1]) & 0x3fff
+      : null;
+    const previousSiteRaw = localStorage.getItem('appointment_prousb_previous_site');
+    const currentSiteCode = this.getSiteCode();
+    if (previousSiteRaw !== null && nextSiteCode !== null && Number(previousSiteRaw) === nextSiteCode && localStorage.getItem('appointment_prousb_recommissioning_required') === 'true') {
+      throw new Error('Sécurité hôtel : la nouvelle base CardLock utilise le même code système que l’ancien hôtel. Créez une identité système CardLock différente avant de programmer les serrures.');
+    }
+    const siteChanged = previousSiteRaw !== null
+      ? nextSiteCode !== null && Number(previousSiteRaw) !== nextSiteCode
+      : currentSiteCode !== undefined && nextSiteCode !== null && currentSiteCode !== nextSiteCode;
+    if (previousSiteRaw !== null && nextSiteCode !== null && Number(previousSiteRaw) === nextSiteCode
+      && localStorage.getItem('appointment_prousb_recommissioning_required') !== 'true') {
+      // A plain MDB disconnect/re-import of the same hotel is not a migration.
+      localStorage.removeItem('appointment_prousb_previous_site');
+    }
+    if (siteChanged) {
+      if (previousSiteRaw === null && currentSiteCode !== undefined) {
+        localStorage.setItem('appointment_prousb_previous_site', String(currentSiteCode));
+      }
+      localStorage.setItem('appointment_prousb_recommissioning_required', 'true');
+      // Old access cards must not be offered for the new hotel. Keep only the
+      // system/reset record needed to audit the transition.
+      this.issuedCards = this.issuedCards.filter((card) => card.type === 'reset' || card.type === 'hard_reset');
+      this.saveIssuedCards();
+    }
+
     this.mdbSnapshot = snapshot;
     this.saveMdbSnapshot();
 
@@ -268,7 +296,7 @@ class LockManager {
       this.settings = {
         ...this.settings,
         hotelName: snapshot.buildings[0].name || this.settings.hotelName,
-        defaultBuildingNo: snapshot.buildings[0].no || this.settings.defaultBuildingNo,
+        defaultBuildingNo: snapshot.buildings[0].no ?? this.settings.defaultBuildingNo,
       };
       this.saveSettings();
     }
@@ -319,7 +347,41 @@ class LockManager {
     return ((profile.site[0] << 8) | profile.site[1]) & 0x3fff;
   }
 
+  public isHotelRecommissioningRequired(): boolean {
+    return localStorage.getItem('appointment_prousb_recommissioning_required') === 'true'
+      || localStorage.getItem('appointment_prousb_previous_site') !== null;
+  }
+
+  public canConfirmHotelRecommissioning(): boolean {
+    const previousSite = localStorage.getItem('appointment_prousb_previous_site');
+    const currentSite = this.getSiteCode();
+    return this.isHotelRecommissioningRequired()
+      && !!this.mdbSnapshot?.systemProfile
+      && previousSite !== null
+      && currentSite !== undefined
+      && Number(previousSite) !== currentSite;
+  }
+
+  public confirmHotelRecommissioning(): void {
+    if (!this.canConfirmHotelRecommissioning()) {
+      throw new Error('Impossible de clôturer la reprogrammation : vérifiez que la nouvelle base possède une identité système différente.');
+    }
+    localStorage.removeItem('appointment_prousb_previous_site');
+    localStorage.removeItem('appointment_prousb_recommissioning_required');
+    this.notifyStateListeners();
+  }
+
+  private assertHotelAccessCardsAllowed(): void {
+    if (this.isHotelRecommissioningRequired()) {
+      throw new Error('Émission bloquée : reprogrammez d’abord toutes les serrures avec la nouvelle carte système, puis confirmez la fin de migration.');
+    }
+  }
+
   public clearMdb(): void {
+    const currentSite = this.getSiteCode();
+    if (currentSite !== undefined) {
+      localStorage.setItem('appointment_prousb_previous_site', String(currentSite));
+    }
     this.mdbSnapshot = null;
     this.saveMdbSnapshot();
     this.notifyStateListeners();
@@ -336,6 +398,7 @@ class LockManager {
       case 0x60: return 'guest';
       case 0x70: return 'checkout';
       case 0x80: return 'group';
+      case 0x90: return 'special';
       case 0xA0: return 'emergency';
       case 0xB0: return 'master';
       case 0xC0: return 'building';
@@ -725,6 +788,7 @@ class LockManager {
   public async issueGuestCard(
     params: EncodeGuestCardParams & { holderName: string; operator: string }
   ): Promise<IssuedCardRecord> {
+    this.assertHotelAccessCardsAllowed();
     // Business rules — expert hotelier
   if (params.validity.endYear < params.validity.startYear ||
       (params.validity.endYear === params.validity.startYear && params.validity.endMonth < params.validity.startMonth) ||
@@ -772,6 +836,7 @@ class LockManager {
   public async issueMasterCard(
     params: EncodeMasterCardParams & { holderName: string; operator: string }
   ): Promise<IssuedCardRecord> {
+    this.assertHotelAccessCardsAllowed();
     // Resolve the site from the template (DB-derived when a base is loaded,
     // built-in default otherwise) — never leave it to the codec fallback.
     const template = this.getSystemTemplate();
@@ -801,9 +866,9 @@ class LockManager {
   }
 
   /**
-   * Issues a Special Password-Protected Card for a dedicated special room.
-   * Completely isolated from all standard master passes, building passes, floor passes,
-   * emergency passes, or fire passes.
+   * Issues Appointment's experimental 0x90 Special Card variant for a dedicated room.
+   * The PIN marker is checked by Appointment when the card is read. This is not a
+   * cryptographic guarantee and lock-firmware enforcement must be verified on hardware.
    */
   public async issueSpecialCard(params: {
     roomNumber: string;
@@ -815,17 +880,21 @@ class LockManager {
     specialDescription?: string;
     validityDays?: number;
   }): Promise<IssuedCardRecord> {
+    this.assertHotelAccessCardsAllowed();
     if (!params.passwordPin || params.passwordPin.length < 4) {
-      throw new Error('Un mot de passe sécurisé (au moins 4 caractères ou chiffres) est obligatoire pour créer une Carte Spéciale.');
+      throw new Error('Un PIN d’au moins 4 caractères est obligatoire pour créer une Carte Spéciale.');
     }
 
     const validityDays = params.validityDays || 365;
     const now = new Date();
     const end = new Date(now.getTime() + validityDays * 24 * 3600 * 1000);
 
-    const recordBytes = encodeGuestCard({
+    const recordBytes = encodeSpecialCard({
       roomNumber: params.roomNumber,
+      buildingNo: params.buildingNo,
+      floorNo: params.floorNo,
       cardIndex: 9,
+      passwordPin: params.passwordPin,
       validity: {
         startYear: now.getFullYear(),
         startMonth: now.getMonth() + 1,
@@ -844,14 +913,6 @@ class LockManager {
       },
       siteCodeLow: this.getSiteCode(),
     });
-
-    // Custom isolate tag and pin signature
-    recordBytes[0] = 0x90 | (recordBytes[0] & 0x0f);
-    let pinHash = 0;
-    for (let i = 0; i < params.passwordPin.length; i++) {
-      pinHash = (pinHash + params.passwordPin.charCodeAt(i) * 31) & 0xff;
-    }
-    recordBytes[13] = pinHash;
 
     const decoded = await this.writeAndVerifyCard(recordBytes);
 
@@ -909,6 +970,17 @@ class LockManager {
   public async issueCommissioningCard(
     params: EncodeCommissioningCardParams & { operator: string }
   ): Promise<IssuedCardRecord> {
+    if (this.isHotelRecommissioningRequired()) {
+      if (!this.mdbSnapshot?.systemProfile) {
+        throw new Error('Importez la nouvelle base CardLock contenant son identité système avant de reprogrammer les serrures.');
+      }
+      if (!['reset', 'room_set', 'time_set'].includes(params.type)) {
+        throw new Error('Changement d’hôtel en cours : seules les cartes système Reset, Room Set et Time Set sont autorisées jusqu’à la reprogrammation de toutes les serrures.');
+      }
+      if (params.type === 'reset' && params.universal === true) {
+        throw new Error('Migration d’hôtel : la carte Reset doit porter le nouveau code système CardLock, pas le code universel 0000.');
+      }
+    }
     let recordBytes: Uint8Array;
 
     if (params.type === 'hard_reset') {
@@ -980,10 +1052,12 @@ class LockManager {
    * Issues a Guest Card from a booking (auto-integration with planning)
    */
   public async issueGuestCardFromBooking(
-    booking: { id: string; guestName: string; unitName?: string; resourceName?: string; startDate: string; endDate: string },
+    booking: { id: string; guestName: string; unitName?: string; resourceName?: string; startDate: string; endDate: string; buildingNo?: number; floorNo?: number },
     operator: string = 'Admin'
   ): Promise<IssuedCardRecord> {
-    const roomNumber = (booking.unitName || booking.resourceName || '101').replace(/\D/g, '') || '101';
+    const roomSource = booking.unitName || booking.resourceName || '101';
+    const roomSegments = roomSource.split('-').filter(Boolean);
+    const roomNumber = (roomSegments.length > 1 ? roomSegments[roomSegments.length - 1] : roomSource).replace(/\D/g, '') || '101';
     const startParts = booking.startDate.split('-').map(Number);
     const endParts = booking.endDate.split('-').map(Number);
 
@@ -993,6 +1067,8 @@ class LockManager {
 
     return this.issueGuestCard({
       roomNumber,
+      buildingNo: booking.buildingNo,
+      floorNo: booking.floorNo,
       cardIndex: 1,
       holderName: booking.guestName,
       operator,
@@ -1021,6 +1097,13 @@ class LockManager {
    */
   public clearPersistedData(): void {
     try {
+      const currentSite = this.getSiteCode();
+      if (currentSite !== undefined && localStorage.getItem('appointment_prousb_previous_site') === null) {
+        localStorage.setItem('appointment_prousb_previous_site', String(currentSite));
+      }
+      if (localStorage.getItem('appointment_prousb_previous_site') !== null) {
+        localStorage.setItem('appointment_prousb_recommissioning_required', 'true');
+      }
       localStorage.removeItem('omnibook_prousb_issued_cards');
       localStorage.removeItem('omnibook_prousb_audit_records');
       localStorage.removeItem('omnibook_prousb_settings');
@@ -1040,6 +1123,8 @@ class LockManager {
    */
   public purgeAllData(): void {
     this.clearPersistedData();
+    // Keep only the previous lock site marker across a local/account data purge.
+    // It is not guest data; it prevents a recreated hotel from reusing old lock credentials.
     this.logs = [];
   }
 
