@@ -59,11 +59,6 @@ const ALLOWED_SECRET_KEYS = new Set([
   'google.refresh_token',
 ]);
 
-export async function getNativeSecret(key: string): Promise<string | null> {
-  if (!isTauri() || !ALLOWED_SECRET_KEYS.has(key)) return null;
-  return invoke<string | null>('secure_secret_get', { key });
-}
-
 export async function setNativeSecret(key: string, value: string): Promise<void> {
   if (!isTauri()) throw new Error('Credential Manager nécessite le runtime natif Windows.');
   if (!ALLOWED_SECRET_KEYS.has(key)) throw new Error('Type de credential non autorisé.');
