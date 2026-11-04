@@ -34,6 +34,7 @@ import { DomainType } from '../types/booking';
 export const Sidebar: React.FC = () => {
   const {
     language,
+    setLanguage,
     activeView,
     setActiveView,
     currentDomain,
