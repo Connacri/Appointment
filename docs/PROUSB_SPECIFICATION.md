@@ -40,6 +40,12 @@
 
 ---
 
+## 1.4 Modèle de données CardLock
+
+La base métier comprend notamment `BuildingInfo`, `RoomInfo`, `GuestInfo`, `CardInfo`, `RecordOpen`, `OperatorInfo`, `CaoZuoInfo`, `RegInfo`, `LogInfo` et `Dai`. Le modèle détaillé, les colonnes connues et les relations métier sont documentés dans [CARDLOCK_DATABASE_ANALYSIS.md](./CARDLOCK_DATABASE_ANALYSIS.md).
+
+Règle d'import essentielle : **`RoomInfo` est le référentiel des chambres**. `GuestInfo` décrit les séjours et ne doit jamais servir à fabriquer une chambre absente. `GuestInfo.BldRoomNo` peut porter une référence à trois segments (bâtiment-étage-chambre). `BldNo = 0` et `FlrNo = 0` sont des identifiants possibles ; seule une valeur réellement absente est considérée inconnue. Les tables Access `MSys*` sont des métadonnées système, pas des données d'hôtel.
+
 ## 2. Protocole de communication HID
 
 ### 2.1 Trames host → lecteur
