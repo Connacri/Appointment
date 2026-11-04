@@ -596,7 +596,7 @@ export const BookingAnalyticsView: React.FC = () => {
       })()}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <TrendLine        <TrendLine
+        <TrendLine
           title={t('Sorties de stock dans le temps', 'Inventory issues over time', 'حركات صرف المخزون عبر الزمن')}
           subtitle={t('Unités sorties selon les mouvements de stock enregistrés.', 'Units issued from recorded stock movements.', 'الوحدات المصروفة وفق حركات المخزون المسجلة.')}
           points={periodMovements.length ? stockMovementTrend : []}
