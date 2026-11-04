@@ -436,8 +436,8 @@ export const BookingAnalyticsView: React.FC = () => {
             ['Période', 'Occupation (%)', 'Arrivées'],
             ...trendPoints.map(point => [point.label, String(point.occupancy), String(point.arrivals)]),
           ];
-          const csv = rows.map(row => row.map(value => `"${value.replace(/"/g, '""')}"`).join(';')).join('\\n');
-          const blob = new Blob(['\\uFEFF', csv], { type: 'text/csv;charset=utf-8;' });
+          const csv = rows.map(row => row.map(value => `"${value.replace(/"/g, '""')}"`).join(';')).join('\n');
+          const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
           const anchor = document.createElement('a');
           anchor.href = url;
