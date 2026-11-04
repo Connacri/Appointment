@@ -267,43 +267,25 @@ jobs:
             npm install --legacy-peer-deps
           }
 
-      - name: Build Web Application (relative base for desktop WebView)
-        run: npm run build
+      - name: Setup Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Build and package native Tauri Windows application
+        shell: pwsh
         env:
+          WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
           VITE_BASE: ./
-
-      - name: Package Windows Executable Desktop Application
-        shell: pwsh
-        env:
-          WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
         run: |
           $version = node -p "require('./package.json').version"
-          Write-Host "Application version: $version"
+          Write-Host "Building native Appointment Windows runtime v$version"
           pwsh -File scripts/package-windows.ps1 -Version $version
-
-      - name: Build Inno Setup Installer (EXE)
-        shell: pwsh
-        run: |
-          $version = node -p "require('./package.json').version"
-          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y }
-          & $iscc "/DAppVersion=$version" scripts\installer.iss
-
-      - name: Sign Inno Setup Installer
-        shell: pwsh
-        run: |
-          $exe = "dist-windows\Planning-Oran-Setup-Inno.exe"
-          if ($env:WINDOWS_CERT_BASE64) {
-            [IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", [Convert]::FromBase64String($env:WINDOWS_CERT_BASE64))
-            Set-AuthenticodeSignature -FilePath $exe -Certificate (Get-PfxCertificate "$env:TEMP\cert.pfx") -HashAlgorithm SHA256 | Out-Null
-            Remove-Item "$env:TEMP\cert.pfx" -Force
-          } else {
-            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Planning Oran Official, O=Planning Oran, C=DZ" -CertStoreLocation "Cert:\CurrentUser\My" -HashAlgorithm SHA256
-            Set-AuthenticodeSignature -FilePath $exe -Certificate $cert -HashAlgorithm SHA256 | Out-Null
-          }
-          Get-AuthenticodeSignature $exe | Format-List
-        env:
-          WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
