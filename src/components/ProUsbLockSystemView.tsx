@@ -120,14 +120,14 @@ export const ProUsbLockSystemView: React.FC = () => {
   // Staff Card Form State
   const [selectedStaffType, setSelectedStaffType] = useState<ProUsbCardType>('master');
   const [staffHolderName, setStaffHolderName] = useState('Gouvernante Générale');
-  const [staffFloorNo, setStaffFloorNo] = useState(1);
-  const [staffBuildingNo, setStaffBuildingNo] = useState(1);
+  const [staffFloorNo, setStaffFloorNo] = useState(0);
+  const [staffBuildingNo, setStaffBuildingNo] = useState(0);
   const [staffValidityDays, setStaffValidityDays] = useState(365);
 
   // Commissioning Form State
   const [commissionRoom, setCommissionRoom] = useState('101');
-  const [commissionFloor, setCommissionFloor] = useState(1);
-  const [commissionBuilding, setCommissionBuilding] = useState(1);
+  const [commissionFloor, setCommissionFloor] = useState(0);
+  const [commissionBuilding, setCommissionBuilding] = useState(0);
   const [commissionValidityDays, setCommissionValidityDays] = useState(365);
   const [commissionValidityHour, setCommissionValidityHour] = useState(12);
   // Carte système universelle : site 0000 → acceptée par une serrure de
@@ -228,7 +228,7 @@ export const ProUsbLockSystemView: React.FC = () => {
       no,
       label: buildingNames.get(no)
         ? `${buildingNames.get(no)} (Bâtiment ${no} — ${mdbRooms.filter((room) => room.building === no).length} chambres)`
-        : `Bâtiment ${no}`,
+        : `Bâtiment ${no + (mdbSnapshot ? 1 : 0)}${mdbSnapshot ? ` (ID ${no})` : ''}`,
     }));
 
     const floorNumbers = mdbSnapshot
@@ -1997,8 +1997,8 @@ export const ProUsbLockSystemView: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2">
                   <button onClick={() => handleIssueCommissioning('group_set')} disabled={isWriting} className="py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs">Groupe Config (0x50)</button>
                   <button onClick={() => handleIssueCommissioning('group')} disabled={isWriting} className="py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs">Carte Groupe (0x80)</button>
-                  <button onClick={() => handleIssueCommissioning('floor')} disabled={isWriting} className="py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg text-xs">Carte Étage (0xD0)</button>
-                  <button onClick={() => handleIssueCommissioning('building')} disabled={isWriting} className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs">Carte Bâtiment (0xC0)</button>
+                  <button onClick={() => handleIssueCommissioning('floor')} disabled={isWriting || availableFloors.length === 0} className="py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg text-xs">Carte Étage (0xD0)</button>
+                  <button onClick={() => handleIssueCommissioning('building')} disabled={isWriting || availableBuildings.length === 0} className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs">Carte Bâtiment (0xC0)</button>
                   <button onClick={() => handleIssueCommissioning('master')} disabled={isWriting} className="py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs col-span-2">Passe Général Master (0xB0)</button>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[10px] text-amber-800 dark:text-amber-200">
