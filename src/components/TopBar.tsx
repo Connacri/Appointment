@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { lockManager, UsbConnectionStatus } from '../locks/lockManager';
-import { objectBox, ObjectBoxSyncState } from '../db/objectbox';
+import { indexedDb, IndexedDbSyncState } from '../db/indexedDb';
 import { UserRole } from '../types/booking';
 
 export const TopBar: React.FC = () => {
@@ -51,7 +51,7 @@ export const TopBar: React.FC = () => {
     isSoundEnabled,
     toggleSound,
     setIsEstablishmentModalOpen,
-    setIsObjectBoxOpen,
+    setIsIndexedDBOpen,
     setIsCockpitOpen,
     setIsLegalModalOpen,
     setIsAboutModalOpen,
@@ -61,7 +61,7 @@ export const TopBar: React.FC = () => {
   } = useApp();
 
   const [usbStatus, setUsbStatus] = useState<UsbConnectionStatus>(lockManager.getStatus());
-  const [objectBoxSync, setObjectBoxSync] = useState<ObjectBoxSyncState>(objectBox.getSyncStatus());
+  const [indexedDbSync, setIndexedDBSync] = useState<IndexedDbSyncState>(indexedDb.getSyncStatus());
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
@@ -77,10 +77,10 @@ export const TopBar: React.FC = () => {
     return unsub;
   }, []);
 
-  // Subscribe to real-time ObjectBox sync state
+  // Subscribe to real-time IndexedDB sync state
   useEffect(() => {
-    const unsub = objectBox.subscribeSyncStatus((status) => {
-      setObjectBoxSync(status);
+    const unsub = indexedDb.subscribeSyncStatus((status) => {
+      setIndexedDBSync(status);
     });
     return unsub;
   }, []);
@@ -277,42 +277,42 @@ export const TopBar: React.FC = () => {
         </div>
       </div>
 
-      {/* RIGHT SECTION: ObjectBox Sync Status, USB Status, + Nouveau, More ⋮ */}
+      {/* RIGHT SECTION: IndexedDB Sync Status, USB Status, + Nouveau, More ⋮ */}
       <div className="pms-app-topbar-actions flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-        {/* Real-time ObjectBox Sync Status Indicator */}
+        {/* Real-time IndexedDB Sync Status Indicator */}
         <button
           type="button"
-          onClick={() => setIsObjectBoxOpen(true)}
+          onClick={() => setIsIndexedDBOpen(true)}
           className={`h-8 px-2 sm:px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-            objectBoxSync === 'synced'
+            indexedDbSync === 'synced'
               ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/60'
-              : objectBoxSync === 'syncing'
+              : indexedDbSync === 'syncing'
               ? 'bg-blue-950/60 border-blue-500/40 text-blue-300 hover:bg-blue-900/60'
               : 'bg-rose-950/60 border-rose-500/40 text-rose-300 hover:bg-rose-900/60'
           }`}
-          title={`Base ObjectBox: ${
-            objectBoxSync === 'synced'
+          title={`Base IndexedDB: ${
+            indexedDbSync === 'synced'
               ? 'Synchronisé'
-              : objectBoxSync === 'syncing'
+              : indexedDbSync === 'syncing'
               ? 'Synchronisation en cours...'
               : 'Hors-ligne'
           } — Cliquer pour inspecter`}
         >
-          {objectBoxSync === 'synced' && (
+          {indexedDbSync === 'synced' && (
             <>
               <Database size={13} className="text-emerald-300" />
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="hidden sm:inline">Synced</span>
             </>
           )}
-          {objectBoxSync === 'syncing' && (
+          {indexedDbSync === 'syncing' && (
             <>
               <Database size={13} className="text-blue-300" />
               <RefreshCw size={12} className="animate-spin text-blue-400" />
               <span className="hidden sm:inline">Syncing...</span>
             </>
           )}
-          {objectBoxSync === 'offline' && (
+          {indexedDbSync === 'offline' && (
             <>
               <Database size={13} className="text-rose-300" />
               <AlertCircle size={12} className="text-rose-400" />
@@ -471,17 +471,17 @@ export const TopBar: React.FC = () => {
                 <span>Paramètres Établissement</span>
               </button>
 
-              {/* ObjectBox Inspector */}
+              {/* IndexedDB Inspector */}
               <button
                 type="button"
                 onClick={() => {
-                  setIsObjectBoxOpen(true);
+                  setIsIndexedDBOpen(true);
                   setIsMoreMenuOpen(false);
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
               >
                 <Database size={14} className="text-emerald-400" />
-                <span>Inspecteur Base ObjectBox</span>
+                <span>Inspecteur Base IndexedDB</span>
               </button>
 
               {/* CI/CD & AGENTS.md Specs */}
