@@ -79,6 +79,10 @@ L'interface est construite avec React 19 et TypeScript. Elle fonctionne comme ap
 
 La version actuelle utilise principalement un stockage local dans le navigateur/appareil. **La synchronisation Supabase distante n'est pas encore implémentée dans cette branche** : aucun client Supabase, schéma distant ni moteur de synchronisation n'est livré actuellement. Le document [SUPABASE_SYNC_PLAN.md](./docs/SUPABASE_SYNC_PLAN.md) décrit les prérequis et l'architecture envisagée.
 
+## Outils IA de développement
+
+Le dépôt fournit une configuration MCP Supabase project-scoped en lecture seule pour les assistants de développement. Consultez [docs/SUPABASE_MCP.md](./docs/SUPABASE_MCP.md) pour connecter ChatGPT ou un IDE compatible et installer facultativement les Agent Skills Supabase.
+
 ## Démarrage rapide
 
 ### Prérequis
