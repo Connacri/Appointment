@@ -1390,10 +1390,10 @@ This pipeline is the single release path; do not add parallel unsigned paths.
 
 | Artifact | Toolchain | Signed by |
 |---|---|---|
-| `Planning-Oran-release.apk` | Gradle `assembleRelease` (Capacitor, R8, signed) | Upload keystore from `ANDROID_KEYSTORE_BASE64` |
-| `Planning-Oran-release.aab` | Gradle `bundleRelease` (Capacitor, R8, signed) | Upload keystore from `ANDROID_KEYSTORE_BASE64` |
-| `Planning-Oran-Setup.exe` / `Planning-Oran-v1.0.0.exe` | `scripts/package-windows.ps1` (C# WebView launcher) | Authenticode cert from `WINDOWS_CERT_BASE64` (else CI self-signed) |
-| `Planning-Oran-Setup-Inno.exe` | Inno Setup `ISCC scripts/installer.iss` | Authenticode cert from `WINDOWS_CERT_BASE64` (else CI self-signed) |
+| `Appointment-PMS-release.apk` | Gradle `assembleRelease` (Capacitor, R8, signed) | Upload keystore from `ANDROID_KEYSTORE_BASE64` |
+| `Appointment-PMS-release.aab` | Gradle `bundleRelease` (Capacitor, R8, signed) | Upload keystore from `ANDROID_KEYSTORE_BASE64` |
+| `Appointment-PMS-Setup.exe` / `Appointment-PMS-v1.0.0.exe` | `scripts/package-windows.ps1` (C# WebView launcher) | Authenticode cert from `WINDOWS_CERT_BASE64` (else CI self-signed) |
+| `Appointment-PMS-Setup-Inno.exe` | Inno Setup `ISCC scripts/installer.iss` | Authenticode cert from `WINDOWS_CERT_BASE64` (else CI self-signed) |
 | Website | `npm run build` Ã¢â€ â€™ GitHub Pages | n/a |
 
 All artifacts are published to a GitHub Release with `SHA256SUMS.txt` on tags,
