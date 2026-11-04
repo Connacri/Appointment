@@ -632,6 +632,7 @@ class IndexedDbStore {
     const names = Array.from(this.idb.objectStoreNames);
     if (names.length === 0) return {};
     const tx = this.idb.transaction(names, 'readonly');
+    const transactionComplete = waitForTransactionCompletion(tx, 'exportSnapshot');
     const snapshot = await new Promise<Record<string, unknown[]>>((resolve, reject) => {
       const result: Record<string, unknown[]> = {};
       let remaining = names.length;
@@ -645,7 +646,7 @@ class IndexedDbStore {
         request.onerror = () => reject(request.error ?? new Error(`Unable to export IndexedDB store ${name}`));
       }
     });
-    await waitForTransactionCompletion(tx, 'exportSnapshot');
+    await transactionComplete;
     return snapshot;
   }
 
