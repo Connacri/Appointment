@@ -1249,3 +1249,162 @@ export const PlanningTimeline: React.FC = () => {
                 >
                   {statusConfig[activePreviewBooking.booking.status]?.label[language] ||
                     activePreviewBooking.booking.status}
+                </span>
+              </div>
+
+              <div className="space-y-1.5 text-slate-600 dark:text-slate-300">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Locataire :</span>
+                  <div className="flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 truncate">
+                    <span>{activePreviewBooking.booking.guestType === 'algerian' ? '🇩🇿' : '🌐'}</span>
+                    <span className="truncate">{activePreviewBooking.booking.guestName}</span>
+                  </div>
+                </div>
+
+                {/* Occupants count with icons */}
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">Occupants :</span>
+                  <div className="flex items-center gap-1 font-medium text-slate-800 dark:text-slate-200">
+                    <div className="flex items-center -space-x-1">
+                      {Array.from({
+                        length: Math.min(
+                          (activePreviewBooking.booking.adults || 1) + (activePreviewBooking.booking.children || 0),
+                          4
+                        ),
+                      }).map((_, i) => (
+                        <User key={i} size={11} className={i > 0 ? 'text-amber-400' : 'text-blue-500'} />
+                      ))}
+                    </div>
+                    <span>
+                      {(activePreviewBooking.booking.adults || 1) + (activePreviewBooking.booking.children || 0)} pers.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between font-mono text-[11px]">
+                  <span className="text-slate-400 font-sans">Dates :</span>
+                  <span>
+                    {activePreviewBooking.booking.startDate} → {activePreviewBooking.booking.endDate}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
+                  <span className="font-bold text-slate-800 dark:text-slate-200">Règlement :</span>
+                  <span className="font-bold text-slate-900 dark:text-white font-mono text-xs tabular-nums">
+                    {activePreviewBooking.booking.originalCurrencyAmount || activePreviewBooking.booking.totalPrice}{' '}
+                    {activePreviewBooking.booking.paymentCurrency || currency}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
+                <button
+                  onClick={() => {
+                    setSelectedBooking(activePreviewBooking.booking);
+                    setActivePreviewBooking(null);
+                  }}
+                  className="flex-1 py-1 bg-blue-600 text-white rounded text-center font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Fiche & Police
+                </button>
+                <button
+                  onClick={() => {
+                    downloadICS(activePreviewBooking.booking);
+                  }}
+                  className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-white border border-slate-200 dark:border-slate-700 rounded transition-colors"
+                  title="Exporter .ICS"
+                >
+                  <Download size={13} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Touch Action Sheet for Smartphone Tap */}
+          {activePreviewBooking && activePreviewBooking.isMobileSheet && (
+            <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-2xs flex items-end justify-center p-0 sm:p-4">
+              <div className="w-full sm:max-w-md max-h-[88dvh] overflow-y-auto bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl space-y-3 animate-in slide-in-from-bottom-5">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-900 dark:text-white text-sm">
+                      {activePreviewBooking.booking.resourceName}
+                    </span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                        statusConfig[activePreviewBooking.booking.status]?.pillBg
+                      }`}
+                    >
+                      {statusConfig[activePreviewBooking.booking.status]?.label[language] ||
+                        activePreviewBooking.booking.status}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setActivePreviewBooking(null)}
+                    className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Locataire :</span>
+                    <span className="font-bold text-slate-900 dark:text-white truncate block">
+                      {activePreviewBooking.booking.guestType === 'algerian' ? '🇩🇿 ' : '🌐 '}
+                      {activePreviewBooking.booking.guestName}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Règlement :</span>
+                    <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400 block tabular-nums">
+                      {activePreviewBooking.booking.originalCurrencyAmount || activePreviewBooking.booking.totalPrice}{' '}
+                      {activePreviewBooking.booking.paymentCurrency || currency}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Arrivée :</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300 block">
+                      {activePreviewBooking.booking.startDate}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Départ :</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300 block">
+                      {activePreviewBooking.booking.endDate}
+                    </span>
+                  </div>
+                  <div className="col-span-2 pt-1 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">Occupants chambre :</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {(activePreviewBooking.booking.adults || 1) + (activePreviewBooking.booking.children || 0)} pers. ({activePreviewBooking.booking.adults || 1} adultes)
+                    </span>
+                  </div>
+                </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => {
+                  setSelectedBooking(activePreviewBooking.booking);
+                  setActivePreviewBooking(null);
+                }}
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-semibold text-center transition-colors shadow-xs"
+              >
+                Ouvrir la Fiche Réservation
+              </button>
+              <button
+                onClick={() => {
+                  downloadICS(activePreviewBooking.booking);
+                }}
+                className="px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
+                title="Exporter .ICS"
+              >
+                <Download size={14} />
+                <span>.ICS</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
