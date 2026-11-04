@@ -491,23 +491,32 @@ class IndexedDbStore {
     const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities'], 'readwrite');
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
+    const tombstones = tx.objectStore('tombstones');
+    const tombstoneId = `${context.workspaceId}:${entity}:${item.id}`;
     const request = workspaceEntities.get([context.workspaceId, entity, item.id]);
-    request.onsuccess = () => {
-      const current = request.result as { version?: number } | undefined;
-      const version = (current?.version ?? 0) + 1;
+    const tombstoneRequest = tombstones.get(tombstoneId);
+    let current: { version?: number } | undefined;
+    let previousTombstone: TombstoneRecord | undefined;
+    let entityReady = false;
+    let tombstoneReady = false;
+    const commitMutation = () => {
+      if (!entityReady || !tombstoneReady) return;
+      const version = Math.max(current?.version ?? 0, previousTombstone?.version ?? 0) + 1;
       const now = new Date().toISOString();
       const persisted = { ...item, workspaceId: context.workspaceId, establishmentId: context.establishmentId, syncVersion: version, deletedAt: null };
       const entityRecord = {
         workspaceId: context.workspaceId, establishmentId: context.establishmentId,
         entity, entityId: item.id, version, updatedAt: now, payload: persisted,
       };
-      // The workspace-keyed entity snapshot and its outbox intent commit together.
       workspaceEntities.put(entityRecord);
       store.put(persisted);
-      tx.objectStore('tombstones').delete(`${context.workspaceId}:${entity}:${item.id}`);
+      tombstones.delete(tombstoneId);
       tx.objectStore('outbox').add(this.createOutboxRecord(context, entity, item.id, 'upsert', version, persisted as Record<string, unknown>, now));
     };
+    request.onsuccess = () => { current = request.result as { version?: number } | undefined; entityReady = true; commitMutation(); };
+    tombstoneRequest.onsuccess = () => { previousTombstone = tombstoneRequest.result as TombstoneRecord | undefined; tombstoneReady = true; commitMutation(); };
     request.onerror = () => tx.abort();
+    tombstoneRequest.onerror = () => tx.abort();
     await waitForTransactionCompletion(tx, `putWithOutbox ${entity}/${item.id}`);
   }
 
@@ -519,24 +528,33 @@ class IndexedDbStore {
     if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox deletes.');
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
-    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones'], 'readwrite');
+    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities'], 'readwrite');
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
+    const tombstones = tx.objectStore('tombstones');
+    const tombstoneId = `${context.workspaceId}:${entity}:${entityId}`;
     const request = workspaceEntities.get([context.workspaceId, entity, entityId]);
-    request.onsuccess = () => {
-      const current = request.result as { version?: number } | undefined;
-      const version = (current?.version ?? 0) + 1;
+    const tombstoneRequest = tombstones.get(tombstoneId);
+    let current: { version?: number } | undefined;
+    let previousTombstone: TombstoneRecord | undefined;
+    let entityReady = false;
+    let tombstoneReady = false;
+    const commitDelete = () => {
+      if (!entityReady || !tombstoneReady) return;
+      const version = Math.max(current?.version ?? 0, previousTombstone?.version ?? 0) + 1;
       const deletedAt = new Date().toISOString();
       store.delete(entityId);
       workspaceEntities.delete([context.workspaceId, entity, entityId]);
-      tx.objectStore('tombstones').put({
-        id: `${context.workspaceId}:${entity}:${entityId}`,
-        workspaceId: context.workspaceId, establishmentId: context.establishmentId,
+      tombstones.put({
+        id: tombstoneId, workspaceId: context.workspaceId, establishmentId: context.establishmentId,
         entity, entityId, version, deletedAt,
       } satisfies TombstoneRecord);
       tx.objectStore('outbox').add(this.createOutboxRecord(context, entity, entityId, 'delete', version, null, deletedAt));
     };
+    request.onsuccess = () => { current = request.result as { version?: number } | undefined; entityReady = true; commitDelete(); };
+    tombstoneRequest.onsuccess = () => { previousTombstone = tombstoneRequest.result as TombstoneRecord | undefined; tombstoneReady = true; commitDelete(); };
     request.onerror = () => tx.abort();
+    tombstoneRequest.onerror = () => tx.abort();
     await waitForTransactionCompletion(tx, `deleteWithOutbox ${entity}/${entityId}`);
   }
 
