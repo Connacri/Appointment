@@ -32,13 +32,13 @@ using System.IO;
 using System.Reflection;
 using System.Windows.Forms;
 
-[assembly: AssemblyTitle("Planning Oran Autonomous Cockpit")]
-[assembly: AssemblyProduct("Planning Oran")]
-[assembly: AssemblyCompany("Planning Oran Lab")]
+[assembly: AssemblyTitle("Appointment PMS Autonomous Cockpit")]
+[assembly: AssemblyProduct("Appointment PMS")]
+[assembly: AssemblyCompany("Appointment PMS Lab")]
 [assembly: AssemblyVersion("$FileVersion")]
 [assembly: AssemblyFileVersion("$FileVersion")]
 
-namespace PlanningOran {
+namespace AppointmentPMS {
     static class Program {
         [STAThread]
         static void Main() {
@@ -57,7 +57,7 @@ namespace PlanningOran {
                 };
                 Process.Start(psi);
             } catch (Exception ex) {
-                MessageBox.Show("Erreur au lancement: " + ex.Message, "Planning Oran", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Erreur au lancement: " + ex.Message, "Appointment PMS", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }
@@ -67,8 +67,8 @@ Set-Content -Path "dist-windows\Program.cs" -Value $sourceCSharp
 
 # Canonical (unversioned) launcher kept for scripts/installer.iss, plus a versioned
 # copy published in the GitHub Release (AGENTS.md 18: artifacts are always versioned).
-$launcherExe = "dist-windows\Planning-Oran-Setup.exe"
-$versionedExe = "dist-windows\Planning-Oran-Setup-v$Version.exe"
+$launcherExe = "dist-windows\Appointment-PMS-Setup.exe"
+$versionedExe = "dist-windows\Appointment-PMS-Setup-v$Version.exe"
 
 $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 & $csc /nologo /target:winexe /platform:anycpu /out:"$launcherExe" /r:"System.Windows.Forms.dll" "dist-windows\Program.cs"
@@ -83,7 +83,7 @@ if ($env:WINDOWS_CERT_BASE64) {
   Remove-Item "$env:TEMP\cert.pfx" -Force
 } else {
   Write-Host "Generation of CI Code-Signing Authenticode Certificate (self-signed)..."
-  $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Planning Oran Official, O=Planning Oran, C=DZ" -CertStoreLocation "Cert:\CurrentUser\My" -HashAlgorithm SHA256
+  $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Appointment PMS Official, O=Appointment PMS, C=DZ" -CertStoreLocation "Cert:\CurrentUser\My" -HashAlgorithm SHA256
   Set-AuthenticodeSignature -FilePath $launcherExe -Certificate $cert -HashAlgorithm SHA256 | Out-Null
   Set-AuthenticodeSignature -FilePath $versionedExe -Certificate $cert -HashAlgorithm SHA256 | Out-Null
 }
@@ -94,7 +94,7 @@ Get-AuthenticodeSignature $versionedExe | Format-List
 New-Item -ItemType Directory -Force -Path "dist-windows\package" | Out-Null
 Copy-Item -Path $launcherExe -Destination "dist-windows\package\"
 Copy-Item -Path "dist" -Destination "dist-windows\package\dist" -Recurse
-Compress-Archive -Path "dist-windows\package\*" -DestinationPath "dist-windows\Planning-Oran-Windows-v$Version.zip" -Force
+Compress-Archive -Path "dist-windows\package\*" -DestinationPath "dist-windows\Appointment-PMS-Windows-v$Version.zip" -Force
 
 Write-Host "Windows artifacts:"
-Get-ChildItem "dist-windows" -Filter "Planning-Oran-*" | Select-Object Name, Length | Format-Table -AutoSize
+Get-ChildItem "dist-windows" -Filter "Appointment-PMS-*" | Select-Object Name, Length | Format-Table -AutoSize
