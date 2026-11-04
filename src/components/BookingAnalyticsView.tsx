@@ -55,7 +55,7 @@ const BookingTrendPanel: React.FC<{
   const formatValue = (value: number) => metric === 'occupancy' ? `${value}%` : value.toLocaleString();
 
   return (
-    <section className="relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+    <section className="relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 p-3.5 shadow-[0_5px_22px_rgba(30,64,175,0.06)] dark:border-slate-800 dark:bg-slate-900 sm:p-5">
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-3">
           <span className="rounded-xl bg-blue-50 p-2 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400"><Activity size={18} /></span>
@@ -437,7 +437,7 @@ export const BookingAnalyticsView: React.FC = () => {
       blue: 'from-sky-50/90 via-white to-white dark:from-sky-950/35 dark:via-slate-900 dark:to-slate-900',
     };
     return (
-      <article className={`group relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br ${surfaces[tone] || surfaces.blue} p-3 shadow-[0_2px_8px_rgba(15,23,42,0.045)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-4`}>
+      <article className={`group relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br ${surfaces[tone] || surfaces.blue} p-3 shadow-[0_4px_16px_rgba(30,64,175,0.055)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-4`}>
         <span className={`absolute inset-x-0 top-0 h-0.5 ${accent}`} />
         <div className="flex items-start justify-between gap-2">
           <span className="min-w-0 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:text-[11px]">{label}</span>
@@ -471,29 +471,25 @@ export const BookingAnalyticsView: React.FC = () => {
   );
 
   return (
-    <div className="min-w-0 w-full flex-1 space-y-3 overflow-y-auto overscroll-contain bg-[#f4f7fb] px-2.5 pb-5 pt-2.5 dark:bg-[#080f1c] sm:space-y-5 sm:p-5 lg:p-6">
-      <header className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-        <div className="min-w-0">
-          <div className="mb-1.5 flex items-center gap-2">
-            <span className="rounded-xl bg-sky-50 p-2 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"><Activity size={18} /></span>
-            <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">Appointment · {t('Pilotage métier', 'Business intelligence', 'ذكاء الأعمال')}</span>
+    <div className="min-w-0 w-full flex-1 space-y-3 overflow-y-auto overscroll-contain bg-gradient-to-br from-[#f5f8ff] via-[#f8f9fd] to-[#eef3ff] px-2.5 pb-5 pt-2.5 dark:bg-none dark:bg-[#080f1c] sm:space-y-4 sm:p-5 lg:p-6">
+      <header className="flex flex-col gap-3 px-1 py-1 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="shrink-0 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 p-3 text-white shadow-lg shadow-blue-500/20"><Activity size={23} strokeWidth={2.4} /></span>
+          <div className="min-w-0">
+            <h1 className="text-xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:text-2xl">{t('Analytique Booking', 'Booking Analytics', 'تحليلات الحجوزات')}</h1>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">{t('Vue d’ensemble de vos performances', 'Overview of your performance', 'نظرة عامة على الأداء')}</p>
           </div>
-          <h1 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white sm:text-xl">{t('Analytique des réservations', 'Booking & property analytics', 'تحليلات الحجوزات والمؤسسة')}</h1>
-          <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{t('Occupation, activité commerciale et performance opérationnelle de l’établissement.', 'Occupancy, booking activity and property operations performance.', 'الإشغال ونشاط الحجوزات والأداء التشغيلي للمؤسسة.')}</p>
         </div>
-        <div className="flex shrink-0 flex-col gap-1.5 sm:items-end">
-          <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">{t('Période analysée', 'Analysis period', 'الفترة المحددة')}</span>
-          <div className="inline-flex w-full rounded-xl bg-slate-100 p-1 dark:bg-slate-800 sm:w-auto">
-            {(['30d', '90d', '365d'] as RangeKey[]).map(key => (
-              <button key={key} type="button" onClick={() => setRange(key)} aria-pressed={range === key} className={`min-h-9 flex-1 rounded-lg px-3 text-[11px] font-bold transition-all sm:flex-none ${range === key ? 'bg-white text-sky-700 shadow-sm dark:bg-slate-700 dark:text-sky-300' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'}`}>
-                {key === '30d' ? t('30 jours', '30 days', '30 يوماً') : key === '90d' ? t('90 jours', '90 days', '90 يوماً') : t('12 mois', '12 months', '12 شهراً')}
-              </button>
-            ))}
-          </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-1 rounded-full border border-slate-200/80 bg-white/85 p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          {(['30d', '90d', '365d'] as RangeKey[]).map(key => (
+            <button key={key} type="button" onClick={() => setRange(key)} aria-pressed={range === key} className={`min-h-9 rounded-full px-3.5 text-[11px] font-bold transition-all sm:px-4 ${range === key ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+              {key === '30d' ? t('30 j', '30 days', '30 يوم') : key === '90d' ? t('90 j', '90 days', '90 يوم') : t('12 mois', '12 months', '12 شهر')}
+            </button>
+          ))}
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 2xl:grid-cols-6">
         <Card icon={Building2} label={t('Bâtiments', 'Buildings', 'المباني')} value={activeGroups.length} detail={t('Groupes configurés', 'Configured groups', 'المجموعات المهيأة')} />
         <Card icon={BedDouble} label={t('Chambres', 'Rooms', 'الغرف')} value={validRooms.length} detail={t('Hors service exclues', 'Out of order excluded', 'باستثناء خارج الخدمة')} />
         <Card icon={Activity} label={t('Occupées', 'Occupied', 'مشغولة')} value={occupiedToday} detail={t('Aujourd’hui', 'Today', 'اليوم')} tone="green" />
@@ -521,40 +517,86 @@ export const BookingAnalyticsView: React.FC = () => {
         }}
       />
 
-      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2 sm:gap-4">
-        <Section icon={CalendarRange} title={t('Réservations par état', 'Bookings by status', 'الحجوزات حسب الحالة')} subtitle={t('Répartition des dossiers qui chevauchent la période, annulations comprises.', 'Distribution of bookings overlapping the period, including cancellations.', 'توزيع الحجوزات المتداخلة مع الفترة، بما فيها الملغاة.')}>
-          {bookingStatusStats.length ? <div className="space-y-3">
-            {bookingStatusStats.map(item => {
-              const ratio = periodBookings.length ? item.count / periodBookings.length * 100 : 0;
-              return <div key={item.key}>
-                <div className="mb-1 flex justify-between gap-3 text-xs">
-                  <span className="text-slate-700 dark:text-slate-200">{item.label}</span>
-                  <strong className="tabular-nums text-slate-900 dark:text-white">{item.count} <span className="font-normal text-slate-400">({Math.round(ratio)}%)</span></strong>
+      {(() => {
+        const summary = [
+          { key: 'confirmed', label: t('Confirmées', 'Confirmed', 'مؤكدة'), color: '#2563eb', count: periodBookings.filter(b => ['confirmed', 'due_in', 'due_out'].includes(b.status)).length },
+          { key: 'pending', label: t('En attente', 'Pending', 'قيد الانتظار'), color: '#f59e0b', count: periodBookings.filter(b => ['new', 'booking_offer'].includes(b.status)).length },
+          { key: 'cancelled', label: t('Annulées', 'Cancelled', 'ملغاة'), color: '#ef4444', count: periodBookings.filter(b => b.status === 'cancelled').length },
+          { key: 'active', label: t('En cours', 'In progress', 'جارية'), color: '#22c55e', count: periodBookings.filter(b => ['checked_in'].includes(b.status)).length },
+        ];
+        const total = summary.reduce((sum, item) => sum + item.count, 0);
+        let angle = -90;
+        const segments = summary.map(item => {
+          const sweep = total ? item.count / total * 360 : 0;
+          const startAngle = angle;
+          angle += sweep;
+          return { ...item, startAngle, sweep };
+        });
+        const polar = (a: number, r: number) => [60 + r * Math.cos(a * Math.PI / 180), 60 + r * Math.sin(a * Math.PI / 180)];
+        const arc = (start: number, sweep: number) => {
+          const [sx, sy] = polar(start, 42);
+          const [ex, ey] = polar(start + sweep, 42);
+          return `M ${sx} ${sy} A 42 42 0 ${sweep > 180 ? 1 : 0} 1 ${ex} ${ey}`;
+        };
+        return (
+          <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-3 sm:gap-4">
+            <Section icon={CalendarRange} title={t('Réservations par statut', 'Bookings by status', 'الحجوزات حسب الحالة')} subtitle={t('Répartition des réservations sur la période.', 'Booking distribution for the selected period.', 'توزيع الحجوزات خلال الفترة المحددة.')}>
+              {total ? <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+                <div className="relative h-36 w-36 shrink-0">
+                  <svg viewBox="0 0 120 120" className="h-full w-full -rotate-0">
+                    <circle cx="60" cy="60" r="42" fill="none" stroke="currentColor" strokeWidth="13" opacity=".08" />
+                    {segments.filter(item => item.count > 0).map(item => <path key={item.key} d={arc(item.startAngle,item.sweep)} fill="none" stroke={item.color} strokeWidth="13" strokeLinecap="butt" />)}
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                    <strong className="text-2xl font-extrabold leading-none text-slate-950 dark:text-white">{total}</strong>
+                    <span className="mt-1 text-[10px] text-slate-500">{t('total', 'total', 'الإجمالي')}</span>
+                  </div>
                 </div>
-                {progress(ratio, item.key === 'cancelled' || item.key === 'out_of_order' ? 'bg-rose-500' : item.key === 'checked_in' ? 'bg-emerald-500' : 'bg-blue-500')}
-              </div>;
-            })}
-          </div> : <p className="text-xs text-slate-500">{t('Aucune réservation sur la période.', 'No bookings in this period.', 'لا توجد حجوزات خلال هذه الفترة.')}</p>}
-        </Section>
+                <div className="w-full min-w-0 space-y-2">
+                  {summary.map(item => <div key={item.key} className="flex items-center gap-2 text-xs">
+                    <i className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300">{item.label}</span>
+                    <strong className="tabular-nums text-slate-900 dark:text-white">{total ? (item.count / total * 100).toFixed(1) : '0.0'} %</strong>
+                  </div>)}
+                </div>
+              </div> : <p className="py-8 text-center text-xs text-slate-500">{t('Aucune réservation sur la période.', 'No bookings in this period.', 'لا توجد حجوزات خلال هذه الفترة.')}</p>}
+            </Section>
 
-        <Section icon={Layers3} title={t('Occupation par bâtiment et étage', 'Occupancy by building and floor', 'الإشغال حسب المبنى والطابق')} subtitle={t('Capacité, occupation actuelle et chambres hors service par niveau.', 'Capacity, current occupancy and out-of-order rooms by level.', 'السعة والإشغال الحالي والغرف خارج الخدمة حسب الطابق.')}>
-          {Object.values(floorStats).length ? <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
-            {Object.values(floorStats).sort((a, b) => a.building.localeCompare(b.building) || a.floor.localeCompare(b.floor)).map(item => (
-              <div key={item.key} className="space-y-1.5">
-                <div className="flex items-center justify-between gap-3 text-xs">
-                  <span className="min-w-0 truncate font-semibold text-slate-800 dark:text-slate-100">{item.building} · {item.floor}</span>
-                  <strong className="shrink-0 tabular-nums text-slate-700 dark:text-slate-200">{item.occupied}/{item.total}</strong>
+            <Section icon={Building2} title={t('Occupation par bâtiment', 'Occupancy by building', 'الإشغال حسب المبنى')} subtitle={t('Taux d’occupation actuel par bâtiment.', 'Current occupancy rate by building.', 'معدل الإشغال الحالي حسب المبنى.')}>
+              {buildingStats.length ? <div className="space-y-4">
+                {buildingStats.slice().sort((a,b) => b.occupancy - a.occupancy).slice(0,5).map((building,index) => <div key={building.id} className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="min-w-0 truncate font-medium text-slate-700 dark:text-slate-200">{building.name}</span>
+                    <strong className="shrink-0 tabular-nums text-slate-900 dark:text-white">{building.occupancy}%</strong>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-blue-100 dark:bg-slate-800">
+                    <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-sky-400" style={{ width: `${building.occupancy}%` }} />
+                  </div>
+                </div>)}
+              </div> : <p className="py-8 text-center text-xs text-slate-500">{t('Aucun bâtiment configuré.', 'No buildings configured.', 'لا توجد مبانٍ مهيأة.')}</p>}
+            </Section>
+
+            <Section icon={Package} title={t('Sorties de stock récentes', 'Recent stock issues', 'آخر حركات صرف المخزون')} subtitle={t('Consommations enregistrées sur la période.', 'Recorded consumption in the selected period.', 'الاستهلاك المسجل خلال الفترة.')}>
+              {consumption.length ? <div className="space-y-3">
+                {consumption.slice().reverse().slice(0,4).map(movement => <div key={movement.id} className="flex items-center gap-3 border-b border-slate-100 pb-2.5 last:border-0 last:pb-0 dark:border-slate-800">
+                  <span className="rounded-lg bg-blue-50 p-2 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300"><Package size={15} /></span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs font-semibold text-slate-800 dark:text-slate-100">{movement.itemName}</div>
+                    <div className="truncate text-[10px] text-slate-500">{movement.room || movement.reason} · {movement.timestamp.slice(0,10)}</div>
+                  </div>
+                  <strong className="shrink-0 text-xs tabular-nums text-rose-600">−{Math.abs(movement.delta)}</strong>
+                </div>)}
+                <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-[10px] text-slate-500 dark:border-slate-800">
+                  <span>{t('Total consommé', 'Total issued', 'إجمالي الصرف')}</span><strong className="text-slate-800 dark:text-slate-200">{consumedUnits} {t('unités', 'units', 'وحدات')}</strong>
                 </div>
-                {progress(item.total ? item.occupied / item.total * 100 : 0, 'bg-teal-500')}
-                <div className="text-[10px] text-slate-500">{item.outOfOrder} {t('hors service', 'out of order', 'خارج الخدمة')}</div>
-              </div>
-            ))}
-          </div> : <p className="text-xs text-slate-500">{t('Aucune donnée de bâtiment ou d’étage.', 'No building or floor data.', 'لا توجد بيانات مبانٍ أو طوابق.')}</p>}
-        </Section>
-      </div>
+              </div> : <p className="py-8 text-center text-xs text-slate-500">{t('Aucun mouvement enregistré.', 'No stock issues recorded.', 'لا توجد حركات مسجلة.')}</p>}
+            </Section>
+          </div>
+        );
+      })()}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <TrendLine
+        <TrendLine        <TrendLine
           title={t('Sorties de stock dans le temps', 'Inventory issues over time', 'حركات صرف المخزون عبر الزمن')}
           subtitle={t('Unités sorties selon les mouvements de stock enregistrés.', 'Units issued from recorded stock movements.', 'الوحدات المصروفة وفق حركات المخزون المسجلة.')}
           points={periodMovements.length ? stockMovementTrend : []}
