@@ -28,7 +28,7 @@
 
 **Appointment PMS** est une application de gestion hôtelière (Property Management System) orientée **hôtels, résidences et resorts**. Elle rassemble dans une interface unique le planning des chambres et unités, le suivi des séjours, les opérations de réception, la facturation et les tâches d'exploitation.
 
-L'interface est construite avec React 19 et TypeScript. Elle fonctionne comme application web et s'appuie sur Capacitor pour la cible Android. Une chaîne GitHub Actions est également configurée pour construire et publier les artefacts Web, Android et Windows.
+L'interface est construite avec React 19 et TypeScript. Elle fonctionne comme application web, s'appuie sur Capacitor pour Android et sur **Tauri 2 + Rust + WebView2** pour le runtime Windows natif. Le binaire Windows n'est plus un lanceur qui démarre Edge : il embarque un hôte Rust capable d'exécuter des commandes système autorisées.
 
 > **Périmètre actuel :** les domaines métier actifs dans le code sont Hôtel et Resort. Les modules de canaux OTA et de serrures proUSB disposent d'interfaces et de fonctionnalités dédiées ; la présence d'un module ne signifie pas qu'un fournisseur externe ou un service cloud est automatiquement connecté.
 
@@ -70,14 +70,15 @@ L'interface est construite avec React 19 et TypeScript. Elle fonctionne comme ap
 | Animations UI | Motion |
 | Icônes | Lucide React |
 | Stockage local | IndexedDB via le module IndexedDB, avec fallback local |
+| Windows Desktop | Tauri 2, Rust, WebView2, Windows Credential Manager |
 | Mobile Android | Capacitor 8 |
-| Serrures & données cartes | WebHID / USB, `mdb-reader`, QR Code |
+| Serrures & données cartes | WebHID / USB, `mdb-reader`, QR Code, import natif CardLock |
 | Qualité | TypeScript, tests Node.js |
 | Livraison | GitHub Actions, GitHub Pages, artefacts Android et Windows |
 
 ### État des données et synchronisation
 
-La version actuelle utilise principalement un stockage local dans le navigateur/appareil. **La synchronisation Supabase distante n'est pas encore implémentée dans cette branche** : aucun client Supabase, schéma distant ni moteur de synchronisation n'est livré actuellement. Le document [SUPABASE_SYNC_PLAN.md](./docs/SUPABASE_SYNC_PLAN.md) décrit les prérequis et l'architecture envisagée.
+IndexedDB reste prioritaire pour les données locales. La configuration Supabase et son test API ne constituent pas un moteur de synchronisation. Le runtime Windows peut tester une connexion PostgreSQL Neon réelle (`SELECT 1`, `SHOW server_version`) et stocker la chaîne dans Windows Credential Manager ; cela ne synchronise pas encore les données Appointment. Le header affiche les événements Outbox en attente et marque explicitement le Pull distant comme indisponible tant que le moteur n'est pas livré.
 
 ## Outils IA de développement
 
@@ -89,6 +90,7 @@ Le dépôt fournit une configuration MCP Supabase project-scoped en lecture seul
 
 - Node.js 22 recommandé
 - npm
+- Rust stable, Microsoft C++ Build Tools et WebView2 Runtime pour compiler la cible Windows native
 - Android Studio + Android SDK uniquement pour compiler la cible Android
 
 ### Installation
@@ -123,6 +125,17 @@ npm run build
 npm run preview
 ```
 
+### Windows Desktop natif
+
+Le runtime Windows utilise Tauri 2. Le processus Rust ouvre CardLock via le sélecteur natif ou les emplacements proUSB connus, et conserve les secrets autorisés dans Windows Credential Manager. L'accès disque reste soumis aux permissions NTFS du compte Windows.
+
+```bash
+npm run tauri:dev
+npm run tauri:build
+```
+
+L'installeur NSIS est configuré pour une installation par utilisateur ou par machine. La compilation de production et la signature s'effectuent dans GitHub Actions, pas sur un poste de développement.
+
 ### Android
 
 Le projet utilise Capacitor. Après le build Web, synchronisez les ressources puis ouvrez le projet Android :
@@ -154,6 +167,9 @@ Les fichiers téléchargeables et leurs versions sont ceux réellement publiés 
 
 - [Contrat et consignes de développement](./AGENTS.md)
 - [Plan de synchronisation Supabase](./docs/SUPABASE_SYNC_PLAN.md)
+- [Manuel hôtel et proUSB](./docs/PROUSB_HOTEL_OPERATIONS_MANUAL.md)
+- [Architecture technique](./docs/ARCHITECTURE.md)
+- [Procédure de release Windows native](./docs/RELEASE.md)
 - [Spécification du système proUSB](./docs/PROUSB_SPECIFICATION.md)
 - [Guide des cartes](./README_CARDS.md)
 - [Cartes système](./README_SYSTEM_CARD.md)
