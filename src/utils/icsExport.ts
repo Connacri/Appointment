@@ -7,7 +7,7 @@ export function generateICS(booking: TimelineBooking): string {
 
   return `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//OmniBook AGENTS.md//FR
+PRODID:-//Appointment PMS//FR
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 BEGIN:VEVENT
