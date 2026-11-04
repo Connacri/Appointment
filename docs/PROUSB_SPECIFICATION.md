@@ -112,6 +112,37 @@ Correctif implémenté :
 
 ---
 
+### 2.6 Identification du lecteur (numéro d'encodeur)
+
+CardLock identifie l'encodeur au démarrage avec `IniCard(port, 2, out)` :
+la trame `AA 01 56 FD` est complétée par des `0xCC` jusqu'à **64 octets**
+(exactement comme `proRFL!IniCard`), puis la réponse brute est lue.
+
+La réponse contient un bloc ASCII d'identification, par exemple `-proUSB 016`.
+`CardLock.Exe` (VA `0x6CD924`) travaille sur la version hexadécimale du rapport
+et cherche le motif `2D70726F555342` (`-proUSB`), puis lit, relativement au
+début du motif :
+
+| Décalage (caractères hex) | Taille | Sens |
+|---|---|---|
+| `+0x0E` | 2 | séparateur, `20` = espace dans la disposition standard |
+| `+0x10` | 6 | numéro d'encodeur, 3 chiffres ASCII (`303136` → `016`) |
+| `+0x1C` | 4 | marqueur d'autorisation `9099` (octets bruts `0x90 0x99`) |
+
+Familles alternatives gérées par l'original : `EM4305-`
+(`454D343330352D`), `-proEM` (`2D70726F454D`), `M9-` (`4D392D`) ; le numéro
+est alors lu sur 12 caractères hexadécimaux, et la branche séparateur `32`
+(`2`) sur 6 caractères après un décalage de `+0x12`.
+
+Le numéro est stocké par CardLock dans `[0x6ED660]` et affiché au format
+`%.6d` (`Reader_000016`). L'application applique la même identification dans
+`src/locks/protocol/readerInfo.ts` ; le résultat alimente le badge du bandeau
+proUSB, la barre supérieure (`USB • Reader_000016`) et les spécifications de
+l'encodeur. Une commande concurrente ne peut pas consommer la réponse : tous
+les échanges HID sont sérialisés par `withDeviceLock()`.
+
+---
+
 ## 3. Base de données CardLock.mdb
 
 ### 3.1 Mot de passe et accès

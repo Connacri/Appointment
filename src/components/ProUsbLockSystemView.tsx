@@ -51,6 +51,7 @@ import {
   lockManager,
   TransportLogEntry,
   IssuedCardRecord,
+  UsbDeviceInfo,
 } from '../locks/lockManager';
 import {
   mdbSnapshotToPlanning,
@@ -136,11 +137,16 @@ export const ProUsbLockSystemView: React.FC = () => {
   const [mdbStatus, setMdbStatus] = useState(lockManager.getMdbStatus());
   const [isImportingMdb, setIsImportingMdb] = useState(false);
   const [usbStatus, setUsbStatus] = useState(lockManager.getStatus());
+  const [usbDevice, setUsbDevice] = useState<UsbDeviceInfo | null>(() => lockManager.getDeviceInfo());
+  const [isIdentifying, setIsIdentifying] = useState(false);
 
   // Subscribe to LockManager state and transport logs
   useEffect(() => {
     const unsubLogs = lockManager.subscribeLogs((newLogs) => setLogs(newLogs));
-    const unsubUsb = lockManager.subscribeConnection((st) => setUsbStatus(st));
+    const unsubUsb = lockManager.subscribeConnection((st, device) => {
+      setUsbStatus(st);
+      setUsbDevice(device);
+    });
     const unsubState = lockManager.subscribeState(() => {
       setIssuedCards(lockManager.getIssuedCards());
       setAuditRecords(lockManager.getAuditRecords());
@@ -874,6 +880,12 @@ export const ProUsbLockSystemView: React.FC = () => {
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                   <span>Déconnecté</span>
+                </span>
+              )}
+              {usbStatus === 'connected' && usbDevice?.readerLabel && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-slate-700 dark:text-slate-200">
+                  <Usb size={11} className="text-blue-500" />
+                  <span>{usbDevice.readerLabel}</span>
                 </span>
               )}
             </div>
@@ -2119,7 +2131,19 @@ export const ProUsbLockSystemView: React.FC = () => {
                   </div>
                   <div className="flex justify-between py-1.5">
                     <span className="text-slate-400">Périphérique :</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">proUSB-TEMIC (Reader_0000016)</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {usbDevice?.readerLabel
+                        ? `proUSB-TEMIC (${usbDevice.readerLabel})`
+                        : 'proUSB-TEMIC (non identifié)'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1.5">
+                    <span className="text-slate-400">N° de lecteur :</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                      {usbDevice?.encoderNo != null
+                        ? String(usbDevice.encoderNo).padStart(6, '0')
+                        : '—'}
+                    </span>
                   </div>
                   <div className="flex justify-between py-1.5">
                     <span className="text-slate-400">Usage Page HID :</span>
@@ -2138,6 +2162,26 @@ export const ProUsbLockSystemView: React.FC = () => {
                   >
                     <Usb size={14} />
                     <span>{isConnecting ? 'Connexion en cours...' : "Connecter l'Encodeur USB (WebHID)"}</span>
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setIsIdentifying(true);
+                      try {
+                        const info = await lockManager.refreshReaderInfo();
+                        if (info?.encoderNo != null) {
+                          showToast('success', `Encodeur identifié : ${info.text.trim()} (Reader_${String(info.encoderNo).padStart(6, '0')})`);
+                        } else {
+                          showToast('error', "L'encodeur n'a pas renvoyé son numéro de lecteur.");
+                        }
+                      } finally {
+                        setIsIdentifying(false);
+                      }
+                    }}
+                    disabled={isIdentifying || usbStatus !== 'connected'}
+                    className="w-full py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw size={14} className={isIdentifying ? 'animate-spin' : ''} />
+                    <span>{isIdentifying ? 'Identification...' : "Lire le n° de lecteur (IniCard)"}</span>
                   </button>
                 </div>
 

@@ -28,7 +28,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { lockManager, UsbConnectionStatus } from '../locks/lockManager';
+import { lockManager, UsbConnectionStatus, UsbDeviceInfo } from '../locks/lockManager';
 import { indexedDb, IndexedDbSyncState } from '../db/indexedDb';
 import { UserRole } from '../types/booking';
 
@@ -70,6 +70,7 @@ export const TopBar: React.FC = () => {
   const [workspaceDraft, setWorkspaceDraft] = useState('');
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
   const [usbStatus, setUsbStatus] = useState<UsbConnectionStatus>(lockManager.getStatus());
+  const [usbDevice, setUsbDevice] = useState<UsbDeviceInfo | null>(() => lockManager.getDeviceInfo());
   const [indexedDbSync, setIndexedDBSync] = useState<IndexedDbSyncState>(indexedDb.getSyncStatus());
   const [pendingPushCount, setPendingPushCount] = useState(0);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
@@ -81,8 +82,9 @@ export const TopBar: React.FC = () => {
 
   // Subscribe to USB connection status
   useEffect(() => {
-    const unsub = lockManager.subscribeConnection((st) => {
+    const unsub = lockManager.subscribeConnection((st, device) => {
       setUsbStatus(st);
+      setUsbDevice(device);
     });
     return unsub;
   }, []);
@@ -367,7 +369,7 @@ export const TopBar: React.FC = () => {
           </span>
           <Usb size={15} />
           <span className="whitespace-nowrap hidden sm:inline">
-            USB • {usbStatus === 'connected' ? 'Prêt' : 'Connecter'}
+            USB • {usbStatus === 'connected' ? (usbDevice?.readerLabel ?? 'Prêt') : 'Connecter'}
           </span>
         </button>
 

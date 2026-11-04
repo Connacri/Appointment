@@ -6,4 +6,5 @@
 export * from './frames';
 export * from './commands';
 export * from './transport';
+export * from './readerInfo';
 export * from '../database';

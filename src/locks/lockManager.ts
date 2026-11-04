@@ -20,6 +20,9 @@ import {
   transact,
   PROUSB_VID,
   PROUSB_PID,
+  readReaderInfo,
+  formatReaderLabel,
+  type ReaderInfo,
 } from './protocol';
 import {
   DecodedProUsbCard,
@@ -55,6 +58,12 @@ export interface UsbDeviceInfo {
   productId: number;
   opened: boolean;
   serialNumber?: string;
+  /** Encoder number reported by the hardware (`IniCard` mode 2). */
+  encoderNo?: number | null;
+  /** `Reader_000016`-style label, `null` while the encoder has not answered. */
+  readerLabel?: string | null;
+  /** True when the encoder reports the proUSB legal (`9099`) marker. */
+  legal?: boolean;
 }
 
 export interface TransportLogEntry {
@@ -106,10 +115,19 @@ class LockManager {
   private issuedCards: IssuedCardRecord[] = this.loadIssuedCards();
   private auditRecords: LockAuditRecord[] = this.loadAuditRecords();
   private settings: ProUsbLockSettings = this.loadSettings();
+  private readerInfo: ReaderInfo | null = null;
+  private readerInfoPending: Promise<ReaderInfo | null> | null = null;
 
   constructor() {
     this.setupTransportLogging(this.webHidTransport);
-    this.webHidTransport.onConnectionChange = () => this.notifyStateListeners();
+    this.webHidTransport.onConnectionChange = () => {
+      if (this.webHidTransport.isOpen()) {
+        void this.refreshReaderInfo();
+      } else {
+        this.readerInfo = null;
+      }
+      this.notifyStateListeners();
+    };
     // Auto-connect only to a previously authorized proUSB device; first-time WebHID
     // permission must be granted from the USB button by an explicit user gesture.
     this.webHidTransport.setAutoConnectEnabled(true);
@@ -360,6 +378,11 @@ class LockManager {
 
   public getDeviceInfo(): UsbDeviceInfo | null {
     if (!this.webHidTransport.isOpen()) return null;
+    const identity = {
+      encoderNo: this.readerInfo?.encoderNo ?? null,
+      readerLabel: formatReaderLabel(this.readerInfo?.encoderNo),
+      legal: this.readerInfo?.legal,
+    };
     const dev = (this.webHidTransport as any).device;
     if (dev) {
       return {
@@ -368,6 +391,7 @@ class LockManager {
         productId: dev.productId || PROUSB_PID,
         opened: dev.opened || false,
         serialNumber: dev.serialNumber,
+        ...identity,
       };
     }
     return {
@@ -375,7 +399,40 @@ class LockManager {
       vendorId: PROUSB_VID,
       productId: PROUSB_PID,
       opened: true,
+      ...identity,
     };
+  }
+
+  /** Last identification report received from the encoder, if any. */
+  public getReaderInfo(): ReaderInfo | null {
+    return this.readerInfo;
+  }
+
+  /**
+   * Asks the encoder for its reader number (`IniCard` mode 2, `AA 01 56 FD`).
+   * Concurrent calls share the same in-flight request.
+   */
+  public refreshReaderInfo(): Promise<ReaderInfo | null> {
+    if (!this.webHidTransport.isOpen()) {
+      this.readerInfo = null;
+      return Promise.resolve(null);
+    }
+    if (this.readerInfoPending) return this.readerInfoPending;
+
+    this.readerInfoPending = (async () => {
+      try {
+        this.readerInfo = await readReaderInfo(this.webHidTransport);
+        return this.readerInfo;
+      } catch (err) {
+        this.readerInfo = null;
+        this.webHidTransport.onLog?.('error', `Identification de l'encodeur impossible : ${(err as Error).message}`);
+        return null;
+      } finally {
+        this.readerInfoPending = null;
+        this.notifyStateListeners();
+      }
+    })();
+    return this.readerInfoPending;
   }
 
   /**

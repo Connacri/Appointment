@@ -56,10 +56,34 @@ export interface TransactOptions {
   minDataLength?: number;
 }
 
+/**
+ * Serializes exchanges with the physical encoder.
+ *
+ * HID input reports carry no command identifier: if two commands are in
+ * flight at once (for instance the identification request issued on connect
+ * and a card read started by the operator), each one can consume the other's
+ * answer. Every exchange therefore runs exclusively.
+ */
+let deviceIoChain: Promise<unknown> = Promise.resolve();
+
+export function withDeviceLock<T>(task: () => Promise<T>): Promise<T> {
+  const run = deviceIoChain.then(task, task);
+  deviceIoChain = run.catch(() => undefined);
+  return run;
+}
+
 export async function transact(
   transport: LockTransport,
   frame: Uint8Array,
   options: TransactOptions = {}
+): Promise<LockResponse> {
+  return withDeviceLock(() => transactUnlocked(transport, frame, options));
+}
+
+async function transactUnlocked(
+  transport: LockTransport,
+  frame: Uint8Array,
+  options: TransactOptions
 ): Promise<LockResponse> {
   const timeoutMs = options.timeoutMs ?? 5000;
   const attempts = Math.max(1, options.attempts ?? 3);
@@ -200,7 +224,7 @@ export class WebHidTransport implements LockTransport {
         this.pendingResolvers = [];
       });
 
-      this.onLog?.('info', `Connected to ${this.device.productName || 'proUSB-TEMIC'} (Serial: ${this.device.serialNumber || 'Reader_0000016'})`);
+      this.onLog?.('info', `Connected to ${this.device.productName || 'proUSB-TEMIC'} (Serial: ${this.device.serialNumber || 'n/a'})`);
       this.onConnectionChange?.();
       this.onLog?.('info', `HID collections: ${JSON.stringify(this.device.collections?.map((c: any) => ({ usagePage: '0x' + c.usagePage?.toString(16), usage: '0x' + c.usage?.toString(16), outputReports: c.outputReports?.map((r: any) => ({ reportId: '0x' + r.reportId?.toString(16) })), inputReports: c.inputReports?.map((r: any) => ({ reportId: '0x' + r.reportId?.toString(16) })) })))}`);
       
