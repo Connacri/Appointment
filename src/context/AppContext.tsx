@@ -23,6 +23,7 @@ import {
 } from '../data/mockData';
 import { EstablishmentProfile, DEFAULT_ESTABLISHMENT_PROFILE } from '../types/establishment';
 import { indexedDb } from '../db/indexedDb';
+import { useWorkspace } from '../services/supabase/WorkspaceContext';
 import { isValidCalendarDate, shouldMarkPaymentAsPaid } from '../utils/bookingValidation';
 import { lockManager } from '../locks/lockManager';
 import {
@@ -52,6 +53,13 @@ export type ActiveAppView =
   | 'help';
 
 interface AppContextType {
+  activeWorkspaceId: string;
+  workspaces: { id: string; name: string; owner_id: string }[];
+  setActiveWorkspaceId: (id: string) => void;
+  refreshWorkspaces: () => Promise<void>;
+  createWorkspace: (name: string) => Promise<void>;
+  isWorkspaceLoading: boolean;
+  workspaceError: string | null;
   language: Language;
   setLanguage: (lang: Language) => void;
   theme: Theme;
@@ -149,6 +157,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const workspace = useWorkspace();
   const [language, setLanguageState] = useState<Language>(() => {
     return (localStorage.getItem('omnibook_lang') as Language) || 'fr';
   });
@@ -991,6 +1000,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider
       value={{
+        activeWorkspaceId: workspace.activeWorkspaceId,
+        workspaces: workspace.workspaces,
+        setActiveWorkspaceId: workspace.setActiveWorkspaceId,
+        refreshWorkspaces: workspace.refreshWorkspaces,
+        createWorkspace: workspace.createWorkspace,
+        isWorkspaceLoading: workspace.loading,
+        workspaceError: workspace.error,
         language,
         setLanguage,
         theme,
