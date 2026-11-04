@@ -510,7 +510,7 @@ class IndexedDbStore {
       };
       workspaceEntities.put(entityRecord);
       store.put(persisted);
-      tombstones.delete(tombstoneId);
+      // Keep prior tombstones until the matching delete event receives a server ACK.
       tx.objectStore('outbox').add(this.createOutboxRecord(context, entity, item.id, 'upsert', version, persisted as Record<string, unknown>, now));
     };
     request.onsuccess = () => { current = request.result as { version?: number } | undefined; entityReady = true; commitMutation(); };
@@ -575,7 +575,29 @@ class IndexedDbStore {
   }
 
   public async markOutboxSynced(id: string): Promise<void> {
-    await this.updateOutboxRecord(id, (record) => ({ ...record, status: 'synced', lastError: undefined }));
+    await this.openStore();
+    if (!this.idb) throw new Error('Outbox is unavailable without IndexedDB.');
+    const tx = this.idb.transaction(['outbox', 'tombstones'], 'readwrite');
+    const outbox = tx.objectStore('outbox');
+    const request = outbox.get(id);
+    request.onsuccess = () => {
+      const record = request.result as OutboxRecord | undefined;
+      if (!record) return;
+      outbox.put({ ...record, status: 'synced', lastError: undefined });
+      if (record.operation === 'delete') {
+        const tombstoneId = `${record.workspaceId}:${record.entity}:${record.entityId}`;
+        const tombstoneRequest = tx.objectStore('tombstones').get(tombstoneId);
+        tombstoneRequest.onsuccess = () => {
+          const tombstone = tombstoneRequest.result as TombstoneRecord | undefined;
+          if (tombstone && tombstone.version === record.version) {
+            tx.objectStore('tombstones').delete(tombstoneId);
+          }
+        };
+        tombstoneRequest.onerror = () => tx.abort();
+      }
+    };
+    request.onerror = () => tx.abort();
+    await waitForTransactionCompletion(tx, `markOutboxSynced ${id}`);
   }
 
   public async markOutboxFailed(id: string, error: string, nextAttemptAt: string): Promise<void> {
