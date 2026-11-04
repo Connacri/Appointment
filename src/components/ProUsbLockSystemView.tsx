@@ -318,7 +318,7 @@ export const ProUsbLockSystemView: React.FC = () => {
     const staffFloorNos = staffAvailableFloors.map((f) => f.no);
     const buildingNos = availableBuildings.map((b) => b.no);
     if (staffFloorNos.length > 0 && !staffFloorNos.includes(staffFloorNo)) setStaffFloorNo(staffFloorNos[0]);
-    if (!buildingNos.includes(staffBuildingNo)) setStaffBuildingNo(buildingNos[0]);
+    if (buildingNos.length > 0 && !buildingNos.includes(staffBuildingNo)) setStaffBuildingNo(buildingNos[0]);
     if (floorNos.length > 0 && !floorNos.includes(commissionFloor)) setCommissionFloor(floorNos[0]);
     if (buildingNos.length > 0 && !buildingNos.includes(commissionBuilding)) setCommissionBuilding(buildingNos[0]);
     if (availableRoomsList.length > 0 && !availableRoomsList.some((r) => r.roomNumber === guestRoomNumber)) {
