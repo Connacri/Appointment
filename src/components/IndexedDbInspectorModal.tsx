@@ -24,7 +24,7 @@ import {
 import { indexedDb, IndexedDbStoreStats } from '../db/indexedDb';
 import { useApp } from '../context/AppContext';
 import { lockManager } from '../locks/lockManager';
-import { mdbSnapshotToPlanning, MdbTableSummary } from '../locks/database/mdbImport';
+import { mdbSnapshotToPlanning, type MdbTableSummary } from '../locks/database/mdbImport';
 import { createClient } from '@supabase/supabase-js';
 import { discoverNativeCardLockFiles, getDesktopRuntimeInfo, hasNativeSecret, isNativeDesktop, pickNativeCardLockFile, readDiscoveredCardLock, setNativeSecret } from '../services/desktopRuntime';
 
@@ -152,7 +152,7 @@ export const IndexedDbInspectorModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
 }> = ({ isOpen, onClose }) => {
-  const { language, setBookings, setResourceGroups } = useApp();
+  const { language, setBookings, setResourceGroups, resourceGroups } = useApp();
   const t = COPY[language] || COPY.fr;
   const isRtl = language === 'ar';
   const mt = MANAGEMENT_COPY[language] || MANAGEMENT_COPY.fr;
