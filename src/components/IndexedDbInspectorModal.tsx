@@ -171,7 +171,6 @@ export const IndexedDbInspectorModal: React.FC<{
   const [anonKey, setAnonKey] = useState(() => localStorage.getItem('appointment_supabase_anon_key') || '');
   const [supabaseState, setSupabaseState] = useState('Configuration locale non vérifiée');
   const [neonConnectionString, setNeonConnectionString] = useState('');
-  const [neonNotice, setNeonNotice] = useState<string | null>(null);
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
   const limit = 8;
 
@@ -198,6 +197,10 @@ export const IndexedDbInspectorModal: React.FC<{
   useEffect(() => {
     if (isOpen) void loadStatsAndData();
   }, [isOpen, loadStatsAndData]);
+
+  useEffect(() => {
+    if (!isOpen) setNeonConnectionString('');
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
