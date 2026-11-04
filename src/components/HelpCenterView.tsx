@@ -25,6 +25,238 @@ type Tutorial = {
 
 const tutorials: Tutorial[] = [
   {
+    id: 'hotel-first-setup', category: 'administration', icon: Building2, duration: '15 min', availability: 'available',
+    title: {
+      fr: 'Créer votre hôtel : guide complet pour débutant',
+      en: 'Set up your hotel: complete beginner guide',
+      ar: 'إعداد فندقك: دليل كامل للمبتدئين'
+    },
+    summary: {
+      fr: 'Choisir entre importer CardLock.mdb et créer un hôtel neuf, construire les bâtiments, les étages et les chambres sans doublons.',
+      en: 'Choose between importing CardLock.mdb and creating a new hotel, then build buildings, floors and rooms without duplicates.',
+      ar: 'اختر بين استيراد CardLock.mdb وإنشاء فندق جديد، ثم أنشئ المباني والطوابق والغرف دون تكرار.'
+    },
+    prerequisites: {
+      fr: ['Pour une reprise proUSB : fermez le logiciel de serrures avant de copier sa base et préparez une sauvegarde.', 'Pour un hôtel neuf : préparez le nom des bâtiments, le nombre d’étages et la règle de numérotation de chaque étage.', 'Ne mélangez pas un import CardLock et une création manuelle sans décider quelle structure doit faire autorité.'],
+      en: ['For a proUSB migration, close the lock software before copying its database and prepare a backup.', 'For a new hotel, prepare building names, floor counts and each floor numbering rule.', 'Do not mix a CardLock import and manual creation without deciding which structure is authoritative.'],
+      ar: ['عند الترحيل من proUSB، أغلق برنامج الأقفال قبل نسخ القاعدة وجهز نسخة احتياطية.', 'لإنشاء فندق جديد، جهز أسماء المباني وعدد الطوابق وقاعدة ترقيم كل طابق.', 'لا تخلط استيراد CardLock مع الإنشاء اليدوي دون تحديد الهيكل المعتمد.']
+    },
+    steps: {
+      fr: [
+        'Ouvrez « Configuration établissement » au premier lancement, ou depuis les paramètres. Commencez par le nom officiel, le type d’établissement, la ville et la devise. Vous pourrez ajouter le logo, les contacts et les informations fiscales ensuite.',
+        'Dans « Bâtiments & Chambres », choisissez une seule méthode initiale : « Importer CardLock.mdb » pour reprendre un hôtel proUSB existant, ou « Créer la structure manuellement » pour un nouvel hôtel.',
+        'Pour CardLock, sélectionnez le fichier du logiciel proUSB. Le chemin courant est C:\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb. Si plusieurs copies existent, comparez leurs dates : la copie VirtualStore de Windows peut être plus récente.',
+        'Avant de confirmer un remplacement, vérifiez l’aperçu des bâtiments, chambres, séjours, cartes et l’inventaire des tables. Le lecteur examine toutes les tables présentes. Les tables BuildingInfo, RoomInfo, GuestInfo, CardInfo et RecordOpen alimentent les données métier prises en charge ; les autres tables restent inventoriées et ne sont pas converties aveuglément en réservations.',
+        'Pour créer manuellement, saisissez le nom du bâtiment et son numéro. Créez les étages un par un : 0 désigne le rez-de-chaussée, 1 le premier étage, 2 le deuxième étage, etc.',
+        'Définissez le format des chambres. Exemple : préfixe 1, début 01, fin 30. Appointment génère 101 à 130. Au deuxième étage, utilisez le préfixe 2 pour obtenir 201 à 230.',
+        'Dans « Numéros à exclure », laissez 13 si votre hôtel ne possède pas de chambre portant ce numéro. Avec le préfixe 1, la chambre 113 sera exclue ; au deuxième étage, 213 sera exclue. Vous pouvez ajouter plusieurs exclusions séparées par des virgules, par exemple 13,17.',
+        'Contrôlez le récapitulatif : nombre de chambres créées, numéros exclus et doublons ignorés. Répétez l’opération pour chaque étage et chaque bâtiment. Vérifiez que les numéros restent uniques dans le bâtiment.',
+        'Enregistrez l’établissement, ouvrez le planning Gantt et contrôlez chaque bâtiment, étage et chambre. Corrigez la structure avant de saisir des réservations réelles.'
+      ],
+      en: [
+        'Open Establishment Setup on first launch or from Settings. Enter the official name, property type, city and currency first. Logo, contacts and tax details can be added later.',
+        'In Buildings & Rooms, choose one initial method: Import CardLock.mdb to migrate an existing proUSB hotel, or Create structure manually for a new hotel.',
+        'For CardLock, select the proUSB database. The usual path is C:\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb. If multiple copies exist, compare modification times: Windows VirtualStore may contain the newer copy.',
+        'Before confirming replacement, review buildings, rooms, stays, cards and the table inventory. The importer reads every table. BuildingInfo, RoomInfo, GuestInfo, CardInfo and RecordOpen feed supported business data; other tables are inventoried and are not blindly converted into bookings.',
+        'For manual setup, enter the building name and number. Create floors one at a time: 0 is ground floor, 1 is first floor, 2 is second floor, and so on.',
+        'Set the room number format. Example: prefix 1, start 01, end 30 generates 101 through 130. On floor two, use prefix 2 to generate 201 through 230.',
+        'In Excluded numbers, keep 13 if the hotel does not have a room with that number. Prefix 1 excludes 113; floor two excludes 213. Add comma-separated exclusions such as 13,17.',
+        'Review the summary: created rooms, excluded numbers and ignored duplicates. Repeat for each floor and building. Ensure room names remain unique within a building.',
+        'Save the property, open the Gantt planner and verify every building, floor and room before entering real bookings.'
+      ],
+      ar: [
+        'افتح إعداد المؤسسة عند التشغيل الأول أو من الإعدادات. أدخل الاسم الرسمي ونوع المؤسسة والمدينة والعملة أولاً. يمكنك إضافة الشعار وبيانات الاتصال والضرائب لاحقاً.',
+        'في قسم المباني والغرف، اختر طريقة واحدة للبدء: استيراد CardLock.mdb لترحيل فندق proUSB قائم، أو إنشاء الهيكل يدوياً لفندق جديد.',
+        'لاستيراد CardLock، اختر قاعدة بيانات proUSB. المسار المعتاد هو C:\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb. إذا وجدت نسخاً متعددة، قارن تاريخ التعديل؛ قد تحتوي VirtualStore على النسخة الأحدث.',
+        'قبل تأكيد الاستبدال، راجع المباني والغرف والإقامات والبطاقات وفهرس الجداول. يقرأ المستورد جميع الجداول. تغذي BuildingInfo وRoomInfo وGuestInfo وCardInfo وRecordOpen البيانات المدعومة؛ أما بقية الجداول فتظهر في الفهرس ولا تحول عشوائياً إلى حجوزات.',
+        'للإنشاء اليدوي، أدخل اسم المبنى ورقمه. أنشئ الطوابق واحداً تلو الآخر: 0 للطابق الأرضي، 1 للأول، 2 للثاني وهكذا.',
+        'حدد تنسيق أرقام الغرف. مثال: البادئة 1 والبداية 01 والنهاية 30 ينتج الغرف 101 إلى 130. للطابق الثاني استخدم البادئة 2 لإنتاج 201 إلى 230.',
+        'في الأرقام المستثناة، اترك 13 إذا كان الفندق لا يستخدم هذا الرقم. مع البادئة 1 تُستثنى الغرفة 113، وفي الطابق الثاني 213. يمكنك إدخال عدة أرقام مفصولة بفواصل مثل 13,17.',
+        'راجع الملخص: الغرف المنشأة والأرقام المستثناة والتكرارات المتجاهلة. كرر العملية لكل طابق ومبنى، وتأكد من عدم تكرار رقم الغرفة داخل المبنى.',
+        'احفظ المؤسسة وافتح مخطط Gantt وتحقق من كل مبنى وطابق وغرفة قبل إدخال حجوزات حقيقية.'
+      ]
+    },
+    result: {
+      fr: 'L’hôtel possède une structure cohérente : bâtiments, étages et chambres identifiables, sans numéro interdit ni doublon involontaire.',
+      en: 'The hotel has a consistent structure: identifiable buildings, floors and rooms, with no excluded numbers or accidental duplicates.',
+      ar: 'أصبح للفندق هيكل متناسق من مبانٍ وطوابق وغرف مع استبعاد الأرقام المطلوبة ومنع التكرار غير المقصود.'
+    },
+    warnings: {
+      fr: [
+        'Un import CardLock remplace la structure hôtelière existante après confirmation. Faites une sauvegarde avant une migration.',
+        'Ne choisissez pas automatiquement le fichier le plus ancien : la copie de Program Files peut être figée alors que VirtualStore contient les changements récents.',
+        'Les tables OperatorInfo, RegInfo, CaoZuoInfo, Dai et LogInfo ne sont pas des réservations. Leur sens détaillé doit être validé avant toute conversion métier.',
+        'Le numéro 13 est une convention par défaut, pas une obligation universelle. Modifiez la liste d’exclusion si votre hôtel utilise ce numéro.'
+      ],
+      en: [
+        'A CardLock import replaces the current hotel structure after confirmation. Back up before migration.',
+        'Do not automatically choose the oldest file: Program Files may be stale while VirtualStore contains recent changes.',
+        'OperatorInfo, RegInfo, CaoZuoInfo, Dai and LogInfo are not bookings. Their detailed meaning must be validated before business conversion.',
+        'Room 13 is a default convention, not a universal rule. Change exclusions if your hotel uses it.'
+      ],
+      ar: [
+        'استيراد CardLock يستبدل هيكل الفندق الحالي بعد التأكيد. أنشئ نسخة احتياطية قبل الترحيل.',
+        'لا تختر الملف الأقدم تلقائياً؛ قد تكون نسخة Program Files قديمة بينما تحتوي VirtualStore على التغييرات الحديثة.',
+        'الجداول OperatorInfo وRegInfo وCaoZuoInfo وDai وLogInfo ليست حجوزات. يجب التحقق من معناها قبل تحويلها إلى بيانات أعمال.',
+        'الغرفة 13 قاعدة افتراضية وليست إلزامية لكل الفنادق. عدّل قائمة الاستثناءات إذا كان فندقك يستخدم هذا الرقم.'
+      ]
+    },
+    tips: {
+      fr: ['Commencez par un seul bâtiment et un seul étage pour valider votre format avant de générer tout l’hôtel.', 'Conservez une copie originale CardLock non modifiée. Appointment lit la base ; il ne doit pas réécrire le fichier proUSB.', 'Les cartes physiques se programment sur l’encodeur et la serrure, pas dans le Gantt. Consultez le tutoriel « Programmer les serrures proUSB ».'],
+      en: ['Start with one building and one floor to validate the format before generating the whole hotel.', 'Keep an untouched copy of the original CardLock database. Appointment reads it and must not rewrite the proUSB file.', 'Physical cards are programmed with the encoder and lock, not in Gantt. See the proUSB lock programming tutorial.'],
+      ar: ['ابدأ بمبنى واحد وطابق واحد للتحقق من التنسيق قبل إنشاء الفندق بالكامل.', 'احتفظ بنسخة أصلية غير معدلة من CardLock. يقرأ Appointment القاعدة ولا ينبغي أن يكتب فوق ملف proUSB.', 'تتم برمجة البطاقات الفعلية بواسطة المشفر والقفل وليس من Gantt. راجع دليل برمجة أقفال proUSB.']
+    }
+  },
+  {
+    id: 'prousb-lock-programming', category: 'administration', icon: KeyRound, duration: '12 min', availability: 'available',
+    title: {
+      fr: 'Installer et programmer les serrures proUSB',
+      en: 'Install and program proUSB door locks',
+      ar: 'تثبيت وبرمجة أقفال proUSB'
+    },
+    summary: {
+      fr: 'Suivre la procédure constructeur pour l’encodeur USB, la carte système, les cartes clients, la carte maître et le réglage de l’horloge.',
+      en: 'Follow the manufacturer procedure for the USB encoder, system card, guest cards, master card and lock clock.',
+      ar: 'اتبع تعليمات الشركة المصنعة لمشفر USB وبطاقة النظام وبطاقات النزلاء والبطاقة الرئيسية وضبط ساعة القفل.'
+    },
+    prerequisites: {
+      fr: ['Installer le logiciel proUSB fourni avec l’encodeur.', 'Brancher l’encodeur USB et vérifier qu’il est détecté.', 'Préparer une carte système et les cartes vierges adaptées au modèle de serrure.'],
+      en: ['Install the proUSB software supplied with the encoder.', 'Connect the USB encoder and verify detection.', 'Prepare a system card and blank cards compatible with the lock model.'],
+      ar: ['ثبت برنامج proUSB المرفق مع المشفر.', 'صل مشفر USB وتأكد من تعرف النظام عليه.', 'جهز بطاقة النظام والبطاقات الفارغة المتوافقة مع طراز القفل.']
+    },
+    steps: {
+      fr: [
+        'Installez le logiciel depuis le CD fourni avec le boîtier encodeur, puis suivez l’assistant d’installation.',
+        'Branchez l’encodeur USB. Dans le logiciel constructeur, ouvrez une session avec le code Admin ; le guide indique qu’aucun mot de passe n’est défini par défaut.',
+        'Ouvrez System Options. Configurez le chemin de sauvegarde quotidien et les autres paramètres demandés. Enregistrez le numéro de l’encodeur et suivez la procédure officielle de registration ; ne choisissez pas « For door lock installation only » pour une installation normale.',
+        'Dans Operator Management, créez les opérateurs selon les responsabilités de l’hôtel.',
+        'Créez le bâtiment et les chambres dans le logiciel constructeur ou importez la structure déjà validée dans Appointment. Vérifiez que les numéros correspondent exactement aux étiquettes physiques.',
+        'Placez une carte vierge sur l’encodeur et émettez une System Card (Authorizing Card). Le constructeur indique une carte d’autorisation système par hôtel. Identifiez-la et conservez-la séparément.',
+        'Pour chaque chambre, placez une carte vierge sur l’encodeur et émettez la Guest Card correspondant exactement au numéro de cette chambre.',
+        'Sur la serrure physique, présentez la carte système trois fois de suite. Immédiatement après, présentez une fois la carte client de la chambre concernée. Les signaux lumineux et sonores indiquent la réussite selon le guide.',
+        'Émettez une Master Card si nécessaire : elle peut ouvrir les serrures déjà configurées. Émettez une Clock Setting Card en cas de décalage d’horloge et présentez-la rapidement sur la serrure.',
+        'Testez chaque porte avec la carte qui lui correspond et consignez le résultat, le bâtiment, l’étage et la chambre.'
+      ],
+      en: [
+        'Install the software from the CD supplied with the encoder and follow the installer.',
+        'Connect the USB encoder. In the manufacturer software, sign in with Admin; the guide states that no password is set by default.',
+        'Open System Options. Configure the daily backup location and required settings. Record the encoder number and follow the official registration process; do not choose “For door lock installation only” for a normal installation.',
+        'Create operators in Operator Management according to hotel responsibilities.',
+        'Create the building and rooms in the manufacturer software or import the validated structure from Appointment. Room numbers must exactly match physical labels.',
+        'Place a blank card on the encoder and issue a System Card (Authorizing Card). The manufacturer specifies one authorization system card per hotel. Label it and store it separately.',
+        'For each room, place a blank card on the encoder and issue the Guest Card matching that exact room number.',
+        'At the physical lock, swipe the system card three consecutive times. Immediately swipe the matching guest card once. Light and sound signals indicate success according to the guide.',
+        'Issue a Master Card if required; it can open locks already configured. If the lock clock is incorrect, issue a Clock Setting Card and swipe it promptly.',
+        'Test every door with its matching card and record the result, building, floor and room.'
+      ],
+      ar: [
+        'ثبت البرنامج من القرص المرفق مع صندوق المشفر واتبع خطوات التثبيت.',
+        'صل مشفر USB. في برنامج الشركة المصنعة، سجل الدخول بالرمز Admin؛ يذكر الدليل أن كلمة المرور الافتراضية غير محددة.',
+        'افتح System Options واضبط مسار النسخ الاحتياطي اليومي والإعدادات المطلوبة. سجل رقم المشفر واتبع إجراء التسجيل الرسمي؛ لا تختر “For door lock installation only” في التثبيت العادي.',
+        'أنشئ المشغلين في Operator Management حسب مسؤوليات الفندق.',
+        'أنشئ المبنى والغرف في برنامج الشركة المصنعة أو استورد الهيكل المعتمد من Appointment. يجب أن تتطابق أرقام الغرف تماماً مع الملصقات الفعلية.',
+        'ضع بطاقة فارغة على المشفر وأصدر System Card (Authorizing Card). تحدد الشركة بطاقة تفويض نظام واحدة لكل فندق. ضع عليها تسمية واحفظها منفصلة.',
+        'لكل غرفة، ضع بطاقة فارغة على المشفر وأصدر Guest Card المطابقة تماماً لرقم الغرفة.',
+        'على القفل الفعلي، مرر بطاقة النظام ثلاث مرات متتالية. فوراً بعدها مرر بطاقة النزيل المطابقة مرة واحدة. تشير الإشارات الضوئية والصوتية إلى النجاح وفق الدليل.',
+        'أصدر Master Card عند الحاجة؛ يمكنها فتح الأقفال التي تمت برمجتها. إذا كانت ساعة القفل غير صحيحة، أصدر Clock Setting Card ومررها بسرعة.',
+        'اختبر كل باب بالبطاقة المطابقة وسجل النتيجة والمبنى والطابق والغرفة.'
+      ]
+    },
+    result: {
+      fr: 'Chaque serrure est associée à la bonne chambre et les cartes fonctionnelles sont identifiées et conservées.',
+      en: 'Each lock is assigned to the correct room and functional cards are identified and stored safely.',
+      ar: 'يرتبط كل قفل بالغرفة الصحيحة ويتم تحديد البطاقات الوظيفية وحفظها بأمان.'
+    },
+    warnings: {
+      fr: [
+        'La carte système est critique : une carte par hôtel selon le constructeur. Ne la distribuez pas comme une carte client.',
+        'Ne présentez pas une carte client d’une autre chambre après les trois passages de la carte système.',
+        'Le guide indique qu’une réinitialisation par clé mécanique trois fois, carte système trois fois puis carte client une fois efface les données de la serrure. Cette séquence est destructive : ne l’exécutez qu’avec autorisation et procédure constructeur.',
+        'Le test d’une carte avant autorisation ne prouve pas que la serrure est correctement affectée à une chambre.'
+      ],
+      en: [
+        'The system card is critical: one per hotel according to the manufacturer. Never distribute it as a guest card.',
+        'Do not swipe a guest card for another room after the three system-card swipes.',
+        'The guide says that turning the mechanical key three times, swiping the system card three times and then a guest card once clears lock data. This is destructive; perform it only with authorization and the manufacturer procedure.',
+        'Testing a card before authorization does not prove the lock is assigned to the correct room.'
+      ],
+      ar: [
+        'بطاقة النظام حساسة للغاية؛ بطاقة واحدة لكل فندق وفق الشركة المصنعة. لا توزعها كبطاقة نزيل.',
+        'لا تمرر بطاقة غرفة أخرى بعد تمرير بطاقة النظام ثلاث مرات.',
+        'يذكر الدليل أن تدوير المفتاح الميكانيكي ثلاث مرات ثم بطاقة النظام ثلاث مرات ثم بطاقة النزيل مرة واحدة يمسح بيانات القفل. هذا إجراء مدمر؛ لا تنفذه إلا بتفويض ووفق تعليمات الشركة.',
+        'اختبار البطاقة قبل التفويض لا يثبت أن القفل مرتبط بالغرفة الصحيحة.'
+      ]
+    },
+    tips: {
+      fr: ['Étiquetez la carte système et stockez-la dans un emplacement sécurisé accessible uniquement aux responsables autorisés.', 'Effectuez un test porte par porte après programmation et après tout remplacement de serrure.', 'Conservez une copie de sauvegarde CardLock avant toute opération de maintenance.'],
+      en: ['Label the system card and store it securely with access limited to authorized managers.', 'Test every door after programming and after replacing a lock.', 'Keep a CardLock backup before maintenance.'],
+      ar: ['ضع تسمية على بطاقة النظام واحفظها في مكان آمن لا يصل إليه إلا المسؤولون المخولون.', 'اختبر كل باب بعد البرمجة وبعد استبدال أي قفل.', 'احتفظ بنسخة احتياطية من CardLock قبل الصيانة.']
+    }
+  },
+  {
+    id: 'cardlock-backup-recovery', category: 'administration', icon: FileText, duration: '6 min', availability: 'available',
+    title: {
+      fr: 'Sauvegarder et restaurer CardLock.mdb',
+      en: 'Back up and restore CardLock.mdb',
+      ar: 'نسخ واستعادة CardLock.mdb'
+    },
+    summary: {
+      fr: 'Comprendre les sauvegardes quotidiennes CardLock datées et restaurer une copie sans écraser la seule base valide.',
+      en: 'Understand dated daily CardLock backups and restore a copy without overwriting the only valid database.',
+      ar: 'فهم نسخ CardLock اليومية المؤرخة واستعادة نسخة دون الكتابة فوق قاعدة البيانات الوحيدة السليمة.'
+    },
+    prerequisites: {
+      fr: ['Connaître le chemin de sauvegarde configuré dans System Options.', 'Disposer d’un accès au dossier CardLock et fermer le logiciel proUSB avant restauration.'],
+      en: ['Know the backup path configured in System Options.', 'Have access to the CardLock folder and close proUSB before restoring.'],
+      ar: ['اعرف مسار النسخ الاحتياطي المحدد في System Options.', 'تأكد من إمكانية الوصول إلى مجلد CardLock وأغلق proUSB قبل الاستعادة.']
+    },
+    steps: {
+      fr: [
+        'Dans le logiciel proUSB, définissez le dossier de sauvegarde. Le constructeur indique qu’une sauvegarde est effectuée une fois par jour.',
+        'Repérez le fichier daté. Exemple du guide : CardLock101126.MDB. Le nom CardLock est suivi de six chiffres de date.',
+        'Avant toute manipulation, copiez le fichier de sauvegarde dans un autre dossier et conservez l’original intact.',
+        'Pour restaurer, fermez complètement le logiciel de gestion des serrures. Ne restaurez jamais une base pendant que proUSB est ouvert.',
+        'Choisissez la sauvegarde la plus récente qui a été vérifiée. Copiez-la dans le dossier du logiciel et renommez la copie en CardLock.MDB en retirant les six chiffres de date.',
+        'Si Windows demande de remplacer le fichier existant, ne confirmez qu’après avoir vérifié que l’ancienne base est sauvegardée ailleurs.',
+        'Relancez proUSB et vérifiez les bâtiments, chambres et données attendues. Comparez ensuite le résultat avec Appointment.'
+      ],
+      en: [
+        'In proUSB, choose the backup folder. The manufacturer says a backup is created once per day.',
+        'Find the dated file. The guide example is CardLock101126.MDB: CardLock followed by six date digits.',
+        'Before changing anything, copy the backup to another folder and keep the original untouched.',
+        'To restore, fully close the lock management software. Never restore while proUSB is running.',
+        'Choose the newest verified backup. Copy it into the software folder and rename the copy to CardLock.MDB by removing the six date digits.',
+        'If Windows asks to replace the existing file, confirm only after the old database has been backed up elsewhere.',
+        'Restart proUSB and verify buildings, rooms and expected records. Compare the result with Appointment.'
+      ],
+      ar: [
+        'في برنامج proUSB حدد مجلد النسخ الاحتياطي. تذكر الشركة أن النسخ يتم مرة واحدة يومياً.',
+        'ابحث عن الملف المؤرخ. مثال الدليل: CardLock101126.MDB؛ يأتي بعد CardLock ستة أرقام للتاريخ.',
+        'قبل أي تغيير، انسخ ملف النسخة الاحتياطية إلى مجلد آخر واحتفظ بالأصل دون تعديل.',
+        'للاستعادة، أغلق برنامج إدارة الأقفال بالكامل. لا تستعد قاعدة البيانات أثناء تشغيل proUSB.',
+        'اختر أحدث نسخة تم التحقق منها. انسخها إلى مجلد البرنامج وأعد تسمية النسخة إلى CardLock.MDB بحذف أرقام التاريخ الستة.',
+        'إذا طلب Windows استبدال الملف الموجود، لا توافق إلا بعد حفظ القاعدة القديمة في مكان آخر.',
+        'أعد تشغيل proUSB وتحقق من المباني والغرف والسجلات المتوقعة، ثم قارن النتيجة مع Appointment.'
+      ]
+    },
+    result: {
+      fr: 'La base restaurée est lisible par proUSB et les données attendues sont présentes.',
+      en: 'The restored database opens in proUSB and contains the expected data.',
+      ar: 'يمكن لبرنامج proUSB فتح القاعدة المستعادة وتحتوي على البيانات المتوقعة.'
+    },
+    warnings: {
+      fr: ['Ne renommez jamais l’unique sauvegarde : travaillez sur une copie.', 'Le guide constructeur mentionne parfois C:\\Program Files\\proUSB lock system\\ ; votre installation peut utiliser Program Files (x86) et un autre sous-dossier.', 'Appointment doit importer une copie de CardLock et ne doit pas modifier la base originale.'],
+      en: ['Never rename the only backup; work on a copy.', 'The manufacturer guide sometimes shows C:\\Program Files\\proUSB lock system\\; your installation may use Program Files (x86) and a different subfolder.', 'Appointment should import a copy of CardLock and must not modify the original database.'],
+      ar: ['لا تعِد تسمية النسخة الاحتياطية الوحيدة؛ اعمل على نسخة.', 'يذكر دليل الشركة أحياناً C:\\Program Files\\proUSB lock system\\؛ قد يستخدم تثبيتك Program Files (x86) ومجلداً فرعياً مختلفاً.', 'ينبغي أن يستورد Appointment نسخة من CardLock وألا يعدل القاعدة الأصلية.']
+    },
+    tips: {
+      fr: ['Conservez plusieurs jours de sauvegardes, pas uniquement la dernière.', 'Notez la date de la sauvegarde et le poste qui l’a produite.', 'Testez périodiquement une restauration sur une copie, jamais directement sur la base de production.'],
+      en: ['Keep multiple days of backups, not only the latest one.', 'Record the backup date and the computer that created it.', 'Periodically test restoration on a copy, never directly on the production database.'],
+      ar: ['احتفظ بنسخ لعدة أيام وليس بآخر نسخة فقط.', 'سجل تاريخ النسخة والجهاز الذي أنشأها.', 'اختبر الاستعادة دورياً على نسخة وليس على قاعدة الإنتاج مباشرة.']
+    }
+  },
+
+  {
     id: 'planning', category: 'reservations', icon: CalendarDays, duration: '6 min', availability: 'available',
     title: { fr: 'Comprendre le planning Gantt', en: 'Understand the Gantt planner', ar: 'فهم مخطط جانت' },
     summary: { fr: 'Lire les disponibilités, les chambres, les séjours et les statuts depuis le planning.', en: 'Read availability, rooms, stays and statuses in the planner.', ar: 'قراءة التوفر والغرف والإقامات والحالات من المخطط.' },
