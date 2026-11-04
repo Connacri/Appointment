@@ -133,6 +133,63 @@ const BookingTrendPanel: React.FC<{
   );
 };
 
+const TrendLine: React.FC<{
+  title: string;
+  subtitle: string;
+  points: Array<{ label: string; value: number }>;
+  suffix: string;
+  color: string;
+  emptyLabel: string;
+}> = ({ title, subtitle, points, suffix, color, emptyLabel }) => {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const maxValue = Math.max(1, ...points.map(point => point.value));
+  const left = 48;
+  const right = 872;
+  const top = 18;
+  const bottom = 190;
+  const x = (index: number) => points.length <= 1 ? (left + right) / 2 : left + index * ((right - left) / (points.length - 1));
+  const y = (value: number) => bottom - (value / maxValue) * (bottom - top);
+  const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(point.value)}`).join(' ');
+  const active = activeIndex === null ? null : points[activeIndex];
+  return (
+    <section className="relative min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+      <div className="mb-4">
+        <h3 className="text-sm font-bold text-slate-900 dark:text-white">{title}</h3>
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{subtitle}</p>
+      </div>
+      {points.length ? (
+        <div className="relative" onMouseLeave={() => setActiveIndex(null)} onMouseMove={event => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          const px = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * 900;
+          const index = points.length <= 1 ? 0 : Math.round((px - left) / (right - left) * (points.length - 1));
+          setActiveIndex(Math.max(0, Math.min(points.length - 1, index)));
+        }}>
+          <svg viewBox="0 0 900 225" className="h-44 w-full sm:h-52" role="img" aria-label={title}>
+            {[0,1,2,3].map(index => {
+              const yy = top + index * ((bottom - top) / 3);
+              return <g key={index}>
+                <line x1={left} x2={right} y1={yy} y2={yy} stroke="currentColor" opacity=".12" strokeDasharray="4 5" />
+                <text x={left - 10} y={yy + 4} textAnchor="end" fill="currentColor" opacity=".5" fontSize="11">{Math.round(maxValue * (3-index) / 3)}</text>
+              </g>;
+            })}
+            <path d={path} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            {activeIndex !== null && <line x1={x(activeIndex)} x2={x(activeIndex)} y1={top} y2={bottom} stroke="currentColor" opacity=".35" strokeDasharray="4 4" />}
+            {points.map((point,index) => <circle key={`${point.label}-${index}`} cx={x(index)} cy={y(point.value)} r={activeIndex === index ? 6 : 3.5} fill={color} stroke="white" strokeWidth="2" />)}
+            {points.filter((_,index) => index === 0 || index === points.length-1 || index === Math.floor((points.length-1)/2)).map(point => {
+              const index = points.indexOf(point);
+              return <text key={index} x={x(index)} y="216" textAnchor={index === 0 ? 'start' : index === points.length-1 ? 'end' : 'middle'} fill="currentColor" opacity=".55" fontSize="11">{point.label}</text>;
+            })}
+          </svg>
+          {active && <div className="pointer-events-none absolute right-2 top-2 rounded-lg border border-slate-700 bg-slate-950/95 px-3 py-2 text-white shadow-xl">
+            <div className="text-[10px] text-slate-300">{active.label}</div>
+            <div className="mt-0.5 text-sm font-bold tabular-nums">{active.value.toLocaleString()} {suffix}</div>
+          </div>}
+        </div>
+      ) : <p className="py-10 text-center text-xs text-slate-500">{emptyLabel}</p>}
+    </section>
+  );
+};
+
 export const BookingAnalyticsView: React.FC = () => {
   const {
     bookings, resourceGroups, stockItems, stockMovements, tasks,
