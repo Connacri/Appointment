@@ -9,12 +9,12 @@
 
 | Domaine | Valeur | Portée |
 |---|---|---|
-| Contrôle d'accès | Hardware | QR + RFID/NFC + lecteurs + contrôleurs de portes + intégrations fabricants |
-| Matériel | Both | Adaptateurs génériques et connecteurs spécifiques aux fabricants |
+| Contrôle d'accès | Hardware | QR + RFID/NFC + lecteurs + contrôleurs physiques et politiques d'accès |
+| Matériel | Generic | Connecteurs génériques et protocoles standardisés ; pas de pilotes propriétaires spécifiques en première livraison |
 | Spa | Full | Catalogue, praticiens, cabines, rendez-vous, forfaits, abonnements, packages |
 | Installations | All | Exploitation interne et espaces commerciaux loués à des tiers |
 
-Le contrôle d'accès est un sous-système physique. QR/RFID/NFC sont des supports d'identification ; les décisions d'accès sont prises par une politique d'autorisation et exécutées/observées par des équipements. Une simple validation de QR dans le navigateur ne constitue pas un contrôle de porte.
+Le contrôle d'accès est un sous-système physique. QR/RFID/NFC sont des supports d'identification ; les décisions d'accès sont prises par une politique d'autorisation et exécutées/observées par des équipements. Une simple validation de QR dans le navigateur ne constitue pas un contrôle de porte. La décision « Generic » remplace la précédente décision « Both » : la première livraison cible des interfaces et protocoles standardisés via une couche d'adaptation neutre. Les pilotes propriétaires de fabricants sont explicitement hors périmètre initial, mais l'architecture doit permettre leur ajout ultérieur.
 
 ## 2. État initial constaté — ne pas confondre cible et existant
 
@@ -148,8 +148,8 @@ Les contrats de location longue durée d'un local ne sont pas des réservations 
 - Les autorisations sont calculées par sujet + zone + plage horaire + état du badge + politique. Le badge ne confère aucun droit implicite.
 - Anti-rejeu, expiration, révocation, limitation d'usage, horloge tolérante et audit des refus sont obligatoires.
 - Les commandes matérielles sont signées, idempotentes, horodatées et acquittées. Ne pas envoyer de commande de porte depuis un composant UI.
-- Les adaptateurs fabricants sont isolés derrière une interface `AccessDeviceAdapter` : discover, health, issueCredential, revokeCredential, pushPolicy, readEvents, executeCommand.
-- Connectivité générique via passerelle locale/API/SDK documenté ; connecteurs spécifiques (fabricants) derrière packages/adapters versionnés. Ne jamais supposer qu'un navigateur peut piloter directement un contrôleur.
+- Les connecteurs matériels sont isolés derrière une interface `AccessDeviceAdapter` : discover, health, issueCredential, revokeCredential, pushPolicy, readEvents, executeCommand. La première livraison fournit uniquement des connecteurs génériques pour protocoles standardisés documentés. Aucun pilote propriétaire par fabricant n'est prévu dans le périmètre Generic initial ; un adaptateur spécifique pourra être ajouté ultérieurement sans modifier le domaine métier.
+- Connectivité générique via passerelle locale/API ou SDK documenté, selon capacités réellement disponibles. Ne jamais supposer qu'un navigateur peut piloter directement un contrôleur. Les intégrations spécifiques fabricants ne sont pas incluses dans la première livraison.
 - En mode offline, un contrôleur/scanner conserve un cache signé des droits avec expiration et une file d'événements. Une révocation effectuée sur un autre appareil n'est pas instantanément connue d'un terminal isolé : pour zones sensibles, imposer connexion ou cache de très courte durée et procédure de secours.
 - Les sorties de secours restent gouvernées par les normes et systèmes incendie locaux ; OmniBook ne doit pas inhiber une sortie réglementaire.
 
@@ -273,3 +273,87 @@ Chaque module doit avoir un parcours guidé contextuel : objectif, prérequis, �
 ## 11. Décisions différées qui ne bloquent pas le modèle
 
 Le choix exact des fabricants, modèles de lecteurs/contrôleurs, protocoles et imprimantes est fait au moment des connecteurs, après inventaire du matériel réel et validation des API/SDK disponibles. Les contrats de données restent neutres vis-à-vis des marques. Les normes locales de sécurité incendie, protection des données et facturation doivent être vérifiées avant déploiement opérationnel.
+
+
+## 12. Plan d'implémentation séquencé
+
+Les lots sont exécutés dans l'ordre ci-dessous. Aucun écran de réservation avancée ni aucune intégration physique ne doit précéder les fondations de persistance, de sécurité et de synchronisation.
+
+| Lot | Priorité | Livrables | Critère de sortie |
+|---|---|---|---|
+| 0. Contrats et audit | P0 | Audit des mutations existantes, modèles TypeScript communs, ADR, migrations locales versionnées | Contrats tenant/ID/version/date/devise documentés et validés |
+| 1. Sync Engine | P0 | Outbox transactionnelle, curseurs, retry/backoff, idempotence, tombstones, conflits, verrou inter-onglets | Tests crash/relaunch, offline-online, doublons et conflits réussis |
+| 2. Facility Catalog | P0 | Catégories, installations, unités, horaires, fermetures, capacités, tarifs | CRUD complet + RLS + migration IDB sans perte |
+| 3. Multi-resource Booking | P0 | Dossiers, lignes, allocations, invités, disponibilité et RPC transactionnelle | Test de concurrence prouvant l'absence de double allocation |
+| 4. Spa Full | P1 | Prestations, praticiens, cabines, planning, packages, abonnements, crédits | Réservation atomique multi-ressources + charges vers folios |
+| 5. Events & Groups | P1 | Événements, sessions, participants, configurations de salles, liens groupes | Salle et ressources réservées ensemble, capacité contrôlée |
+| 6. Rentals & Commercial Leases | P1 | Actifs, contrats, mouvements, inspections, baux commerciaux | Cycle de location court et long distinct et auditable |
+| 7. Access Control Generic | P1 | Zones, points, appareils, policies, badges, credentials, grants, événements | Simulation complète puis validation sur matériel physique réellement inventorié |
+| 8. Printing & Device Ops | P2 | Templates, jobs, profils imprimantes, heartbeat, diagnostics | Impression/reprint auditée et supervision testée |
+| 9. Exploitation étendue | P2 | Maintenance, ordres de travail, POS, portail client, self check-in/out, analytics | Intégration financière et permissions validées |
+| 10. Tutoriels | Transversal | Guides par rôle, aide contextuelle, scénarios démo FR/EN/AR | Chaque fonctionnalité livrée dispose d'un tutoriel vérifié sur la version UI |
+
+### 12.1 Déroulement obligatoire d'un lot
+
+1. Créer/mettre à jour les contrats TypeScript et validations runtime.
+2. Ajouter les migrations IndexedDB incrémentales et tests de migration depuis la version précédente.
+3. Ajouter les migrations SQL versionnées dans le dépôt, avec PK/FK, contraintes, index et RLS dans la même livraison logique.
+4. Tester la migration sur un environnement Supabase de développement avant production.
+5. Implémenter repositories et mapping IndexedDB/Supabase ; raccorder toutes les mutations à l'outbox.
+6. Implémenter l'UI et les permissions ; localisation FR/EN/AR et RTL.
+7. Ajouter tutoriels et tests d'acceptation.
+8. Exécuter lint, typecheck, tests et CI ; corriger les erreurs à la source.
+9. Vérifier le schéma distant, les advisors Supabase et les policies RLS.
+10. Documenter les limites non testées, notamment matériel, mode offline et intégrations externes.
+
+### 12.2 Livrables de code attendus
+
+- `src/types/facility.ts`, `src/types/facilityBooking.ts`, `src/types/accessControl.ts`, `src/types/rental.ts`, `src/types/event.ts` : contrats métier.
+- `src/db/migrations/` : migrations IndexedDB ordonnées, non destructives.
+- `src/services/facilities/` : repositories et services du catalogue et des réservations.
+- `src/services/spa/`, `src/services/events/`, `src/services/rentals/`, `src/services/access/` : services spécialisés.
+- `src/services/sync/` : outbox, engine, conflits, curseurs, lifecycle.
+- `supabase/migrations/` : migrations SQL versionnées et reproductibles.
+- `tests/` : migration, concurrence, RLS, multi-tenant, offline, idempotence et adaptateurs matériels simulés.
+
+Les noms de fichiers sont des conventions proposées ; avant création, réutiliser les répertoires et abstractions réellement présents dans le dépôt. Ne pas créer de deuxième repository financier ni une deuxième abstraction de réservation si un composant existant couvre déjà le besoin.
+
+### 12.3 Dépendances et chemin critique
+
+```text
+Audit + contrats
+      |
+      v
+Outbox / Sync / RLS
+      |
+      v
+Facility Catalog
+      |
+      v
+Booking + Allocations transactionnelles
+      |
+      +----------+-------------+
+      |          |             |
+      v          v             v
+     Spa      Events         Rentals
+      |          |             |
+      +----------+-------------+
+                 |
+                 v
+         Folios / Finance
+                 |
+                 v
+        Access Control Generic
+                 |
+                 v
+       Hardware réel + Printing
+```
+
+Le contrôle d'accès peut démarrer en parallèle de Spa/Events uniquement pour le modèle de zones, badges et policies ; la connexion aux portes physiques reste dépendante de l'inventaire matériel, du connecteur générique et des tests sur site.
+
+### 12.4 Hors périmètre de la première livraison matérielle
+
+- Pilotes propriétaires spécifiques à chaque marque.
+- Garantie de compatibilité sans modèle exact, documentation protocole et test physique.
+- Déverrouillage direct de portes depuis le frontend.
+- Mode offline illimité ou révocation instantanée sur terminal déconnecté.
