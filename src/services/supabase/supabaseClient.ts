@@ -19,8 +19,10 @@ function readRuntimeConfig() {
 }
 const runtimeConfig = readRuntimeConfig();
 const supabaseUrl = runtimeConfig.url || (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || DEFAULT_SUPABASE_URL;
-const supabasePublishableKey = runtimeConfig.publishableKey || runtimeConfig.anonKey ||
-  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
+// Never pair a user-supplied project URL with another project's default public key.
+const supabasePublishableKey = runtimeConfig.url
+  ? runtimeConfig.publishableKey || runtimeConfig.anonKey
+  : (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKey);
 
