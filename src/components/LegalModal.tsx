@@ -69,14 +69,14 @@ export const LegalModal: React.FC = () => {
       icon: LockKeyhole,
       title: t('Politique de confidentialité', 'Privacy policy', 'سياسة الخصوصية'),
       description: t('Données collectées, finalités, conservation et droits des utilisateurs.', 'Data collected, purposes, retention and user rights.', 'البيانات المجمعة والأغراض ومدة الاحتفاظ وحقوق المستخدمين.'),
-      href: `/privacy/${language}/`,
+      href: `./privacy/${language}/`,
       action: t('Lire la politique', 'Read policy', 'قراءة السياسة'),
     },
     {
       icon: FileText,
       title: t('Suppression du compte', 'Account deletion', 'حذف الحساب'),
       description: t('Procédure et portail de demande de suppression du compte.', 'Account deletion procedure and request portal.', 'إجراءات وبوابة طلب حذف الحساب.'),
-      href: `/delete-account/${language}/`,
+      href: `./delete-account/${language}/`,
       action: t('Ouvrir le portail', 'Open portal', 'فتح البوابة'),
     },
   ];
@@ -193,7 +193,7 @@ export const LegalModal: React.FC = () => {
                       <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
                         <div className="flex items-center gap-2 text-xs font-bold text-slate-900 dark:text-white"><Cloud size={16} className="text-violet-500" />Supabase Cloud</div>
                         <p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{t('Les données du workspace distant ne sont pas supprimées par la purge locale. Utilisez la procédure de suppression de compte.', 'Remote workspace data is not removed by the local purge. Use the account deletion procedure.', 'لا تُحذف بيانات مساحة العمل البعيدة عبر المسح المحلي. استخدم إجراء حذف الحساب.')}</p>
-                        <a href={`/delete-account/${language}/`} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline dark:text-blue-400">{t('Voir la procédure', 'View procedure', 'عرض الإجراء')}<ArrowUpRight size={12} /></a>
+                        <a href={`./delete-account/${language}/`} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline dark:text-blue-400">{t('Voir la procédure', 'View procedure', 'عرض الإجراء')}<ArrowUpRight size={12} /></a>
                       </div>
                     </div>
 
