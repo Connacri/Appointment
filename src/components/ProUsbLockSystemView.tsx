@@ -753,7 +753,7 @@ export const ProUsbLockSystemView: React.FC = () => {
 
       showToast(
         'success',
-        `CardLock.mdb importée : ${snapshot.counts.cards} cartes, ${snapshot.counts.rooms} chambres, ${snapshot.counts.guests} séjours${warn}`,
+        `CardLock.mdb importée : ${snapshot.counts.cards} cartes, ${snapshot.counts.rooms} chambres,  ${snapshot.counts.guests} séjours, ${snapshot.tableInventory?.length ?? 0} tables inventoriées${warn}`,
       );
 
       // Propose d'importer aussi les chambres et séjours dans le planning/Gantt
@@ -768,16 +768,19 @@ export const ProUsbLockSystemView: React.FC = () => {
           `Les bâtiments créés localement seront conservés ; les données précédemment importées de CardLock seront actualisées.`,
         );
         if (wantPlanning) {
-          const { resourceGroups: mdbGroups, bookings: mdbBookings } =
+          const { resourceGroups: mdbGroups, bookings: mdbBookings, warnings: planningWarnings } =
             mdbSnapshotToPlanning(snapshot);
           setResourceGroups((current) => [
             ...current.filter((group) => !group.id.startsWith('mdb-')),
             ...mdbGroups,
           ]);
-          setBookings((current) => {
-            const importedIds = new Set(mdbBookings.map((booking) => booking.id));
-            return [...current.filter((booking) => !importedIds.has(booking.id)), ...mdbBookings];
-          });
+          setBookings((current) => [
+            ...current.filter((booking) => booking.customMetadata?.source !== 'cardlock_mdb'),
+            ...mdbBookings,
+          ]);
+          if (planningWarnings.length) {
+            showToast('error', planningWarnings.join(' '));
+          }
           showToast(
             'success',
             `Planning mis à jour : ${mdbGroups.length} groupe(s) de ressources, ${mdbBookings.length} réservation(s).`,
