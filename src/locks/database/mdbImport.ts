@@ -110,6 +110,8 @@ export interface MdbTableSummary {
   rowCount: number;
   columns: string[];
   readable: boolean;
+  /** Access catalog/system objects are inventoried but are not hotel entities. */
+  system?: boolean;
 }
 
 export interface MdbSnapshot {
@@ -291,6 +293,26 @@ export async function parseCardLockMdb(
 
   const tableCache = new Map<string, Row[]>();
   const failedTables = new Set<string>();
+  const systemObjectNames = new Set(['userdefined', 'summaryinfo', 'accesslayout', 'sysrel', 'scripts', 'reports', 'modules', 'forms', 'dataaccesspages']);
+  const tables: MdbTableSummary[] = tableNames.map((name) => {
+    const system = name.toLowerCase().startsWith('msys') || systemObjectNames.has(name.toLowerCase());
+    try {
+      const table = db.getTable(name);
+      const rows = table.getData();
+      tableCache.set(name, rows);
+      const columnReader = table as unknown as { getColumnNames?: () => string[] };
+      const columns = columnReader.getColumnNames?.() ?? Object.keys(rows[0] ?? {});
+      return { name, rowCount: rows.length, columns, readable: true, system };
+    } catch {
+      failedTables.add(name);
+      tableCache.set(name, []);
+      return { name, rowCount: 0, columns: [], readable: false, system };
+    }
+  });
+  for (const table of tables) {
+    if (!table.readable && !table.system) warnings.push('Table « ' + table.name + ' » présente mais illisible.');
+  }
+
   const read = (primaryName: string, aliases: string[] = []): Row[] => {
     const match = findTable([primaryName, ...aliases]);
     if (!match) {
@@ -329,7 +351,7 @@ export async function parseCardLockMdb(
     const rawBld = getNonEmptyField(r, ['BldNo', 'bldno', 'Bld_No', 'BuildingNo', 'Building', 'Bld', 'bld_no']);
     const rawFlr = getNonEmptyField(r, ['FlrNo', 'flrno', 'Flr_No', 'FloorNo', 'Floor', 'Flr', 'flr_no']);
     const rawRoomNo = getNonEmptyField(r, ['RoomNo', 'roomno', 'Room_No']);
-    const rawRoomId = getNonEmptyField(r, ['RomID', 'Room', 'RomNo', 'ID']);
+    const rawRoomId = getNonEmptyField(r, ['RomID2', 'RomID', 'Room', 'RomNo', 'ID']);
     const rawType = getNonEmptyField(r, ['sType', 'stype', 'RoomType', 'Type', 'type']);
     const rawStatus = getNonEmptyField(r, ['Status', 'status']);
     const rawPrice = getNonEmptyField(r, ['Price', 'price', 'Rate', 'rate']);
@@ -377,7 +399,7 @@ export async function parseCardLockMdb(
     buildingByNo.set(building.no, building);
   }
   for (const room of rooms) {
-    if (room.building > 0 && !buildingByNo.has(room.building)) {
+    if (room.building >= 0 && !buildingByNo.has(room.building)) {
       buildingByNo.set(room.building, { no: room.building, name: `Bâtiment ${room.building}` });
     }
   }
@@ -418,14 +440,6 @@ export async function parseCardLockMdb(
     const hex = str(rawRec).toUpperCase();
     return hex.length > 0 && !/^F+$/.test(hex) && !/^0+$/.test(hex);
   }).length;
-
-  const systemObjectNames = new Set(['userdefined', 'summaryinfo', 'accesslayout', 'sysrel', 'scripts', 'reports', 'modules', 'forms']);
-  const tables: MdbTableSummary[] = tableNames
-    .filter((name) => !name.toLowerCase().startsWith('msys') && !systemObjectNames.has(name.toLowerCase()))
-    .map((name) => {
-      const rows = read(name);
-      return { name, rowCount: rows.length, columns: Object.keys(rows[0] ?? {}), readable: !failedTables.has(name) };
-    });
 
   return {
     fileName,
@@ -512,7 +526,7 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
   const roomsByBuilding = new Map<number, ImportedRoom[]>();
   const unassignedRooms: ImportedRoom[] = [];
   for (const room of rooms) {
-    if (Number.isFinite(room.building) && room.building > 0) {
+    if (Number.isFinite(room.building) && room.building >= 0) {
       const buildingRooms = roomsByBuilding.get(room.building) ?? [];
       buildingRooms.push(room);
       roomsByBuilding.set(room.building, buildingRooms);
@@ -637,8 +651,8 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
         cardId: guest.cardId,
         flag,
         roomType: room.type,
-        building: room.building > 0 ? room.building : undefined,
-        floor: room.floor > 0 ? room.floor : undefined,
+        building: room.building >= 0 ? room.building : undefined,
+        floor: room.floor >= 0 ? room.floor : undefined,
         originalPrice: room.price,
         cardCount: room.cardCount,
         maxCards: room.maxCards,
@@ -653,27 +667,30 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 }
 
 function resourceIdFromRoom(r: ImportedRoom): string {
-  const building = r.building > 0 ? String(r.building) : 'unknown';
+  const building = r.building >= 0 ? String(r.building) : 'unassigned';
   return `mdb-rm-${building}-${normalizeRoomNo(r.roomNo)}`;
 }
 
+function normalizeHousekeepingStatus(value: string): ResourceItem['housekeepingStatus'] {
+  const status = value.trim().toLowerCase().replace(/[ -]+/g, '_');
+  if (status === 'clean' || status === 'propre') return 'clean';
+  if (status === 'dirty' || status === 'sale') return 'dirty';
+  if (status === 'cleaning' || status === 'in_cleaning' || status === 'en_nettoyage') return 'cleaning';
+  if (status === 'out_of_order' || status === 'hs') return 'out_of_order';
+  return undefined;
+}
+
 function resourceItemFromRoom(r: ImportedRoom): ResourceItem {
-  const floor = r.floor > 0 ? String(r.floor) : undefined;
+  const floor = r.floor >= 0 ? String(r.floor) : undefined;
   return {
     id: resourceIdFromRoom(r),
     name: r.roomNo,
     type: r.type || 'Chambre',
     sector: 'hotel',
     pricePerDay: parsePrice(r.price),
-    housekeepingStatus: (r.status && /clean/i.test(r.status)
-      ? 'clean'
-      : /dirty/i.test(r.status)
-        ? 'dirty'
-        : /out.of.order|hs/i.test(r.status)
-          ? 'out_of_order'
-          : 'clean') as ResourceItem['housekeepingStatus'],
+    ...(normalizeHousekeepingStatus(r.status) ? { housekeepingStatus: normalizeHousekeepingStatus(r.status) } : {}),
     capacity: 1,
-    ...(r.building > 0 ? { building: String(r.building) } : {}),
+    ...(r.building >= 0 ? { building: String(r.building) } : {}),
     ...(floor ? { floor } : {}),
   };
 }
