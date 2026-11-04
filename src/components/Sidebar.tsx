@@ -288,7 +288,8 @@ export const Sidebar: React.FC = () => {
                   </button>
                 );
               })}
-            </div>}
+            </div>
+          )}
           </section>
         </div>
       )}
@@ -308,7 +309,8 @@ export const Sidebar: React.FC = () => {
               <ChevronDown size={15} className={`text-slate-400 transition-transform ${isMobilePreferencesExpanded ? 'rotate-180' : ''}`} />
             </span>
           </button>
-          {isMobilePreferencesExpanded && <div className="space-y-2">
+          {isMobilePreferencesExpanded && (
+            <div className="space-y-2">
           <div className="grid grid-cols-[auto_1fr] items-center gap-2">
             <span className="text-[11px] text-slate-400">{language === "fr" ? "Langue" : language === "ar" ? "اللغة" : "Language"}</span>
             <div className="grid grid-cols-3 gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1">
@@ -340,7 +342,8 @@ export const Sidebar: React.FC = () => {
               <Sliders size={14} className="text-blue-400" />
               {language === "fr" ? "Établissement" : language === "ar" ? "المؤسسة" : "Property"}
             </button>
-          </div>}
+            </div>
+          )}
         </section>
       )}
       {/* Navigation List */}
