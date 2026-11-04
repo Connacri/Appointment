@@ -249,7 +249,7 @@ jobs:
   build-and-publish-windows-release:
     name: Build & Sign Windows EXE (.exe)
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
