@@ -214,7 +214,7 @@ Rules:
 ## 11. PERFORMANCE
 
 * Prioritize startup time, fluid 60 fps (120 fps capable) rendering, small initial payload, and lazy loading (route-level code splitting, deferred heavy modules).
-* **ObjectBox**: use paginated lazy queries with `offset` and `limit`; never load whole collections into memory; index queried properties; run writes off the UI thread.
+* **IndexedDB**: use paginated lazy queries with `offset` and `limit`; never load whole collections into memory; index queried properties; run writes off the UI thread.
 * Lists: virtualization, stable keys, memoized rows.
 * Images: modern formats (WebP/AVIF), correct sizes, lazy loading, caching.
 * Budgets (adjust to the project): web initial JS Ã¢â€°Â¤ 200 KB gzip, LCP Ã¢â€°Â¤ 2.5 s, CLS Ã¢â€°Â¤ 0.1, INP Ã¢â€°Â¤ 200 ms; Android cold start Ã¢â€°Â¤ 2 s on mid-range devices. Report regressions found.
@@ -455,7 +455,7 @@ The root pages (`/privacy/`, `/delete-account/`) are the URLs given to Google Pl
 **Privacy Policy MUST cover**
 
 * who we are (entity name, contact email)
-* exactly which data is collected (account/auth data, device & FCM tokens, analytics, crash logs, local ObjectBox data, permissions) and why
+* exactly which data is collected (account/auth data, device & FCM tokens, analytics, crash logs, local IndexedDB data, permissions) and why
 * third parties and SDKs (Firebase, Google Sign-In, analytics, ads if any) and what they receive
 * storage location, retention periods, security measures
 * user rights (access, rectification, deletion, portability; GDPR where relevant)
