@@ -1,6 +1,6 @@
 # Changelog
 
-Toutes les modifications notables de **Appointment / Planning Oran** sont documentées dans ce fichier.
+Toutes les modifications notables de **Appointment / Appointment PMS** sont documentées dans ce fichier.
 
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le projet respecte le [Semantic Versioning](https://semver.org/lang/fr/).
 
@@ -77,7 +77,7 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ### Fixed
 
-- **Artefacts de release désormais versionnés** (`Planning-Oran-vX.Y.Z.apk`, `-vX.Y.Z.aab`, launcher Windows, installeur Inno Setup, archive web). Les anciens noms codés en dur (`Planning-Oran-release.apk`, `Planning-Oran-v1.0.0.exe`, `Planning-Oran-Windows-v1.0.0.zip`) laissaient croire que la dernière version n'était pas publiée.
+- **Artefacts de release désormais versionnés** (`Appointment-PMS-vX.Y.Z.apk`, `-vX.Y.Z.aab`, launcher Windows, installeur Inno Setup, archive web). Les anciens noms codés en dur (`Appointment-PMS-release.apk`, `Appointment-PMS-v1.0.0.exe`, `Appointment-PMS-Windows-v1.0.0.zip`) laissaient croire que la dernière version n'était pas publiée.
 - Version réellement injectée dans le launcher Windows (`AssemblyVersion` / `FileVersion`), dans l'installeur Inno Setup (`/DAppVersion`) et dans le manifeste Android (`versionName` / `versionCode`).
 - Titre de la GitHub Release aligné sur le tag (`vX.Y.Z`) et notes de version générées depuis la section correspondante de `CHANGELOG.md`.
 - `fail_on_unmatched_files` activé : la publication échoue désormais explicitement si un artefact attendu est absent (fini les copies silencieuses `|| true`).
@@ -105,7 +105,7 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ### Added
 
-- Renommage de l'application en **OmniBook** (`strings.xml`, config Capacitor, titre HTML).
+- Renommage de l'application en **Appointment PMS** (`strings.xml`, config Capacitor, titre HTML).
 - Génération des assets Capacitor (icônes / splash) et upload Play Store optionnel.
 - Génération des icônes et de l'écran de démarrage natifs via `@capacitor/assets`.
 
