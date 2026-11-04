@@ -71,7 +71,7 @@ export const TopBar: React.FC = () => {
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
   const [usbStatus, setUsbStatus] = useState<UsbConnectionStatus>(lockManager.getStatus());
   const [indexedDbSync, setIndexedDBSync] = useState<IndexedDbSyncState>(indexedDb.getSyncStatus());
-  const [pendingPushCount, setPendingPushCount] = useState(0);
+  const [pendingPushCount, setPendingPushCount] = useState<number | null>(null);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
@@ -103,7 +103,7 @@ export const TopBar: React.FC = () => {
         const pending = activeWorkspaceId ? await indexedDb.getPendingOutbox(activeWorkspaceId, 1000) : [];
         if (active) setPendingPushCount(pending.length);
       } catch {
-        if (active) setPendingPushCount(0);
+        if (active) setPendingPushCount(null);
       }
     };
     void refreshOutbox();
@@ -335,7 +335,7 @@ export const TopBar: React.FC = () => {
         </button>
 
         <div className="flex h-7 sm:h-8 items-center gap-1 sm:gap-2 rounded-lg border border-amber-500/30 bg-amber-950/30 px-1.5 sm:px-2 text-[9px] sm:text-[10px] font-semibold text-amber-200" title="Push = événements locaux en attente d’envoi, sans accusé serveur. Pull = indisponible tant que le moteur distant n’est pas déployé.">
-          <span>Push {pendingPushCount}</span><span className="text-amber-400/70">·</span><span>Pull —</span>
+          <span>Push {pendingPushCount ?? '—'}</span><span className="text-amber-400/70">·</span><span>Pull —</span>
         </div>
 
         {/* USB Hardware Button matching szsz.png (🟢 USB • Prêt) */}
