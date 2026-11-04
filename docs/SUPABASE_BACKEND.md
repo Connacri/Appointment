@@ -63,8 +63,9 @@ Le schéma et le client sont alignés sur le socle PMS, mais le produit n'est pa
 
 - Les mutations de `AppContext` restent majoritairement locales (localStorage/IndexedDB) et ne passent pas toutes par `pmsRepository`.
 - Aucun sélecteur de workspace/établissement ne pilote encore les mutations de l'application.
-- Aucun Outbox IndexedDB transactionnel ni moteur pull/push automatique n'est livré.
-- Les conflits, retries, curseurs, idempotence réseau et restauration après fermeture ne sont pas encore implémentés.
+- Un Outbox IndexedDB transactionnel est livré en étape partielle (stores versionnés, isolation par workspace, clés d'idempotence, tombstones). Le CRUD des réservations y est raccordé uniquement pour les enregistrements non-démo et lorsqu'un workspace est actif.
+- Aucun moteur pull/push automatique ne consomme encore l'Outbox ; les autres domaines métier ne sont pas encore raccordés.
+- Les conflits, curseurs et l'idempotence côté serveur ne sont pas encore implémentés. L'Outbox conserve les tentatives et leur prochaine date de reprise, mais aucun worker ne les exécute encore.
 - Les repositories financiers pour factures/lignes et paiements ne sont pas complets.
 - Les domaines Spa Full, Facility universel, événements, locations commerciales et contrôle d'accès générique ne sont pas encore matérialisés dans le schéma.
 - Les données de démonstration ne sont pas importées dans Supabase. Les tables sont restées vides lors de l'audit.
