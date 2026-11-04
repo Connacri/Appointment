@@ -157,19 +157,20 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     try {
       const snapshot = await lockManager.importMdb(file);
       const planning = mdbSnapshotToPlanning(snapshot);
-      if (planning.resourceGroups.length) {
-        // Replace the previous MDB snapshot but preserve buildings created locally.
-        setResourceGroups((current) => [
-          ...current.filter((group) => !group.id.startsWith('mdb-')),
-          ...planning.resourceGroups,
-        ]);
-        setSelectedEstablishmentId('all');
-      }
-      if (planning.bookings.length) setBookings((prev) => {
-        const importedIds = new Set(planning.bookings.map((booking) => booking.id));
-        return [...prev.filter((booking) => !importedIds.has(booking.id)), ...planning.bookings];
-      });
-      setStructureMessage(`Import réussi : ${snapshot.counts.rooms} chambres, ${snapshot.buildings.length} bâtiment(s), ${snapshot.counts.guests} séjour(s), ${snapshot.counts.cards} carte(s).${snapshot.warnings.length ? ' Avertissements : ' + snapshot.warnings.join(' ') : ''}`);
+      // Replace the previous CardLock import as one snapshot. Never leave stale
+      // rooms or stays from a previously imported hotel behind.
+      setResourceGroups((current) => [
+        ...current.filter((group) => !group.id.startsWith('mdb-')),
+        ...planning.resourceGroups,
+      ]);
+      setSelectedEstablishmentId('all');
+      setBookings((prev) => [
+        ...prev.filter((booking) => booking.customMetadata?.source !== 'cardlock_mdb'),
+        ...planning.bookings,
+      ]);
+      const allWarnings = [...snapshot.warnings, ...planning.warnings];
+      const importedRoomCount = planning.resourceGroups.reduce((sum, group) => sum + group.resources.length, 0);
+      setStructureMessage(`Import terminé : ${importedRoomCount} chambres réelles, ${planning.resourceGroups.length} groupe(s) bâtiment, ${planning.bookings.length} séjour(s) lié(s), ${snapshot.counts.cards} carte(s).${allWarnings.length ? ' Avertissements : ' + allWarnings.join(' ') : ''}`);
       playSuccessFeedback();
     } catch (error) {
       setStructureMessage(`Échec de l’import : ${error instanceof Error ? error.message : 'fichier illisible'}`);
