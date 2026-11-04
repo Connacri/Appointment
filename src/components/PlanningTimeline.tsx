@@ -875,7 +875,8 @@ export const PlanningTimeline: React.FC = () => {
               className="absolute top-0 bottom-0 min-h-full pointer-events-none z-30 flex flex-col items-center"
               style={{
                 ...(isRTL
-                  ? { right: `${(todayIndex + currentHourFraction) * colWidth}px` }
+                  // In RTL, both the day columns and time within the day progress right-to-left.
+                  ? { right: `${(todayIndex + (1 - currentHourFraction)) * colWidth}px` }
                   : { left: `${(todayIndex + currentHourFraction) * colWidth}px` }),
                 transform: 'translateX(-50%)',
               }}
