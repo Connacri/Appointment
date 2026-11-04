@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * 
- * Spa, Thalasso & Wellness Centre Types for OmniBook PMS
+ * Spa, Thalasso & Wellness Centre Types for Appointment PMS
  */
 
 export type SpaCategory = 'massage' | 'hammam_hydro' | 'facial_beauty' | 'package';
