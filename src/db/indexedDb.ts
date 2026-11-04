@@ -310,8 +310,25 @@ class IndexedDbStore {
       if (this.idb) {
         const tx = this.idb.transaction(storeName, 'readwrite');
         const store = tx.objectStore(storeName);
-        store.clear();
-        for (const item of items) store.put(item);
+        const existingRequest = store.getAll();
+        existingRequest.onsuccess = () => {
+          const existingById = new Map(
+            (existingRequest.result as Array<T & { workspaceId?: string; establishmentId?: string; syncVersion?: number; deletedAt?: string | null }>)
+              .map((entry) => [entry.id, entry])
+          );
+          store.clear();
+          for (const item of items) {
+            const existing = existingById.get(item.id);
+            store.put(existing ? {
+              ...item,
+              workspaceId: existing.workspaceId,
+              establishmentId: existing.establishmentId,
+              syncVersion: existing.syncVersion,
+              deletedAt: existing.deletedAt,
+            } : item);
+          }
+        };
+        existingRequest.onerror = () => tx.abort();
         await waitForTransactionCompletion(tx, `replaceAll ${storeName}`);
 
         // IndexedDB is authoritative. The localStorage snapshot is only a fallback mirror.
