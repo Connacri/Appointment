@@ -2678,7 +2678,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                     Création d'une Carte Spéciale (avec mot de passe)
                   </h3>
                   <p className="text-[11px] text-amber-100">
-                    Chambre Spéciale · Famille proUSB 0x90 Isolée de tout Master & Bâtiment
+                    Carte spéciale 0x90 · PIN vérifié dans Appointment ; compatibilité serrure à confirmer
                   </p>
                 </div>
               </div>
