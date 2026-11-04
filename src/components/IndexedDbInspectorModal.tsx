@@ -19,10 +19,7 @@ import {
   ChevronDown,
   Upload,
   Download,
-  Cloud,
-  Server,
   ShieldAlert,
-  CheckCircle2,
 } from 'lucide-react';
 import { indexedDb, IndexedDbStoreStats } from '../db/indexedDb';
 import { useApp } from '../context/AppContext';
@@ -143,13 +140,47 @@ const COPY = {
   },
 };
 
-export const IndexedDbInspectorModal: React.FC<{
+
+const MANAGEMENT_COPY = {
+  fr: {
+    center:'{mt.center}', localTab:'Local & CardLock', supabaseTab:'Supabase', neonTab:'Neon', backupTab:'Sauvegarde',
+    localTitle:'{mt.localTitle}', localPath:'Chemin attendu : C:\\Program Files (x86)\\proUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb',
+    localWarning:'{mt.localWarning}', chooseFile:'Choisir CardLock.mdb', analyzing:'Analyse…',
+    importConfirm:(rooms:number,guests:number,cards:number)=>`CardLock analysé : ${rooms} chambres, ${guests} séjours et ${cards} cartes.\\n\\nImporter les chambres et séjours dans le planning ?`,
+    stale:'Attention : fichier ancien. Vérifiez la copie VirtualStore, qui contient souvent les modifications récentes de CardLock.', importDone:(buildings:number,rooms:number,guests:number,cards:number,warnings:number)=>`Import terminé : ${buildings} bâtiments, ${rooms} chambres, ${guests} séjours, ${cards} cartes.${warnings ? ` ${warnings} avertissement(s).` : ''}`, importError:mt.importError,
+    projectUrl:'{mt.projectUrl}', publishable:'{mt.publishable}', anon:'{mt.anon}', keyHint:'{mt.keyHint}', test:'{mt.test}', save:'{mt.save}', invalid:mt.invalid, testing:mt.testing, connected:mt.connected, testError:mt.testError, saved:mt.saved,
+    neonWarning:'{mt.neonWarning}', neonLabel:'{mt.neonLabel}', neonPlaceholder:'{mt.neonPlaceholder}', neonNotice:'Aucun connecteur serveur Neon n’est installé. La chaîne ne sera pas enregistrée. Ajoutez un backend sécurisé avec secret manager, TLS et validation de certificat. Aucun test n’est lancé depuis le navigateur.', clear:'{mt.clear}',
+    backupTitle:'{mt.backupTitle}', backupHint:'{mt.backupHint}', preparing:mt.preparing, downloaded:mt.downloaded, backupError:mt.backupError, download:'{mt.download}',
+  },
+  en: {
+    center:'Data center', localTab:'Local & CardLock', supabaseTab:'Supabase', neonTab:'Neon', backupTab:'Backup',
+    localTitle:'Import the proUSB CardLock database', localPath:'Expected path: C:\\Program Files (x86)\\proUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb',
+    localWarning:'On Windows, prefer the VirtualStore copy if CardLock.exe modifies the database. The browser asks you to select the file and cannot read this path automatically.', chooseFile:'Choose CardLock.mdb', analyzing:'Analyzing…',
+    importConfirm:(rooms:number,guests:number,cards:number)=>`CardLock parsed: ${rooms} rooms, ${guests} stays and ${cards} cards.\\n\\nImport rooms and stays into the planning board?`,
+    stale:'Warning: this file is old. Check the VirtualStore copy, which often contains the latest CardLock changes.', importDone:(buildings:number,rooms:number,guests:number,cards:number,warnings:number)=>`Import complete: ${buildings} buildings, ${rooms} rooms, ${guests} stays, ${cards} cards.${warnings ? ` ${warnings} warning(s).` : ''}`, importError:'CardLock import failed.',
+    projectUrl:'Project URL', publishable:'Publishable key', anon:'Anon key (legacy)', keyHint:'These are public keys and must be protected by RLS. Never enter a service_role key. Publishable takes precedence; anon is supported for legacy projects.', test:'Test connection', save:'Save and apply', invalid:'HTTPS URL and public key are required', testing:'Testing…', connected:'API connected and workspaces table accessible', testError:'Supabase connection failed', saved:'Public configuration saved. Reloading to apply to the main client…',
+    neonWarning:'A server-side PostgreSQL connector is required. The web client and Windows Edge launcher cannot safely open a direct PostgreSQL connection. Never store this connection string in the browser.', neonLabel:'Direct connection string (temporary input only)', neonPlaceholder:'postgresql://user:password@host/db?sslmode=require', neonNotice:'No Neon server connector is installed. This value will not be saved. Add a secure backend with a secret manager, TLS and certificate validation. No browser-side test is available.', clear:'Clear entered string',
+    backupTitle:'Downloadable local backup', backupHint:'Includes IndexedDB collections and the CardLock snapshot. Attach the file manually to Gmail or upload it to Google Drive. Gmail/Drive OAuth is not configured yet.', preparing:'Preparing backup…', downloaded:'Backup downloaded. You can attach it to Gmail or upload it to Google Drive.', backupError:'Backup failed.', download:'Download backup',
+  },
+  ar: {
+    center:'مركز البيانات', localTab:'محلي وCardLock', supabaseTab:'Supabase', neonTab:'Neon', backupTab:'نسخة احتياطية',
+    localTitle:'استيراد قاعدة proUSB CardLock', localPath:'المسار المتوقع: C:\\Program Files (x86)\\proUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb',
+    localWarning:'في Windows، يُفضّل استخدام نسخة VirtualStore إذا كان CardLock.exe يحدّث قاعدة البيانات. يجب اختيار الملف يدوياً؛ لا يستطيع المتصفح قراءة هذا المسار تلقائياً.', chooseFile:'اختيار CardLock.mdb', analyzing:'جارٍ التحليل…',
+    importConfirm:(rooms:number,guests:number,cards:number)=>`تم تحليل CardLock: ${rooms} غرفة و${guests} إقامة و${cards} بطاقة.\\n\\nهل تريد استيراد الغرف والإقامات إلى التخطيط؟`,
+    stale:'تحذير: الملف قديم. تحقق من نسخة VirtualStore التي تحتوي غالباً على أحدث تعديلات CardLock.', importDone:(buildings:number,rooms:number,guests:number,cards:number,warnings:number)=>`اكتمل الاستيراد: ${buildings} مبنى و${rooms} غرفة و${guests} إقامة و${cards} بطاقة.${warnings ? ` ${warnings} تحذير.` : ''}`, importError:'تعذر استيراد CardLock.',
+    projectUrl:'رابط المشروع', publishable:'مفتاح Publishable', anon:'مفتاح Anon (قديم)', keyHint:'هذه مفاتيح عامة ويجب حمايتها بسياسات RLS. لا تُدخل مفتاح service_role أبداً. مفتاح Publishable له الأولوية.', test:'اختبار الاتصال', save:'حفظ وتطبيق', invalid:'يلزم رابط HTTPS ومفتاح عام', testing:'جارٍ الاختبار…', connected:'تم الاتصال بالواجهة وجدول workspaces متاح', testError:'فشل الاتصال بـ Supabase', saved:'تم حفظ الإعدادات العامة. جارٍ إعادة التحميل لتطبيقها…',
+    neonWarning:'يلزم موصل PostgreSQL على الخادم. لا يمكن لواجهة الويب ومشغل Edge في Windows فتح اتصال PostgreSQL مباشر بشكل آمن. يجب عدم تخزين سلسلة الاتصال في المتصفح.', neonLabel:'سلسلة الاتصال المباشر (إدخال مؤقت فقط)', neonPlaceholder:'postgresql://user:password@host/db?sslmode=require', neonNotice:'موصل Neon على الخادم غير مثبت. لن يتم حفظ القيمة. يلزم خادم آمن ومدير أسرار واتصال TLS والتحقق من الشهادة. لا يتوفر اختبار من المتصفح.', clear:'مسح السلسلة المدخلة',
+    backupTitle:'تنزيل نسخة احتياطية محلية', backupHint:'تتضمن مجموعات IndexedDB ولقطة CardLock. يمكنك إرفاق الملف يدوياً في Gmail أو رفعه إلى Google Drive. لم تتم تهيئة OAuth بعد.', preparing:'جارٍ إعداد النسخة الاحتياطية…', downloaded:'تم تنزيل النسخة. يمكنك إرفاقها في Gmail أو رفعها إلى Google Drive.', backupError:'فشل إنشاء النسخة الاحتياطية.', download:'تنزيل النسخة الاحتياطية',
+  },
+} as const;
+\nexport const IndexedDbInspectorModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
 }> = ({ isOpen, onClose }) => {
   const { language, setBookings, setResourceGroups } = useApp();
   const t = COPY[language] || COPY.fr;
   const isRtl = language === 'ar';
+  const mt = MANAGEMENT_COPY[language] || MANAGEMENT_COPY.fr;
   const [stats, setStats] = useState<IndexedDbStoreStats | null>(null);
   const [activeStore, setActiveStore] = useState<StoreName>('bookings');
   const [storeData, setStoreData] = useState<any[]>([]);
@@ -211,7 +242,7 @@ export const IndexedDbInspectorModal: React.FC<{
       const snapshot = await lockManager.importMdb(file);
       if (snapshot.fileLastModified) {
         const ageDays = (Date.now() - new Date(snapshot.fileLastModified).getTime()) / 86400000;
-        if (ageDays > 90) setMdbMessage('Attention : fichier ancien. Vérifiez la copie VirtualStore, qui contient souvent les modifications récentes de CardLock.');
+        if (ageDays > 90) setMdbMessage(mt.stale);
       }
       if (snapshot.counts.rooms || snapshot.counts.guests) {
         const { resourceGroups, bookings } = mdbSnapshotToPlanning(snapshot);
@@ -221,7 +252,7 @@ export const IndexedDbInspectorModal: React.FC<{
           setBookings(current => [...current.filter(item => !bookings.some(next => next.id === item.id)), ...bookings]);
         }
       }
-      setMdbMessage(`Import terminé : ${snapshot.buildings.length} bâtiments, ${snapshot.counts.rooms} chambres, ${snapshot.counts.guests} séjours, ${snapshot.counts.cards} cartes.${snapshot.warnings.length ? ` ${snapshot.warnings.length} avertissement(s).` : ''}`);
+      setMdbMessage(mt.importDone(snapshot.buildings.length, snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards, snapshot.warnings.length));
       await loadStatsAndData();
     } catch (err) {
       setMdbMessage(err instanceof Error ? err.message : 'Import CardLock impossible.');
@@ -338,11 +369,11 @@ export const IndexedDbInspectorModal: React.FC<{
 
         <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900 sm:px-5">
           <nav className="flex gap-2 overflow-x-auto pb-2" aria-label="Gestion des données">
-            {([['local','Local & CardLock'],['supabase','Supabase'],['neon','Neon'],['backup','Sauvegarde']] as const).map(([id,label]) => <button key={id} type="button" onClick={() => setActivePanel(id)} className={`shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold ${activePanel===id?'border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-200':'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300'}`}>{label}</button>)}
+            {([['local',mt.localTab],['supabase',mt.supabaseTab],['neon',mt.neonTab],['backup',mt.backupTab]] as const).map(([id,label]) => <button key={id} type="button" onClick={() => setActivePanel(id)} className={`shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold ${activePanel===id?'border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-200':'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300'}`}>{label}</button>)}
           </nav>
           {activePanel === 'local' && <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
             <div><p className="text-sm font-semibold text-slate-900 dark:text-white">Importer la base proUSB CardLock</p><p className="mt-1 break-all text-[11px] text-slate-500">Chemin attendu : C:\\Program Files (x86)\\proUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb</p><p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">Dans Windows, privilégiez la copie VirtualStore si CardLock.exe modifie la base. Le navigateur demande de sélectionner le fichier ; il ne peut pas lire ce chemin automatiquement.</p></div>
-            <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 text-xs font-bold text-white hover:bg-cyan-600"><Upload size={15}/>{mdbBusy?'Analyse…':'Choisir CardLock.mdb'}<input className="hidden" type="file" accept=".mdb,application/x-msaccess" disabled={mdbBusy} onChange={event => { const file=event.target.files?.[0] ?? null; void handleMdbImport(file); event.currentTarget.value=''; }}/></label>
+            <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 text-xs font-bold text-white hover:bg-cyan-600"><Upload size={15}/>{mdbBusy?mt.analyzing:mt.chooseFile}<input className="hidden" type="file" accept=".mdb,application/x-msaccess" disabled={mdbBusy} onChange={event => { const file=event.target.files?.[0] ?? null; void handleMdbImport(file); event.currentTarget.value=''; }}/></label>
             {mdbMessage && <p role="status" className="text-xs text-slate-600 dark:text-slate-300 sm:col-span-2">{mdbMessage}</p>}
           </div>}
           {activePanel === 'supabase' && <div className="grid gap-3 sm:grid-cols-2">
