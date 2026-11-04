@@ -26,6 +26,7 @@ import {
   Volume2,
   VolumeX,
   Sliders,
+  User,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
