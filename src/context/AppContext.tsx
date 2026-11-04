@@ -621,6 +621,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Auto-issue proUSB guest card for hotel/resort bookings
     if (bookingData.sector === 'hotel' || bookingData.sector === 'resort') {
+      const bookedResource = resourceGroups.flatMap((group) => group.resources).find((resource) => resource.id === bookingData.resourceId);
       try {
         lockManager
           .issueGuestCardFromBooking(
@@ -628,6 +629,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               id: newBkg.id,
               guestName: bookingData.guestName,
               resourceName: bookingData.resourceName,
+              buildingNo: bookedResource?.building !== undefined ? Number.parseInt(bookedResource.building, 10) : undefined,
+              floorNo: bookedResource?.floor !== undefined ? Number.parseInt(bookedResource.floor, 10) : undefined,
               startDate: bookingData.startDate,
               endDate: bookingData.endDate,
             },
