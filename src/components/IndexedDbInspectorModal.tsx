@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Database,
   X,
@@ -152,10 +152,11 @@ export const IndexedDbInspectorModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
 }> = ({ isOpen, onClose }) => {
-  const { language, setBookings, setResourceGroups, resourceGroups } = useApp();
+  const { language, setBookings, setResourceGroups, resourceGroups: currentResourceGroups } = useApp();
   const t = COPY[language] || COPY.fr;
   const isRtl = language === 'ar';
   const mt = MANAGEMENT_COPY[language] || MANAGEMENT_COPY.fr;
+  const mdbInputRef = useRef<HTMLInputElement>(null);
   const [stats, setStats] = useState<IndexedDbStoreStats | null>(null);
   const [activeStore, setActiveStore] = useState<StoreName>('bookings');
   const [storeData, setStoreData] = useState<any[]>([]);
