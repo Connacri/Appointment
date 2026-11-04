@@ -69,7 +69,7 @@ export const ResourceUsageDashboard: React.FC = () => {
       { name: 'TypeScript Static Analysis & Lint', count: 5, cpuRange: [60, 82], memRange: [2500, 3100] },
       { name: 'Vite Production Web Bundle & Minify', count: 7, cpuRange: [75, 88], memRange: [3200, 4100] },
       { name: 'Keystore base64 Decryption & Audit', count: 3, cpuRange: [25, 40], memRange: [2100, 2500] },
-      { name: 'Gradle compileReleaseKotlin & ObjectBox', count: 12, cpuRange: [82, 94], memRange: [4200, 5600] },
+      { name: 'Gradle compileReleaseKotlin & IndexedDB', count: 12, cpuRange: [82, 94], memRange: [4200, 5600] },
       { name: 'R8 Bytecode Optimization & Shrink', count: 8, cpuRange: [88, 97], memRange: [5400, 6800] },
       { name: 'bundleRelease & assembleRelease Packaging', count: 10, cpuRange: [85, 96], memRange: [6100, 7200] },
       { name: 'apksigner SHA-256 Digest Verify', count: 4, cpuRange: [40, 55], memRange: [3800, 4200] },
