@@ -250,6 +250,24 @@ export const ProUsbLockSystemView: React.FC = () => {
     return { availableBuildings, availableFloors };
   }, [mdbSnapshot, resourceGroups, commissionBuilding]);
 
+  const staffAvailableFloors = useMemo(() => {
+    if (mdbSnapshot && mdbSnapshot.rooms.length > 0) {
+      return getCardLockFloorNumbers(mdbSnapshot.rooms, staffBuildingNo).map((no) => ({
+        no,
+        label: no === 0 ? 'Rez-de-chaussée (0)' : `Étage ${no}`,
+      }));
+    }
+    const rooms = resourceGroups
+      .filter((group) => group.sector === 'hotel')
+      .flatMap((group) => group.resources)
+      .filter((resource) => Number.parseInt(resource.building ?? '', 10) === staffBuildingNo);
+    const floors = [...new Set(rooms.map((resource) => {
+      const explicit = Number.parseInt(resource.floor ?? '', 10);
+      return Number.isInteger(explicit) && explicit >= 0 ? explicit : Number.parseInt((resource.name || '')[0] ?? '', 10);
+    }).filter((no) => Number.isInteger(no) && no >= 0))].sort((a, b) => a - b);
+    return floors.map((no) => ({ no, label: no === 0 ? 'Rez-de-chaussée (0)' : `Étage ${no}` }));
+  }, [mdbSnapshot, resourceGroups, staffBuildingNo]);
+
   /**
    * Chambres réelles câblées et alignées avec les bâtiments et étages réels.
    * Si CardLock.mdb est importé : utilise les chambres et bâtiments réels de la base.
@@ -297,8 +315,9 @@ export const ProUsbLockSystemView: React.FC = () => {
   // première valeur réellement existante.
   useEffect(() => {
     const floorNos = availableFloors.map((f) => f.no);
+    const staffFloorNos = staffAvailableFloors.map((f) => f.no);
     const buildingNos = availableBuildings.map((b) => b.no);
-    if (!floorNos.includes(staffFloorNo)) setStaffFloorNo(floorNos[0]);
+    if (staffFloorNos.length > 0 && !staffFloorNos.includes(staffFloorNo)) setStaffFloorNo(staffFloorNos[0]);
     if (!buildingNos.includes(staffBuildingNo)) setStaffBuildingNo(buildingNos[0]);
     if (floorNos.length > 0 && !floorNos.includes(commissionFloor)) setCommissionFloor(floorNos[0]);
     if (buildingNos.length > 0 && !buildingNos.includes(commissionBuilding)) setCommissionBuilding(buildingNos[0]);
@@ -451,7 +470,20 @@ export const ProUsbLockSystemView: React.FC = () => {
           details.push(`Intégrité: ${decoded.siteComplementOk ? 'OK' : 'INVALIDE (~site attendu)'}`);
         }
         if (decoded.roomNumber) details.push(`Chambre: ${decoded.roomNumber}`);
-        if (decoded.type === 'special') details.push('Carte spéciale 0x90 : marqueur PIN lu ; la protection réelle dépend du firmware de la serrure.');
+        if (decoded.type === 'special') {
+          const pin = window.prompt('Carte spéciale 0x90 détectée. Saisissez le PIN pour vérifier le marqueur logiciel.');
+          if (pin !== null) {
+            let pinHash = 0;
+            for (let i = 0; i < pin.length; i += 1) pinHash = (pinHash + pin.charCodeAt(i) * 31) & 0xff;
+            if (pinHash !== decoded.specialPinHash) {
+              showToast('error', 'PIN incorrect : la carte a été lue, mais la vérification logicielle a échoué.');
+              return;
+            }
+            details.push('PIN logiciel vérifié (empreinte 8 bits).');
+          } else {
+            details.push('PIN logiciel non vérifié.');
+          }
+        }
         if (v) {
           details.push(`${decoded.endIsUnknown ? 'Émise le' : 'Début'}: ${fmt(v.startYear, v.startMonth, v.startDay, v.startHour, v.startMinute ?? 0)}`);
           if (decoded.endIsUnknown) details.push(decoded.type === 'special' ? 'Expiration : non encodée dans cette variante spéciale' : 'Expiration: aucune (carte système)');
@@ -1651,7 +1683,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                       onChange={(e) => setStaffFloorNo(Number(e.target.value))}
                       className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
                     >
-                      {availableFloors.map((fl) => (
+                      {staffAvailableFloors.map((fl) => (
                         <option key={fl.no} value={fl.no}>
                           {fl.label}
                         </option>
