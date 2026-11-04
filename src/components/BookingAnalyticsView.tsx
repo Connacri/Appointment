@@ -55,7 +55,7 @@ const BookingTrendPanel: React.FC<{
   const formatValue = (value: number) => metric === 'occupancy' ? `${value}%` : value.toLocaleString();
 
   return (
-    <section className="relative min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+    <section className="relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:border-slate-800 dark:bg-slate-900 sm:p-5">
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-3">
           <span className="rounded-xl bg-blue-50 p-2 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400"><Activity size={18} /></span>
@@ -93,7 +93,7 @@ const BookingTrendPanel: React.FC<{
             const rawIndex = points.length <= 1 ? 0 : Math.round((viewX - left) / (right - left) * (points.length - 1));
             setHoveredIndex(Math.max(0, Math.min(points.length - 1, rawIndex)));
           }}>
-            <svg viewBox="0 0 900 280" role="img" aria-label={metric === 'occupancy' ? t('Courbe du taux d’occupation', 'Occupancy trend chart', 'مخطط نسبة الإشغال') : t('Courbe des arrivées', 'Arrival trend chart', 'مخطط الوصول')} className="h-52 w-full overflow-visible sm:h-64">
+            <svg viewBox="0 0 900 280" role="img" aria-label={metric === 'occupancy' ? t('Courbe du taux d’occupation', 'Occupancy trend chart', 'مخطط نسبة الإشغال') : t('Courbe des arrivées', 'Arrival trend chart', 'مخطط الوصول')} className="h-56 w-full overflow-visible sm:h-72">
               <defs>
                 <linearGradient id="booking-trend-fill" x1="0" x2="0" y1="0" y2="1">
                   <stop offset="0%" stopColor={metric === 'occupancy' ? '#0d9488' : '#7c3aed'} stopOpacity="0.24" />
@@ -164,7 +164,7 @@ const TrendLine: React.FC<{
           const index = points.length <= 1 ? 0 : Math.round((px - left) / (right - left) * (points.length - 1));
           setActiveIndex(Math.max(0, Math.min(points.length - 1, index)));
         }}>
-          <svg viewBox="0 0 900 225" className="h-44 w-full sm:h-52" role="img" aria-label={title}>
+          <svg viewBox="0 0 900 225" className="h-48 w-full sm:h-56" role="img" aria-label={title}>
             {[0,1,2,3].map(index => {
               const yy = top + index * ((bottom - top) / 3);
               return <g key={index}>
@@ -422,28 +422,36 @@ export const BookingAnalyticsView: React.FC = () => {
 
   const Card = ({ icon: Icon, label, value, detail, tone = 'blue' }: {
     icon: React.ElementType; label: string; value: string | number; detail: string; tone?: string;
-  }) => (
-    <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</span>
-        <span className={`rounded-lg p-2 ${tone === 'green' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400' : tone === 'amber' ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400' : tone === 'purple' ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400'}`}>
-          <Icon size={17} />
-        </span>
-      </div>
-      <div className="truncate text-xl font-bold text-slate-900 dark:text-white sm:text-2xl">{value}</div>
-      <p className="mt-1 text-[10px] leading-relaxed text-slate-500 dark:text-slate-400">{detail}</p>
-    </div>
-  );
+  }) => {
+    const tones: Record<string, string> = {
+      green: 'bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 dark:ring-emerald-900/60',
+      amber: 'bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-900/60',
+      purple: 'bg-violet-50 text-violet-700 ring-violet-100 dark:bg-violet-950/50 dark:text-violet-300 dark:ring-violet-900/60',
+      blue: 'bg-sky-50 text-sky-700 ring-sky-100 dark:bg-sky-950/50 dark:text-sky-300 dark:ring-sky-900/60',
+    };
+    const accent = tone === 'green' ? 'bg-emerald-500' : tone === 'amber' ? 'bg-amber-500' : tone === 'purple' ? 'bg-violet-500' : 'bg-sky-500';
+    return (
+      <article className="group relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 sm:p-4">
+        <span className={`absolute inset-x-0 top-0 h-0.5 ${accent}`} />
+        <div className="flex items-start justify-between gap-2">
+          <span className="min-w-0 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:text-[11px]">{label}</span>
+          <span className={`shrink-0 rounded-xl p-2 ring-1 ${tones[tone] || tones.blue}`}><Icon size={17} strokeWidth={1.9} /></span>
+        </div>
+        <div className="mt-2 min-w-0 truncate text-[clamp(1.2rem,2vw,1.65rem)] font-bold leading-tight tracking-tight text-slate-950 dark:text-white tabular-nums">{value}</div>
+        <p className="mt-1.5 min-h-4 text-[10px] leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[11px]">{detail}</p>
+      </article>
+    );
+  };
 
   const Section = ({ title, subtitle, icon: Icon, children }: {
     title: string; subtitle: string; icon: React.ElementType; children: React.ReactNode;
   }) => (
-    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-      <div className="mb-4 flex items-start gap-3">
-        <span className="rounded-xl bg-slate-100 p-2 text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Icon size={18} /></span>
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+      <div className="mb-4 flex items-start gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+        <span className="shrink-0 rounded-xl bg-slate-100 p-2.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Icon size={17} strokeWidth={1.9} /></span>
         <div className="min-w-0">
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white">{title}</h2>
-          <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{subtitle}</p>
+          <h2 className="text-[13px] font-bold tracking-tight text-slate-900 dark:text-white sm:text-sm">{title}</h2>
+          <p className="mt-0.5 text-[10px] leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[11px]">{subtitle}</p>
         </div>
       </div>
       {children}
@@ -457,22 +465,25 @@ export const BookingAnalyticsView: React.FC = () => {
   );
 
   return (
-    <div className="min-w-0 w-full flex-1 space-y-4 overflow-y-auto overscroll-contain bg-slate-50 p-2.5 dark:bg-slate-950 sm:space-y-5 sm:p-5 lg:p-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="mb-1 flex items-center gap-2">
-            <Activity size={18} className="text-blue-600" />
-            <h1 className="text-lg font-bold text-slate-900 dark:text-white sm:text-xl">{t('Analytique de l’établissement', 'Property performance analytics', 'تحليلات أداء المؤسسة')}</h1>
+    <div className="min-w-0 w-full flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[#f4f7fb] p-2.5 dark:bg-[#080f1c] sm:space-y-5 sm:p-5 lg:p-6">
+      <header className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="min-w-0">
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="rounded-xl bg-sky-50 p-2 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"><Activity size={18} /></span>
+            <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">Appointment · {t('Pilotage métier', 'Business intelligence', 'ذكاء الأعمال')}</span>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">{t('Pilotage opérationnel : bâtiments, chambres, consommation, stock et facturation.', 'Operational overview: buildings, rooms, consumption, inventory and billing.', 'نظرة تشغيلية: المباني والغرف والاستهلاك والمخزون والفوترة.')}</p>
+          <h1 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white sm:text-xl">{t('Analytique des réservations', 'Booking & property analytics', 'تحليلات الحجوزات والمؤسسة')}</h1>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{t('Occupation, activité commerciale et performance opérationnelle de l’établissement.', 'Occupancy, booking activity and property operations performance.', 'الإشغال ونشاط الحجوزات والأداء التشغيلي للمؤسسة.')}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="mr-1 text-[11px] font-semibold text-slate-500">{t('Période', 'Period', 'الفترة')}</span>
-          {(['30d', '90d', '365d'] as RangeKey[]).map(key => (
-            <button key={key} type="button" onClick={() => setRange(key)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${range === key ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'}`}>
-              {key === '30d' ? t('30 jours', '30 days', '30 يوماً') : key === '90d' ? t('90 jours', '90 days', '90 يوماً') : t('12 mois', '12 months', '12 شهراً')}
-            </button>
-          ))}
+        <div className="flex shrink-0 flex-col gap-1.5 sm:items-end">
+          <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">{t('Période analysée', 'Analysis period', 'الفترة المحددة')}</span>
+          <div className="inline-flex w-full rounded-xl bg-slate-100 p-1 dark:bg-slate-800 sm:w-auto">
+            {(['30d', '90d', '365d'] as RangeKey[]).map(key => (
+              <button key={key} type="button" onClick={() => setRange(key)} aria-pressed={range === key} className={`min-h-9 flex-1 rounded-lg px-3 text-[11px] font-bold transition-all sm:flex-none ${range === key ? 'bg-white text-sky-700 shadow-sm dark:bg-slate-700 dark:text-sky-300' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'}`}>
+                {key === '30d' ? t('30 jours', '30 days', '30 يوماً') : key === '90d' ? t('90 jours', '90 days', '90 يوماً') : t('12 mois', '12 months', '12 شهراً')}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
@@ -504,7 +515,7 @@ export const BookingAnalyticsView: React.FC = () => {
         }}
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2 sm:gap-4">
         <Section icon={CalendarRange} title={t('Réservations par état', 'Bookings by status', 'الحجوزات حسب الحالة')} subtitle={t('Répartition des dossiers qui chevauchent la période, annulations comprises.', 'Distribution of bookings overlapping the period, including cancellations.', 'توزيع الحجوزات المتداخلة مع الفترة، بما فيها الملغاة.')}>
           {bookingStatusStats.length ? <div className="space-y-3">
             {bookingStatusStats.map(item => {
