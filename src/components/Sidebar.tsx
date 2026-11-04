@@ -238,65 +238,45 @@ export const Sidebar: React.FC = () => {
       {/* Mobile Domain & Role Switcher inside Drawer */}
       {isMobileView && (
         <div className="px-3 py-2.5 border-b border-slate-800/80 bg-slate-950/60 space-y-2 shrink-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold uppercase text-slate-400">
-              {language === 'fr' ? 'Secteur :' : language === 'ar' ? 'القطاع:' : 'Sector:'}
-            </span>
-            <div className="flex-1 grid grid-cols-2 gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
-              <button
-                type="button"
-                onClick={() => setCurrentDomain('hotel')}
-                className={`py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  currentDomain === 'hotel'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Hotel size={13} />
-                <span>{language === 'fr' ? 'Hôtel' : language === 'ar' ? 'فندق' : 'Hotel'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrentDomain('resort')}
-                className={`py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  currentDomain === 'resort'
-                    ? 'bg-amber-500 text-slate-950 shadow-xs'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Palmtree size={13} />
-                <span>Resort</span>
-              </button>
+          <section className="rounded-xl border border-slate-800 bg-slate-900/80 p-2.5 space-y-2">
+            <div className="flex items-center justify-between gap-2 px-0.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                {language === 'fr' ? 'Profil de travail' : language === 'ar' ? 'ملف العمل' : 'Work profile'}
+              </span>
+              <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-300">
+                {language === 'fr' ? 'Actif' : language === 'ar' ? 'نشط' : 'Active'} · {currentRole === 'admin' ? 'Admin' : currentRole === 'manager' ? (language === 'fr' ? 'Gérant' : 'Manager') : currentRole === 'receptionist' ? (language === 'fr' ? 'Réception' : 'Front desk') : currentRole === 'staff' ? (language === 'fr' ? 'Étage' : 'Staff') : (language === 'fr' ? 'Client' : 'Guest')}
+              </span>
             </div>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold uppercase text-slate-400">
-              {language === 'fr' ? 'Rôle :' : language === 'ar' ? 'الدور:' : 'Role:'}
-            </span>
-            <div className="flex-1 flex gap-1 overflow-x-auto p-0.5 bg-slate-900 rounded-lg border border-slate-800">
+            <div className="grid grid-cols-2 gap-1.5">
               {[
-                { id: 'admin', label: 'Admin' },
-                { id: 'manager', label: language === 'fr' ? 'Gérant' : 'Manager' },
-                { id: 'receptionist', label: language === 'fr' ? 'Réception' : 'Front' },
-                { id: 'staff', label: language === 'fr' ? 'Étage' : 'Staff' },
-                { id: 'client', label: language === 'fr' ? 'Client' : 'Guest' },
-              ].map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => setCurrentRole(r.id as any)}
-                  className={`px-2 py-1 text-[11px] font-semibold rounded whitespace-nowrap cursor-pointer transition-colors ${
-                    currentRole === r.id
-                      ? 'bg-blue-600 text-white font-bold'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {r.label}
-                </button>
-              ))}
+                { id: 'admin', label: 'Admin', icon: ShieldCheck },
+                { id: 'manager', label: language === 'fr' ? 'Gérant' : language === 'ar' ? 'مدير' : 'Manager', icon: LayoutDashboard },
+                { id: 'receptionist', label: language === 'fr' ? 'Réception' : language === 'ar' ? 'استقبال' : 'Front desk', icon: CalendarDays },
+                { id: 'staff', label: language === 'fr' ? 'Étage' : language === 'ar' ? 'طاقم العمل' : 'Housekeeping', icon: Sparkles },
+                { id: 'client', label: language === 'fr' ? 'Client' : language === 'ar' ? 'عميل' : 'Guest', icon: User },
+              ].map((role) => {
+                const RoleIcon = role.icon;
+                const isSelected = currentRole === role.id;
+                return (
+                  <button
+                    key={role.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => setCurrentRole(role.id as any)}
+                    className={`flex min-h-10 min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                      isSelected
+                        ? 'border-blue-400/70 bg-blue-600 text-white shadow-sm'
+                        : 'border-slate-800 bg-slate-950/70 text-slate-300 hover:border-slate-600 hover:bg-slate-800'
+                    }`}
+                  >
+                    <RoleIcon size={15} className={`shrink-0 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+                    <span className="truncate">{role.label}</span>
+                    {isSelected && <CheckCircle2 size={13} className="ml-auto shrink-0" />}
+                  </button>
+                );
+              })}
             </div>
-          </div>
+          </section>
         </div>
       )}
 
