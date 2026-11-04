@@ -4,13 +4,13 @@
 #endif
 
 [Setup]
-AppName=Planning Oran
+AppName=Appointment PMS
 AppVersion={#AppVersion}
-AppPublisher=Planning Oran Lab
-DefaultDirName={autopf}\PlanningOran
-DefaultGroupName=Planning Oran
+AppPublisher=Appointment PMS Lab
+DefaultDirName={autopf}\AppointmentPMS
+DefaultGroupName=Appointment PMS
 OutputDir=..\dist-windows
-OutputBaseFilename=Planning-Oran-Setup-Inno
+OutputBaseFilename=Appointment-PMS-Setup-Inno
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -19,15 +19,15 @@ ArchitecturesInstallIn64BitMode=x64compatible
 
 [Files]
 Source: "..\dist\*"; DestDir: "{app}\dist"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\dist-windows\Planning-Oran-Setup.exe"; DestDir: "{app}"; DestName: "Planning-Oran.exe"; Flags: ignoreversion
+Source: "..\dist-windows\Appointment-PMS-Setup.exe"; DestDir: "{app}"; DestName: "Appointment-PMS.exe"; Flags: ignoreversion
 Source: "..\dist-windows\launch.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Planning Oran"; Filename: "{app}\Planning-Oran.exe"
-Name: "{autodesktop}\Planning Oran"; Filename: "{app}\Planning-Oran.exe"
+Name: "{group}\Appointment PMS"; Filename: "{app}\Appointment-PMS.exe"
+Name: "{autodesktop}\Appointment PMS"; Filename: "{app}\Appointment-PMS.exe"
 
 [Run]
-Filename: "{app}\Planning-Oran.exe"; Description: "Launch Planning Oran"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Appointment-PMS.exe"; Description: "Launch Appointment PMS"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
