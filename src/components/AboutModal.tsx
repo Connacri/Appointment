@@ -314,7 +314,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                   <span>Architecture PMS & Mobile</span>
                 </div>
                 <p className="text-[11px] text-slate-400 leading-tight">
-                  Appointment PMS, OmniBook, AnatomyZ, CabaLink, AutoPost Studio. Full-stack React 19, TypeScript, Capacitor, Flutter, Supabase & IndexedDB.
+                  Appointment PMS, AnatomyZ, CabaLink, AutoPost Studio. Full-stack React 19, TypeScript, Capacitor, Flutter, Supabase & IndexedDB.
                 </p>
               </div>
             </div>
