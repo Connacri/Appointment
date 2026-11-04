@@ -128,6 +128,10 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
         setStructureMessage(`Aucune chambre créée. ${result.excluded.length} numéro(s) exclu(s), ${result.duplicates.length} doublon(s).`);
         return;
       }
+      const preview = result.rooms.slice(0, 8).map((room) => room.name).join(', ');
+      const more = result.rooms.length > 8 ? ', …' : '';
+      const summary = `Bâtiment : ${buildingName} (n° ${bNo})\\nÉtage : ${fNo}\\nChambres : ${result.rooms.length}\\nAperçu : ${preview}${more}\\nExclus : ${result.excluded.length}\\nDoublons ignorés : ${result.duplicates.length}\\n\\nConfirmer la création de ces chambres ?`;
+      if (!window.confirm(summary)) return;
       const nextGroup = {
         id: existing?.id ?? `manual-building-${bNo}`,
         name: existing?.name ?? { fr: buildingName.trim(), en: buildingName.trim(), ar: buildingName.trim() },
