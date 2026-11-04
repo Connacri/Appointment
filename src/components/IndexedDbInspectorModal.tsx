@@ -226,16 +226,17 @@ export const IndexedDbInspectorModal: React.FC<{
     setMdbBusy(true);
     setMdbMessage(null);
     try {
-      const snapshot = await lockManager.importMdb(file);
+      const snapshot = await lockManager.analyzeMdb(file);
       const sourceIsOld = snapshot.fileLastModified ? (Date.now() - new Date(snapshot.fileLastModified).getTime()) / 86400000 > 90 : false;
       setMdbTableInventory(snapshot.tableInventory ?? []);
       let importApplied = false;
-      if (snapshot.counts.rooms || snapshot.counts.guests) {
+      if (snapshot.buildings.length || snapshot.counts.rooms || snapshot.counts.guests || snapshot.counts.cards) {
         const { resourceGroups, bookings } = mdbSnapshotToPlanning(snapshot);
         const currentHotelRooms = currentResourceGroups.reduce((count, group) => count + (group.sector === 'hotel' ? group.resources.length : 0), 0);
         const replacementWarning = currentHotelRooms > 0 ? `\\n\\nLa structure hôtelière actuelle (${currentHotelRooms} chambres) sera remplacée. Les autres secteurs seront conservés.` : '';
         const importNow = window.confirm(mt.confirm(snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards) + replacementWarning);
         if (importNow) {
+          lockManager.applyMdbSnapshot(snapshot);
           setResourceGroups(current => [...current.filter(group => group.sector !== 'hotel'), ...resourceGroups]);
           setBookings(current => [...current.filter(item => !bookings.some(next => next.id === item.id)), ...bookings]);
           importApplied = true;
