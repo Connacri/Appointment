@@ -73,7 +73,7 @@ export const DeploymentLogs: React.FC<DeploymentLogsProps> = ({
     // Step 4: Build Signed APK & AAB
     { id: '13', timestamp: '06:04:14.800Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'cmd', message: '$ ./gradlew assembleRelease bundleRelease --no-daemon --parallel -PminifyWithR8=true' },
     { id: '14', timestamp: '06:04:22.400Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'info', message: ':app:preReleaseBuild UP-TO-DATE' },
-    { id: '15', timestamp: '06:04:31.900Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'info', message: ':app:compileReleaseKotlin [OmniBook Domain Modules, ObjectBox Entities]' },
+    { id: '15', timestamp: '06:04:31.900Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'info', message: ':app:compileReleaseKotlin [OmniBook Domain Modules, IndexedDB Entities]' },
     { id: '16', timestamp: '06:04:45.100Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'info', message: ':app:minifyReleaseWithR8: Shrinking resources, bytecode optimizations applied.' },
     { id: '17', timestamp: '06:04:54.300Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'info', message: ':app:signReleaseBundle & signReleaseApk with alias [omnibook-release-key]' },
     { id: '18', timestamp: '06:04:58.200Z', stepId: 4, stepName: 'Build Signed APK & AAB', level: 'success', message: '✔ Signed APK ready: build/outputs/apk/release/app-release.apk (15.2 MB)' },
