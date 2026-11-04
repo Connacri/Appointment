@@ -701,14 +701,14 @@ export const BookingModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) closeModal();
       }}
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="booking-dialog-title" className="pms-dialog-panel max-w-2xl w-full flex flex-col max-h-[94dvh] my-auto">
+      <div role="dialog" aria-modal="true" aria-labelledby="booking-dialog-title" className="pms-dialog-panel w-full max-w-2xl flex flex-col max-h-[96dvh] sm:max-h-[94dvh] h-[96dvh] sm:h-auto my-0 sm:my-auto rounded-t-3xl sm:rounded-2xl overflow-hidden">
         {/* Modal Dedicated Domain Header */}
-        <div className="border-b border-slate-200 dark:border-slate-800 px-5 py-4 flex items-center justify-between bg-slate-50 dark:bg-slate-850 shrink-0">
+        <div className="border-b border-slate-200 dark:border-slate-800 px-4 sm:px-5 pt-3 sm:pt-4 pb-3 sm:py-4 flex items-center justify-between bg-slate-50 dark:bg-slate-850 shrink-0 gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400">
               <DomainHeaderIcon size={20} />
@@ -746,7 +746,7 @@ export const BookingModal: React.FC = () => {
         </div>
 
         {/* Modal Body */}
-        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 p-4 sm:p-5 overflow-y-auto overscroll-contain space-y-4 text-xs pb-5">
           {conflictError && (
             <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
               <AlertCircle size={16} className="shrink-0" />
@@ -1652,14 +1652,14 @@ export const BookingModal: React.FC = () => {
           </div>
 
           {/* ACTION BUTTONS */}
-          <div className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-3 -mx-5 -mb-5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2 flex-wrap z-10">
+          <div className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 z-10">
             {activeDomain === 'hotel' && (
-              <div className="flex items-center gap-2 mr-auto">
+              <div className="flex items-center gap-2 w-full sm:w-auto sm:mr-auto">
                 <button
                   type="button"
                   onClick={() => void handleCreateRoomCard()}
                   disabled={isCreatingCard}
-                  className={`min-h-[44px] px-3 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-violet-500 ${
+                  className={`min-h-11 flex-1 sm:flex-none justify-center px-3 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-violet-500 ${
                     isCreatingCard
                       ? 'bg-slate-300 text-slate-600 cursor-wait'
                       : usbConnected
@@ -1712,7 +1712,7 @@ export const BookingModal: React.FC = () => {
                     updateBookingStatus(selectedBooking.id, 'checked_in');
                     closeModal();
                   }}
-                  className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-xs shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                  className="min-h-11 flex-1 sm:flex-none justify-center px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <CheckCircle2 size={14} />
                   <span>{language === 'fr' ? 'Check-in' : 'Check-in'}</span>
@@ -1724,7 +1724,7 @@ export const BookingModal: React.FC = () => {
                     generateTurnoverTasksForCheckout(selectedBooking.resourceName);
                     closeModal();
                   }}
-                  className="px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg text-xs shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                  className="min-h-11 flex-1 sm:flex-none justify-center px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
                   title="Effectue le départ et génère les tâches de remise en état chambre"
                 >
                   <Sparkles size={14} />
@@ -1735,13 +1735,13 @@ export const BookingModal: React.FC = () => {
             <button
               type="button"
               onClick={closeModal}
-              className="min-h-[44px] px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold transition-colors text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-slate-400"
+              className="min-h-11 flex-1 sm:flex-none px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold transition-colors text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-slate-400"
             >
               {language === 'fr' ? 'Annuler' : language === 'ar' ? 'إلغاء' : 'Cancel'}
             </button>
             <button
               type="submit"
-              className="min-h-[44px] px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="min-h-11 flex-[2] sm:flex-none justify-center px-4 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <CheckCircle2 size={16} />
               <span>
