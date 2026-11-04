@@ -300,18 +300,21 @@ export const TopBar: React.FC = () => {
         >
           {objectBoxSync === 'synced' && (
             <>
+              <Database size={13} className="text-emerald-300" />
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="hidden sm:inline">Synced</span>
             </>
           )}
           {objectBoxSync === 'syncing' && (
             <>
+              <Database size={13} className="text-blue-300" />
               <RefreshCw size={12} className="animate-spin text-blue-400" />
               <span className="hidden sm:inline">Syncing...</span>
             </>
           )}
           {objectBoxSync === 'offline' && (
             <>
+              <Database size={13} className="text-rose-300" />
               <AlertCircle size={12} className="text-rose-400" />
               <span className="hidden sm:inline">Offline</span>
             </>
@@ -343,7 +346,7 @@ export const TopBar: React.FC = () => {
               }`}
             />
           </span>
-          <Usb size={13} className="hidden xs:inline" />
+          <Usb size={15} />
           <span className="whitespace-nowrap hidden sm:inline">
             USB • {usbStatus === 'connected' ? 'Prêt' : 'Connecter'}
           </span>
