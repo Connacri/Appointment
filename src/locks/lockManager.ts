@@ -1129,8 +1129,8 @@ class LockManager {
    */
   public purgeAllData(): void {
     this.clearPersistedData();
-    localStorage.removeItem('appointment_prousb_previous_site');
-    localStorage.removeItem('appointment_prousb_recommissioning_required');
+    // Keep only the previous lock site marker across a local/account data purge.
+    // It is not guest data; it prevents a recreated hotel from reusing old lock credentials.
     this.logs = [];
   }
 
