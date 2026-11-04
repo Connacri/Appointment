@@ -467,6 +467,12 @@ class IndexedDbStore {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   }
 
+  private notifyOutboxChanged(): void {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('appointment:outbox-updated'));
+    }
+  }
+
   private createOutboxRecord(context: OutboxMutationContext, entity: OutboxEntity, entityId: string,
     operation: OutboxOperation, version: number, payload: Record<string, unknown> | null, now: string): OutboxRecord {
     if (!context.workspaceId.trim()) throw new Error('A workspace is required before queuing a cloud mutation.');
@@ -518,6 +524,7 @@ class IndexedDbStore {
     request.onerror = () => tx.abort();
     tombstoneRequest.onerror = () => tx.abort();
     await waitForTransactionCompletion(tx, `putWithOutbox ${entity}/${item.id}`);
+    this.notifyOutboxChanged();
   }
 
   /** Atomically delete the local row and retain a workspace-scoped tombstone + delete intent. */
@@ -556,6 +563,7 @@ class IndexedDbStore {
     request.onerror = () => tx.abort();
     tombstoneRequest.onerror = () => tx.abort();
     await waitForTransactionCompletion(tx, `deleteWithOutbox ${entity}/${entityId}`);
+    this.notifyOutboxChanged();
   }
 
   public async getPendingOutbox(workspaceId: string, limit = 100): Promise<OutboxRecord[]> {
@@ -598,6 +606,7 @@ class IndexedDbStore {
     };
     request.onerror = () => tx.abort();
     await waitForTransactionCompletion(tx, `markOutboxSynced ${id}`);
+    this.notifyOutboxChanged();
   }
 
   public async markOutboxFailed(id: string, error: string, nextAttemptAt: string): Promise<void> {
