@@ -292,13 +292,13 @@ jobs:
       - name: Sign Inno Setup Installer
         shell: pwsh
         run: |
-          $exe = "dist-windows\Planning-Oran-Setup-Inno.exe"
+          $exe = "dist-windows\Appointment-PMS-Setup-Inno.exe"
           if ($env:WINDOWS_CERT_BASE64) {
             [IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", [Convert]::FromBase64String($env:WINDOWS_CERT_BASE64))
             Set-AuthenticodeSignature -FilePath $exe -Certificate (Get-PfxCertificate "$env:TEMP\cert.pfx") -HashAlgorithm SHA256 | Out-Null
             Remove-Item "$env:TEMP\cert.pfx" -Force
           } else {
-            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Planning Oran Official, O=Planning Oran, C=DZ" -CertStoreLocation "Cert:\CurrentUser\My" -HashAlgorithm SHA256
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Appointment PMS Official, O=Appointment PMS, C=DZ" -CertStoreLocation "Cert:\CurrentUser\My" -HashAlgorithm SHA256
             Set-AuthenticodeSignature -FilePath $exe -Certificate $cert -HashAlgorithm SHA256 | Out-Null
           }
           Get-AuthenticodeSignature $exe | Format-List
@@ -310,10 +310,10 @@ jobs:
         with:
           name: windows-release
           path: |
-            dist-windows\Planning-Oran-Setup.exe
-            dist-windows\Planning-Oran-Setup-v*.exe
-            dist-windows\Planning-Oran-Windows-v*.zip
-            dist-windows\Planning-Oran-Setup-Inno.exe
+            dist-windows\Appointment-PMS-Setup.exe
+            dist-windows\Appointment-PMS-Setup-v*.exe
+            dist-windows\Appointment-PMS-Windows-v*.zip
+            dist-windows\Appointment-PMS-Setup-Inno.exe
           retention-days: 30
 
   # ============================================================
@@ -346,7 +346,7 @@ jobs:
           name: web-build
           path: release-assets/web
 
-      # AGENTS.md 18: released artifacts are ALWAYS versioned (Planning-Oran-vX.Y.Z.*)
+      # AGENTS.md 18: released artifacts are ALWAYS versioned (Appointment-PMS-vX.Y.Z.*)
       # and the tag must match package.json (single source of truth).
       - name: Prepare Final Release Package & Checksums
         run: |
@@ -367,13 +367,13 @@ jobs:
           MAP_FILE=$(find release-assets/android -type f -name "mapping.txt" 2>/dev/null | head -n 1)
 
           if [[ -n "$APK_FILE" ]]; then
-            cp "$APK_FILE" "release-final/Planning-Oran-v$VERSION.apk"
+            cp "$APK_FILE" "release-final/Appointment-PMS-v$VERSION.apk"
           else
             echo "::warning::app-release.apk not found in downloaded android artifacts"
           fi
 
           if [[ -n "$AAB_FILE" ]]; then
-            cp "$AAB_FILE" "release-final/Planning-Oran-v$VERSION.aab"
+            cp "$AAB_FILE" "release-final/Appointment-PMS-v$VERSION.aab"
           else
             echo "::warning::app-release.aab not found in downloaded android artifacts"
           fi
@@ -384,16 +384,16 @@ jobs:
             echo "# R8 ProGuard / DexGuard Mapping Symbols for v$VERSION" > "release-final/mapping-v$VERSION.txt"
           fi
 
-          WIN_SETUP=$(find release-assets/windows -type f \( -name "Planning-Oran-Setup.exe" -o -name "Planning-Oran-Setup-v*.exe" \) 2>/dev/null | head -n 1)
-          WIN_INNO=$(find release-assets/windows -type f \( -name "Planning-Oran-Setup-Inno.exe" -o -name "Planning-Oran-Setup-Inno-v*.exe" \) 2>/dev/null | head -n 1)
+          WIN_SETUP=$(find release-assets/windows -type f \( -name "Appointment-PMS-Setup.exe" -o -name "Appointment-PMS-Setup-v*.exe" \) 2>/dev/null | head -n 1)
+          WIN_INNO=$(find release-assets/windows -type f \( -name "Appointment-PMS-Setup-Inno.exe" -o -name "Appointment-PMS-Setup-Inno-v*.exe" \) 2>/dev/null | head -n 1)
 
           if [[ -n "$WIN_SETUP" ]]; then
-            cp "$WIN_SETUP" "release-final/Planning-Oran-Setup-v$VERSION.exe"
+            cp "$WIN_SETUP" "release-final/Appointment-PMS-Setup-v$VERSION.exe"
           fi
           if [[ -n "$WIN_INNO" ]]; then
-            cp "$WIN_INNO" "release-final/Planning-Oran-Setup-Inno-v$VERSION.exe"
+            cp "$WIN_INNO" "release-final/Appointment-PMS-Setup-Inno-v$VERSION.exe"
           fi
-          find release-assets/windows -type f -name "Planning-Oran-Windows-v*.zip" -exec cp {} release-final/ \; 2>/dev/null || true
+          find release-assets/windows -type f -name "Appointment-PMS-Windows-v*.zip" -exec cp {} release-final/ \; 2>/dev/null || true
           find release-assets/web -type f -name "web-build-v*.zip" -exec cp {} release-final/ \; 2>/dev/null || true
 
           cd release-final
@@ -418,9 +418,9 @@ jobs:
             echo "" >> release-notes.md
             echo "Automated continuous delivery release generated on push to \`${{ github.ref_name }}\`." >> release-notes.md
             echo "- Commit: \`${{ github.sha }}\`" >> release-notes.md
-            echo "- Signed Android APK: \`Planning-Oran-v$VERSION.apk\`" >> release-notes.md
-            echo "- Signed Android AAB: \`Planning-Oran-v$VERSION.aab\`" >> release-notes.md
-            echo "- Windows EXE Installer: \`Planning-Oran-Setup-v$VERSION.exe\`" >> release-notes.md
+            echo "- Signed Android APK: \`Appointment-PMS-v$VERSION.apk\`" >> release-notes.md
+            echo "- Signed Android AAB: \`Appointment-PMS-v$VERSION.aab\`" >> release-notes.md
+            echo "- Windows EXE Installer: \`Appointment-PMS-Setup-v$VERSION.exe\`" >> release-notes.md
             echo "- Production Web Application deployed to GitHub Pages." >> release-notes.md
           fi
           cat release-notes.md
@@ -429,7 +429,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
-          name: Planning Oran Release v${{ steps.release_notes.outputs.version || '2.4.0' }} (Build #${{ github.run_number }})
+          name: Appointment PMS Release v${{ steps.release_notes.outputs.version || '2.4.0' }} (Build #${{ github.run_number }})
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v2.4.0-build.{0}', github.run_number) }}
           draft: false
           prerelease: false

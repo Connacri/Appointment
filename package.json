@@ -1,5 +1,5 @@
 {
-  "name": "omnibook",
+  "name": "appointment-pms",
   "private": true,
   "version": "1.2.0",
   "type": "module",
@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "node --import tsx --test tests/bookingValidation.test.ts tests/readerInfo.test.ts tests/cardLockScope.test.ts tests/cardSpecialDecode.test.ts tests/roomReadiness.test.ts",
+    "test": "node --import tsx --test tests/bookingValidation.test.ts tests/readerInfo.test.ts tests/cardLockScope.test.ts tests/cardSpecialDecode.test.ts tests/roomReadiness.test.ts tests/mdbImport.test.ts",
     "assets:generate": "npx @capacitor/assets generate",
     "typecheck": "tsc --noEmit"
   },

@@ -77,7 +77,11 @@ L'interface est construite avec React 19 et TypeScript. Elle fonctionne comme ap
 
 ### État des données et synchronisation
 
-La version actuelle utilise principalement un stockage local dans le navigateur/appareil. **La synchronisation Supabase distante n'est pas encore implémentée dans cette branche** : aucun client Supabase, schéma distant ni moteur de synchronisation n'est livré actuellement. Le document [SUPABASE_SYNC_PLAN.md](./docs/SUPABASE_SYNC_PLAN.md) décrit les prérequis et l'architecture envisagée.
+Appointment PMS est **offline-first** : IndexedDB reste la source de vérité locale. Le client Supabase et le schéma distant du projet Appointment sont présents (PostgreSQL 17, 16 tables publiques avec RLS activé). Le contexte workspace et l'Outbox transactionnelle sont partiellement raccordés au CRUD des réservations. En revanche, le worker réseau de push/pull n'est pas encore livré : les événements Outbox peuvent donc rester en attente. La présence du client, du schéma ou d'un indicateur réseau ne signifie pas que les données sont synchronisées. Les autres domaines métier ne sont pas encore tous raccordés. Voir [SUPABASE_SYNC_PLAN.md](./docs/SUPABASE_SYNC_PLAN.md) pour l'état exact.
+
+### Import de la base proUSB CardLock
+
+L'import de `CardLock.mdb` est une lecture de la base historique proUSB. Les bâtiments proviennent de `BuildingInfo` et les chambres de `RoomInfo` ; les séjours `GuestInfo` ne sont associés qu'à une chambre existante avec une référence bâtiment/étage/numéro non ambiguë et des dates valides. Les cartes (`CardInfo`, `Dai`), les ouvertures (`RecordOpen`), les opérateurs et les journaux sont des domaines distincts. Les chambres de démonstration sont écartées lors d'un import réel ; aucune chambre, aucun étage ni aucun tarif par défaut ne doit être inventé. Consultez [l'analyse du schéma CardLock](./docs/CARDLOCK_DATABASE_ANALYSIS.md) et le tutoriel intégré au Centre d'aide.
 
 ## Outils IA de développement
 
@@ -141,7 +145,7 @@ La signature de production dépend des secrets et variables configurés dans Git
 - **Android / Windows** : consulter la [page des Releases](https://github.com/Connacri/Appointment/releases).
 - **CI/CD** : suivre les [workflows GitHub Actions](https://github.com/Connacri/Appointment/actions).
 
-Les fichiers téléchargeables et leurs versions sont ceux réellement publiés dans les Releases. Le README ne fixe volontairement pas de noms d'artefacts ou de numéros de version historiques.
+Les artefacts de release utilisent le préfixe `Appointment-PMS` et la version du tag, par exemple `Appointment-PMS-vX.Y.Z.apk`, `Appointment-PMS-vX.Y.Z.aab` et `Appointment-PMS-Setup-vX.Y.Z.exe`. Le package Android historique `com.planning.oran` reste inchangé pour préserver l'identité de l'application déjà publiée sur Google Play.
 
 ## Confidentialité et sécurité
 
@@ -154,6 +158,7 @@ Les fichiers téléchargeables et leurs versions sont ceux réellement publiés 
 
 - [Contrat et consignes de développement](./AGENTS.md)
 - [Plan de synchronisation Supabase](./docs/SUPABASE_SYNC_PLAN.md)
+- [Analyse des tables et relations CardLock.mdb](./docs/CARDLOCK_DATABASE_ANALYSIS.md)
 - [Spécification du système proUSB](./docs/PROUSB_SPECIFICATION.md)
 - [Guide des cartes](./README_CARDS.md)
 - [Cartes système](./README_SYSTEM_CARD.md)

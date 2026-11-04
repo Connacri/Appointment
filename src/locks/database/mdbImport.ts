@@ -105,8 +105,16 @@ export interface ImportedBuilding {
   name: string;
 }
 
+export interface MdbTableSummary {
+  name: string;
+  rowCount: number;
+  columns: string[];
+  readable: boolean;
+}
+
 export interface MdbSnapshot {
   fileName: string;
+  tables: MdbTableSummary[];
   /**
    * `File.lastModified` of the imported file, ISO-8601. `null` when unknown
    * (e.g. snapshot restored from storage). Used to warn when the user picked
@@ -273,66 +281,84 @@ export async function parseCardLockMdb(
     return undefined;
   };
 
+  const getNonEmptyField = (row: Row, candidateKeys: string[]): unknown => {
+    for (const key of candidateKeys) {
+      const value = getField(row, [key]);
+      if (value !== undefined && value !== null && String(value).trim() !== '') return value;
+    }
+    return undefined;
+  };
+
+  const tableCache = new Map<string, Row[]>();
+  const failedTables = new Set<string>();
   const read = (primaryName: string, aliases: string[] = []): Row[] => {
     const match = findTable([primaryName, ...aliases]);
     if (!match) {
       warnings.push(`Table « ${primaryName} » absente du fichier.`);
       return [];
     }
+    const cached = tableCache.get(match);
+    if (cached) return cached;
     try {
-      return db.getTable(match).getData();
+      const rows = db.getTable(match).getData();
+      tableCache.set(match, rows);
+      return rows;
     } catch (error) {
       warnings.push(`Table « ${primaryName} » (${match}) illisible : ${(error as Error).message}`);
+      failedTables.add(match);
+      tableCache.set(match, []);
       return [];
     }
   };
 
   const rawBuildings = read('BuildingInfo', ['Building', 'Buildings', 'BldInfo', 'tblBuilding']);
-  const buildings: ImportedBuilding[] = rawBuildings.map((r, idx) => {
-    const noVal = getField(r, ['BldNo', 'bldno', 'Bld_No', 'BuildingNo', 'BuildingID', 'ID', 'No']);
-    const nameVal = getField(r, ['BldName', 'bldname', 'Bld_Name', 'BuildingName', 'Name', 'Description']);
-    const buildingNumber = noVal !== undefined ? num(noVal, idx + 1) : idx + 1;
-    return {
-      no: buildingNumber,
-      name: str(nameVal) || `Bâtiment ${buildingNumber}`,
-    };
+  const buildings: ImportedBuilding[] = rawBuildings.flatMap((r) => {
+    const noVal = getNonEmptyField(r, ['BldNo', 'bldno', 'Bld_No', 'BuildingNo', 'BuildingID', 'ID', 'No']);
+    const nameVal = getNonEmptyField(r, ['BldName', 'bldname', 'Bld_Name', 'BuildingName', 'Name', 'Description']);
+    const buildingNumber = noVal !== undefined ? num(noVal, -1) : -1;
+    if (!Number.isInteger(buildingNumber) || buildingNumber < 0) {
+      warnings.push('Ligne BuildingInfo ignorée : BldNo absent ou invalide.');
+      return [];
+    }
+    return [{ no: buildingNumber, name: str(nameVal) || `Bâtiment ${buildingNumber}` }];
   });
 
   const rawRooms = read('RoomInfo', ['Room', 'Rooms', 'RomInfo', 'tblRoom']);
-  const rooms: ImportedRoom[] = rawRooms.map((r) => {
-    const rawBld = getField(r, ['BldNo', 'bldno', 'Bld_No', 'BuildingNo', 'Building', 'Bld', 'bld_no']);
-    const rawFlr = getField(r, ['FlrNo', 'flrno', 'Flr_No', 'FloorNo', 'Floor', 'Flr', 'flr_no']);
-    const rawRoomNo = getField(r, ['RoomNo', 'roomno', 'Room_No', 'RomID', 'Room', 'RomNo', 'ID']);
-    const rawType = getField(r, ['sType', 'stype', 'RoomType', 'Type', 'type']);
-    const rawStatus = getField(r, ['Status', 'status']);
-    const rawPrice = getField(r, ['Price', 'price', 'Rate', 'rate']);
-    const rawCardCount = getField(r, ['CardCount', 'cardcount', 'Card_Count']);
-    const rawMaxCards = getField(r, ['MaxCards', 'maxcards', 'Max_Cards']);
+  let skippedRoomsWithoutNumber = 0;
+  const rooms: ImportedRoom[] = rawRooms.flatMap((r) => {
+    const rawBld = getNonEmptyField(r, ['BldNo', 'bldno', 'Bld_No', 'BuildingNo', 'Building', 'Bld', 'bld_no']);
+    const rawFlr = getNonEmptyField(r, ['FlrNo', 'flrno', 'Flr_No', 'FloorNo', 'Floor', 'Flr', 'flr_no']);
+    const rawRoomNo = getNonEmptyField(r, ['RoomNo', 'roomno', 'Room_No']);
+    const rawRoomId = getNonEmptyField(r, ['RomID', 'Room', 'RomNo', 'ID']);
+    const rawType = getNonEmptyField(r, ['sType', 'stype', 'RoomType', 'Type', 'type']);
+    const rawStatus = getNonEmptyField(r, ['Status', 'status']);
+    const rawPrice = getNonEmptyField(r, ['Price', 'price', 'Rate', 'rate']);
+    const rawCardCount = getNonEmptyField(r, ['CardCount', 'cardcount', 'Card_Count']);
+    const rawMaxCards = getNonEmptyField(r, ['MaxCards', 'maxcards', 'Max_Cards']);
 
-    let roomNumberStr = str(rawRoomNo);
-    let parsedBld = rawBld !== undefined && rawBld !== null && str(rawBld) !== '' ? num(rawBld, 0) : 0;
-    let parsedFlr = rawFlr !== undefined && rawFlr !== null && str(rawFlr) !== '' ? num(rawFlr, 0) : 0;
+    let roomNumberStr = str(rawRoomNo) || str(rawRoomId);
+    const hasExplicitBuilding = rawBld !== undefined;
+    const hasExplicitFloor = rawFlr !== undefined;
+    let parsedBld = hasExplicitBuilding ? num(rawBld, -1) : -1;
+    let parsedFlr = hasExplicitFloor ? num(rawFlr, -1) : -1;
 
-    // Check for building and floor prefixes in room format: e.g. "1-2-205" or "2-101"
+    // Composite room references are fallback values only when source columns are absent.
     const dashMatch = roomNumberStr.match(/^(\d+)-(\d+)(?:-(\d+))?$/);
     if (dashMatch) {
       if (dashMatch[3]) {
-        if (parsedBld <= 0) parsedBld = num(dashMatch[1], 1);
-        if (parsedFlr <= 0) parsedFlr = num(dashMatch[2], 1);
+        if (!hasExplicitBuilding) parsedBld = num(dashMatch[1], -1);
+        if (!hasExplicitFloor) parsedFlr = num(dashMatch[2], -1);
         roomNumberStr = dashMatch[3];
       } else {
-        if (parsedBld <= 0) parsedBld = num(dashMatch[1], 1);
+        if (!hasExplicitBuilding) parsedBld = num(dashMatch[1], -1);
         roomNumberStr = dashMatch[2];
       }
     }
-
-    // Floor comes only from the explicit FlrNo column (or a dashed room
-    // number like "1-2-205") — never inferred here, so rooms without a
-    // floor in the DB stay floor-less instead of inventing floor 1.
-    // Display-level inference for 3+ digit room numbers lives in
-    // resourceItemFromRoom.
-
-    return {
+    if (!roomNumberStr) {
+      skippedRoomsWithoutNumber += 1;
+      return [];
+    }
+    return [{
       building: parsedBld,
       floor: parsedFlr,
       roomNo: roomNumberStr,
@@ -341,8 +367,9 @@ export async function parseCardLockMdb(
       price: str(rawPrice),
       cardCount: num(rawCardCount, 0),
       maxCards: num(rawMaxCards, 0),
-    };
+    }];
   });
+  if (skippedRoomsWithoutNumber > 0) warnings.push(`${skippedRoomsWithoutNumber} ligne(s) RoomInfo ignorée(s) : numéro absent.`);
 
   // Never drop a building that exists in BuildingInfo or is referenced in RoomInfo.
   const buildingByNo = new Map<number, ImportedBuilding>();
@@ -350,7 +377,7 @@ export async function parseCardLockMdb(
     buildingByNo.set(building.no, building);
   }
   for (const room of rooms) {
-    if (room.building > 0 && !buildingByNo.has(room.building)) {
+    if (room.building >= 0 && !buildingByNo.has(room.building)) {
       buildingByNo.set(room.building, { no: room.building, name: `Bâtiment ${room.building}` });
     }
   }
@@ -358,18 +385,18 @@ export async function parseCardLockMdb(
 
   const rawGuests = read('GuestInfo', ['Guest', 'Guests', 'tblGuest']);
   const guests: ImportedGuest[] = rawGuests.map((r) => ({
-    roomNo: str(getField(r, ['BldRoomNo', 'bldroomno', 'RoomNo', 'Room', 'BldRoom'])),
-    name: str(getField(r, ['Name', 'name', 'GuestName', 'Customer'])),
-    comeTime: toIsoString(getField(r, ['ComeTime', 'cometime', 'CheckIn', 'StartDate', 'Come_Time'])),
-    goTime: toIsoString(getField(r, ['GoTime', 'gotime', 'CheckOut', 'EndDate', 'Go_Time'])),
-    cardId: str(getField(r, ['CardID', 'cardid', 'CardNo', 'Card_ID'])),
-    flag: str(getField(r, ['Flag', 'flag', 'Status', 'State'])),
+    roomNo: str(getNonEmptyField(r, ['BldRoomNo', 'bldroomno', 'RoomNo', 'Room', 'BldRoom'])),
+    name: str(getNonEmptyField(r, ['Name', 'name', 'GuestName', 'Customer'])),
+    comeTime: toIsoString(getNonEmptyField(r, ['ComeTime', 'cometime', 'CheckIn', 'StartDate', 'Come_Time'])),
+    goTime: toIsoString(getNonEmptyField(r, ['GoTime', 'gotime', 'CheckOut', 'EndDate', 'Go_Time'])),
+    cardId: str(getNonEmptyField(r, ['CardID', 'cardid', 'CardNo', 'Card_ID'])),
+    flag: str(getNonEmptyField(r, ['Flag', 'flag', 'Status', 'State'])),
   }));
 
   const cards: ImportedCard[] = [];
   let skippedCards = 0;
   for (const row of read('CardInfo', ['Card', 'Cards', 'tblCard'])) {
-    const rawData = getField(row, ['CardData', 'carddata', 'Card_Data', 'Data', 'Hex']);
+    const rawData = getNonEmptyField(row, ['CardData', 'carddata', 'Card_Data', 'Data', 'Hex']);
     const hex = normalizeHex(rawData);
     if (!hex) {
       skippedCards += 1;
@@ -387,13 +414,22 @@ export async function parseCardLockMdb(
   if (skippedCards > 0) warnings.push(`${skippedCards} carte(s) ignorée(s) (CardData vide ou invalide).`);
 
   const openings = read('RecordOpen', ['Record', 'Records', 'OpenRecord', 'tblRecordOpen']).filter((r) => {
-    const rawRec = getField(r, ['RecData', 'recdata', 'Data', 'RecordData']);
+    const rawRec = getNonEmptyField(r, ['RecData', 'recdata', 'Data', 'RecordData']);
     const hex = str(rawRec).toUpperCase();
     return hex.length > 0 && !/^F+$/.test(hex) && !/^0+$/.test(hex);
   }).length;
 
+  const systemObjectNames = new Set(['userdefined', 'summaryinfo', 'accesslayout', 'sysrel', 'scripts', 'reports', 'modules', 'forms']);
+  const tables: MdbTableSummary[] = tableNames
+    .filter((name) => !name.toLowerCase().startsWith('msys') && !systemObjectNames.has(name.toLowerCase()))
+    .map((name) => {
+      const rows = read(name);
+      return { name, rowCount: rows.length, columns: Object.keys(rows[0] ?? {}), readable: !failedTables.has(name) };
+    });
+
   return {
     fileName,
+    tables,
     fileLastModified: null,
     importedAt: new Date().toISOString(),
     buildings: completeBuildings,
@@ -454,6 +490,9 @@ export function parseAccessDateTime(value: unknown): string | null {
 export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
   resourceGroups: ResourceGroup[];
   bookings: TimelineBooking[];
+  buildingStats: { no: number; name: string; rooms: number }[];
+  skippedGuests: number;
+  warnings: string[];
 } {
   const { rooms, guests } = snapshot;
 
@@ -463,7 +502,7 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     if (Number.isFinite(building.no)) buildingByNo.set(building.no, building);
   }
   for (const room of rooms) {
-    if (Number.isFinite(room.building) && room.building > 0 && !buildingByNo.has(room.building)) {
+    if (Number.isFinite(room.building) && room.building >= 0 && !buildingByNo.has(room.building)) {
       buildingByNo.set(room.building, { no: room.building, name: `Bâtiment ${room.building}` });
     }
   }
@@ -473,7 +512,7 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
   const roomsByBuilding = new Map<number, ImportedRoom[]>();
   const unassignedRooms: ImportedRoom[] = [];
   for (const room of rooms) {
-    if (Number.isFinite(room.building) && room.building > 0) {
+    if (Number.isFinite(room.building) && room.building >= 0) {
       const buildingRooms = roomsByBuilding.get(room.building) ?? [];
       buildingRooms.push(room);
       roomsByBuilding.set(room.building, buildingRooms);
@@ -481,6 +520,12 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
       unassignedRooms.push(room);
     }
   }
+
+  const buildingStats = buildings.map((building) => ({
+    no: building.no,
+    name: building.name,
+    rooms: roomsByBuilding.get(building.no)?.length ?? 0,
+  }));
 
   const resourceGroups: ResourceGroup[] = buildings.map((building) => {
     const name = building.name.trim() || `Bâtiment ${building.no}`;
@@ -511,10 +556,6 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     });
   }
 
-  // Resolve rooms by a composite key first. Room numbers can repeat between buildings.
-  const roomByBuildingAndNo = new Map(
-    rooms.map((room) => [`${room.building}:${normalizeRoomNo(room.roomNo)}`, room])
-  );
   const roomsByNo = new Map<string, ImportedRoom[]>();
   for (const room of rooms) {
     const key = normalizeRoomNo(room.roomNo);
@@ -522,16 +563,15 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     matches.push(room);
     roomsByNo.set(key, matches);
   }
-
+  const warnings = [...snapshot.warnings];
+  let missingRoomReferences = 0;
+  let invalidStayDates = 0;
+  let skippedGuests = 0;
   const stayByKey = new Map<string, TimelineBooking>();
   const bookings: TimelineBooking[] = [];
 
   for (const guest of guests) {
     const rawRoomRef = str(guest.roomNo);
-    // CardLock legacy references may be either "building-room" or
-    // "building-floor-room" (e.g. 1-1-12064). Parse all dimensions before
-    // attempting a room lookup; treating "1-1-12064" as building-room
-    // leaves "1-12064" as the room number and silently breaks the link.
     const parts = rawRoomRef.split('-').map((part) => part.trim());
     const hasBuilding = parts.length >= 2 && /^\d+$/.test(parts[0]);
     const hasFloor = parts.length >= 3 && /^\d+$/.test(parts[1]);
@@ -539,28 +579,27 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     const guestFloor = hasFloor ? Number(parts[1]) : null;
     const rawRoomNo = hasFloor ? parts.slice(2).join('-') : hasBuilding ? parts.slice(1).join('-') : rawRoomRef;
     const roomNo = normalizeRoomNo(rawRoomNo);
+    const candidates = (roomsByNo.get(roomNo) ?? []).filter((candidate) =>
+      guestBuilding === null || candidate.building === guestBuilding
+    );
+    const exactMatches = guestFloor === null ? candidates : candidates.filter((candidate) => candidate.floor === guestFloor);
+    const room = exactMatches.length === 1 ? exactMatches[0] : undefined;
 
-    const buildingMatches = guestBuilding !== null
-      ? (roomsByNo.get(roomNo) ?? []).filter((candidate) => candidate.building === guestBuilding)
-      : (roomsByNo.get(roomNo) ?? []);
-    const room = guestFloor !== null
-      ? (buildingMatches.find((candidate) => candidate.floor === guestFloor) ??
-        (buildingMatches.length === 1 ? buildingMatches[0] : undefined))
-      : guestBuilding !== null
-        ? (buildingMatches.length === 1 ? buildingMatches[0] : roomByBuildingAndNo.get(`${guestBuilding}:${roomNo}`))
-        : (buildingMatches.length === 1 ? buildingMatches[0] : undefined);
-    const resourceId = room
-      ? `mdb-rm-${room.building}-${normalizeRoomNo(room.roomNo)}`
-      : guestBuilding !== null
-        ? `mdb-rm-${guestBuilding}-${roomNo}`
-        : `mdb-room-${roomNo}`;
-    const resourceName = room ? room.roomNo : roomNo;
-
+    if (!room) {
+      missingRoomReferences += 1;
+      skippedGuests += 1;
+      continue;
+    }
     const startIso = parseAccessDateTime(guest.comeTime);
     const endIso = parseAccessDateTime(guest.goTime);
-    const startDate = startIso ? startIso.slice(0, 10) : new Date().toISOString().slice(0, 10);
-    const endDate = endIso ? endIso.slice(0, 10) : startDate;
-    const price = room ? parsePrice(room.price) : 0;
+    if (!startIso || !endIso || endIso.slice(0, 10) <= startIso.slice(0, 10)) {
+      invalidStayDates += 1;
+      skippedGuests += 1;
+      continue;
+    }
+    const startDate = startIso.slice(0, 10);
+    const endDate = endIso.slice(0, 10);
+    const price = parsePrice(room.price);
     const flag = guest.flag || '';
     const status: TimelineBooking['status'] = /check.?out/i.test(flag)
       ? 'checked_out'
@@ -569,20 +608,18 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
         : /walk.?in|check.?in|arriv/i.test(flag)
           ? 'checked_in'
           : 'confirmed';
-
-    const key = `${guestBuilding ?? room?.building ?? ''}:${guestFloor ?? room?.floor ?? ''}:${roomNo}|${startIso ?? startDate}|${guest.name}`;
+    const key = `${room.building}:${room.floor}:${roomNo}|${startIso}|${guest.name}`;
     const existing = stayByKey.get(key);
     if (existing) {
-      if (endIso && endDate > existing.endDate) existing.endDate = endDate;
+      if (endDate > existing.endDate) existing.endDate = endDate;
       const copies = Number(existing.customMetadata?.copies ?? 1) + 1;
       existing.customMetadata = { ...existing.customMetadata, copies };
       continue;
     }
-
     const booking: TimelineBooking = {
-      id: `mdb-bkg-${guestBuilding ?? room?.building ?? 'unknown'}-${roomNo}-${startDate}-${bookings.length + 1}`,
-      resourceId,
-      resourceName,
+      id: `mdb-bkg-${room.building}-${room.floor}-${roomNo}-${startDate}-${bookings.length + 1}`,
+      resourceId: resourceIdFromRoom(room),
+      resourceName: room.roomNo,
       sector: 'hotel',
       guestName: guest.name || 'Client',
       guestEmail: '',
@@ -599,34 +636,36 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
         source: 'cardlock_mdb',
         cardId: guest.cardId,
         flag,
-        roomType: room?.type,
-        building: room?.building ?? guestBuilding,
-        floor: room?.floor ?? guestFloor,
-        originalPrice: room?.price,
-        cardCount: room?.cardCount,
-        maxCards: room?.maxCards,
+        roomType: room.type,
+        building: room.building >= 0 ? room.building : undefined,
+        floor: room.floor >= 0 ? room.floor : undefined,
+        originalPrice: room.price,
+        cardCount: room.cardCount,
+        maxCards: room.maxCards,
       },
     };
     stayByKey.set(key, booking);
     bookings.push(booking);
   }
+  if (missingRoomReferences > 0) warnings.push(`${missingRoomReferences} séjour(s) ignoré(s) : aucune chambre unique correspondante dans RoomInfo (bâtiment/étage/numéro).`);
+  if (invalidStayDates > 0) warnings.push(`${invalidStayDates} séjour(s) ignoré(s) : dates d'arrivée ou de départ absentes/invalides.`);
+  return { resourceGroups, bookings, buildingStats, skippedGuests, warnings };
+}
 
-  return { resourceGroups, bookings };
+function resourceIdFromRoom(r: ImportedRoom): string {
+  const building = r.building >= 0 ? String(r.building) : 'unknown';
+  const floor = r.floor >= 0 ? `-f${r.floor}` : '';
+  return `mdb-rm-${building}${floor}-${normalizeRoomNo(r.roomNo)}`;
 }
 
 function resourceItemFromRoom(r: ImportedRoom): ResourceItem {
-  // Infer a floor only when the room number provides an unambiguous leading digit.
-  const inferredFloor = r.roomNo.replace(/\D/g, '').length >= 3
-    ? r.roomNo.replace(/\D/g, '')[0]
-    : undefined;
-  const floor = r.floor > 0 ? String(r.floor) : inferredFloor;
-
+  const floor = r.floor >= 0 ? String(r.floor) : undefined;
   return {
-    id: `mdb-rm-${r.building || 'unknown'}-${normalizeRoomNo(r.roomNo)}`,
+    id: resourceIdFromRoom(r),
     name: r.roomNo,
     type: r.type || 'Chambre',
     sector: 'hotel',
-    pricePerDay: parsePrice(r.price) || 123,
+    pricePerDay: parsePrice(r.price),
     housekeepingStatus: (r.status && /clean/i.test(r.status)
       ? 'clean'
       : /dirty/i.test(r.status)
@@ -635,7 +674,7 @@ function resourceItemFromRoom(r: ImportedRoom): ResourceItem {
           ? 'out_of_order'
           : 'clean') as ResourceItem['housekeepingStatus'],
     capacity: 1,
-    ...(r.building > 0 ? { building: String(r.building) } : {}),
+    ...(r.building >= 0 ? { building: String(r.building) } : {}),
     ...(floor ? { floor } : {}),
   };
 }

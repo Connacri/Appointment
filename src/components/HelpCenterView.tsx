@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   BookOpen, Search, CalendarDays, BedDouble, Receipt, Sparkles, ClipboardList,
-  Boxes, Coins, Globe, KeyRound, Flower2, BarChart3, Users, Building2,
+  Boxes, Coins, Globe, KeyRound, Flower2, BarChart3, Users, Building2, Database,
   QrCode, ChevronRight, ChevronLeft, Clock3, CheckCircle2, Circle,
   AlertTriangle, Lightbulb, PlayCircle, GraduationCap, Wrench, FileText,
 } from 'lucide-react';
@@ -233,6 +233,59 @@ const tutorials: Tutorial[] = [
     result: { fr: 'Chaque visiteur dispose d’un droit limité, vérifiable et révocable.', en: 'Each visitor has a limited, verifiable and revocable permission.', ar: 'يحصل كل زائر على صلاحية محدودة وقابلة للتحقق والإلغاء.' },
     warnings: { fr: ['Ce processus est futur. Le QR Pass actuel ne fournit pas encore un contrôle d’accès physique complet.', 'Un scanner hors ligne ne peut pas connaître immédiatement une révocation distante.'], en: ['This is future scope. The current QR pass is not a complete physical access-control system.', 'An offline scanner cannot immediately know about a remote revocation.'], ar: ['هذا سير عمل مستقبلي؛ تصريح QR الحالي ليس نظام تحكم مادي كاملاً.', 'لا يستطيع الماسح غير المتصل معرفة الإلغاء البعيد فوراً.'] },
     tips: { fr: ['Ne mettez aucune donnée personnelle directement dans le QR.', 'Prévoyez une procédure de perte et de remplacement du badge.'], en: ['Do not put personal data directly in the QR.', 'Define a lost-badge replacement procedure.'], ar: ['لا تضع بيانات شخصية مباشرة داخل QR.', 'حدد إجراءً لاستبدال الشارة المفقودة.'] }
+  },
+  {
+    id: 'cardlock-import', category: 'administration', icon: Database, duration: '7 min', availability: 'available',
+    title: { fr: 'Importer et contrôler CardLock.mdb', en: 'Import and verify CardLock.mdb', ar: 'استيراد وفحص قاعدة CardLock.mdb' },
+    summary: { fr: 'Importer bâtiments, chambres, séjours et cartes sans inventer de chambres.', en: 'Import buildings, rooms, stays and cards without inventing rooms.', ar: 'استيراد المباني والغرف والإقامات والبطاقات دون إنشاء غرف وهمية.' },
+    prerequisites: {
+      fr: ['Avoir accès au CardLock.mdb réellement utilisé par proUSB.', 'Si proUSB est installé sous Program Files (x86), vérifier aussi la copie active de %LOCALAPPDATA%\\VirtualStore.'],
+      en: ['Have access to the CardLock.mdb actually used by proUSB.', 'If proUSB is installed under Program Files (x86), also check the active %LOCALAPPDATA%\\VirtualStore copy.'],
+      ar: ['تأكد من توفر ملف CardLock.mdb المستخدم فعلياً من proUSB.', 'إذا كان proUSB مثبتاً داخل Program Files (x86)، تحقق أيضاً من نسخة VirtualStore النشطة.']
+    },
+    steps: {
+      fr: [
+        'Ouvrez la configuration de l’établissement, puis Structure / Import proUSB.',
+        'Sélectionnez le fichier réellement utilisé par proUSB ; une ancienne copie de Program Files peut être obsolète.',
+        'Contrôlez le rapport des tables : nom et nombre de lignes de chaque table métier.',
+        'BuildingInfo fournit BldNo et BldName. RoomInfo fournit BldNo, FlrNo, RoomNo/RomID, type, statut, tarif et compteurs de cartes.',
+        'Vérifiez le nombre de chambres pour chaque bâtiment. Le bâtiment, l’étage et le numéro sont conservés séparément.',
+        'GuestInfo devient un séjour seulement si la chambre exacte existe dans RoomInfo et si les dates sont valides.',
+        'CardInfo et Dai décrivent les cartes ; RecordOpen journalise les ouvertures ; OperatorInfo et les journaux ne sont pas des chambres.',
+        'Après import, contrôlez les bâtiments, les chambres et les avertissements avant toute nouvelle réservation.'
+      ],
+      en: [
+        'Open property setup, then Structure / proUSB Import.',
+        'Select the file actually used by proUSB; an old Program Files copy may be stale.',
+        'Review the table report: name and row count for each business table.',
+        'BuildingInfo supplies BldNo and BldName. RoomInfo supplies BldNo, FlrNo, RoomNo/RomID, type, status, rate and card counters.',
+        'Verify the room count for every building. Building, floor and room number remain separate.',
+        'GuestInfo becomes a stay only when the exact room exists in RoomInfo and dates are valid.',
+        'CardInfo and Dai describe cards; RecordOpen logs openings; OperatorInfo and logs are not rooms.',
+        'After import, verify buildings, rooms and warnings before creating bookings.'
+      ],
+      ar: [
+        'افتح إعدادات المؤسسة ثم Structure / Import proUSB.',
+        'اختر الملف المستخدم فعلياً من proUSB؛ فقد تكون نسخة Program Files قديمة.',
+        'راجع تقرير الجداول: اسم كل جدول وعدد سجلاته.',
+        'يوفر BuildingInfo حقلي BldNo وBldName. ويوفر RoomInfo حقول المبنى والطابق ورقم الغرفة والنوع والحالة والسعر وعدّادات البطاقات.',
+        'تحقق من عدد الغرف لكل مبنى. يتم حفظ المبنى والطابق ورقم الغرفة كلٌ على حدة.',
+        'يصبح GuestInfo إقامة فقط عندما توجد الغرفة المطابقة في RoomInfo وتكون التواريخ صحيحة.',
+        'تصف CardInfo وDai البطاقات؛ ويسجل RecordOpen عمليات الفتح؛ أما OperatorInfo والسجلات فليست غرفاً.',
+        'بعد الاستيراد، راجع المباني والغرف والتحذيرات قبل إنشاء الحجوزات.'
+      ]
+    },
+    result: { fr: 'L’inventaire reprend les lignes RoomInfo valides ; les séjours orphelins sont signalés et les chambres de démonstration sont retirées.', en: 'Inventory reflects valid RoomInfo rows; orphan stays are reported and demo rooms are removed.', ar: 'يعكس المخزون سجلات RoomInfo الصحيحة؛ ويتم الإبلاغ عن الإقامات غير المرتبطة وإزالة غرف العرض التجريبي.' },
+    warnings: {
+      fr: ['Ne déduisez jamais un étage depuis le numéro de chambre.', 'Un séjour sans chambre correspondante ou sans dates valides est ignoré, jamais transformé en chambre fictive.', 'Ne modifiez pas la base proUSB originale depuis Appointment PMS.'],
+      en: ['Never infer a floor from the room number.', 'A stay without a matching room or valid dates is skipped, never turned into a fake room.', 'Do not modify the original proUSB database from Appointment PMS.'],
+      ar: ['لا تستنتج الطابق من رقم الغرفة.', 'يتم تجاهل الإقامة التي لا تطابق غرفة حقيقية أو لا تحتوي على تواريخ صحيحة، ولا تتحول إلى غرفة وهمية.', 'لا تعدّل قاعدة proUSB الأصلية من Appointment PMS.']
+    },
+    tips: {
+      fr: ['Conservez une sauvegarde du MDB.', 'Si le bâtiment 2 manque, comparez BuildingInfo et la distribution des valeurs RoomInfo.BldNo dans le fichier choisi.'],
+      en: ['Keep a backup of the MDB.', 'If building 2 is missing, compare BuildingInfo with the RoomInfo.BldNo distribution in the selected file.'],
+      ar: ['احتفظ بنسخة احتياطية من MDB.', 'إذا كان المبنى الثاني مفقوداً، فقارن BuildingInfo مع توزيع RoomInfo.BldNo في الملف المحدد.']
+    }
   }
 ];
 

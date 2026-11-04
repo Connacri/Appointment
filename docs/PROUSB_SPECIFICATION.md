@@ -1204,7 +1204,7 @@ Dans la reconstruction React, **ce bridage est supprimé** — l'accès à l'enc
 |-----------|--------|-------------|
 | Mot de passe MDB | pradlock | Mot de passe de la base Access |
 | Provider | Jet 4.0 / ACE 12.0 | Fournisseur OLEDB |
-| Tables principales | 4 | CardInfo, RecordOpen, Dai, RegInfo |
+| Tables métier | 10 | BuildingInfo, RoomInfo, GuestInfo, CardInfo, RecordOpen, Dai, RegInfo, OperatorInfo, CaoZuoInfo, LogInfo |
 | Taille max carte | 16 octets | Données encodées par carte |
 | Taille max audit | 8 octets | Données brutes par entrée d'audit |
 
