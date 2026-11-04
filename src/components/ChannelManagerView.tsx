@@ -176,7 +176,7 @@ export const ChannelManagerView: React.FC = () => {
       markupPercent: parseFloat(newChannelMarkup) || 15,
       autoStopSellThreshold: parseInt(newChannelThreshold, 10) || 1,
       webhookStatus: 'active',
-      apiUrl: newChannelApiKey ? `https://api.gateway.omnibook.io/v1/${newChannelProvider}` : undefined,
+      apiUrl: newChannelApiKey ? `https://api.gateway.appointment-pms.io/v1/${newChannelProvider}` : undefined,
     };
 
     setChannels((prev) => [newChan, ...prev]);
@@ -830,11 +830,11 @@ export const ChannelManagerView: React.FC = () => {
           <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2 text-xs">
             <div className="font-bold text-cyan-400">Commande keytool avec votre package com.planning.oran :</div>
             <div className="p-2.5 bg-slate-900 rounded font-mono text-[11px] text-emerald-400 flex items-center justify-between gap-2 overflow-x-auto">
-              <span className="truncate">keytool -genkeypair -v -storetype JKS -keystore planning-oran.keystore -alias oran-release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Planning Oran, OU=Dev, O=Planning, C=DZ"</span>
+              <span className="truncate">keytool -genkeypair -v -storetype JKS -keystore planning-oran.keystore -alias oran-release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Appointment PMS, OU=Dev, O=Planning, C=DZ"</span>
               <button
                 onClick={() =>
                   copyToClipboard(
-                    'keytool -genkeypair -v -storetype JKS -keystore planning-oran.keystore -alias oran-release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Planning Oran, OU=Dev, O=Planning, C=DZ"',
+                    'keytool -genkeypair -v -storetype JKS -keystore planning-oran.keystore -alias oran-release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Appointment PMS, OU=Dev, O=Planning, C=DZ"',
                     'keytool-oran'
                   )
                 }
@@ -1039,7 +1039,7 @@ export const ChannelManagerView: React.FC = () => {
                 </span>
                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                   {domainResources.map((res) => {
-                    const icalExportUrl = `https://api.omnibook.io/v1/ical/export/${configuringChannel.id}/${res.id}.ics`;
+                    const icalExportUrl = `https://api.appointment-pms.io/v1/ical/export/${configuringChannel.id}/${res.id}.ics`;
 
                     return (
                       <div
