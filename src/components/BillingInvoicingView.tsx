@@ -163,7 +163,7 @@ export const BillingInvoicingView: React.FC = () => {
       depositPaid: newDeposit,
       balanceDue: Math.round(balanceDue * 100) / 100,
       status: newDocType === 'invoice' && newDeposit >= totalTTC ? 'paid' : 'sent',
-      termsAndNotes: 'Document généré selon les normes comptables internationales OmniBook.',
+      termsAndNotes: 'Document généré selon les normes comptables internationales Appointment.',
     };
 
     const updated = [newDoc, ...invoices];
