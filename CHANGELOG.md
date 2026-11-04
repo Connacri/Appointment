@@ -18,6 +18,7 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ### Fixed
 
+- **Machine code affiché décalé d'un octet (`3950 1214` au lieu de `5012 14D2`)** : WebHID livre chaque rapport d'entrée précédé de son report ID, que `WebHidTransport` conserve en tête du tampon, alors que CardLock passe le tampon de la DLL directement à son parser. L'offset fixe `Copy(rapportHex, 11, 8)` lisait donc les octets 4..7 du bloc d'identification. Le machine code est désormais ancré sur la signature du bloc (`55 21 01` + `52|55|56 39` + `50 12`), avec repli sur l'offset d'origine ; un rapport avec ou sans report ID donne la même valeur. Régression couverte par deux tests (report ID `0x00` et `0x40`).
 - **Validation des réservations** : validation stricte des dates calendaires `YYYY-MM-DD` pour tous les secteurs avant toute modification d'état ; les dates impossibles comme le 31 février sont refusées.
 - **Confirmation des paiements cash** : l'absence de confirmation d'encaissement ne règle plus une réservation en attente ; l'encaissement exige un montant reçu au moins égal au montant dû, et le calcul du check-in est déterministe.
 - **Purge locale et conformité** : la purge réinitialise les collections utilisateur, retire toutes les clés locales préfixées par l'application, vide les données proUSB et attend la fin de la transaction IndexedDB. Une erreur de stockage empêche désormais l'écran d'annoncer un succès. Le texte légal précise que cette purge locale ne supprime pas les données distantes.

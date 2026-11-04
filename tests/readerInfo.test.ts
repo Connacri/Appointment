@@ -117,6 +117,40 @@ test('reads the machine code from a full Reg.ini report (M9 family)', () => {
   assert.equal(info.marker, 'M9-');
 });
 
+/** Standard `-proUSB` identification block, bytes 0..35, machine code 501214D2. */
+function standardUsbBlock(): number[] {
+  return [
+    0x55, 0x21, 0x01, 0x55, 0x39, 0x50, 0x12, 0x14, 0xd2, 0x88, 0x19, 0x88, 0x18, 0x0f, 0xff,
+    0x2d, 0x70, 0x72, 0x6f, 0x55, 0x53, 0x42, 0x20, 0x30, 0x31, 0x36, 0x00, 0x00, 0x00, 0x90,
+    0x99, 0x00, 0x00, 0x00, 0x00, 0xf5,
+  ];
+}
+
+test('keeps the machine code aligned when the transport prepends a report ID', () => {
+  // WebHidTransport stores `array[0] = reportId` before the report payload, so
+  // the block is shifted by one byte. The old fixed `Copy(hex, 11, 8)` read
+  // bytes 4..7 of the block and produced 39501214.
+  for (const reportId of [0x00, 0x40]) {
+    const info = parseReaderInfo(reportFromBytes([reportId], standardUsbBlock()));
+    assert.ok(info);
+    assert.equal(info.machineCode, '501214D2');
+    assert.equal(formatMachineCode(info.machineCode), '5012 14D2');
+    // Marker-relative parsing is unaffected by the shift.
+    assert.equal(info.encoderNo, 16);
+    assert.equal(info.marker, '-proUSB');
+    assert.equal(info.legal, true);
+  }
+});
+
+test('reads the same machine code with and without a report ID prefix', () => {
+  const plain = parseReaderInfo(reportFromBytes(standardUsbBlock()));
+  const prefixed = parseReaderInfo(reportFromBytes([0x00], standardUsbBlock()));
+  assert.ok(plain);
+  assert.ok(prefixed);
+  assert.equal(prefixed.machineCode, plain.machineCode);
+  assert.equal(prefixed.reportHex.length, plain.reportHex.length + 2);
+});
+
 test('formatMachineCode rejects incomplete or malformed codes', () => {
   assert.equal(formatMachineCode('501214D2'), '5012 14D2');
   assert.equal(formatMachineCode('501214'), null);

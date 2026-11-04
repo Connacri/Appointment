@@ -29,6 +29,13 @@
  *   reader serial. CardLock stores the same value at the head of `SerialNo2`
  *   in `Reg.ini`.
  *
+ *   CardLock feeds the DLL buffer straight to its parser, but a browser HID
+ *   transport prepends the report ID byte to every input report, which shifts
+ *   the whole block by one byte and yields e.g. `39501214` instead of
+ *   `501214D2`. The machine code is therefore anchored on the block signature
+ *   (`55 21 01` + two model bytes + `50 12`) instead of a fixed offset, with a
+ *   fallback to `Copy(hex, 11, 8)` when the signature is absent.
+ *
  * Nothing here is guessed: every offset maps to an instruction of the routine
  * at `CardLock.Exe` VA 0x6CD924 (marker) and VA 0x6D8644/0x6D8660 (machine
  * code, `Copy(hex, 11, 8)`).
@@ -47,9 +54,25 @@ const LEGAL_MARKER_HEX = '9099';
 const SPACE_HEX = '20';
 const DIGIT_MARKER_HEX = '32';
 
-/** Delphi `Copy(reportHex, 11, 8)`: machine code starts at byte 5 (0-based). */
+/**
+ * Fallback for Delphi `Copy(reportHex, 11, 8)`: machine code starts at byte 5
+ * of the identification block when the block signature cannot be located.
+ */
 const MACHINE_CODE_POSITION = 11;
 const MACHINE_CODE_LENGTH = 8;
+
+/**
+ * Identification block signature, as hex characters: `55 21 01` (fixed header),
+ * the two model bytes (`52|55|56 39` on the known families) and `50 12` (vendor
+ * prefix). The model bytes are left open so an unlisted family still anchors;
+ * at least three fixed bytes plus the vendor prefix make false positives
+ * negligible. Anchoring keeps the machine code aligned even when the transport
+ * prepends a HID report ID byte.
+ */
+const MACHINE_CODE_ANCHOR = /552101[0-9A-F]{4}5012/;
+
+/** Hex characters between the anchor start and the machine code start (5 bytes). */
+const MACHINE_CODE_ANCHOR_OFFSET = 10;
 
 /** Identification command for `IniCard` mode 2 (`AA 01 56 FD`). */
 export const READER_INFO_COMMAND = [0xaa, 0x01, 0x56, 0xfd] as const;
@@ -118,6 +141,24 @@ function copyHex(hex: string, position: number, count: number): string {
 }
 
 /**
+ * Extracts the 8 hex characters of the machine code. The block signature is
+ * searched first so a leading HID report ID byte cannot shift the value;
+ * `Copy(hex, 11, 8)` is used as a fallback for unexpected layouts.
+ */
+function extractMachineCodeHex(reportHex: string): string | null {
+  const anchor = MACHINE_CODE_ANCHOR.exec(reportHex);
+  if (anchor && anchor.index % 2 === 0) {
+    const hex = reportHex.slice(
+      anchor.index + MACHINE_CODE_ANCHOR_OFFSET,
+      anchor.index + MACHINE_CODE_ANCHOR_OFFSET + MACHINE_CODE_LENGTH
+    );
+    if (hex.length === MACHINE_CODE_LENGTH) return hex;
+  }
+  const fallback = copyHex(reportHex, MACHINE_CODE_POSITION, MACHINE_CODE_LENGTH);
+  return fallback.length === MACHINE_CODE_LENGTH ? fallback : null;
+}
+
+/**
  * Parses an identification report. Returns `null` when the report does not
  * carry a known reader marker (for instance a command acknowledgement).
  */
@@ -153,8 +194,7 @@ export function parseReaderInfo(report: Uint8Array): ReaderInfo | null {
 
   const digits = hexToText(numberHex).replace(/\D/g, '');
   const encoderNo = digits ? Number.parseInt(digits, 10) : null;
-  const machineCodeHex = copyHex(reportHex, MACHINE_CODE_POSITION, MACHINE_CODE_LENGTH);
-  const machineCode = machineCodeHex.length === MACHINE_CODE_LENGTH ? machineCodeHex : null;
+  const machineCode = extractMachineCodeHex(reportHex);
 
   return {
     encoderNo: encoderNo !== null && Number.isFinite(encoderNo) ? encoderNo : null,

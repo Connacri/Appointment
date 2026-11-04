@@ -163,6 +163,18 @@ L'application expose cette valeur via `ReaderInfo.machineCode` (8 caractères
 hexadécimaux majuscules) et l'affiche groupée par `formatMachineCode()`
 (`5012 14D2`).
 
+**Piège du transport navigateur.** CardLock passe le tampon de la DLL
+directement à son parser, mais WebHID livre chaque rapport d'entrée avec son
+**report ID** en tête. `WebHidTransport` conserve cet octet
+(`array[0] = reportId`, `transport.ts`), donc le bloc est décalé d'un octet :
+un offset fixe `Copy(rapportHex, 11, 8)` lisait alors les octets 4..7 du bloc
+et affichait `39501214` (`3950 1214`) au lieu de `501214D2` (`5012 14D2`).
+L'extraction est donc **ancrée sur la signature du bloc** —
+`55 21 01`, deux octets de modèle, puis `50 12` — puis lit 8 caractères à
+`+10` ; en l'absence de signature, elle retombe sur
+`Copy(rapportHex, 11, 8)`. Les décalages relatifs au motif ASCII (`-proUSB`,
+etc.) ne sont pas concernés : le motif est cherché n'importe où dans le rapport.
+
 ---
 
 ## 3. Base de données CardLock.mdb

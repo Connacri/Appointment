@@ -65,6 +65,7 @@ import {
 } from '../locks/cards/types';
 import { toHexFormatted } from '../locks/protocol/frames';
 import { fromHex } from '../locks/protocol/frames';
+import { formatMachineCode, formatReaderLabel } from '../locks/protocol/readerInfo';
 import {
   buildCardInfoSyncScript,
   cardInfoId,
@@ -2165,10 +2166,12 @@ export const ProUsbLockSystemView: React.FC = () => {
                       try {
                         const info = await lockManager.refreshReaderInfo();
                         if (info?.encoderNo != null) {
-                          const machine = info.machineCode
-                            ? ` · ${info.machineCode.slice(0, 4)} ${info.machineCode.slice(4)}`
-                            : '';
-                          showToast('success', `Encodeur identifié : ${info.text.trim()} (Reader_${String(info.encoderNo).padStart(6, '0')}${machine})`);
+                          const machine = formatMachineCode(info.machineCode);
+                          const label = formatReaderLabel(info.encoderNo);
+                          showToast(
+                            'success',
+                            `Encodeur identifié : ${info.text.trim()} (${label}${machine ? ` · ${machine}` : ''})`
+                          );
                         } else {
                           showToast('error', "L'encodeur n'a pas renvoyé son numéro de lecteur.");
                         }
