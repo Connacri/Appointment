@@ -617,6 +617,39 @@ class IndexedDbStore {
     await waitForTransactionCompletion(tx, `updateOutboxRecord ${id}`);
   }
 
+  /** Export every IndexedDB object store for an explicit user-requested backup. */
+  public async exportSnapshot(): Promise<Record<string, unknown[]>> {
+    await this.openStore();
+    if (!this.idb) {
+      const fallback: Record<string, unknown[]> = {};
+      for (const name of ['bookings', 'invoices', 'resources']) {
+        try { fallback[name] = JSON.parse(localStorage.getItem(`ob_${name}`) || '[]') as unknown[]; }
+        catch { fallback[name] = []; }
+      }
+      return fallback;
+    }
+
+    const names = Array.from(this.idb.objectStoreNames);
+    if (names.length === 0) return {};
+    const tx = this.idb.transaction(names, 'readonly');
+    const transactionComplete = waitForTransactionCompletion(tx, 'exportSnapshot');
+    const snapshot = await new Promise<Record<string, unknown[]>>((resolve, reject) => {
+      const result: Record<string, unknown[]> = {};
+      let remaining = names.length;
+      for (const name of names) {
+        const request = tx.objectStore(name).getAll();
+        request.onsuccess = () => {
+          result[name] = request.result as unknown[];
+          remaining -= 1;
+          if (remaining === 0) resolve(result);
+        };
+        request.onerror = () => reject(request.error ?? new Error(`Unable to export IndexedDB store ${name}`));
+      }
+    });
+    await transactionComplete;
+    return snapshot;
+  }
+
   // Get Store Statistics
   public async getStats(): Promise<IndexedDbStoreStats> {
     await this.openStore();
