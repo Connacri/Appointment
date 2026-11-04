@@ -326,15 +326,11 @@ export async function parseCardLockMdb(
       }
     }
 
-    // Infer floor from leading digits if still unspecified
-    if (parsedFlr <= 0) {
-      const pureDigits = roomNumberStr.replace(/\D/g, '');
-      if (pureDigits.length >= 3) {
-        parsedFlr = parseInt(pureDigits[0], 10) || 1;
-      } else if (pureDigits.length > 0) {
-        parsedFlr = 1;
-      }
-    }
+    // Floor comes only from the explicit FlrNo column (or a dashed room
+    // number like "1-2-205") — never inferred here, so rooms without a
+    // floor in the DB stay floor-less instead of inventing floor 1.
+    // Display-level inference for 3+ digit room numbers lives in
+    // resourceItemFromRoom.
 
     return {
       building: parsedBld,
