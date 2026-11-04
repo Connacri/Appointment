@@ -1257,7 +1257,7 @@ export const PlanningTimeline: React.FC = () => {
               ? { panel: 'border-amber-300 dark:border-amber-800', icon: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300', accent: 'bg-amber-500', label: language === 'fr' ? 'Nettoyage en cours' : language === 'ar' ? 'قيد التنظيف' : 'Cleaning' }
               : timelineNotice.roomStatus === 'dirty'
               ? { panel: 'border-rose-300 dark:border-rose-800', icon: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', accent: 'bg-rose-500', label: language === 'fr' ? 'À nettoyer' : language === 'ar' ? 'تحتاج تنظيف' : 'Needs cleaning' }
-              : { panel: 'border-slate-300 dark:border-slate-700', icon: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300', accent: 'bg-slate-500', label: language === 'fr' ? 'Hors service' : language === 'ar' ? 'خارج الخدمة' : 'Out of service' };
+              : { panel: 'border-rose-300 dark:border-rose-800', icon: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', accent: 'bg-rose-600', label: language === 'fr' ? 'Hors service · critique' : language === 'ar' ? 'خارج الخدمة · حرج' : 'Out of service · Critical' };
             const tone = timelineNotice.roomName
               ? roomTone
               : timelineNotice.tone === 'danger'
@@ -1267,7 +1267,7 @@ export const PlanningTimeline: React.FC = () => {
               : { panel: 'border-blue-300 dark:border-blue-800', icon: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300', accent: 'bg-blue-500', label: language === 'fr' ? 'Information' : language === 'ar' ? 'معلومة' : 'Information' };
             return (
               <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 backdrop-blur-[2px] p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setTimelineNotice(null); }}>
-                <section role="alertdialog" aria-modal="true" aria-labelledby="timeline-notice-title" className={`w-full max-w-sm overflow-hidden rounded-2xl border bg-white shadow-2xl dark:bg-slate-900 ${tone.panel}`}>
+                <section role="alertdialog" aria-modal="true" aria-labelledby="timeline-notice-title" className={`w-full max-w-sm overflow-hidden rounded-2xl border-2 bg-white shadow-2xl dark:bg-slate-900 ${tone.panel}`}>
                   <div className={`h-1.5 w-full ${tone.accent}`} />
                   <div className="p-4 sm:p-5">
                     <div className="flex items-start gap-3">
