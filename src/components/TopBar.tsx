@@ -328,7 +328,7 @@ export const TopBar: React.FC = () => {
           className={`h-8 px-1.5 sm:px-3 rounded-lg text-[11px] sm:text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs ${
             usbStatus === 'connected'
               ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-              : 'bg-emerald-950/80 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-700/60'
+              : 'bg-rose-950/80 hover:bg-rose-900/80 text-rose-300 border border-rose-700/60'
           }`}
           title={
             usbStatus === 'connected'
@@ -342,7 +342,7 @@ export const TopBar: React.FC = () => {
             )}
             <span
               className={`relative inline-flex rounded-full h-2 w-2 ${
-                usbStatus === 'connected' ? 'bg-white' : 'bg-amber-400'
+                usbStatus === 'connected' ? 'bg-white' : 'bg-rose-500'
               }`}
             />
           </span>
