@@ -11,26 +11,26 @@ import {
   HardDrive,
   FileCode,
 } from 'lucide-react';
-import { objectBox, ObjectBoxStoreStats } from '../db/objectbox';
+import { indexedDb, IndexedDbStoreStats } from '../db/indexedDb';
 import { useApp } from '../context/AppContext';
 
-export const ObjectBoxInspectorModal: React.FC<{
+export const IndexedDbInspectorModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
 }> = ({ isOpen, onClose }) => {
   const { language } = useApp();
-  const [stats, setStats] = useState<ObjectBoxStoreStats | null>(null);
-  const [activeBox, setActiveBox] = useState<'bookings' | 'invoices' | 'resources'>('bookings');
-  const [boxData, setBoxData] = useState<any[]>([]);
+  const [stats, setStats] = useState<IndexedDbStoreStats | null>(null);
+  const [activeStore, setActiveStore] = useState<'bookings' | 'invoices' | 'resources'>('bookings');
+  const [storeData, setBoxData] = useState<any[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [offset, setOffset] = useState(0);
   const limit = 5;
 
   const loadStatsAndData = async () => {
-    const s = await objectBox.getStats();
+    const s = await indexedDb.getStats();
     setStats(s);
 
-    const res = await objectBox.queryBox<any>(activeBox, {
+    const res = await indexedDb.queryStore<any>(activeStore, {
       offset,
       limit,
     });
@@ -42,7 +42,7 @@ export const ObjectBoxInspectorModal: React.FC<{
     if (isOpen) {
       loadStatsAndData();
     }
-  }, [isOpen, activeBox, offset]);
+  }, [isOpen, activeStore, offset]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -70,10 +70,10 @@ export const ObjectBoxInspectorModal: React.FC<{
             <Database size={20} className="text-emerald-500" />
             <div>
               <span className="font-bold text-slate-900 dark:text-white text-sm">
-                ObjectBox Embedded Engine Inspector
+                IndexedDB Inspector
               </span>
               <span className="text-[11px] text-slate-400 block">
-                Conforme aux exigences d'architecture locale AGENTS.md §11
+                Stockage local du navigateur
               </span>
             </div>
           </div>
@@ -100,9 +100,9 @@ export const ObjectBoxInspectorModal: React.FC<{
             </span>
           </div>
           <div>
-            <span className="text-[10px] text-slate-500 uppercase block font-semibold">Règle §11 Lazy Query</span>
+            <span className="text-[10px] text-slate-500 uppercase block font-semibold">Pagination IndexedDB</span>
             <span className="font-mono text-sky-400 font-bold">
-              Offset & Limit Actifs
+              Offset & Limit
             </span>
           </div>
           <div>
@@ -119,11 +119,11 @@ export const ObjectBoxInspectorModal: React.FC<{
             <button
               key={box}
               onClick={() => {
-                setActiveBox(box);
+                setActiveStore(box);
                 setOffset(0);
               }}
               className={`py-2.5 px-3 border-b-2 transition-colors flex items-center gap-1.5 ${
-                activeBox === box
+                activeStore === box
                   ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
                   : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
@@ -131,7 +131,7 @@ export const ObjectBoxInspectorModal: React.FC<{
               <Layers size={14} />
               <span className="capitalize">Box : {box}</span>
               <span className="text-[10px] font-mono px-1.5 py-0.2 bg-slate-200 dark:bg-slate-800 rounded">
-                {stats?.boxCounts[box] ?? 0}
+                {stats?.storeCounts[box] ?? 0}
               </span>
             </button>
           ))}
@@ -153,7 +153,7 @@ export const ObjectBoxInspectorModal: React.FC<{
           </div>
 
           <div className="space-y-2">
-            {boxData.map((item, idx) => (
+            {storeData.map((item, idx) => (
               <div
                 key={item.id || idx}
                 className="p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1 text-[11px] overflow-x-auto"
@@ -161,7 +161,7 @@ export const ObjectBoxInspectorModal: React.FC<{
                 <div className="flex items-center justify-between font-bold text-slate-900 dark:text-white">
                   <span>ID : {item.id}</span>
                   <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">
-                    @Entity {activeBox.slice(0, -1).toUpperCase()}
+                    @Entity {activeStore.slice(0, -1).toUpperCase()}
                   </span>
                 </div>
                 <pre className="text-slate-700 dark:text-slate-300 text-[10px] whitespace-pre-wrap">
