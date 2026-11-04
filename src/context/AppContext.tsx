@@ -688,14 +688,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSelectedBooking(targetBooking ?? null);
     }
 
-    /* legacy updater replaced */
-
-    if (selectedBooking && selectedBooking.id === bookingId) {
-      setSelectedBooking((prev) =>
-        prev ? { ...prev, paymentStatus: 'paid' } : null
-      );
-    }
-
     return {
       success: true,
       message:
