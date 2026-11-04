@@ -983,6 +983,9 @@ class LockManager {
       if (!['reset', 'room_set', 'time_set'].includes(params.type)) {
         throw new Error('Changement d’hôtel en cours : seules les cartes système Reset, Room Set et Time Set sont autorisées jusqu’à la reprogrammation de toutes les serrures.');
       }
+      if (params.type === 'reset' && params.universal === true) {
+        throw new Error('Migration d’hôtel : la carte Reset doit porter le nouveau code système CardLock, pas le code universel 0000.');
+      }
     }
     let recordBytes: Uint8Array;
 
