@@ -6,6 +6,14 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ## [Unreleased]
 
+### Fixed
+- **Import CardLock incomplet / chambres fictives** : préservation de `BldNo = 0` et `FlrNo = 0`, repli d'une colonne `RoomNo` vide vers `RomID2` / `RomID`, exclusion des lignes sans numéro de chambre, absence de création de chambres à partir de `GuestInfo`, et suppression des prix/statuts inventés (123 / propre). Les séjours sans correspondance unique ou dates valides sont signalés au lieu de créer des références fantômes. Un nouvel import remplace l'ensemble des anciennes données CardLock importées.
+- **Inventaire MDB** : l'import lit toutes les tables et expose leurs noms, volumes, colonnes et erreurs de lecture dans le centre de données. Les tables métier non encore converties restent inventoriées sans interprétation arbitraire.
+
+### Changed
+- **Marque de distribution** : releases, noms d'artefacts Android/Windows, installateur Windows, titres d'application et documentation utilisent désormais **Appointment PMS**. L'identifiant Android historique `com.planning.oran` est conservé pour préserver l'identité de l'application déjà publiée.
+
+
 ### Added
 
 - **Identification réelle de l'encodeur USB (`IniCard` mode 2)** : l'application interroge l'encodeur (`AA 01 56 FD`, complété par des `0xCC`), analyse le bloc d'identification renvoyé par le matériel et affiche le numéro d'encodeur (`Reader_000016`, format `%.6d` de CardLock) ainsi que le **machine code** du lecteur (« Current Reader No. » : octets 5..8 du rapport, par exemple `5012 14D2`). Le préfixe `50 12` est constant pour toutes les familles proUSB/M9/proEM ; les octets suivants identifient le lecteur et changent avec lui. La valeur est visible dans le bandeau USB, la fiche encodeur et le journal HID.
