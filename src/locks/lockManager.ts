@@ -242,12 +242,17 @@ class LockManager {
       : null;
     const previousSiteRaw = localStorage.getItem('appointment_prousb_previous_site');
     const currentSiteCode = this.getSiteCode();
-    if (previousSiteRaw !== null && nextSiteCode !== null && Number(previousSiteRaw) === nextSiteCode) {
+    if (previousSiteRaw !== null && nextSiteCode !== null && Number(previousSiteRaw) === nextSiteCode && localStorage.getItem('appointment_prousb_recommissioning_required') === 'true') {
       throw new Error('Sécurité hôtel : la nouvelle base CardLock utilise le même code système que l’ancien hôtel. Créez une identité système CardLock différente avant de programmer les serrures.');
     }
     const siteChanged = previousSiteRaw !== null
       ? nextSiteCode !== null && Number(previousSiteRaw) !== nextSiteCode
       : currentSiteCode !== undefined && nextSiteCode !== null && currentSiteCode !== nextSiteCode;
+    if (previousSiteRaw !== null && nextSiteCode !== null && Number(previousSiteRaw) === nextSiteCode
+      && localStorage.getItem('appointment_prousb_recommissioning_required') !== 'true') {
+      // A plain MDB disconnect/re-import of the same hotel is not a migration.
+      localStorage.removeItem('appointment_prousb_previous_site');
+    }
     if (siteChanged) {
       if (previousSiteRaw === null && currentSiteCode !== undefined) {
         localStorage.setItem('appointment_prousb_previous_site', String(currentSiteCode));
@@ -342,7 +347,7 @@ class LockManager {
   }
 
   public isHotelRecommissioningRequired(): boolean {
-    return localStorage.getItem('appointment_prousb_recommissioning_required') === 'true';
+    return localStorage.getItem('appointment_prousb_recommissioning_required') === 'true'\n      || localStorage.getItem('appointment_prousb_previous_site') !== null;
   }
 
   public canConfirmHotelRecommissioning(): boolean {
@@ -374,7 +379,6 @@ class LockManager {
     const currentSite = this.getSiteCode();
     if (currentSite !== undefined) {
       localStorage.setItem('appointment_prousb_previous_site', String(currentSite));
-      localStorage.setItem('appointment_prousb_recommissioning_required', 'true');
     }
     this.mdbSnapshot = null;
     this.saveMdbSnapshot();
