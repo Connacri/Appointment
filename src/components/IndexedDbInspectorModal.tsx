@@ -214,10 +214,7 @@ export const IndexedDbInspectorModal: React.FC<{
     setMdbMessage(null);
     try {
       const snapshot = await lockManager.importMdb(file);
-      if (snapshot.fileLastModified) {
-        const ageDays = (Date.now() - new Date(snapshot.fileLastModified).getTime()) / 86400000;
-        if (ageDays > 90) setMdbMessage(mt.stale);
-      }
+      const sourceIsOld = snapshot.fileLastModified ? (Date.now() - new Date(snapshot.fileLastModified).getTime()) / 86400000 > 90 : false;
       if (snapshot.counts.rooms || snapshot.counts.guests) {
         const { resourceGroups, bookings } = mdbSnapshotToPlanning(snapshot);
         const importNow = window.confirm(mt.confirm(snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards));
@@ -361,7 +358,7 @@ export const IndexedDbInspectorModal: React.FC<{
             <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"><ShieldAlert size={16} className="mt-0.5 shrink-0"/><p><strong>{mt.neonWarning}</strong></p></div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">{mt.neonLabel}<input type="password" autoComplete="off" value={neonConnectionString} onChange={e=>setNeonConnectionString(e.target.value)} placeholder={mt.neonPlaceholder} className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-normal dark:border-slate-700 dark:bg-slate-950"/></label>
             <p className="text-[11px] text-slate-500">{neonNotice} Ajoutez ensuite un backend sécurisé avec secret manager, TLS, validation de certificat et endpoints de synchronisation. Aucun test n'est lancé depuis le navigateur.</p>
-            <button type="button" onClick={()=>{setNeonConnectionString('');setNeonNotice('Champ effacé. Le connecteur serveur Neon reste à déployer.');}} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">{mt.clear}</button>
+            <button type="button" onClick={()=>{setNeonConnectionString('');setNeonNotice(mt.neonNotice);}} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">{mt.clear}</button>
           </div>}
           {activePanel === 'backup' && <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-slate-900 dark:text-white">{mt.backupTitle}</p><p className="mt-1 text-[11px] text-slate-500">{mt.backupHint}</p>{backupMessage && <p role="status" className="mt-2 text-xs text-slate-600 dark:text-slate-300">{backupMessage}</p>}</div><button type="button" onClick={()=>void exportBackup()} className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 text-xs font-bold text-white"><Download size={15}/>{mt.download}</button></div>}
         </div>
