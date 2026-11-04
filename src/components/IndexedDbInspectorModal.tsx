@@ -388,7 +388,7 @@ export const IndexedDbInspectorModal: React.FC<{
                 className="flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 sm:px-3"
               >
                 {isRtl ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-                <span className="hidden xs:inline">{t.previous}</span>
+                <span className="hidden sm:inline">{t.previous}</span>
               </button>
               <span className="text-[10px] font-medium tabular-nums text-slate-500">{t.page} {currentPage} {t.of} {pageCount}</span>
               <button
@@ -397,7 +397,7 @@ export const IndexedDbInspectorModal: React.FC<{
                 onClick={() => setOffset(offset + limit)}
                 className="flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 sm:px-3"
               >
-                <span className="hidden xs:inline">{t.next}</span>
+                <span className="hidden sm:inline">{t.next}</span>
                 {isRtl ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
               </button>
             </div>
