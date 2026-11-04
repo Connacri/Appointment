@@ -370,9 +370,6 @@ jobs:
           if [[ -n "$WIN_SETUP" ]]; then
             cp "$WIN_SETUP" "release-final/Planning-Oran-Setup-v$VERSION.exe"
           fi
-          if [[ -n "$WIN_INNO" ]]; then
-            cp "$WIN_INNO" "release-final/Planning-Oran-Setup-Inno-v$VERSION.exe"
-          fi
           find release-assets/windows -type f -name "Planning-Oran-Windows-v*.zip" -exec cp {} release-final/ \; 2>/dev/null || true
           find release-assets/web -type f -name "web-build-v*.zip" -exec cp {} release-final/ \; 2>/dev/null || true
 
