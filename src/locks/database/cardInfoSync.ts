@@ -179,7 +179,7 @@ export function buildCardInfoSyncScript(
 
   const header = [
     "' ============================================================================",
-    "'  Planning Oran - synchronisation de la table CardInfo (CardLock.mdb)",
+    "'  Appointment PMS - synchronisation de la table CardInfo (CardLock.mdb)",
     "' ----------------------------------------------------------------------------",
     `'  Genere le ${generatedAt}`,
     `'  Cartes a inserer : ${cleaned.length}`,
@@ -201,7 +201,7 @@ export function buildCardInfoSyncScript(
     "' ============================================================================",
     'Option Explicit',
     '',
-    'Const APP_TITLE = "Planning Oran - CardLock.mdb"',
+    'Const APP_TITLE = "Appointment PMS - CardLock.mdb"',
     `Const FORCED_PATH = "${forcedPath.replace(/"/g, '""')}"`,
     `Const INSTALL_PATH = "${CARD_LOCK_MDB_INSTALL_PATH.replace(/"/g, '""')}"`,
     `Const VIRTUAL_PATH = "${CARD_LOCK_MDB_VIRTUALSTORE_PATH.replace(/"/g, '""')}"`,
