@@ -73,6 +73,112 @@ const TrendLine: React.FC<{
   );
 };
 
+type BookingTrendPoint = { label: string; occupancy: number; arrivals: number };
+
+const BookingTrendPanel: React.FC<{
+  points: BookingTrendPoint[];
+  language: string;
+  onExport: () => void;
+}> = ({ points, language, onExport }) => {
+  const [metric, setMetric] = useState<'occupancy' | 'arrivals'>('occupancy');
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const isFr = language === 'fr';
+  const isAr = language === 'ar';
+  const t = (fr: string, en: string, ar: string) => isFr ? fr : isAr ? ar : en;
+  const width = 900;
+  const left = 58;
+  const right = 872;
+  const top = 26;
+  const bottom = 238;
+  const values = points.map(point => point[metric]);
+  const maxValue = metric === 'occupancy' ? 100 : Math.max(1, ...values);
+  const x = (index: number) => points.length <= 1 ? (left + right) / 2 : left + index * ((right - left) / (points.length - 1));
+  const y = (value: number) => bottom - (Math.max(0, value) / maxValue) * (bottom - top);
+  const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(point[metric])}`).join(' ');
+  const areaPath = points.length ? `${linePath} L ${x(points.length - 1)} ${bottom} L ${x(0)} ${bottom} Z` : '';
+  const active = hoveredIndex === null ? null : points[hoveredIndex];
+  const activeValue = active ? active[metric] : null;
+  const formatValue = (value: number) => metric === 'occupancy' ? `${value}%` : value.toLocaleString();
+
+  return (
+    <section className="relative min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+      <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="rounded-xl bg-blue-50 p-2 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400"><Activity size={18} /></span>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">{t('Évolution de l’activité & des réservations', 'Activity & booking trends', 'تطور النشاط والحجوزات')}</h2>
+            <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{t('Analyse chronologique sur la période sélectionnée. Survolez les points pour les valeurs détaillées.', 'Timeline for the selected period. Hover points to inspect exact values.', 'التطور الزمني للفترة المحددة. مرر المؤشر فوق النقاط لعرض القيم.')}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
+            <button type="button" onClick={() => { setMetric('occupancy'); setHoveredIndex(null); }} className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold transition-colors ${metric === 'occupancy' ? 'bg-white text-teal-700 shadow-sm dark:bg-slate-700 dark:text-teal-300' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'}`}>
+              <span className="h-2 w-2 rounded-full bg-teal-500" />{t('Occupation', 'Occupancy', 'الإشغال')}
+            </button>
+            <button type="button" onClick={() => { setMetric('arrivals'); setHoveredIndex(null); }} className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold transition-colors ${metric === 'arrivals' ? 'bg-white text-violet-700 shadow-sm dark:bg-slate-700 dark:text-violet-300' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'}`}>
+              <span className="h-2 w-2 rounded-full bg-violet-500" />{t('Arrivées', 'Arrivals', 'الوصول')}
+            </button>
+          </div>
+          <button type="button" onClick={onExport} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-[11px] font-semibold text-white transition-colors hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">
+            <FileText size={14} /> CSV
+          </button>
+        </div>
+      </div>
+      {points.length ? (
+        <>
+          <div className="mb-1 flex items-end justify-between gap-3">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{metric === 'occupancy' ? t('Taux d’occupation moyen', 'Average occupancy', 'متوسط الإشغال') : t('Arrivées sur la période', 'Arrivals in period', 'الوصول خلال الفترة')}</div>
+              <div className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">{metric === 'occupancy' ? `${Math.round(points.reduce((sum, point) => sum + point.occupancy, 0) / points.length)}%` : points.reduce((sum, point) => sum + point.arrivals, 0).toLocaleString()}</div>
+            </div>
+            <div className="text-right text-[10px] text-slate-400">{t('Points de mesure', 'Data points', 'نقاط القياس')}: {points.length}</div>
+          </div>
+          <div className="relative w-full" onMouseLeave={() => setHoveredIndex(null)} onMouseMove={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const viewX = ((event.clientX - rect.left) / Math.max(1, rect.width)) * width;
+            const rawIndex = points.length <= 1 ? 0 : Math.round((viewX - left) / (right - left) * (points.length - 1));
+            setHoveredIndex(Math.max(0, Math.min(points.length - 1, rawIndex)));
+          }}>
+            <svg viewBox="0 0 900 280" role="img" aria-label={metric === 'occupancy' ? t('Courbe du taux d’occupation', 'Occupancy trend chart', 'مخطط نسبة الإشغال') : t('Courbe des arrivées', 'Arrival trend chart', 'مخطط الوصول')} className="h-52 w-full overflow-visible sm:h-64">
+              <defs>
+                <linearGradient id="booking-trend-fill" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor={metric === 'occupancy' ? '#0d9488' : '#7c3aed'} stopOpacity="0.24" />
+                  <stop offset="100%" stopColor={metric === 'occupancy' ? '#0d9488' : '#7c3aed'} stopOpacity="0.015" />
+                </linearGradient>
+              </defs>
+              {[0, 1, 2, 3, 4].map(index => {
+                const value = maxValue * (4 - index) / 4;
+                const yy = top + index * ((bottom - top) / 4);
+                return <g key={index}>
+                  <line x1={left} x2={right} y1={yy} y2={yy} stroke="currentColor" opacity="0.10" strokeDasharray="4 5" />
+                  <text x={left - 12} y={yy + 4} textAnchor="end" fill="currentColor" opacity="0.48" fontSize="11">{metric === 'occupancy' ? `${Math.round(value)}%` : Math.round(value)}</text>
+                </g>;
+              })}
+              {points.length > 1 && <path d={areaPath} fill="url(#booking-trend-fill)" />}
+              <path d={linePath} fill="none" stroke={metric === 'occupancy' ? '#0d9488' : '#7c3aed'} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+              {active && hoveredIndex !== null && <line x1={x(hoveredIndex)} x2={x(hoveredIndex)} y1={top} y2={bottom} stroke="currentColor" opacity="0.35" strokeDasharray="4 4" />}
+              {points.map((point, index) => <circle key={`${point.label}-${index}`} cx={x(index)} cy={y(point[metric])} r={hoveredIndex === index ? 6 : points.length > 24 ? 2.5 : 3.8} fill={metric === 'occupancy' ? '#0d9488' : '#7c3aed'} stroke="white" strokeWidth="2" />)}
+              {points.filter((_, index) => index === 0 || index === points.length - 1 || index === Math.floor((points.length - 1) / 2)).map(point => {
+                const index = points.indexOf(point);
+                return <text key={`label-${index}`} x={x(index)} y="266" textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'} fill="currentColor" opacity="0.55" fontSize="11">{point.label}</text>;
+              })}
+            </svg>
+            {active && activeValue !== null && <div className="pointer-events-none absolute right-2 top-2 z-10 min-w-32 rounded-lg border border-slate-700 bg-slate-950/95 px-3 py-2 text-white shadow-xl sm:right-5">
+              <div className="mb-1 border-b border-slate-700 pb-1 text-[10px] text-slate-300">{active.label}</div>
+              <div className={`text-sm font-bold tabular-nums ${metric === 'occupancy' ? 'text-teal-300' : 'text-violet-300'}`}>{formatValue(activeValue)}</div>
+              <div className="mt-0.5 text-[9px] text-slate-400">{metric === 'occupancy' ? t('Occupation moyenne', 'Average occupancy', 'متوسط الإشغال') : t('Arrivées enregistrées', 'Recorded arrivals', 'الوصول المسجل')}</div>
+            </div>}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-400 dark:border-slate-800">
+            <span className="inline-flex items-center gap-1.5"><i className={`h-2 w-2 rounded-full ${metric === 'occupancy' ? 'bg-teal-500' : 'bg-violet-500'}`} />{metric === 'occupancy' ? t('Taux d’occupation réel', 'Actual occupancy rate', 'نسبة الإشغال الفعلية') : t('Nombre d’arrivées', 'Arrival count', 'عدد الوصول')}</span>
+            <span>{t('Données issues des réservations locales', 'Based on local booking records', 'البيانات من سجلات الحجوزات المحلية')}</span>
+          </div>
+        </>
+      ) : <p className="py-12 text-center text-xs text-slate-500">{t('Aucune donnée disponible sur cette période.', 'No data available for this period.', 'لا توجد بيانات لهذه الفترة.')}</p>}
+    </section>
+  );
+};
+
 export const BookingAnalyticsView: React.FC = () => {
   const {
     bookings, resourceGroups, stockItems, stockMovements, tasks,
@@ -359,31 +465,33 @@ export const BookingAnalyticsView: React.FC = () => {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4 sm:gap-3">
-        <Card icon={Building2} label={t('Bâtiments', 'Buildings', 'المباني')} value={activeGroups.length} detail={t('Groupes de chambres configurés', 'Configured room groups', 'مجموعات الغرف المهيأة')} />
-        <Card icon={BedDouble} label={t('Chambres exploitables', 'Operational rooms', 'الغرف المتاحة للتشغيل')} value={validRooms.length} detail={t(`${occupiedToday} occupées aujourd’hui`, `${occupiedToday} occupied today`, `${occupiedToday} مشغولة اليوم`)} />
-        <Card icon={TrendingUp} label={t('Occupation actuelle', 'Current occupancy', 'الإشغال الحالي')} value={`${occupancyToday}%`} detail={t(`${occupiedToday} / ${validRooms.length} chambres exploitables`, `${occupiedToday} / ${validRooms.length} operational rooms`, `${occupiedToday} / ${validRooms.length} غرفة قابلة للتشغيل`)} tone="green" />
-        <Card icon={Wallet} label={t('CA réservations', 'Booking revenue', 'إيرادات الحجوزات')} value={periodRevenue} detail={t('Part estimée des séjours sur la période', 'Prorated booking value for selected period', 'قيمة الإقامات المقدرة خلال الفترة')} tone="purple" />
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6 sm:gap-3">
+        <Card icon={Building2} label={t('Bâtiments', 'Buildings', 'المباني')} value={activeGroups.length} detail={t('Groupes configurés', 'Configured groups', 'المجموعات المهيأة')} />
+        <Card icon={BedDouble} label={t('Chambres', 'Rooms', 'الغرف')} value={validRooms.length} detail={t('Hors service exclues', 'Out of order excluded', 'باستثناء خارج الخدمة')} />
+        <Card icon={Activity} label={t('Occupées', 'Occupied', 'مشغولة')} value={occupiedToday} detail={t('Aujourd’hui', 'Today', 'اليوم')} tone="green" />
+        <Card icon={TrendingUp} label={t('Occupation', 'Occupancy', 'الإشغال')} value={`${occupancyToday}%`} detail={t('Taux actuel', 'Current rate', 'النسبة الحالية')} tone="green" />
+        <Card icon={CalendarRange} label={t('Réservations', 'Bookings', 'الحجوزات')} value={periodBookings.length} detail={t('Sur la période', 'In selected period', 'خلال الفترة')} tone="amber" />
+        <Card icon={Wallet} label={t('CA réservations', 'Booking revenue', 'إيرادات الحجوزات')} value={periodRevenue} detail={t('Montant proratisé', 'Prorated value', 'القيمة المحسوبة')} tone="purple" />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <TrendLine
-          title={t('Tendance du taux d’occupation', 'Occupancy trend', 'اتجاه نسبة الإشغال')}
-          subtitle={t('Moyenne quotidienne des chambres occupées, sur la période sélectionnée.', 'Average daily occupied-room ratio over the selected period.', 'متوسط نسبة الغرف المشغولة يومياً خلال الفترة المحددة.')}
-          points={trendPoints.map(point => ({ label: point.label, value: point.occupancy }))}
-          suffix="%"
-          color="#0d9488"
-          emptyLabel={t('Aucune donnée de capacité exploitable.', 'No usable capacity data.', 'لا توجد بيانات سعة قابلة للاستخدام.')}
-        />
-        <TrendLine
-          title={t('Tendance des arrivées', 'Arrival trend', 'اتجاه الوصول')}
-          subtitle={t('Nombre de réservations dont la date d’arrivée tombe dans chaque intervalle.', 'Bookings with a check-in date in each interval.', 'عدد الحجوزات التي يقع تاريخ وصولها ضمن كل فترة.')}
-          points={trendPoints.map(point => ({ label: point.label, value: point.arrivals }))}
-          suffix={t('arrivées', 'arrivals', 'وصول')}
-          color="#7c3aed"
-          emptyLabel={t('Aucune arrivée enregistrée sur la période.', 'No arrivals recorded in this period.', 'لا توجد عمليات وصول مسجلة خلال هذه الفترة.')}
-        />
-      </div>
+      <BookingTrendPanel
+        points={trendPoints.map(point => ({ label: point.label, occupancy: point.occupancy, arrivals: point.arrivals }))}
+        language={language}
+        onExport={() => {
+          const rows = [
+            ['Période', 'Occupation (%)', 'Arrivées'],
+            ...trendPoints.map(point => [point.label, String(point.occupancy), String(point.arrivals)]),
+          ];
+          const csv = rows.map(row => row.map(value => `"${value.replace(/"/g, '""')}"`).join(';')).join('\\n');
+          const blob = new Blob(['\\uFEFF', csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.download = `appointment-booking-analytics-${range}.csv`;
+          anchor.click();
+          URL.revokeObjectURL(url);
+        }}
+      />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Section icon={CalendarRange} title={t('Réservations par état', 'Bookings by status', 'الحجوزات حسب الحالة')} subtitle={t('Répartition des dossiers qui chevauchent la période, annulations comprises.', 'Distribution of bookings overlapping the period, including cancellations.', 'توزيع الحجوزات المتداخلة مع الفترة، بما فيها الملغاة.')}>
