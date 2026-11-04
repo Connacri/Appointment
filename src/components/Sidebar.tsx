@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
+  BookOpen,
   CalendarDays,
   Receipt,
   BarChart3,
@@ -86,6 +87,14 @@ export const Sidebar: React.FC = () => {
 
   // Strictly filter navigation items by Role AND Domain for Hotel & Resort
   const allNavItems = [
+    {
+      id: 'help',
+      label: language === 'fr' ? 'Centre d’aide & Tutoriels' : language === 'ar' ? 'مركز المساعدة والدروس' : 'Help Center & Tutorials',
+      icon: BookOpen,
+      view: 'help' as const,
+      roles: ['admin', 'manager', 'receptionist', 'staff', 'client'],
+      domains: ['hotel', 'resort'] as DomainType[],
+    },
     {
       id: 'planning',
       label: language === 'fr' ? 'Planning Gantt' : language === 'ar' ? 'مخطط الحجوزات' : 'Gantt Planning',
