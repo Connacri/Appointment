@@ -23,7 +23,7 @@ test('preserves padded numbering and applies custom exclusions', () => {
 
 test('does not create existing room names twice', () => {
   const result = generateHotelFloorRooms({
-    buildingNumber: 1, floorNumber: 2, prefix: '2', start: 1, end: 3,
+    buildingNumber: 1, floorNumber: 2, prefix: '2', start: 1, end: 3, padWidth: 2,
     existingNames: ['201'],
   });
   assert.deepEqual(result.rooms.map((room) => room.name), ['202','203']);
