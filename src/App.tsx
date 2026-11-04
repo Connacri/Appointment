@@ -31,6 +31,7 @@ import { SpaManagementView } from './components/SpaManagementView';
 import { HelpCenterView } from './components/HelpCenterView';
 import { EstablishmentSetupModal } from './components/EstablishmentSetupModal';
 import { SupabaseAuthGate } from './services/supabase/SupabaseAuthGate';
+import { WorkspaceProvider } from './services/supabase/WorkspaceContext';
 
 import { AboutModal } from './components/AboutModal';
 
@@ -129,9 +130,11 @@ const MainLayout: React.FC = () => {
 export default function App() {
   return (
     <SupabaseAuthGate>
-      <AppProvider>
-        <MainLayout />
-      </AppProvider>
+      <WorkspaceProvider>
+        <AppProvider>
+          <MainLayout />
+        </AppProvider>
+      </WorkspaceProvider>
     </SupabaseAuthGate>
   );
 }
