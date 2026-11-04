@@ -52,6 +52,7 @@ export const PlanningTimeline: React.FC = () => {
 
   const isRTL = language === 'ar';
   const [showAvailabilityHelp, setShowAvailabilityHelp] = useState(false);
+  const [selectedHousekeepingRoom, setSelectedHousekeepingRoom] = useState<{ id: string; name: string; status: string } | null>(null);
 
   // The Gantt filter must reflect actual inventory: imported CardLock buildings
   // and buildings created locally in the establishment setup screen.
@@ -448,20 +449,8 @@ export const PlanningTimeline: React.FC = () => {
     return timelineDays.findIndex((d) => d.dateStr === dateStr);
   };
 
-  const cycleHousekeepingStatus = (resourceId: string, currentStatus?: string) => {
-    const cycleOrder: ('clean' | 'dirty' | 'cleaning' | 'out_of_order')[] = [
-      'clean',
-      'dirty',
-      'cleaning',
-      'out_of_order',
-    ];
-    const currentIndex = cycleOrder.indexOf((currentStatus as any) || 'clean');
-    const nextStatus = cycleOrder[(currentIndex + 1) % cycleOrder.length];
-    updateHousekeepingStatus(resourceId, nextStatus);
-  };
-
-  // Interactive housekeeping status indicator dot (click to change state)
-  const renderHousekeepingTag = (status?: string, resourceId?: string) => {
+  // Open an explicit status selector instead of silently cycling through statuses.
+  const renderHousekeepingTag = (status?: string, resourceId?: string, resourceName?: string) => {
     const isOutOfOrder = status === 'out_of_order';
     const colorClass =
       status === 'clean'
@@ -484,13 +473,16 @@ export const PlanningTimeline: React.FC = () => {
     return (
       <button
         type="button"
+        disabled={status === 'out_of_order'}
         onClick={(e) => {
           e.stopPropagation();
-          if (resourceId) cycleHousekeepingStatus(resourceId, status);
+          if (resourceId && status !== 'out_of_order') {
+            setSelectedHousekeepingRoom({ id: resourceId, name: resourceName || '', status: status || 'clean' });
+          }
         }}
-        className={`relative z-20 w-3.5 h-3.5 rounded-full ${colorClass} shrink-0 cursor-pointer transition-all hover:scale-125 focus:outline-none ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 shadow-2xs pointer-events-auto`}
-        title={`État : ${label} — Cliquez pour changer (Propre → Sale → En cours → Hors Service)`}
-        aria-label={`État de la chambre : ${label}. Cliquez pour modifier`}
+        className={`relative z-20 w-3.5 h-3.5 rounded-full ${colorClass} shrink-0 ${status === 'out_of_order' ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:scale-125'} transition-all focus:outline-none ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 shadow-2xs pointer-events-auto`}
+        title={status === 'out_of_order' ? `État : ${label}` : `État : ${label} — Cliquez pour choisir un statut`}
+        aria-label={status === 'out_of_order' ? `Chambre ${resourceName || ''} hors service` : `État de la chambre : ${label}. Cliquez pour modifier`}
       />
     );
   };
@@ -830,7 +822,7 @@ export const PlanningTimeline: React.FC = () => {
                             title={`${res.name} · ${res.type || 'Chambre'} · ${floorGroup.label}${isOutOfOrder ? ' · HORS SERVICE (HS)' : ''}`}
                           >
                             <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
-                              {renderHousekeepingTag(res.housekeepingStatus, res.id)}
+                              {renderHousekeepingTag(res.housekeepingStatus, res.id, res.name)}
                               {leftBarMode !== 'mini' ? (
                                 <span className="min-w-0 flex flex-col leading-tight">
                                   <span className={`font-semibold truncate text-xs sm:text-[13px] ${isOutOfOrder ? 'line-through text-slate-500 dark:text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
@@ -981,7 +973,7 @@ export const PlanningTimeline: React.FC = () => {
                             key={res.id}
                             className={`h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 flex relative border-b border-slate-200/80 dark:border-slate-800/80 transition-colors ${
                               isOutOfOrder
-                                ? 'bg-slate-200 dark:bg-slate-800/90 pointer-events-none select-none cursor-not-allowed opacity-90'
+                                ? 'bg-slate-200 dark:bg-slate-800/90 select-none cursor-not-allowed opacity-90'
                                 : 'bg-white dark:bg-slate-900 hover:bg-blue-50/20 dark:hover:bg-blue-950/20'
                             }`}
                           >
@@ -1021,7 +1013,7 @@ export const PlanningTimeline: React.FC = () => {
                                   }
                                   className={`relative shrink-0 border-r border-slate-100 dark:border-slate-800/40 h-full p-0 transition-colors ${
                                     isOutOfOrder
-                                      ? 'bg-slate-200/95 dark:bg-slate-800/90 cursor-not-allowed pointer-events-none select-none opacity-80'
+                                      ? 'bg-slate-200/95 dark:bg-slate-800/90 cursor-not-allowed select-none opacity-80'
                                       : isPast
                                       ? 'bg-slate-100/90 dark:bg-slate-900/60 cursor-not-allowed pointer-events-none opacity-40 select-none'
                                       : `cursor-pointer hover:bg-blue-50/70 dark:hover:bg-blue-950/35 active:bg-blue-100 dark:active:bg-blue-900/40 ${
@@ -1180,6 +1172,59 @@ export const PlanningTimeline: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {selectedHousekeepingRoom && (
+            <div
+              className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-3"
+              role="presentation"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) setSelectedHousekeepingRoom(null);
+              }}
+            >
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="housekeeping-status-title"
+                className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-2xl"
+              >
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="min-w-0">
+                    <h2 id="housekeeping-status-title" className="text-base font-bold text-slate-900 dark:text-white">
+                      {language === 'fr' ? 'Modifier le statut' : language === 'ar' ? 'تغيير الحالة' : 'Change status'}
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 truncate">
+                      {selectedHousekeepingRoom.name}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setSelectedHousekeepingRoom(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label={language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}>
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  {([
+                    { value: 'clean', fr: 'Propre', en: 'Clean', ar: 'جاهزة', style: 'border-emerald-200 hover:bg-emerald-50 dark:border-emerald-900 dark:hover:bg-emerald-950/40', dot: 'bg-emerald-500' },
+                    { value: 'cleaning', fr: 'En cours de nettoyage', en: 'Cleaning', ar: 'قيد التنظيف', style: 'border-amber-200 hover:bg-amber-50 dark:border-amber-900 dark:hover:bg-amber-950/40', dot: 'bg-amber-500' },
+                    { value: 'dirty', fr: 'À nettoyer', en: 'Dirty', ar: 'تحتاج تنظيف', style: 'border-rose-200 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950/40', dot: 'bg-rose-500' },
+                    { value: 'out_of_order', fr: 'Hors service / Maintenance', en: 'Out of order / Maintenance', ar: 'خارج الخدمة / صيانة', style: 'border-slate-300 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800', dot: 'bg-slate-400' },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        updateHousekeepingStatus(selectedHousekeepingRoom.id, option.value);
+                        setSelectedHousekeepingRoom(null);
+                      }}
+                      className={`flex min-h-11 items-center gap-3 rounded-xl border px-3 py-2 text-left text-sm font-semibold text-slate-800 dark:text-slate-100 transition-colors ${option.style} ${selectedHousekeepingRoom.status === option.value ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-slate-900' : ''}`}
+                    >
+                      <span className={`h-3 w-3 shrink-0 rounded-full ${option.dot}`} />
+                      <span>{language === 'fr' ? option.fr : language === 'ar' ? option.ar : option.en}</span>
+                      {selectedHousekeepingRoom.status === option.value && <CheckCircle2 size={16} className="ml-auto text-blue-600" />}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
 
           {/* Floating Tooltip Card for Desktop */}
           {activePreviewBooking && !activePreviewBooking.isMobileSheet && activePreviewBooking.x !== undefined && (
