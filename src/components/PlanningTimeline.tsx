@@ -985,10 +985,28 @@ export const PlanningTimeline: React.FC = () => {
                                 <button
                                   key={day.dateStr}
                                   type="button"
-                                  disabled={isCellDisabled}
                                   style={{ width: `${colWidth}px` }}
                                   onClick={() => {
-                                    if (isCellDisabled) return;
+                                    if (isOutOfOrder) {
+                                      window.alert(
+                                        language === 'fr'
+                                          ? `Réservation impossible : la chambre ${res.name} est hors service (HS).`
+                                          : language === 'ar'
+                                          ? `لا يمكن إنشاء الحجز: الغرفة ${res.name} خارج الخدمة.`
+                                          : `Booking unavailable: room ${res.name} is out of order.`
+                                      );
+                                      return;
+                                    }
+                                    if (isPast) {
+                                      window.alert(
+                                        language === 'fr'
+                                          ? `Réservation impossible : le ${day.dateStr} est une date passée.`
+                                          : language === 'ar'
+                                          ? `لا يمكن إنشاء الحجز: التاريخ ${day.dateStr} في الماضي.`
+                                          : `Booking unavailable: ${day.dateStr} is in the past.`
+                                      );
+                                      return;
+                                    }
                                     setActivePreviewBooking(null);
                                     setNewBookingInitialSlot({
                                       resourceId: res.id,
@@ -1014,7 +1032,7 @@ export const PlanningTimeline: React.FC = () => {
                                     isOutOfOrder
                                       ? 'bg-slate-200/95 dark:bg-slate-800/90 cursor-not-allowed select-none opacity-80'
                                       : isPast
-                                      ? 'bg-slate-100/90 dark:bg-slate-900/60 cursor-not-allowed pointer-events-none opacity-40 select-none'
+                                      ? 'bg-slate-100/90 dark:bg-slate-900/60 cursor-not-allowed opacity-40 select-none'
                                       : `cursor-pointer hover:bg-blue-50/70 dark:hover:bg-blue-950/35 active:bg-blue-100 dark:active:bg-blue-900/40 ${
                                           day.isWeekend ? 'bg-slate-50/30 dark:bg-slate-900/20' : ''
                                         }`
