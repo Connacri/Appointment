@@ -27,12 +27,12 @@ export async function discoverNativeCardLockFiles(): Promise<NativeCardLockCandi
 }
 
 async function readNativeCardLock(path: string): Promise<File> {
-  const encoded = await invoke<string>('read_cardlock_file', { path });
-  const binary = atob(encoded);
+  const source = await invoke<{ contentBase64: string; modifiedUnixMs: number | null; sizeBytes: number }>('read_cardlock_file', { path });
+  const binary = atob(source.contentBase64);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
   const name = path.split(/[\\/]/).pop() || 'CardLock.mdb';
-  return new File([bytes], name, { type: 'application/x-msaccess', lastModified: Date.now() });
+  return new File([bytes], name, { type: 'application/x-msaccess', lastModified: source.modifiedUnixMs ?? Date.now() });
 }
 
 export async function pickNativeCardLockFile(): Promise<File | null> {
