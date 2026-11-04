@@ -87,11 +87,6 @@ export const BookingAnalyticsView: React.FC = () => {
     totals[code] = (totals[code] || 0) + (booking.totalPrice * nightsInPeriod / totalNights);
     return totals;
   }, {} as Record<string, number>);
-  const formatBreakdown = (totals: Record<string, number>) => {
-    const entries = Object.entries(totals).filter(([, amount]) => amount !== 0);
-    return entries.length ? entries.map(([code, amount]) => fmtMoney(amount, code)).join(' · ') : fmtMoney(0); 
-  };
-  const periodRevenue = formatBreakdown(periodRevenueByCurrency);
   const fmtMoney = (amount: number, code = currency) => {
     const normalized = code === 'DA' ? 'DZD' : code;
     try {
@@ -102,6 +97,11 @@ export const BookingAnalyticsView: React.FC = () => {
       return `${Math.round(amount).toLocaleString()} ${code}`;
     }
   };
+  const formatBreakdown = (totals: Record<string, number>) => {
+    const entries = Object.entries(totals).filter(([, amount]) => amount !== 0);
+    return entries.length ? entries.map(([code, amount]) => fmtMoney(amount, code)).join(' · ') : fmtMoney(0);
+  };
+  const periodRevenue = formatBreakdown(periodRevenueByCurrency);
 
   const buildingStats = activeGroups.map(group => {
     const groupRooms = group.resources.filter(room => room.housekeepingStatus !== 'out_of_order');
