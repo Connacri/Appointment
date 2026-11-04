@@ -29,7 +29,7 @@ npm run tauri:build
 
 ## Signing
 
-Set GitHub Secret `WINDOWS_CERT_BASE64` to a trusted Authenticode PFX (and configure its password handling in CI if required). Without this secret, CI may sign with a self-signed certificate for diagnostic builds; Windows customers will not automatically trust that publisher. Do not describe a self-signed build as a trusted production signature.
+Set GitHub Secret `WINDOWS_CERT_BASE64` to a trusted Authenticode PFX and, when protected, `WINDOWS_CERT_PASSWORD` to its password. Without this secret, CI may sign with a self-signed certificate for diagnostic builds; Windows customers will not automatically trust that publisher. Do not describe a self-signed build as a trusted production signature.
 
 Production artifacts must be built and signed in GitHub Actions. Never build/sign release artifacts locally. Verify the exact workflow run, installer signature status and release asset checksum before distribution.
 
