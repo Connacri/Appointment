@@ -11,7 +11,6 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
   throw "Unable to determine the application version (package.json / -Version)."
 }
 
-$FileVersion = "$Version.0"
 $bundleDir = "src-tauri\target\release\bundle\nsis"
 $canonicalExe = "dist-windows\Planning-Oran-Setup.exe"
 $versionedExe = "dist-windows\Planning-Oran-Setup-v$Version.exe"
@@ -38,13 +37,20 @@ Copy-Item -Path $tauriSetup.FullName -Destination $versionedExe -Force
 Write-Host "Authenticode signing native Tauri installer..."
 if ($env:WINDOWS_CERT_BASE64) {
   $certPath = Join-Path $env:TEMP "appointment-signing.pfx"
+  $cert = $null
   try {
     [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERT_BASE64))
-    $cert = Get-PfxCertificate -FilePath $certPath
+    if ($env:WINDOWS_CERT_PASSWORD) {
+      $pfxPassword = ConvertTo-SecureString $env:WINDOWS_CERT_PASSWORD -AsPlainText -Force
+      $cert = Import-PfxCertificate -FilePath $certPath -CertStoreLocation "Cert:\\CurrentUser\\My" -Password $pfxPassword
+    } else {
+      $cert = Import-PfxCertificate -FilePath $certPath -CertStoreLocation "Cert:\\CurrentUser\\My"
+    }
     Set-AuthenticodeSignature -FilePath $canonicalExe -Certificate $cert -HashAlgorithm SHA256 | Out-Null
     Set-AuthenticodeSignature -FilePath $versionedExe -Certificate $cert -HashAlgorithm SHA256 | Out-Null
   } finally {
     if (Test-Path $certPath) { Remove-Item $certPath -Force }
+    if ($cert) { Remove-Item "Cert:\\CurrentUser\\My\\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue }
   }
 } else {
   Write-Warning "WINDOWS_CERT_BASE64 is not configured. A self-signed certificate will not establish a trusted publisher on customer PCs."
