@@ -71,6 +71,7 @@ export const TopBar: React.FC = () => {
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
   const [usbStatus, setUsbStatus] = useState<UsbConnectionStatus>(lockManager.getStatus());
   const [indexedDbSync, setIndexedDBSync] = useState<IndexedDbSyncState>(indexedDb.getSyncStatus());
+  const [pendingPushCount, setPendingPushCount] = useState(0);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
@@ -93,6 +94,23 @@ export const TopBar: React.FC = () => {
     });
     return unsub;
   }, []);
+
+  // This is a local Outbox queue count, not a remote delivery confirmation.
+  useEffect(() => {
+    let active = true;
+    const refreshOutbox = async () => {
+      try {
+        const pending = activeWorkspaceId ? await indexedDb.getPendingOutbox(activeWorkspaceId, 1000) : [];
+        if (active) setPendingPushCount(pending.length);
+      } catch {
+        if (active) setPendingPushCount(0);
+      }
+    };
+    void refreshOutbox();
+    const timer = window.setInterval(() => void refreshOutbox(), 5000);
+    window.addEventListener('focus', refreshOutbox);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refreshOutbox); };
+  }, [activeWorkspaceId]);
 
   // Click outside listener for dropdowns
   useEffect(() => {
@@ -314,6 +332,10 @@ export const TopBar: React.FC = () => {
             </>
           )}
         </button>
+
+        <div className="flex h-7 sm:h-8 items-center gap-1 sm:gap-2 rounded-lg border border-amber-500/30 bg-amber-950/30 px-1.5 sm:px-2 text-[9px] sm:text-[10px] font-semibold text-amber-200" title="P = événements locaux en attente. R = Pull distant non déployé.">
+          <span>P {pendingPushCount}</span><span className="text-amber-400/70">·</span><span>R —</span>
+        </div>
 
         {/* USB Hardware Button matching szsz.png (🟢 USB • Prêt) */}
         <button
