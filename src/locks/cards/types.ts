@@ -227,6 +227,8 @@ export interface DecodedProUsbCard {
   buildingNo?: number;
   floorNo?: number;
   roomNumber?: string;
+  /** Byte [13] on the custom 0x90 card family; not a cryptographic verifier. */
+  specialPinHash?: number;
   roomMod100?: number;
   roomDiv100?: number;
   validity?: CardValidityWindow;
