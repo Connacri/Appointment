@@ -22,7 +22,7 @@ import {
   initialPmsTasks,
 } from '../data/mockData';
 import { EstablishmentProfile, DEFAULT_ESTABLISHMENT_PROFILE } from '../types/establishment';
-import { objectBox } from '../db/objectbox';
+import { indexedDb } from '../db/indexedDb';
 import { isValidCalendarDate, shouldMarkPaymentAsPaid } from '../utils/bookingValidation';
 import { lockManager } from '../locks/lockManager';
 import {
@@ -98,8 +98,8 @@ interface AppContextType {
   setIsCockpitOpen: (open: boolean) => void;
   isLegalModalOpen: boolean;
   setIsLegalModalOpen: (open: boolean) => void;
-  isObjectBoxOpen: boolean;
-  setIsObjectBoxOpen: (open: boolean) => void;
+  isIndexedDBOpen: boolean;
+  setIsIndexedDBOpen: (open: boolean) => void;
   isQrScannerOpen: boolean;
   setIsQrScannerOpen: (open: boolean) => void;
   activeQrPassBooking: TimelineBooking | null;
@@ -378,7 +378,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [newBookingInitialSlot, setNewBookingInitialSlot] = useState<{ resourceId?: string; date?: string } | null>(null);
   const [isCockpitOpen, setIsCockpitOpen] = useState(false);
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
-  const [isObjectBoxOpen, setIsObjectBoxOpen] = useState(false);
+  const [isIndexedDBOpen, setIsIndexedDBOpen] = useState(false);
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [activeQrPassBooking, setActiveQrPassBooking] = useState<TimelineBooking | null>(null);
   const [isOffline, setIsOffline] = useState(false);
@@ -417,29 +417,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [theme]);
 
-  // Save bookings & resources to localStorage & ObjectBox
+  // Save bookings & resources to localStorage & IndexedDB
   useEffect(() => {
     localStorage.setItem('omnibook_bookings', JSON.stringify(bookings));
     // Atomic replacement keeps IndexedDB and its fallback aligned, including deletions.
-    void objectBox.replaceAll('bookings', bookings).catch((error) => {
-      console.error('[AppContext] Failed to persist bookings to ObjectBox:', error);
+    void indexedDb.replaceAll('bookings', bookings).catch((error) => {
+      console.error('[AppContext] Failed to persist bookings to IndexedDB:', error);
     });
   }, [bookings]);
 
   useEffect(() => {
     localStorage.setItem('omnibook_resource_groups', JSON.stringify(resourceGroups));
     const resources = resourceGroups.flatMap((g) => g.resources);
-    void objectBox.replaceAll('resources', resources).catch((error) => {
-      console.error('[AppContext] Failed to persist resources to ObjectBox:', error);
+    void indexedDb.replaceAll('resources', resources).catch((error) => {
+      console.error('[AppContext] Failed to persist resources to IndexedDB:', error);
     });
   }, [resourceGroups]);
 
-  // Seed initial ObjectBox data on startup
+  // Seed initial IndexedDB data on startup
   useEffect(() => {
-    objectBox.openStore().then(() => {
-      initialInvoices.forEach((inv) => objectBox.put('invoices', inv));
+    indexedDb.openStore().then(() => {
+      initialInvoices.forEach((inv) => indexedDb.put('invoices', inv));
     }).catch((error) => {
-      console.error('[AppContext] ObjectBox initialization failed:', error);
+      console.error('[AppContext] IndexedDB initialization failed:', error);
     });
   }, []);
 
@@ -984,7 +984,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     lockManager.purgeAllData();
 
     // Wait for IndexedDB completion. A failed transaction must not be reported as success.
-    await objectBox.clearAll();
+    await indexedDb.clearAll();
   };
 
   return (
@@ -1031,8 +1031,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsCockpitOpen,
         isLegalModalOpen,
         setIsLegalModalOpen,
-        isObjectBoxOpen,
-        setIsObjectBoxOpen,
+        isIndexedDBOpen,
+        setIsIndexedDBOpen,
         isQrScannerOpen,
         setIsQrScannerOpen,
         activeQrPassBooking,
