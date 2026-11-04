@@ -300,6 +300,7 @@ export const IndexedDbInspectorModal: React.FC<{
   const saveSupabase = () => {
     const key = publishableKey.trim() || anonKey.trim();
     if (!/^https:\/\//i.test(supabaseUrl.trim()) || !key) { setSupabaseState(mt.invalid); return; }
+    if (isPrivilegedSupabaseKey(key)) { setSupabaseState(mt.privilegedKey); return; }
     localStorage.setItem('appointment_supabase_url', supabaseUrl.trim());
     localStorage.setItem('appointment_supabase_publishable_key', publishableKey.trim());
     localStorage.setItem('appointment_supabase_anon_key', anonKey.trim());
