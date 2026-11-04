@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Appointment PMS</string>
-    <string name="title_activity_main">Appointment PMS</string>
+    <string name="app_name">Appointment</string>
+    <string name="title_activity_main">Appointment</string>
     <string name="package_name">com.planning.oran</string>
     <string name="custom_url_scheme">com.planning.oran</string>
 </resources>
