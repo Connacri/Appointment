@@ -273,7 +273,7 @@ export const IndexedDbInspectorModal: React.FC<{
   const testSupabase = async () => {
     const key = publishableKey.trim() || anonKey.trim();
     if (!/^https:\/\//i.test(supabaseUrl.trim()) || !key) { setSupabaseState(mt.invalid); return; }
-    if (isPrivilegedSupabaseKey(key)) { setSupabaseState(mt.privilegedKey); return; }
+    if ([publishableKey, anonKey].some((candidate) => candidate.trim() && isPrivilegedSupabaseKey(candidate.trim()))) { setSupabaseState(mt.privilegedKey); return; }
     setSupabaseState(mt.testing);
     try {
       const client = createClient(supabaseUrl.trim(), key, { auth: { persistSession: false, autoRefreshToken: false } });
