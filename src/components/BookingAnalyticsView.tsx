@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   Building2, BedDouble, TrendingUp, Package, FileText, CheckCircle2,
-  Boxes, Wallet, Activity,
+  Boxes, Wallet, Activity, CalendarRange, Layers3, Flower2, Presentation,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { InvoiceRecord } from '../types/booking';
@@ -25,6 +25,52 @@ const overlapNights = (start: string, end: string, from: string, toExclusive: st
   const a = start > from ? start : from;
   const b = end < toExclusive ? end : toExclusive;
   return dayDiff(a, b);
+};
+
+type ChartPoint = { label: string; value: number };
+
+const TrendLine: React.FC<{
+  title: string;
+  subtitle: string;
+  points: ChartPoint[];
+  color?: string;
+  suffix?: string;
+  emptyLabel: string;
+}> = ({ title, subtitle, points, color = '#2563eb', suffix = '', emptyLabel }) => {
+  const values = points.map(point => point.value);
+  const max = Math.max(1, ...values);
+  const min = Math.min(0, ...values);
+  const range = Math.max(1, max - min);
+  const x = (index: number) => points.length <= 1 ? 24 : 24 + index * (352 / (points.length - 1));
+  const y = (value: number) => 112 - ((value - min) / range) * 88;
+  const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(point.value)}`).join(' ');
+
+  return (
+    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+      <div className="mb-3">
+        <h2 className="text-sm font-bold text-slate-900 dark:text-white">{title}</h2>
+        <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{subtitle}</p>
+      </div>
+      {points.length ? (
+        <>
+          <div className="flex items-baseline gap-2">
+            <strong className="text-2xl font-bold tabular-nums text-slate-900 dark:text-white">{points[points.length - 1].value.toLocaleString()}</strong>
+            <span className="text-xs text-slate-500">{suffix}</span>
+          </div>
+          <svg viewBox="0 0 400 142" role="img" aria-label={title} className="mt-2 h-36 w-full overflow-visible">
+            {[24, 68, 112].map(lineY => <line key={lineY} x1="24" x2="376" y1={lineY} y2={lineY} stroke="currentColor" opacity="0.10" strokeDasharray="3 4" />)}
+            <path d={path} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((point, index) => <circle key={point.label} cx={x(index)} cy={y(point.value)} r={points.length > 24 ? 1.8 : 3} fill={color} />)}
+          </svg>
+          <div className="flex justify-between gap-2 text-[10px] text-slate-400">
+            <span>{points[0].label}</span>
+            {points.length > 2 && <span>{points[Math.floor((points.length - 1) / 2)].label}</span>}
+            <span>{points[points.length - 1].label}</span>
+          </div>
+        </>
+      ) : <p className="py-8 text-xs text-slate-500">{emptyLabel}</p>}
+    </section>
+  );
 };
 
 export const BookingAnalyticsView: React.FC = () => {
@@ -165,6 +211,98 @@ export const BookingAnalyticsView: React.FC = () => {
     occupied: rooms.filter(room => room.type === type && occupiedTodayIds.has(room.id)).length,
   }));
 
+  const periodBookings = bookings.filter(booking =>
+    booking.sector === currentDomain &&
+    booking.startDate < toExclusive &&
+    booking.endDate > from
+  );
+  const bookingStatusStats = [
+    { key: 'new', label: t('Nouvelles', 'New', 'جديدة') },
+    { key: 'confirmed', label: t('Confirmées', 'Confirmed', 'مؤكدة') },
+    { key: 'due_in', label: t('Arrivées prévues', 'Due in', 'وصول متوقع') },
+    { key: 'checked_in', label: t('En séjour', 'Checked in', 'تم تسجيل الوصول') },
+    { key: 'due_out', label: t('Départs prévus', 'Due out', 'مغادرة متوقعة') },
+    { key: 'checked_out', label: t('Clôturées', 'Checked out', 'تم تسجيل المغادرة') },
+    { key: 'booking_offer', label: t('Offres', 'Offers', 'عروض') },
+    { key: 'cancelled', label: t('Annulées', 'Cancelled', 'ملغاة') },
+    { key: 'out_of_order', label: t('Hors service', 'Out of order', 'خارج الخدمة') },
+  ].map(status => ({
+    ...status,
+    count: periodBookings.filter(booking => booking.status === status.key).length,
+  })).filter(status => status.count > 0);
+
+  const floorStats = rooms.reduce((stats, room) => {
+    const group = activeGroups.find(item => item.id === rooms.find(candidate => candidate.id === room.id)?.groupId);
+    const building = room.building?.trim() || group?.name?.[language] || room.groupName;
+    const floor = room.floor?.trim() || t('Étage non renseigné', 'Floor not specified', 'الطابق غير محدد');
+    const key = `${building}::${floor}`;
+    if (!stats[key]) stats[key] = { key, building, floor, total: 0, occupied: 0, outOfOrder: 0 };
+    stats[key].total += 1;
+    if (occupiedTodayIds.has(room.id)) stats[key].occupied += 1;
+    if (room.housekeepingStatus === 'out_of_order') stats[key].outOfOrder += 1;
+    return stats;
+  }, {} as Record<string, { key: string; building: string; floor: string; total: number; occupied: number; outOfOrder: number }>);
+
+  const trendPoints = (() => {
+    const bucketCount = range === '30d' ? 15 : range === '90d' ? 13 : 12;
+    return Array.from({ length: bucketCount }, (_, index) => {
+      const start = new Date(fromDate);
+      start.setDate(start.getDate() + Math.floor(index * periodDays / bucketCount));
+      const end = new Date(fromDate);
+      end.setDate(end.getDate() + Math.floor((index + 1) * periodDays / bucketCount));
+      const startKey = dateKey(start);
+      const endKey = index === bucketCount - 1 ? toExclusive : dateKey(end);
+      let occupiedPercentTotal = 0;
+      let measuredDays = 0;
+      const cursor = new Date(start);
+      while (dateKey(cursor) < endKey) {
+        const key = dateKey(cursor);
+        const occupiedIds = new Set(bookings.filter(booking =>
+          booking.sector === currentDomain &&
+          !['cancelled', 'out_of_order', 'booking_offer'].includes(booking.status) &&
+          booking.startDate <= key && booking.endDate > key
+        ).map(booking => booking.resourceId));
+        occupiedPercentTotal += validRooms.length ? Math.min(100, occupiedIds.size / validRooms.length * 100) : 0;
+        measuredDays += 1;
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      const arrivals = activeBookings.filter(booking => booking.startDate >= startKey && booking.startDate < endKey).length;
+      const labelDate = new Date(`${startKey}T00:00:00`);
+      return {
+        label: new Intl.DateTimeFormat(language === 'fr' ? 'fr-DZ' : language === 'ar' ? 'ar-DZ' : 'en', {
+          day: range === '365d' ? undefined : '2-digit',
+          month: 'short',
+        }).format(labelDate),
+        occupancy: measuredDays ? Math.round(occupiedPercentTotal / measuredDays) : 0,
+        arrivals,
+      };
+    });
+  })();
+
+  const stockCategoryStats = Array.from(new Set(stockItems.map(item => item.category))).map(category => ({
+    category,
+    quantity: stockItems.filter(item => item.category === category).reduce((sum, item) => sum + item.quantity, 0),
+    low: stockItems.filter(item => item.category === category && item.quantity <= item.minThreshold).length,
+  })).sort((a, b) => b.quantity - a.quantity);
+
+  const stockMovementTrend = trendPoints.map((point, index) => {
+    const bucketCount = trendPoints.length;
+    const start = new Date(fromDate);
+    start.setDate(start.getDate() + Math.floor(index * periodDays / bucketCount));
+    const end = new Date(fromDate);
+    end.setDate(end.getDate() + Math.floor((index + 1) * periodDays / bucketCount));
+    const startKey = dateKey(start);
+    const endKey = index === bucketCount - 1 ? toExclusive : dateKey(end);
+    const movements = periodMovements.filter(movement => {
+      const day = movement.timestamp.slice(0, 10);
+      return day >= startKey && day < endKey;
+    });
+    return {
+      label: point.label,
+      value: movements.filter(movement => movement.delta < 0).reduce((sum, movement) => sum + Math.abs(movement.delta), 0),
+    };
+  });
+
   const Card = ({ icon: Icon, label, value, detail, tone = 'blue' }: {
     icon: React.ElementType; label: string; value: string | number; detail: string; tone?: string;
   }) => (
@@ -226,6 +364,97 @@ export const BookingAnalyticsView: React.FC = () => {
         <Card icon={BedDouble} label={t('Chambres exploitables', 'Operational rooms', 'الغرف المتاحة للتشغيل')} value={validRooms.length} detail={t(`${occupiedToday} occupées aujourd’hui`, `${occupiedToday} occupied today`, `${occupiedToday} مشغولة اليوم`)} />
         <Card icon={TrendingUp} label={t('Occupation actuelle', 'Current occupancy', 'الإشغال الحالي')} value={`${occupancyToday}%`} detail={t(`${occupiedToday} / ${validRooms.length} chambres exploitables`, `${occupiedToday} / ${validRooms.length} operational rooms`, `${occupiedToday} / ${validRooms.length} غرفة قابلة للتشغيل`)} tone="green" />
         <Card icon={Wallet} label={t('CA réservations', 'Booking revenue', 'إيرادات الحجوزات')} value={periodRevenue} detail={t('Part estimée des séjours sur la période', 'Prorated booking value for selected period', 'قيمة الإقامات المقدرة خلال الفترة')} tone="purple" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <TrendLine
+          title={t('Tendance du taux d’occupation', 'Occupancy trend', 'اتجاه نسبة الإشغال')}
+          subtitle={t('Moyenne quotidienne des chambres occupées, sur la période sélectionnée.', 'Average daily occupied-room ratio over the selected period.', 'متوسط نسبة الغرف المشغولة يومياً خلال الفترة المحددة.')}
+          points={trendPoints.map(point => ({ label: point.label, value: point.occupancy }))}
+          suffix="%"
+          color="#0d9488"
+          emptyLabel={t('Aucune donnée de capacité exploitable.', 'No usable capacity data.', 'لا توجد بيانات سعة قابلة للاستخدام.')}
+        />
+        <TrendLine
+          title={t('Tendance des arrivées', 'Arrival trend', 'اتجاه الوصول')}
+          subtitle={t('Nombre de réservations dont la date d’arrivée tombe dans chaque intervalle.', 'Bookings with a check-in date in each interval.', 'عدد الحجوزات التي يقع تاريخ وصولها ضمن كل فترة.')}
+          points={trendPoints.map(point => ({ label: point.label, value: point.arrivals }))}
+          suffix={t('arrivées', 'arrivals', 'وصول')}
+          color="#7c3aed"
+          emptyLabel={t('Aucune arrivée enregistrée sur la période.', 'No arrivals recorded in this period.', 'لا توجد عمليات وصول مسجلة خلال هذه الفترة.')}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Section icon={CalendarRange} title={t('Réservations par état', 'Bookings by status', 'الحجوزات حسب الحالة')} subtitle={t('Répartition des dossiers qui chevauchent la période, annulations comprises.', 'Distribution of bookings overlapping the period, including cancellations.', 'توزيع الحجوزات المتداخلة مع الفترة، بما فيها الملغاة.')}>
+          {bookingStatusStats.length ? <div className="space-y-3">
+            {bookingStatusStats.map(item => {
+              const ratio = periodBookings.length ? item.count / periodBookings.length * 100 : 0;
+              return <div key={item.key}>
+                <div className="mb-1 flex justify-between gap-3 text-xs">
+                  <span className="text-slate-700 dark:text-slate-200">{item.label}</span>
+                  <strong className="tabular-nums text-slate-900 dark:text-white">{item.count} <span className="font-normal text-slate-400">({Math.round(ratio)}%)</span></strong>
+                </div>
+                {progress(ratio, item.key === 'cancelled' || item.key === 'out_of_order' ? 'bg-rose-500' : item.key === 'checked_in' ? 'bg-emerald-500' : 'bg-blue-500')}
+              </div>;
+            })}
+          </div> : <p className="text-xs text-slate-500">{t('Aucune réservation sur la période.', 'No bookings in this period.', 'لا توجد حجوزات خلال هذه الفترة.')}</p>}
+        </Section>
+
+        <Section icon={Layers3} title={t('Occupation par bâtiment et étage', 'Occupancy by building and floor', 'الإشغال حسب المبنى والطابق')} subtitle={t('Capacité, occupation actuelle et chambres hors service par niveau.', 'Capacity, current occupancy and out-of-order rooms by level.', 'السعة والإشغال الحالي والغرف خارج الخدمة حسب الطابق.')}>
+          {Object.values(floorStats).length ? <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+            {Object.values(floorStats).sort((a, b) => a.building.localeCompare(b.building) || a.floor.localeCompare(b.floor)).map(item => (
+              <div key={item.key} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className="min-w-0 truncate font-semibold text-slate-800 dark:text-slate-100">{item.building} · {item.floor}</span>
+                  <strong className="shrink-0 tabular-nums text-slate-700 dark:text-slate-200">{item.occupied}/{item.total}</strong>
+                </div>
+                {progress(item.total ? item.occupied / item.total * 100 : 0, 'bg-teal-500')}
+                <div className="text-[10px] text-slate-500">{item.outOfOrder} {t('hors service', 'out of order', 'خارج الخدمة')}</div>
+              </div>
+            ))}
+          </div> : <p className="text-xs text-slate-500">{t('Aucune donnée de bâtiment ou d’étage.', 'No building or floor data.', 'لا توجد بيانات مبانٍ أو طوابق.')}</p>}
+        </Section>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <TrendLine
+          title={t('Sorties de stock dans le temps', 'Inventory issues over time', 'حركات صرف المخزون عبر الزمن')}
+          subtitle={t('Unités sorties selon les mouvements de stock enregistrés.', 'Units issued from recorded stock movements.', 'الوحدات المصروفة وفق حركات المخزون المسجلة.')}
+          points={stockMovementTrend}
+          suffix={t('unités', 'units', 'وحدات')}
+          color="#d97706"
+          emptyLabel={t('Aucun mouvement de stock enregistré.', 'No stock movements recorded.', 'لا توجد حركات مخزون مسجلة.')}
+        />
+        <Section icon={Boxes} title={t('Stock par catégorie', 'Stock by category', 'المخزون حسب الفئة')} subtitle={t('Quantités disponibles et références sous seuil.', 'Available quantities and items below threshold.', 'الكميات المتاحة والأصناف دون الحد الأدنى.')}>
+          {stockCategoryStats.length ? <div className="space-y-3">
+            {stockCategoryStats.map(item => (
+              <div key={item.category}>
+                <div className="mb-1 flex justify-between gap-3 text-xs">
+                  <span className="min-w-0 truncate text-slate-700 dark:text-slate-200">{item.category}</span>
+                  <strong className="shrink-0 tabular-nums text-slate-900 dark:text-white">{item.quantity}</strong>
+                </div>
+                {progress(stockCategoryStats[0].quantity ? item.quantity / stockCategoryStats[0].quantity * 100 : 0, 'bg-amber-500')}
+                <div className="mt-1 text-[10px] text-slate-500">{item.low} {t('référence(s) sous seuil', 'item(s) below threshold', 'أصناف دون الحد')}</div>
+              </div>
+            ))}
+          </div> : <p className="text-xs text-slate-500">{t('Aucun article de stock enregistré.', 'No inventory items recorded.', 'لا توجد أصناف مخزون مسجلة.')}</p>}
+        </Section>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Section icon={Flower2} title={t('Spa & bien-être', 'Spa & wellness', 'المنتجع الصحي والعافية')} subtitle={t('Indicateurs à connecter aux rendez-vous, prestations, cabines et praticiens.', 'Metrics awaiting connection to appointments, treatments, facilities and therapists.', 'مؤشرات بانتظار ربطها بالمواعيد والخدمات والمرافق والمعالجين.')}>
+          <div className="rounded-xl border border-dashed border-slate-300 p-4 dark:border-slate-700">
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{t('Source analytique non centralisée', 'Analytics source not centralized', 'مصدر التحليلات غير مركزي')}</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">{t('Les rendez-vous Spa sont actuellement conservés dans l’état local de l’écran Spa. Ils ne sont pas encore exposés à ce tableau de bord. Aucun chiffre n’est affiché pour éviter de confondre les données de démonstration avec l’activité réelle.', 'Spa appointments currently live in the Spa screen local state and are not exposed to this dashboard. No figures are shown to avoid presenting demo data as real activity.', 'مواعيد السبا محفوظة حالياً في الحالة المحلية لشاشة السبا ولا تتوفر لهذا التقرير. لا يتم عرض أرقام لتجنب الخلط بين بيانات العرض والنشاط الفعلي.')}</p>
+          </div>
+        </Section>
+        <Section icon={Presentation} title={t('Conférences & événements', 'Conferences & events', 'المؤتمرات والفعاليات')} subtitle={t('Capacité, occupation des salles, sessions et revenus événementiels.', 'Room capacity, venue utilization, sessions and event revenue.', 'سعة القاعات واستخدامها والجلسات وإيرادات الفعاليات.')}>
+          <div className="rounded-xl border border-dashed border-slate-300 p-4 dark:border-slate-700">
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{t('Module non disponible dans cette version', 'Module not available in this version', 'الوحدة غير متاحة في هذا الإصدار')}</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">{t('Le dépôt ne contient pas encore de modèle de données ni de module de gestion des conférences. Ces indicateurs nécessiteront un vrai référentiel de salles, événements, sessions et réservations.', 'The repository does not yet contain a conference data model or management module. These metrics require a real source for venues, events, sessions and bookings.', 'لا يحتوي المشروع بعد على نموذج بيانات أو وحدة لإدارة المؤتمرات. تتطلب هذه المؤشرات مصدراً فعلياً للقاعات والفعاليات والجلسات والحجوزات.')}</p>
+          </div>
+        </Section>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
