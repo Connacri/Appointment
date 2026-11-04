@@ -516,7 +516,7 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     if (Number.isFinite(building.no)) buildingByNo.set(building.no, building);
   }
   for (const room of rooms) {
-    if (Number.isFinite(room.building) && room.building > 0 && !buildingByNo.has(room.building)) {
+    if (Number.isFinite(room.building) && room.building >= 0 && !buildingByNo.has(room.building)) {
       buildingByNo.set(room.building, { no: room.building, name: `Bâtiment ${room.building}` });
     }
   }
