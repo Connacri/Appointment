@@ -334,7 +334,7 @@ export const TopBar: React.FC = () => {
           )}
         </button>
 
-        <div className="hidden xl:flex h-8 items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-950/30 px-2 text-[10px] font-semibold text-amber-200" title="Push = événements locaux prêts à être envoyés. Pull distant non disponible tant que le moteur bidirectionnel n'est pas déployé.">
+        <div className="hidden lg:flex h-8 items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-950/30 px-2 text-[10px] font-semibold text-amber-200" title="Push = événements locaux prêts à être envoyés. Pull distant non disponible tant que le moteur bidirectionnel n'est pas déployé.">
           <span>Push {pendingPushCount}</span>
           <span className="text-amber-400/70">·</span>
           <span>Pull —</span>
