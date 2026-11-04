@@ -105,7 +105,15 @@ export interface ImportedBuilding {
   name: string;
 }
 
+export interface MdbTableSummary {
+  name: string;
+  rowCount: number;
+  columns: string[];
+}
+
 export interface MdbSnapshot {
+  /** Inventory produced by reading every table in the Access file. Raw rows are not persisted. */
+  tableInventory?: MdbTableSummary[];
   fileName: string;
   /**
    * `File.lastModified` of the imported file, ISO-8601. `null` when unknown
@@ -251,7 +259,7 @@ export async function parseCardLockMdb(
   }
 
   const tableNames = db.getTableNames();
-  
+
   const findTable = (candidateNames: string[]): string | undefined => {
     for (const name of candidateNames) {
       const match = tableNames.find((t) => t.toLowerCase() === name.toLowerCase());
@@ -273,18 +281,33 @@ export async function parseCardLockMdb(
     return undefined;
   };
 
+  // Read every physical table, not only the four tables currently mapped to PMS entities.
+  // We keep an inventory (name, row count, columns) and deliberately do not persist raw
+  // operator/card/log rows that may contain sensitive or security-relevant information.
+  const tableRows = new Map<string, Row[]>();
+  const tableInventory = tableNames.map((name) => {
+    try {
+      const rows = db.getTable(name).getData();
+      tableRows.set(name.toLowerCase(), rows);
+      return {
+        name,
+        rowCount: rows.length,
+        columns: [...new Set(rows.flatMap((row) => Object.keys(row)))].sort(),
+      };
+    } catch (error) {
+      warnings.push(`Table « ${name} » illisible : ${(error as Error).message}`);
+      tableRows.set(name.toLowerCase(), []);
+      return { name, rowCount: 0, columns: [] };
+    }
+  });
+
   const read = (primaryName: string, aliases: string[] = []): Row[] => {
     const match = findTable([primaryName, ...aliases]);
     if (!match) {
       warnings.push(`Table « ${primaryName} » absente du fichier.`);
       return [];
     }
-    try {
-      return db.getTable(match).getData();
-    } catch (error) {
-      warnings.push(`Table « ${primaryName} » (${match}) illisible : ${(error as Error).message}`);
-      return [];
-    }
+    return tableRows.get(match.toLowerCase()) ?? [];
   };
 
   const rawBuildings = read('BuildingInfo', ['Building', 'Buildings', 'BldInfo', 'tblBuilding']);
@@ -394,6 +417,7 @@ export async function parseCardLockMdb(
 
   return {
     fileName,
+    tableInventory,
     fileLastModified: null,
     importedAt: new Date().toISOString(),
     buildings: completeBuildings,
