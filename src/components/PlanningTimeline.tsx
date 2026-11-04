@@ -53,6 +53,7 @@ export const PlanningTimeline: React.FC = () => {
   const isRTL = language === 'ar';
   const [showAvailabilityHelp, setShowAvailabilityHelp] = useState(false);
   const [selectedHousekeepingRoom, setSelectedHousekeepingRoom] = useState<{ id: string; name: string; status: string } | null>(null);
+  const [timelineNotice, setTimelineNotice] = useState<{ title: string; message: string; tone: 'danger' | 'warning' | 'info'; roomName?: string; roomStatus?: string } | null>(null);
 
   // The Gantt filter must reflect actual inventory: imported CardLock buildings
   // and buildings created locally in the establishment setup screen.
@@ -988,23 +989,29 @@ export const PlanningTimeline: React.FC = () => {
                                   style={{ width: `${colWidth}px` }}
                                   onClick={() => {
                                     if (isOutOfOrder) {
-                                      window.alert(
-                                        language === 'fr'
-                                          ? `Réservation impossible : la chambre ${res.name} est hors service (HS).`
+                                      setTimelineNotice({
+                                        title: language === 'fr' ? 'Chambre indisponible' : language === 'ar' ? 'الغرفة غير متاحة' : 'Room unavailable',
+                                        message: language === 'fr'
+                                          ? `La chambre ${res.name} est hors service. Aucune réservation ne peut être créée tant que son statut n’a pas été rétabli.`
                                           : language === 'ar'
-                                          ? `لا يمكن إنشاء الحجز: الغرفة ${res.name} خارج الخدمة.`
-                                          : `Booking unavailable: room ${res.name} is out of order.`
-                                      );
+                                          ? `الغرفة ${res.name} خارج الخدمة. لا يمكن إنشاء حجز قبل إعادة تفعيلها.`
+                                          : `Room ${res.name} is out of service. A booking cannot be created until its status is restored.`,
+                                        tone: 'danger',
+                                        roomName: res.name,
+                                        roomStatus: res.housekeepingStatus || 'out_of_order',
+                                      });
                                       return;
                                     }
                                     if (isPast) {
-                                      window.alert(
-                                        language === 'fr'
-                                          ? `Réservation impossible : le ${day.dateStr} est une date passée.`
+                                      setTimelineNotice({
+                                        title: language === 'fr' ? 'Date déjà passée' : language === 'ar' ? 'التاريخ منقضٍ' : 'Date is in the past',
+                                        message: language === 'fr'
+                                          ? `Le ${day.dateStr} est antérieur à aujourd’hui. Choisissez une date actuelle ou future pour créer une réservation.`
                                           : language === 'ar'
-                                          ? `لا يمكن إنشاء الحجز: التاريخ ${day.dateStr} في الماضي.`
-                                          : `Booking unavailable: ${day.dateStr} is in the past.`
-                                      );
+                                          ? `التاريخ ${day.dateStr} يسبق تاريخ اليوم. اختر تاريخاً حالياً أو مستقبلياً لإنشاء الحجز.`
+                                          : `${day.dateStr} is earlier than today. Choose today or a future date to create a booking.`,
+                                        tone: 'info',
+                                      });
                                       return;
                                     }
                                     setActivePreviewBooking(null);
@@ -1242,6 +1249,49 @@ export const PlanningTimeline: React.FC = () => {
               </section>
             </div>
           )}
+
+          {timelineNotice && (() => {
+            const roomTone = timelineNotice.roomStatus === 'clean'
+              ? { panel: 'border-emerald-300 dark:border-emerald-800', icon: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300', accent: 'bg-emerald-500', label: language === 'fr' ? 'Chambre propre' : language === 'ar' ? 'غرفة نظيفة' : 'Clean room' }
+              : timelineNotice.roomStatus === 'cleaning'
+              ? { panel: 'border-amber-300 dark:border-amber-800', icon: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300', accent: 'bg-amber-500', label: language === 'fr' ? 'Nettoyage en cours' : language === 'ar' ? 'قيد التنظيف' : 'Cleaning' }
+              : timelineNotice.roomStatus === 'dirty'
+              ? { panel: 'border-rose-300 dark:border-rose-800', icon: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', accent: 'bg-rose-500', label: language === 'fr' ? 'À nettoyer' : language === 'ar' ? 'تحتاج تنظيف' : 'Needs cleaning' }
+              : { panel: 'border-slate-300 dark:border-slate-700', icon: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300', accent: 'bg-slate-500', label: language === 'fr' ? 'Hors service' : language === 'ar' ? 'خارج الخدمة' : 'Out of service' };
+            const tone = timelineNotice.roomName
+              ? roomTone
+              : timelineNotice.tone === 'danger'
+              ? { panel: 'border-rose-300 dark:border-rose-800', icon: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', accent: 'bg-rose-500', label: language === 'fr' ? 'Critique' : language === 'ar' ? 'حرج' : 'Critical' }
+              : timelineNotice.tone === 'warning'
+              ? { panel: 'border-amber-300 dark:border-amber-800', icon: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300', accent: 'bg-amber-500', label: language === 'fr' ? 'Attention' : language === 'ar' ? 'تنبيه' : 'Warning' }
+              : { panel: 'border-blue-300 dark:border-blue-800', icon: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300', accent: 'bg-blue-500', label: language === 'fr' ? 'Information' : language === 'ar' ? 'معلومة' : 'Information' };
+            return (
+              <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 backdrop-blur-[2px] p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setTimelineNotice(null); }}>
+                <section role="alertdialog" aria-modal="true" aria-labelledby="timeline-notice-title" className={`w-full max-w-sm overflow-hidden rounded-2xl border bg-white shadow-2xl dark:bg-slate-900 ${tone.panel}`}>
+                  <div className={`h-1.5 w-full ${tone.accent}`} />
+                  <div className="p-4 sm:p-5">
+                    <div className="flex items-start gap-3">
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone.icon}`}>
+                        <AlertCircle size={21} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tone.icon}`}>{tone.label}</span>
+                          {timelineNotice.roomName && <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{timelineNotice.roomName}</span>}
+                        </div>
+                        <h2 id="timeline-notice-title" className="text-base font-bold text-slate-900 dark:text-white">{timelineNotice.title}</h2>
+                        <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{timelineNotice.message}</p>
+                      </div>
+                      <button type="button" onClick={() => setTimelineNotice(null)} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200" aria-label={language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}><X size={18} /></button>
+                    </div>
+                    <div className="mt-5 flex justify-end">
+                      <button type="button" autoFocus onClick={() => setTimelineNotice(null)} className="min-h-10 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white">{language === 'fr' ? 'Compris' : language === 'ar' ? 'حسناً' : 'Got it'}</button>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            );
+          })()}
 
           {/* Floating Tooltip Card for Desktop */}
           {activePreviewBooking && !activePreviewBooking.isMobileSheet && activePreviewBooking.x !== undefined && (
