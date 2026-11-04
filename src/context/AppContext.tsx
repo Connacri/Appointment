@@ -525,7 +525,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addBooking = (
     bookingData: Omit<TimelineBooking, 'id'>
-  ): { success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: ResourceItem['housekeepingStatus']; booking?: TimelineBooking } => {
+  ): { success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'; booking?: TimelineBooking } => {
     // Validate both calendar dates for every reservation sector before changing state.
     if (!isValidCalendarDate(bookingData.startDate) || !isValidCalendarDate(bookingData.endDate)) {
       return {
