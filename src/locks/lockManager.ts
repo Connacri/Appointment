@@ -865,9 +865,9 @@ class LockManager {
   }
 
   /**
-   * Issues a Special Password-Protected Card for a dedicated special room.
-   * Completely isolated from all standard master passes, building passes, floor passes,
-   * emergency passes, or fire passes.
+   * Issues Appointment's experimental 0x90 Special Card variant for a dedicated room.
+   * The PIN marker is checked by Appointment when the card is read. This is not a
+   * cryptographic guarantee and lock-firmware enforcement must be verified on hardware.
    */
   public async issueSpecialCard(params: {
     roomNumber: string;
