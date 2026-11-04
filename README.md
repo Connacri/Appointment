@@ -56,7 +56,7 @@ L'interface est construite avec React 19 et TypeScript. Elle fonctionne comme ap
 - **Thème clair et sombre**.
 - **Expérience mobile** : navigation adaptée aux petits écrans et fiche de réservation tactile.
 - **QR** : génération/affichage de pass et lecture via les vues dédiées.
-- **Mode hors ligne** : indicateur de connectivité et persistance locale via IndexedDB/IndexedDB avec mécanisme de repli local.
+- **Mode hors ligne** : indicateur de connectivité et persistance locale via IndexedDB avec mécanisme de repli local.
 - **Retour audio et haptique** pour certaines interactions.
 - **Exports** : génération de documents PDF et export iCalendar (.ics) selon les modules.
 
