@@ -624,6 +624,7 @@ class IndexedDbStore {
     request.onsuccess = () => { if (request.result) store.put(update(request.result as OutboxRecord)); };
     request.onerror = () => tx.abort();
     await waitForTransactionCompletion(tx, `updateOutboxRecord ${id}`);
+    this.notifyOutboxChanged();
   }
 
   /** Export every IndexedDB object store for an explicit user-requested backup. */
