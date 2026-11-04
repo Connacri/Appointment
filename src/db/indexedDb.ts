@@ -166,6 +166,11 @@ class IndexedDbStore {
           tombstones.createIndex('workspaceDeletedAt', ['workspaceId', 'deletedAt'], { unique: false });
           tombstones.createIndex('workspaceEntity', ['workspaceId', 'entity', 'entityId'], { unique: true });
         }
+        if (!db.objectStoreNames.contains('workspaceEntities')) {
+          const entities = db.createObjectStore('workspaceEntities', { keyPath: ['workspaceId', 'entity', 'entityId'] });
+          entities.createIndex('workspaceEntityId', ['workspaceId', 'entityId'], { unique: false });
+          entities.createIndex('workspaceUpdatedAt', ['workspaceId', 'updatedAt'], { unique: false });
+        }
       };
 
       req.onsuccess = () => {
@@ -438,12 +443,13 @@ class IndexedDbStore {
       await this.openStore();
 
       if (this.idb) {
-        const tx = this.idb.transaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones'], 'readwrite');
+        const tx = this.idb.transaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities'], 'readwrite');
         tx.objectStore('bookings').clear();
         tx.objectStore('invoices').clear();
         tx.objectStore('resources').clear();
         tx.objectStore('outbox').clear();
         tx.objectStore('tombstones').clear();
+        tx.objectStore('workspaceEntities').clear();
         await waitForTransactionCompletion(tx, 'clear all stores');
       }
 
@@ -482,14 +488,21 @@ class IndexedDbStore {
     if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox writes.');
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
-    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones'], 'readwrite');
+    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities'], 'readwrite');
     const store = tx.objectStore(storeName);
-    const request = store.get(item.id);
+    const workspaceEntities = tx.objectStore('workspaceEntities');
+    const request = workspaceEntities.get([context.workspaceId, entity, item.id]);
     request.onsuccess = () => {
-      const current = request.result as (T & { syncVersion?: number }) | undefined;
-      const version = (current?.syncVersion ?? 0) + 1;
+      const current = request.result as { version?: number } | undefined;
+      const version = (current?.version ?? 0) + 1;
       const now = new Date().toISOString();
       const persisted = { ...item, workspaceId: context.workspaceId, establishmentId: context.establishmentId, syncVersion: version, deletedAt: null };
+      const entityRecord = {
+        workspaceId: context.workspaceId, establishmentId: context.establishmentId,
+        entity, entityId: item.id, version, updatedAt: now, payload: persisted,
+      };
+      // The workspace-keyed entity snapshot and its outbox intent commit together.
+      workspaceEntities.put(entityRecord);
       store.put(persisted);
       tx.objectStore('tombstones').delete(`${context.workspaceId}:${entity}:${item.id}`);
       tx.objectStore('outbox').add(this.createOutboxRecord(context, entity, item.id, 'upsert', version, persisted as Record<string, unknown>, now));
@@ -508,12 +521,14 @@ class IndexedDbStore {
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
     const tx = this.idb.transaction([storeName, 'outbox', 'tombstones'], 'readwrite');
     const store = tx.objectStore(storeName);
-    const request = store.get(entityId);
+    const workspaceEntities = tx.objectStore('workspaceEntities');
+    const request = workspaceEntities.get([context.workspaceId, entity, entityId]);
     request.onsuccess = () => {
-      const current = request.result as { syncVersion?: number } | undefined;
-      const version = (current?.syncVersion ?? 0) + 1;
+      const current = request.result as { version?: number } | undefined;
+      const version = (current?.version ?? 0) + 1;
       const deletedAt = new Date().toISOString();
       store.delete(entityId);
+      workspaceEntities.delete([context.workspaceId, entity, entityId]);
       tx.objectStore('tombstones').put({
         id: `${context.workspaceId}:${entity}:${entityId}`,
         workspaceId: context.workspaceId, establishmentId: context.establishmentId,
