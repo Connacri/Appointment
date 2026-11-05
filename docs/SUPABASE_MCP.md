@@ -25,6 +25,25 @@ The application client also has safe defaults for the Appointment Supabase proje
 
 The browser/mobile client uses only the publishable key. Never replace it with a Supabase secret key or legacy service-role key. A publishable key is expected to be visible in a client application; authorization must be enforced by database grants and Row Level Security (RLS).
 
+## OpenCode project configuration
+
+`opencode.json` (repository root) is the single project-level OpenCode config. It exists to keep the
+agent context small and correctly scoped:
+
+- `supabase` — same project-scoped, read-only URL as `.mcp.json`. It stays unconnected until an
+  engineer runs `opencode mcp auth supabase` or uses `/mcps`, so it costs no context when unused.
+- `firebase`, `google-play`, `render` — configured but `disabled: true`. This project does not depend
+  on Firebase (no `firebase` npm package) and does not deploy on Render or publish to `com.rnd.dz`.
+  Re-enable one only when a task actually needs it, by setting `disabled` to `false` (or deleting the
+  entry so the global config applies again).
+- `rea` — also disabled here; the global definition in `~/.config/opencode/opencode.jsonc` is disabled
+  too because its 200+ reverse-engineering tools are not needed for day-to-day work on this repo.
+- `permissions` — hides Render skills/tools and the Swift/Expo/Sonner skills, which cannot apply to a
+  React + Capacitor codebase.
+
+A project config replaces the whole server object with the same name, so every required field is
+repeated in the entry. Do not put tokens, keys or credentials in this file.
+
 ## Connect ChatGPT
 
 The repository configuration does not automatically register a connector in a ChatGPT account. To connect ChatGPT:
