@@ -56,16 +56,7 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: |
-          # package-lock.json is intentionally NOT committed: a lockfile created
-          # on Windows omits the optional native bindings (vite/rolldown) that
-          # Linux runners need, and `npm ci` then "succeeds" while producing a
-          # tree that crashes with "Cannot find native binding".
-          if [ -f "package-lock.json" ]; then
-            npm ci --legacy-peer-deps || npm install --legacy-peer-deps
-          else
-            npm install --legacy-peer-deps
-          fi
+        uses: ./.github/actions/npm-install
 
       - name: Build Web Application (Vite Production SPA)
         run: npm run build
@@ -135,12 +126,7 @@ jobs:
           node-version: '22'
 
       - name: Install Node dependencies
-        run: |
-          if [ -f "package-lock.json" ]; then
-            npm ci --legacy-peer-deps || npm install --legacy-peer-deps
-          else
-            npm install --legacy-peer-deps
-          fi
+        uses: ./.github/actions/npm-install
 
       - name: Build Web Production Assets (relative base for WebView)
         run: npm run build
@@ -260,12 +246,7 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: |
-          if (Test-Path "package-lock.json") {
-            npm ci --legacy-peer-deps
-          } else {
-            npm install --legacy-peer-deps
-          }
+        uses: ./.github/actions/npm-install
 
       - name: Build Web Application (relative base for desktop WebView)
         run: npm run build

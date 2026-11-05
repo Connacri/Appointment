@@ -1,0 +1,31 @@
+name: Install npm dependencies
+description: >
+  Install npm dependencies with bounded retries. package-lock.json is intentionally
+  not committed (a lockfile generated on Windows omits Linux-only native bindings),
+  so every job resolves the tree fresh and a transient registry/CDN timeout must not
+  fail the whole pipeline.
+
+runs:
+  using: composite
+  steps:
+    - name: npm install (up to 3 attempts)
+      shell: bash
+      run: |
+        set -uo pipefail
+        attempt=1
+        while [ "$attempt" -le 3 ]; do
+          echo "::group::npm install — attempt $attempt/3"
+          npm install --legacy-peer-deps
+          status=$?
+          echo "::endgroup::"
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+          echo "::warning::npm install failed (attempt $attempt/3, exit $status); retrying with a clean tree."
+          # A partially written node_modules makes the next attempt fail on EPERM/ENOTEMPTY.
+          rm -rf node_modules
+          attempt=$((attempt + 1))
+          sleep 15
+        done
+        echo "::error::npm install failed after 3 attempts."
+        exit 1

@@ -29,7 +29,7 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        uses: ./.github/actions/npm-install
 
       - name: Run TypeScript typecheck
         run: npm run typecheck
@@ -48,7 +48,7 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        uses: ./.github/actions/npm-install
 
       - name: Run regression tests
         run: npm run test
@@ -67,7 +67,7 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        uses: ./.github/actions/npm-install
 
       - name: Build production application
         run: npm run build
