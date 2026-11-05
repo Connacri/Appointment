@@ -64,6 +64,7 @@ import {
   DecodedProUsbCard,
   LockAuditRecord,
 } from '../locks/cards/types';
+import { decodeCardRecord } from '../locks/cards/codec';
 import { toHexFormatted } from '../locks/protocol/frames';
 import { fromHex } from '../locks/protocol/frames';
 import { formatMachineCode, formatReaderLabel } from '../locks/protocol/readerInfo';
@@ -194,6 +195,29 @@ export const ProUsbLockSystemView: React.FC = () => {
   const mdbCardByKey = new Map(
     mdbSnapshotCards.map((c) => [cardInfoId(c.hex), c] as const)
   );
+
+  // Ventilation des cartes CardInfo importées par famille (système / personnel / client / autre).
+  const cardBreakdown = useMemo(() => {
+    const counts = { system: 0, staff: 0, guest: 0, other: 0 };
+    for (const card of mdbSnapshotCards) {
+      let decoded: DecodedProUsbCard | null = null;
+      try {
+        decoded = decodeCardRecord(card.hex);
+      } catch {
+        decoded = null;
+      }
+      if (!decoded || !decoded.isProUsbFormat) {
+        counts.other += 1;
+        continue;
+      }
+      const meta = PROUSB_CARD_TYPES[decoded.type];
+      if (meta.isCommissioningCard) counts.system += 1;
+      else if (decoded.type === 'guest') counts.guest += 1;
+      else if (meta.isStaffCard) counts.staff += 1;
+      else counts.other += 1;
+    }
+    return counts;
+  }, [mdbSnapshotCards]);
   // Un instantané est une photo : une carte créée après l'import est forcément
   // « absente », ce qui ne veut pas dire qu'elle n'existe pas dans la base.
   const mdbImportedLabel = mdbSnapshot?.importedAt
@@ -1860,6 +1884,20 @@ export const ProUsbLockSystemView: React.FC = () => {
                   <div>
                     <strong className="block text-slate-500 dark:text-slate-400">Code site</strong>
                     <span className="font-mono">{mdbStatus.systemIdHex ?? '—'}</span>
+                  </div>
+                </div>
+              )}
+              {mdbStatus.connected && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Hôtel chargé : <strong className="font-mono">{mdbStatus.source}</strong>
+                    {mdbStatus.importedAt ? ` — importé le ${new Date(mdbStatus.importedAt).toLocaleString('fr-FR')}` : ''}
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-slate-700 dark:text-slate-200">
+                    <div><strong className="block text-slate-500 dark:text-slate-400">Système</strong>{cardBreakdown.system}</div>
+                    <div><strong className="block text-slate-500 dark:text-slate-400">Personnel</strong>{cardBreakdown.staff}</div>
+                    <div><strong className="block text-slate-500 dark:text-slate-400">Client</strong>{cardBreakdown.guest}</div>
+                    <div><strong className="block text-slate-500 dark:text-slate-400">Autres</strong>{cardBreakdown.other}</div>
                   </div>
                 </div>
               )}

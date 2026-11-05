@@ -508,6 +508,8 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
   resourceGroups: ResourceGroup[];
   bookings: TimelineBooking[];
   buildingStats: { no: number; name: string; rooms: number }[];
+  /** Groupe rattaché à l'hôtel restauré (premier bâtiment importé), ou `null` si la base ne contient aucune chambre. */
+  establishmentId: string | null;
   skippedGuests: number;
   warnings: string[];
 } {
@@ -546,8 +548,9 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 
   const resourceGroups: ResourceGroup[] = buildings.map((building) => {
     const name = building.name.trim() || `Bâtiment ${building.no}`;
+    const id = `mdb-bld-${building.no}`;
     return {
-      id: `mdb-bld-${building.no}`,
+      id,
       name: {
         fr: name,
         en: building.name.trim() || `Building ${building.no}`,
@@ -555,7 +558,10 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
       },
       sector: 'hotel',
       icon: 'Building',
-      resources: (roomsByBuilding.get(building.no) ?? []).map(resourceItemFromRoom),
+      resources: (roomsByBuilding.get(building.no) ?? []).map((room) => ({
+        ...resourceItemFromRoom(room),
+        establishmentId: id,
+      })),
     };
   });
 
@@ -569,7 +575,10 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
       },
       sector: 'hotel',
       icon: 'Building',
-      resources: unassignedRooms.map(resourceItemFromRoom),
+      resources: unassignedRooms.map((room) => ({
+        ...resourceItemFromRoom(room),
+        establishmentId: 'mdb-rooms-nobld',
+      })),
     });
   }
 
@@ -666,7 +675,14 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
   }
   if (missingRoomReferences > 0) warnings.push(`${missingRoomReferences} séjour(s) ignoré(s) : aucune chambre unique correspondante dans RoomInfo (bâtiment/étage/numéro).`);
   if (invalidStayDates > 0) warnings.push(`${invalidStayDates} séjour(s) ignoré(s) : dates d'arrivée ou de départ absentes/invalides.`);
-  return { resourceGroups, bookings, buildingStats, skippedGuests, warnings };
+  return {
+    resourceGroups,
+    bookings,
+    buildingStats,
+    establishmentId: resourceGroups[0]?.id ?? null,
+    skippedGuests,
+    warnings,
+  };
 }
 
 function resourceIdFromRoom(r: ImportedRoom): string {

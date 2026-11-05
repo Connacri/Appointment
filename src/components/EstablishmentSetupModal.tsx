@@ -31,6 +31,7 @@ import {
   Layers,
   Plus,
   Database,
+  History,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -42,6 +43,7 @@ import { PRESET_HOTEL_LOGOS } from '../utils/establishmentDefaults';
 import { playSuccessFeedback, playClickFeedback } from '../utils/audioFeedback';
 import { lockManager } from '../locks/lockManager';
 import { mdbSnapshotToPlanning } from '../locks/database/mdbImport';
+import { canListDirectory, pickMdbBackupDirectory, listMdbBackups, type MdbBackupFile } from '../locks/database/mdbBackups';
 import { initialResourceGroups } from '../data/mockData';
 
 const DEMO_RESOURCE_GROUP_IDS = new Set(initialResourceGroups.map((group) => group.id));
@@ -77,6 +79,8 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   const [roomCount, setRoomCount] = useState('10');
   const [structureMessage, setStructureMessage] = useState('');
   const [isImportingMdb, setIsImportingMdb] = useState(false);
+  const [mdbBackups, setMdbBackups] = useState<MdbBackupFile[] | null>(null);
+  const [isPickingBackups, setIsPickingBackups] = useState(false);
 
   if (!isOpen) return null;
 
@@ -152,9 +156,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     playSuccessFeedback();
   };
 
-  const handleMdbImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const importMdbFile = async (file: File) => {
     setIsImportingMdb(true);
     setStructureMessage('');
     try {
@@ -165,7 +167,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
         ...current.filter((group) => !group.id.startsWith('mdb-') && !DEMO_RESOURCE_GROUP_IDS.has(group.id)),
         ...planning.resourceGroups,
       ]);
-      setSelectedEstablishmentId('all');
+      setSelectedEstablishmentId(planning.establishmentId ?? 'all');
       setBookings((prev) => [
         ...prev.filter((booking) => booking.customMetadata?.source !== 'cardlock_mdb'),
         ...planning.bookings,
@@ -179,7 +181,29 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
       setStructureMessage(`Échec de l’import : ${error instanceof Error ? error.message : 'fichier illisible'}`);
     } finally {
       setIsImportingMdb(false);
-      event.target.value = '';
+    }
+  };
+
+  const handleMdbImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    await importMdbFile(file);
+  };
+
+  const handlePickBackupFolder = async () => {
+    setIsPickingBackups(true);
+    setStructureMessage('');
+    try {
+      const handle = await pickMdbBackupDirectory();
+      if (!handle) return;
+      const files = await listMdbBackups(handle);
+      setMdbBackups(files);
+      if (files.length === 0) setStructureMessage('Aucun fichier .mdb/.accdb trouvé dans ce dossier.');
+    } catch (error) {
+      setStructureMessage(`Lecture du dossier impossible : ${error instanceof Error ? error.message : 'erreur inconnue'}`);
+    } finally {
+      setIsPickingBackups(false);
     }
   };
 
@@ -772,10 +796,39 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                   Cible habituelle : C:\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb
                 </p>
                 <input ref={mdbInputRef} type="file" accept=".mdb,application/x-msaccess" onChange={handleMdbImport} className="hidden" />
-                <button type="button" disabled={isImportingMdb} onClick={() => mdbInputRef.current?.click()}
-                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 disabled:opacity-60">
-                  <Upload size={15} /> {isImportingMdb ? 'Analyse de la base en cours…' : 'Choisir CardLock.mdb'}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={isImportingMdb} onClick={() => mdbInputRef.current?.click()}
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 disabled:opacity-60">
+                    <Upload size={15} /> {isImportingMdb ? 'Analyse de la base en cours…' : 'Choisir CardLock.mdb'}
+                  </button>
+                  {canListDirectory() && (
+                    <button type="button" disabled={isImportingMdb || isPickingBackups} onClick={() => void handlePickBackupFolder()}
+                      className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white rounded-xl font-bold text-xs flex items-center gap-2 disabled:opacity-60">
+                      <History size={15} /> {isPickingBackups ? 'Lecture du dossier…' : 'Restaurer une sauvegarde CardLock'}
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 break-all">
+                  Sauvegardes automatiques : <span className="font-mono">D:\proUSB_DBBak</span> (ex. CardLock260611.MDB → CardLock261104.MDB).
+                  {!canListDirectory() && ' Ouvrez le dossier manuellement avec « Choisir CardLock.mdb ».'}
+                </p>
+                {mdbBackups && mdbBackups.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 p-2 space-y-1 max-h-56 overflow-y-auto">
+                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 px-1">
+                      {mdbBackups.length} sauvegarde(s) trouvée(s) — cliquez pour restaurer
+                    </p>
+                    {mdbBackups.map((backup) => (
+                      <button key={backup.name} type="button" disabled={isImportingMdb}
+                        onClick={() => void importMdbFile(backup.file)}
+                        className="w-full flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-left text-xs hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors disabled:opacity-60">
+                        <span className="font-mono truncate">{backup.name}</span>
+                        <span className="shrink-0 text-[11px] text-slate-500 dark:text-slate-400">
+                          {backup.lastModified ? new Date(backup.lastModified).toLocaleString('fr-FR') : '—'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {(() => {
                   const status = lockManager.getMdbStatus();
                   return status.connected ? (

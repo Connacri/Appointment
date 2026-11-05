@@ -82,3 +82,16 @@ test('keeps unknown housekeeping status unset instead of marking the room clean'
   const result = mdbSnapshotToPlanning(source);
   assert.equal(result.resourceGroups[1].resources[0].housekeepingStatus, undefined);
 });
+
+test('exposes the restored establishment id and stamps it on every room resource', () => {
+  const result = mdbSnapshotToPlanning(snapshot());
+  assert.equal(result.establishmentId, 'mdb-bld-1');
+  assert.ok(result.resourceGroups[0].resources.length > 0);
+  assert.equal(result.resourceGroups[0].resources[0].establishmentId, 'mdb-bld-1');
+});
+
+test('returns a null establishment id when the base has no rooms', () => {
+  const result = mdbSnapshotToPlanning(snapshot({ buildings: [], rooms: [], guests: [], counts: { cards: 0, guests: 0, rooms: 0, openings: 0 } }));
+  assert.equal(result.establishmentId, null);
+  assert.equal(result.resourceGroups.length, 0);
+});
