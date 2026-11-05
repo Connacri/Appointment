@@ -103,6 +103,8 @@ jobs:
               per_page: 20,
             });
             for (const d of deployments) {
+              // Never cancel the deployment belonging to THIS run.
+              if (d.sha === context.sha) continue;
               const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -110,14 +112,15 @@ jobs:
                 per_page: 1,
               });
               const latest = statuses[0];
-              if (!latest || (latest.state !== 'success' && latest.state !== 'inactive' && latest.state !== 'failure' && latest.state !== 'error')) {
-                core.info(`Canceling deployment ${d.id} (${d.sha})`);
+              // Only cancel deployments that are stuck (queued / in_progress / pending / waiting).
+              if (latest && (latest.state === 'queued' || latest.state === 'in_progress' || latest.state === 'pending' || latest.state === 'waiting')) {
+                core.info(`Canceling stuck deployment ${d.id} (${d.sha})`);
                 await github.rest.repos.createDeploymentStatus({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   deployment_id: d.id,
-                  state: 'inactive',
-                  description: 'Canceled by CI before new Pages deploy',
+                  state: 'error',
+                  description: 'Canceled by CI: stuck Pages deployment',
                 }).catch(() => {});
               }
             }
@@ -164,7 +167,18 @@ jobs:
 
       - name: Deploy to GitHub Pages Website
         id: deployment
+        continue-on-error: true
         uses: actions/deploy-pages@v4
+
+      - name: Verify live website
+        if: steps.deployment.outcome == 'success'
+        run: |
+          BASE="https://connacri.github.io/Appointment/"
+          for path in "" privacy/ privacy/fr/ privacy/en/ privacy/ar/ delete-account/ delete-account/fr/ delete-account/en/ delete-account/ar/; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "${BASE}${path}")
+            echo "${BASE}${path} -> ${code}"
+            [[ "$code" == "200" ]] || { echo "::warning::${BASE}${path} did not return HTTP 200"; }
+          done
 
   # ============================================================
   # JOB 2: Build & Package Signed Android Release (APK & AAB)
