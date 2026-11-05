@@ -175,6 +175,7 @@ Les artefacts de release utilisent le préfixe `Appointment-PMS` et la version d
 - [Contrat et consignes de développement](./AGENTS.md)
 - [Architecture applicative](./docs/ARCHITECTURE.md)
 - [Internationalisation et RTL](./docs/I18N.md)
+- [Inventaire des données et conformité Play / RGPD](./docs/COMPLIANCE.md)
 - [Scorecard de santé engineering](./docs/HEALTH.md)
 - [Plan de synchronisation Supabase](./docs/SUPABASE_SYNC_PLAN.md)
 - [Release, signature et déploiement](./docs/RELEASE.md)

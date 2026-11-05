@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Policy - AgentOps AGENTS.md</title>
-  <meta name="description" content="Privacy Policy for AgentOps Autonomous Cockpit and related applications.">
+  <title>Privacy Policy - Appointment PMS</title>
+  <meta name="description" content="Privacy Policy for Appointment PMS, the hotel and resort property management application.">
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem 1rem; line-height: 1.6; }
     .container { max-width: 840px; margin: 0 auto; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 2.5rem; }
@@ -12,10 +12,11 @@
     h2 { color: #e2e8f0; font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid #334155; padding-bottom: 0.5rem; }
     p, li { color: #cbd5e1; font-size: 0.95rem; }
     ul { padding-left: 1.5rem; }
-    .nav { margin-bottom: 1.5rem; display: flex; gap: 1rem; }
+    .nav { margin-bottom: 1.5rem; display: flex; gap: 1rem; flex-wrap: wrap; }
     .nav a { color: #38bdf8; text-decoration: none; font-size: 0.9rem; }
     .badge { display: inline-block; background: #0369a1; color: #e0f2fe; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; margin-bottom: 1rem; }
     .contact-box { background: #0f172a; border-left: 4px solid #38bdf8; padding: 1rem; margin-top: 1.5rem; border-radius: 0 8px 8px 0; }
+    .notice { background: #0f172a; border-left: 4px solid #22c55e; padding: 1rem; border-radius: 0 8px 8px 0; margin-top: 1.5rem; }
   </style>
 </head>
 <body>
@@ -26,50 +27,70 @@
       <a href="../ar/" dir="rtl">العربية</a>
       <a href="../../delete-account/en/">Delete Account Portal</a>
     </div>
-    <span class="badge">Last Updated: October 2026</span>
+    <span class="badge">Last Updated: November 2026</span>
     <h1>Privacy Policy</h1>
-    
-    <h2>1. Entity Identity & Data Controller</h2>
-    <p>This Privacy Policy describes the policies and procedures of <strong>AgentOps Software Engineering Lab</strong> ("we", "our", or "the Company") on the collection, use, and disclosure of your information when using the AgentOps AGENTS.md Autonomous Cockpit web and mobile applications.</p>
-    <p>Contact Email: <strong>ramzi.guedouar@gmail.com</strong></p>
 
-    <h2>2. Information We Collect</h2>
-    <p>We believe in data minimization and collect only the data necessary to provide and operate the service:</p>
+    <h2>1. Who We Are</h2>
+    <p><strong>Appointment PMS</strong> is a hotel and resort property management application (web application and Android app, package <code>com.planning.oran</code>). This policy explains what the application stores, on which device or service, and how you can delete it.</p>
+    <p>Contact: <strong>Ramzi Guedouar</strong> — <strong>ramzi.guedouar@gmail.com</strong> (data protection contact).</p>
+
+    <h2>2. Data We Store</h2>
+    <p>The application is local-first: in normal use, <strong>no account and no remote service are required</strong>, and your operational data stays on your device.</p>
     <ul>
-      <li><strong>Authentication Information:</strong> When signing in through Google Sign-In or Firebase Authentication, we receive your email address, display name, and unique user ID.</li>
-      <li><strong>Device and Push Notification Data:</strong> If enabled, Firebase Cloud Messaging (FCM) device tokens to deliver build and deployment alert notifications.</li>
-      <li><strong>Local Workspace Data:</strong> Autonomous project manifests, audit checklists, and offline configurations stored locally on your device (via IndexedDB and local storage).</li>
-      <li><strong>Diagnostic & Performance Data:</strong> Anonymous crash reports and performance metrics (cold start, build validation timings) to ensure application stability.</li>
+      <li><strong>Local operational data (default):</strong> reservations, rooms and resources, invoices, preferences, and proUSB lock data (issued card records, encoder audit log, imported <code>CardLock.mdb</code> snapshot). Stored in your browser's IndexedDB (database <code>OmniBook_ObjectBox_Store</code>) with a localStorage fallback, on the device you use.</li>
+      <li><strong>Account data (only if Supabase is configured and you sign up):</strong> your email address, a password processed by Supabase (never stored in clear text by the application), your user identifier, the active session token kept by the browser, and the workspace records you create.</li>
+      <li><strong>Hardware access you grant explicitly:</strong> WebHID access to the physical proUSB encoder, requested by the browser with a permission prompt, and the camera stream used to scan QR codes. QR images are processed locally and are never uploaded.</li>
+      <li><strong>Preferences:</strong> selected language and display preferences, stored in localStorage on your device.</li>
     </ul>
 
-    <h2>3. Third-Party Services & SDKs</h2>
-    <p>The application interacts with strictly audited service providers:</p>
+    <div class="notice">
+      <strong>What we do not collect:</strong> no analytics, no advertising identifiers, no crash reports or performance telemetry, no location data, no contacts, no Firebase or push notification tokens.
+    </div>
+
+    <h2>3. Third-Party Services</h2>
     <ul>
-      <li><strong>Google Firebase:</strong> Authentication and Cloud Messaging (FCM). Firebase processes tokens under Google Cloud's privacy commitments.</li>
-      <li><strong>Google Play Services:</strong> App integrity verification (Play Integrity API) and deployment synchronization.</li>
-      <li><strong>GitHub Actions & GitHub REST API:</strong> Autonomous workflow triggers and release asset verification using user-configured access tokens.</li>
+      <li><strong>Supabase</strong> (hosted PostgreSQL and authentication) — used only if the application is configured with a Supabase project and you create an account. It stores your authentication record and the workspace rows you write.</li>
+      <li><strong>GitHub Pages</strong> — hosts this website and the application bundle over HTTPS.</li>
+      <li><strong>Google Fonts</strong> — serves the application fonts (Plus Jakarta Sans, Cairo, JetBrains Mono). Requests are made to Google's font CDN.</li>
+    </ul>
+    <p>No other third party receives data from the application. There is no analytics, advertising or marketing SDK.</p>
+
+    <h2>4. Retention</h2>
+    <ul>
+      <li><strong>Local data</strong> stays on your device until you delete it: use the in-app purge (see section 6) or clear your browser/site data.</li>
+      <li><strong>Account and workspace data</strong> is retained while your account exists, then deleted through the <a href="../../delete-account/en/" style="color:#38bdf8;">account deletion procedure</a>.</li>
+      <li><strong>No telemetry is retained</strong>, because none is collected.</li>
     </ul>
 
-    <h2>4. Data Retention and Security</h2>
-    <p>Your authentication session tokens and notification registrations are retained for as long as your account remains active. Local workspace state is retained exclusively in your client environment until cleared. We enforce TLS 1.3 encryption for all data in transit, and do not log or store secret keys or keystores on remote application servers.</p>
+    <h2>5. Security</h2>
+    <p>The website and application are served over HTTPS. No signing key, server secret or credential is embedded in the application bundle. When Supabase is used, database tables are protected by row-level security and authentication is handled by Supabase. Data at rest on your device is protected by the security of your own device and browser profile.</p>
 
-    <h2>5. User Rights (GDPR & CCPA Compliance)</h2>
-    <p>You have the absolute right to:</p>
+    <h2>6. Your Rights (GDPR and equivalent frameworks)</h2>
+    <p>You may request:</p>
     <ul>
-      <li>Access a portable copy of your account profile and workspace data.</li>
-      <li>Rectify inaccurate personal information.</li>
-      <li>Request permanent deletion of your account and all associated telemetry records.</li>
-      <li>Withdraw consent for push notifications at any time via device settings.</li>
+      <li>access to the personal data we hold about you;</li>
+      <li>rectification of inaccurate data;</li>
+      <li>erasure of your account and associated data;</li>
+      <li>portability of your data in a machine-readable format;</li>
+      <li>objection to or restriction of processing.</li>
     </ul>
-    <p>To request permanent deletion, visit our <a href="../../delete-account/en/" style="color:#38bdf8;">Account Deletion Page</a> or email <strong>ramzi.guedouar@gmail.com</strong>.</p>
+    <p><strong>How to exercise them:</strong></p>
+    <ol style="color:#cbd5e1; font-size:0.95rem; padding-left:1.5rem;">
+      <li>Local data: in the application, open the top-bar menu → <strong>Privacy &amp; Account</strong> → <strong>Local data</strong> → <strong>Clear local data</strong> (immediate, on this device).</li>
+      <li>Account and remote data: use the <a href="../../delete-account/en/" style="color:#38bdf8;">account deletion page</a>, or email <strong>ramzi.guedouar@gmail.com</strong>.</li>
+    </ol>
+    <p>Requests are answered within 48 business hours.</p>
 
-    <h2>6. Children's Privacy</h2>
-    <p>Our services are developer tools designed for professionals and individuals aged 13 and above. We do not knowingly collect personal identifiable information from children under the age of 13.</p>
+    <h2>7. Children's Privacy</h2>
+    <p>Appointment PMS is a professional tool for hospitality staff and is not directed at children. We do not knowingly collect personal data from children.</p>
+
+    <h2>8. Changes to This Policy</h2>
+    <p>Any change to this policy is published on this page with an updated date. Continued use of the application after a change constitutes acceptance of the updated policy.</p>
 
     <div class="contact-box">
-      <strong>Data Protection Officer:</strong> Ramzi Guedouar<br>
+      <strong>Data protection contact:</strong> Ramzi Guedouar<br>
       Email: <strong>ramzi.guedouar@gmail.com</strong><br>
-      Response time: Under 48 business hours.
+      Response time: within 48 business hours.
     </div>
   </div>
 </body>

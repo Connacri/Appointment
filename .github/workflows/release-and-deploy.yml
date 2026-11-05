@@ -70,12 +70,26 @@ jobs:
 
       - name: Verify Legal Pages in dist output (AGENTS.md 19.3)
         run: |
+          set -u
+          fail() { echo "::error::$1"; exit 1; }
+
           for p in privacy delete-account; do
             for l in "" fr/ en/ ar/; do
-              test -f "dist/$p/${l}index.html" || { echo "::error::Missing dist/$p/${l}index.html in production build"; exit 1; }
+              test -f "dist/$p/${l}index.html" || fail "Missing dist/$p/${l}index.html in production build"
             done
+            grep -q 'dir="rtl"' "dist/$p/ar/index.html" || fail "dist/$p/ar/index.html must declare dir=\"rtl\""
+            grep -qi '<title>' "dist/$p/index.html" || fail "dist/$p/index.html must declare a <title>"
           done
-          echo "Legal pages verified in production build dist/."
+
+          # No placeholders or stale branding may ship in the legal pages.
+          if grep -rEn 'TODO|REPLACE_ME|CHANGE_ME|your-email|example\.(com|org)|\{\{|AgentOps' dist/privacy dist/delete-account; then
+            fail "Placeholder or stale branding text found in legal pages"
+          fi
+
+          grep -qi 'privacy' README.md        || fail "README.md must link the Privacy Policy"
+          grep -qi 'delete-account' README.md || fail "README.md must link the Delete Account page"
+
+          echo "Legal pages verified in production build dist/ (existence, RTL, no placeholders, README links)."
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v4

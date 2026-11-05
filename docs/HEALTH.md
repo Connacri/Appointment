@@ -10,14 +10,36 @@ Score: **88/100** (Refreshed: 2026-11-05)
 |---|---|---|---|
 | Security & secrets | 18 | 20 | No secret tracked (`.env*`, keystores, service accounts ignored); CI reconstructs the signing keystore only in `$RUNNER_TEMP` and deletes it with `if: always()`; production deps: `npm audit --omit=dev` → **0 vulnerabilities**. Gap: 8 moderate advisories remain in the dev toolchain. |
 | CI/CD & releases | 19 | 20 | `release-and-deploy.yml` builds signed APK/AAB (`com.planning.oran`) + Windows setup, publishes an immutable GitHub Release per run and deploys GitHub Pages; `quality-checks.yml` gates typecheck, tests, i18n and build. Gap: no build-provenance attestation yet. |
-| Compliance (Play + legal) | 14 | 15 | `/privacy/` and `/delete-account/` shipped in fr/en/ar (`dir="rtl"` for Arabic) and linked from the app, README and site; local purge implemented. Gap: `docs/COMPLIANCE.md` (data inventory for the Play Data Safety form) is still missing. |
+| Compliance (Play + legal) | 14 | 15 | `/privacy/` and `/delete-account/` shipped in fr/en/ar (`dir="rtl"` for Arabic), rewritten from a code audit so they describe what the app really does (no Firebase/FCM/analytics claims); `docs/COMPLIANCE.md` is the data inventory behind the Play Data Safety answers; CI fails on missing pages, missing `dir="rtl"`, placeholders/stale branding or missing README links. Gap: in-app account deletion still needs a backend endpoint (web `mailto:` request is the only server-side path). |
 | i18n + RTL | 9 | 10 | 111 keys × fr/en/ar, `npm run i18n:check` enforced in CI, `dir`/`lang` driven by `AppContext`, RTL logical properties in the shell. Gap: several screens still branch on `language === 'fr'` inline, and the default language is `fr` instead of `en`. |
 | Responsive + accessibility | 8 | 10 | Mobile-first breakpoints, safe areas, 44 px targets, visible focus, reduced-motion/transparency/contrast fallbacks. Gap: no automated axe or Playwright device × language matrix. |
 | Performance | 9 | 10 | Initial bundle cut from **494 kB → ~208 kB gzip** (main chunk 418 kB / 122 kB gzip, lucide 295 kB / 85 kB gzip) by code-splitting 12 views and 7 modals; every other view/modal loads on demand. Gap: slightly above the 200 kB budget and no Lighthouse CI budget file. |
 | Tests | 7 | 10 | 38 unit tests green (`bookingValidation`, `readerInfo`, `cardLockScope`, `cardSpecialDecode`, `roomReadiness`, `mdbImport`) + i18n parity gate. Gap: no component or E2E tests. |
-| Documentation | 4 | 5 | `README`, `CHANGELOG`, `docs/ARCHITECTURE.md`, `docs/I18N.md`, `docs/RELEASE.md`, CardLock specs. Gap: `docs/COMPLIANCE.md` and `docs/BRANDING.md` missing. |
+| Documentation | 4 | 5 | `README`, `CHANGELOG`, `docs/ARCHITECTURE.md`, `docs/I18N.md`, `docs/COMPLIANCE.md`, `docs/RELEASE.md`, CardLock specs. Gap: `docs/BRANDING.md` missing (splash assets absent). |
 
 **Total: 88/100**
+
+## 2026-11-05 — Legal pages rebuilt from a code audit
+
+The published `/privacy/` and `/delete-account/` pages described a different product
+("AgentOps Autonomous Cockpit", Firebase/FCM, Google Sign-In, clinic/patient data, Play
+Integrity, telemetry) that does not exist in this repository, and the deletion form showed
+a fake "verification link dispatched" confirmation while sending nothing.
+
+- Rewrote `public/privacy/{en,fr,ar}` from an audit of `src/`: local-first IndexedDB data,
+  optional Supabase email/password account, WebHID and camera capabilities, Google Fonts
+  and GitHub Pages as the only third parties, explicit "we do not collect" list.
+- Rewrote `public/delete-account/{en,fr,ar}`: accurate in-app purge steps (top-bar menu →
+  Privacy & Account → Local data → Clear local data), a **working** request channel
+  (pre-filled `mailto:` the user actually sends), honest retention statements (no analytics,
+  invoices are local) and a 72-business-hour timeline.
+- Fixed stale titles (`AgentOps AGENTS.md`, `Appointment AGENTS.md`) on the root pages.
+- Added `docs/COMPLIANCE.md` (data inventory, permissions, third parties, deletion flows,
+  Play Data Safety mapping, open items for the owner).
+- CI: the legal-page step now fails on missing files, missing `dir="rtl"` on Arabic pages,
+  placeholders/stale branding (`TODO`, `example.com`, `AgentOps`, …) or missing README links.
+
+**Review required**: the legal texts should be validated by the owner or a lawyer.
 
 ## 2026-11-05 — Performance, dependencies and i18n gate
 

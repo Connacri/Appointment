@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" dir="ltr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Politique de Confidentialité - AgentOps AGENTS.md</title>
-  <meta name="description" content="Politique de confidentialité de l'application AgentOps AGENTS.md Autonomous Cockpit.">
+  <title>Politique de Confidentialité - Appointment PMS</title>
+  <meta name="description" content="Politique de confidentialité d'Appointment PMS, l'application de gestion hôtelière et resort.">
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem 1rem; line-height: 1.6; }
     .container { max-width: 840px; margin: 0 auto; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 2.5rem; }
@@ -12,57 +12,85 @@
     h2 { color: #e2e8f0; font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid #334155; padding-bottom: 0.5rem; }
     p, li { color: #cbd5e1; font-size: 0.95rem; }
     ul { padding-left: 1.5rem; }
-    .nav { margin-bottom: 1.5rem; display: flex; gap: 1rem; }
+    .nav { margin-bottom: 1.5rem; display: flex; gap: 1rem; flex-wrap: wrap; }
     .nav a { color: #38bdf8; text-decoration: none; font-size: 0.9rem; }
     .badge { display: inline-block; background: #0369a1; color: #e0f2fe; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; margin-bottom: 1rem; }
     .contact-box { background: #0f172a; border-left: 4px solid #38bdf8; padding: 1rem; margin-top: 1.5rem; border-radius: 0 8px 8px 0; }
+    .notice { background: #0f172a; border-left: 4px solid #22c55e; padding: 1rem; border-radius: 0 8px 8px 0; margin-top: 1.5rem; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="nav">
-      <a href="../">← Choix de la langue</a>
+      <a href="../">← Sélection de la langue</a>
       <a href="../en/">English</a>
       <a href="../ar/" dir="rtl">العربية</a>
-      <a href="../../delete-account/fr/">Suppression de compte</a>
+      <a href="../../delete-account/fr/">Portail de suppression</a>
     </div>
-    <span class="badge">Dernière mise à jour : Octobre 2026</span>
-    <h1>Politique de Confidentialité</h1>
-    
-    <h2>1. Responsable du Traitement</h2>
-    <p>La présente Politique de Confidentialité définit les règles appliquées par <strong>AgentOps Software Engineering Lab</strong> (« nous », « notre ») pour la collecte, le traitement et la protection de vos données personnelles via l'application AgentOps AGENTS.md.</p>
-    <p>Contact référent : <strong>ramzi.guedouar@gmail.com</strong></p>
+    <span class="badge">Dernière mise à jour : novembre 2026</span>
+    <h1>Politique de confidentialité</h1>
 
-    <h2>2. Données Collectées</h2>
-    <p>Conformément au principe de minimisation du RGPD, nous ne recueillons que les informations strictement nécessaires :</p>
+    <h2>1. Qui sommes-nous</h2>
+    <p><strong>Appointment PMS</strong> est une application de gestion hôtelière et resort (application web et application Android, paquet <code>com.planning.oran</code>). Cette politique décrit ce que l'application enregistre, où (sur votre appareil ou sur un service distant), et comment le supprimer.</p>
+    <p>Contact : <strong>Ramzi Guedouar</strong> — <strong>ramzi.guedouar@gmail.com</strong> (contact responsable de la protection des données).</p>
+
+    <h2>2. Données enregistrées</h2>
+    <p>L'application fonctionne en mode local d'abord : dans l'usage normal, <strong>aucun compte et aucun service distant ne sont requis</strong> et vos données métier restent sur votre appareil.</p>
     <ul>
-      <li><strong>Données d'authentification :</strong> Adresse e-mail, nom public et identifiant unique de compte lors de la connexion via Google Auth ou Firebase Authentication.</li>
-      <li><strong>Jetons de notification push (FCM) :</strong> Identifiant d'appareil pour vous informer de l'état des compilations et des déploiements CI/CD.</li>
-      <li><strong>Espace de travail local :</strong> Audit de santé, checklists AGENTS.md et configurations conservées localement dans votre navigateur (IndexedDB / LocalStorage).</li>
-      <li><strong>Télémétrie de stabilité :</strong> Rapports de plantage et métriques de performance anonymisés pour maintenir le service opérationnel.</li>
+      <li><strong>Données locales (par défaut) :</strong> réservations, chambres et ressources, factures, préférences et données des serrures proUSB (registre des cartes émises, journal de l'encodeur, instantané de la base <code>CardLock.mdb</code> importée). Stockées dans la IndexedDB de votre navigateur (base <code>OmniBook_ObjectBox_Store</code>) avec repli localStorage, sur l'appareil que vous utilisez.</li>
+      <li><strong>Données de compte (uniquement si Supabase est configuré et que vous créez un compte) :</strong> votre adresse e-mail, un mot de passe traité par Supabase (jamais conservé en clair par l'application), votre identifiant utilisateur, le jeton de session conservé par le navigateur et les enregistrements du workspace que vous saisissez.</li>
+      <li><strong>Accès matériel que vous autorisez explicitement :</strong> l'accès WebHID à l'encodeur proUSB physique, demandé par le navigateur avec une invite de permission, ainsi que le flux caméra utilisé pour scanner les QR codes. Les images QR sont traitées localement et ne sont jamais envoyées.</li>
+      <li><strong>Préférences :</strong> langue sélectionnée et préférences d'affichage, stockées dans le localStorage de votre appareil.</li>
     </ul>
 
-    <h2>3. Sous-traitants et Services Tiers</h2>
-    <p>Nos intégrations respectent les exigences de sécurité les plus strictes :</p>
+    <div class="notice">
+      <strong>Ce que nous ne collectons pas :</strong> aucune analyse d'usage, aucun identifiant publicitaire, aucun rapport de crash ni télémétrie de performance, aucune géolocalisation, aucun carnet de contacts, aucun jeton Firebase ni notification push.
+    </div>
+
+    <h2>3. Services tiers</h2>
     <ul>
-      <li><strong>Google Firebase :</strong> Authentification et notifications Firebase Cloud Messaging (FCM).</li>
-      <li><strong>Google Play Services :</strong> Validation de l'intégrité de l'application (Play Integrity) et gestion des versions.</li>
-      <li><strong>GitHub Actions :</strong> Automatisation de la chaîne d'intégration continue via des jetons sécurisés.</li>
+      <li><strong>Supabase</strong> (PostgreSQL hébergé et authentification) — utilisé uniquement si l'application est configurée avec un projet Supabase et que vous créez un compte. Il enregistre votre identité d'authentification et les données du workspace que vous écrivez.</li>
+      <li><strong>GitHub Pages</strong> — héberge ce site et le bundle de l'application en HTTPS.</li>
+      <li><strong>Google Fonts</strong> — sert les polices de l'application (Plus Jakarta Sans, Cairo, JetBrains Mono). Les requêtes partent vers le CDN de polices de Google.</li>
+    </ul>
+    <p>Aucun autre tiers ne reçoit de données de l'application. Aucun SDK d'analyse, de publicité ou de marketing n'est présent.</p>
+
+    <h2>4. Durées de conservation</h2>
+    <ul>
+      <li><strong>Les données locales</strong> restent sur votre appareil jusqu'à ce que vous les supprimiez : utilisez la purge intégrée (voir section 6) ou effacez les données du site dans votre navigateur.</li>
+      <li><strong>Les données de compte et de workspace</strong> sont conservées tant que votre compte existe, puis supprimées via la <a href="../../delete-account/fr/" style="color:#38bdf8;">procédure de suppression de compte</a>.</li>
+      <li><strong>Aucune télémétrie n'est conservée</strong>, car aucune n'est collectée.</li>
     </ul>
 
-    <h2>4. Sécurité et Durée de Conservation</h2>
-    <p>Vos sessions restent actives jusqu'à votre déconnexion ou suppression. Les données de projet locales restent sous votre contrôle exclusif. Toutes les communications réseau transitent par le protocole sécurisé TLS 1.3. Aucun mot de passe ni clé privée n'est enregistré sur nos serveurs.</p>
+    <h2>5. Sécurité</h2>
+    <p>Le site et l'application sont servis en HTTPS. Aucune clé de signature, aucun secret serveur ni identifiant n'est intégré au bundle. Lorsque Supabase est utilisé, les tables sont protégées par la sécurité au niveau des lignes (RLS) et l'authentification est gérée par Supabase. Les données en repos sur votre appareil sont protégées par la sécurité de votre appareil et de votre profil navigateur.</p>
 
-    <h2>5. Vos Droits (Conformité RGPD)</h2>
-    <p>Vous disposez d'un droit permanent d'accès, de rectification, de portabilité et de suppression de l'ensemble de vos données. Pour supprimer définitivement vos données personnelles, utilisez notre formulaire dédié <a href="../../delete-account/fr/" style="color:#38bdf8;">Suppression de Compte</a> ou contactez-nous par e-mail à <strong>ramzi.guedouar@gmail.com</strong>.</p>
+    <h2>6. Vos droits (RGPD et cadres équivalents)</h2>
+    <p>Vous pouvez demander :</p>
+    <ul>
+      <li>l'accès aux données personnelles que nous détenons à votre sujet ;</li>
+      <li>la rectification de données inexactes ;</li>
+      <li>l'effacement de votre compte et des données associées ;</li>
+      <li>la portabilité de vos données dans un format lisible par machine ;</li>
+      <li>l'opposition ou la limitation du traitement.</li>
+    </ul>
+    <p><strong>Comment exercer ces droits :</strong></p>
+    <ol style="color:#cbd5e1; font-size:0.95rem; padding-left:1.5rem;">
+      <li>Données locales : dans l'application, ouvrez le menu de la barre supérieure → <strong>Confidentialité &amp; compte</strong> → <strong>Données locales</strong> → <strong>Effacer les données locales</strong> (immédiat, sur cet appareil).</li>
+      <li>Compte et données distantes : utilisez la <a href="../../delete-account/fr/" style="color:#38bdf8;">page de suppression de compte</a> ou écrivez à <strong>ramzi.guedouar@gmail.com</strong>.</li>
+    </ol>
+    <p>Les demandes reçoivent une réponse sous 48 heures ouvrées.</p>
 
-    <h2>6. Protection des Mineurs</h2>
-    <p>Nos services s'adressent aux ingénieurs et développeurs âgés d'au moins 13 ans. Nous ne collectons sciemment aucune donnée personnelle relative aux enfants de moins de 13 ans.</p>
+    <h2>7. Confidentialité des mineurs</h2>
+    <p>Appointment PMS est un outil professionnel destiné au personnel de l'hôtellerie et n'est pas adressé aux enfants. Nous ne collectons pas sciemment de données personnelles de mineurs.</p>
+
+    <h2>8. Évolution de cette politique</h2>
+    <p>Toute modification est publiée sur cette page avec une date mise à jour. L'utilisation continue de l'application après une modification vaut acceptation de la politique mise à jour.</p>
 
     <div class="contact-box">
-      <strong>Délégué à la Protection des Données (DPO) :</strong> Ramzi Guedouar<br>
+      <strong>Contact protection des données :</strong> Ramzi Guedouar<br>
       E-mail : <strong>ramzi.guedouar@gmail.com</strong><br>
-      Délai de réponse : Inférieur à 48 heures ouvrées.
+      Délai de réponse : sous 48 heures ouvrées.
     </div>
   </div>
 </body>
