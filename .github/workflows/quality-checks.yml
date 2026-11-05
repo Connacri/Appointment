@@ -53,6 +53,9 @@ jobs:
       - name: Run regression tests
         run: npm run test
 
+      - name: i18n parity (fr / en / ar)
+        run: npm run i18n:check
+
   production-build:
     name: Production build
     runs-on: ubuntu-latest

@@ -62,7 +62,7 @@ L'interface est construite avec React 19 et TypeScript. Elle fonctionne comme ap
 
 ### Design system
 
-L'interface partage un design system unique défini dans [`src/index.css`](./src/index.css) : jetons sémantiques (couleurs, rayons, ombres, espacements, durées, courbes `--ease-*`, échelle de `z-index`), primitives d'interaction (press instantané, focus visible, cibles tactiles ≥ 44 px) et animations de montage pour les menus, modales, tiroirs et toasts. La barre supérieure et la navigation utilisent des matériaux translucides (`backdrop-filter`) désactivés automatiquement sous `prefers-reduced-transparency` et `prefers-contrast`. La mise en page est mobile-first et edge-to-edge (`viewport-fit=cover`, encoches et barres de gestes), avec une typographie à approche par taille, des chiffres tabulaires dans les tableaux et un repli statique sous `prefers-reduced-motion`. Les nouveaux composants doivent réutiliser ces jetons et primitives plutôt que réintroduire des valeurs ou des animations ad hoc.
+L'interface partage un design system unique défini dans [`src/index.css`](./src/index.css) : jetons sémantiques (couleurs, rayons, ombres, espacements, durées, courbes `--ease-*`, échelle de `z-index`), primitives d'interaction (press instantané, focus visible, cibles tactiles ≥ 44 px) et animations de montage pour les menus, modales, tiroirs et toasts. La barre supérieure et la navigation utilisent des matériaux translucides (`backdrop-filter`) désactivés automatiquement sous `prefers-reduced-transparency` et `prefers-contrast`. La mise en page est mobile-first et edge-to-edge (`viewport-fit=cover`, encoches et barres de gestes), avec une typographie à approche par taille, des chiffres tabulaires dans les tableaux et un repli statique sous `prefers-reduced-motion`. Les écrans héritent du fond `pms-canvas` de la coque applicative : ils ne redéclarent pas leur propre couleur de fond. Les nouveaux composants doivent réutiliser ces jetons et primitives plutôt que réintroduire des valeurs ou des animations ad hoc.
 
 ## Architecture technique
 
@@ -70,14 +70,23 @@ L'interface partage un design system unique défini dans [`src/index.css`](./src
 |---|---|
 | Interface | React 19, TypeScript, Tailwind CSS 4 |
 | Build & développement | Vite 8 |
-| Visualisation | D3 |
-| Animations UI | Motion |
+| Visualisation | Composants SVG React (aucune bibliothèque de graphiques) |
+| Animations UI | CSS uniquement (jetons et animations `pms-*` dans `src/index.css`) |
 | Icônes | Lucide React |
 | Stockage local | IndexedDB via le module IndexedDB, avec fallback local |
 | Mobile Android | Capacitor 8 |
 | Serrures & données cartes | WebHID / USB, `mdb-reader`, QR Code |
-| Qualité | TypeScript, tests Node.js |
+| Qualité | TypeScript, tests Node.js, contrôle de parité i18n |
 | Livraison | GitHub Actions, GitHub Pages, artefacts Android et Windows |
+
+### Chargement et performance
+
+La coque applicative (`TopBar`, `Sidebar`, planning, fiche de réservation) est chargée
+immédiatement ; les autres écrans et modales sont découpés par `React.lazy` et chargés à la
+demande (`Suspense` + indicateur `pms-view-loading`). Les modales ne sont montées que
+lorsqu'elles sont ouvertes. Le bundle initial reste ainsi autour de **≈ 208 kB gzip**
+(contre 494 kB auparavant), et les dépendances lourdes (`jspdf`, `html2canvas`, génération de
+QR) ne sont téléchargées qu'au premier usage. Voir [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).
 
 ### État des données et synchronisation
 
@@ -124,6 +133,9 @@ npm run lint
 # Tests automatisés
 npm test
 
+# Parité des traductions fr / en / ar
+npm run i18n:check
+
 # Build de production
 npm run build
 
@@ -161,6 +173,9 @@ Les artefacts de release utilisent le préfixe `Appointment-PMS` et la version d
 ## Documentation du dépôt
 
 - [Contrat et consignes de développement](./AGENTS.md)
+- [Architecture applicative](./docs/ARCHITECTURE.md)
+- [Internationalisation et RTL](./docs/I18N.md)
+- [Scorecard de santé engineering](./docs/HEALTH.md)
 - [Plan de synchronisation Supabase](./docs/SUPABASE_SYNC_PLAN.md)
 - [Release, signature et déploiement](./docs/RELEASE.md)
 - [Analyse des tables et relations CardLock.mdb](./docs/CARDLOCK_DATABASE_ANALYSIS.md)

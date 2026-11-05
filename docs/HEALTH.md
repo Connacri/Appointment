@@ -1,19 +1,48 @@
 # HEALTH.md — Engineering Health Scorecard
 
-Score: **100/100** (Refreshed: October 2026)
+Score: **88/100** (Refreshed: 2026-11-05)
+
+> The previous score (100/100) was not evidence-based: it claimed “zero runtime bloat”
+> while the initial JS payload was 1.75 MB (494 kB gzip). The score is corrected here
+> and now reflects measured output and identified gaps.
 
 | Area | Pts | Max | Evidence & Audit Findings |
 |---|---|---|---|
-| Security & Secrets | 20 | 20 | Zero secrets committed, `.env*` ignored, CI keystore fallback + GitHub Secrets mapping, Authenticode Windows code signing. Vendor Jet password (`pradlock`, third-party constant) documented, no user data. |
-| CI/CD & Releases | 20 | 20 | GitHub Actions `.github/workflows/release-and-deploy.yml` builds Signed APK (`com.planning.oran`), Signed AAB, Windows Signed EXE (`Appointment-PMS-Setup.exe`), and deploys GitHub Pages website. |
-| Compliance (Play + Legal) | 15 | 15 | Mandatory legal pages `/privacy/` and `/delete-account/` present in FR, EN, AR with `dir="rtl"` and working deletion portal without placeholders (§19.3). |
-| i18n + RTL | 10 | 10 | French, English, Arabic (RTL) supported across navigation, Planning Gantt, Channel Manager, Modals, and legal pages. |
-| Responsive + Accessibility | 10 | 10 | Fluid layout, mobile-first Planning Gantt with Mini/Compact/Normal modes, touch action sheet for smartphone tap, WCAG AA contrast. |
-| Performance | 10 | 10 | Vite 8 + React 19 fast bundle, IndexedDB IndexedDB local caching, zero runtime bloat. |
-| Tests & Compilation | 10 | 10 | TypeScript strict typing passes with 0 errors (`tsc --noEmit`), build succeeded. |
-| Documentation | 5 | 5 | AGENTS.md, README.md, scripts/bootstrap-secrets.sh, docs/HEALTH.md all synchronized. |
+| Security & secrets | 18 | 20 | No secret tracked (`.env*`, keystores, service accounts ignored); CI reconstructs the signing keystore only in `$RUNNER_TEMP` and deletes it with `if: always()`; production deps: `npm audit --omit=dev` → **0 vulnerabilities**. Gap: 8 moderate advisories remain in the dev toolchain. |
+| CI/CD & releases | 19 | 20 | `release-and-deploy.yml` builds signed APK/AAB (`com.planning.oran`) + Windows setup, publishes an immutable GitHub Release per run and deploys GitHub Pages; `quality-checks.yml` gates typecheck, tests, i18n and build. Gap: no build-provenance attestation yet. |
+| Compliance (Play + legal) | 14 | 15 | `/privacy/` and `/delete-account/` shipped in fr/en/ar (`dir="rtl"` for Arabic) and linked from the app, README and site; local purge implemented. Gap: `docs/COMPLIANCE.md` (data inventory for the Play Data Safety form) is still missing. |
+| i18n + RTL | 9 | 10 | 111 keys × fr/en/ar, `npm run i18n:check` enforced in CI, `dir`/`lang` driven by `AppContext`, RTL logical properties in the shell. Gap: several screens still branch on `language === 'fr'` inline, and the default language is `fr` instead of `en`. |
+| Responsive + accessibility | 8 | 10 | Mobile-first breakpoints, safe areas, 44 px targets, visible focus, reduced-motion/transparency/contrast fallbacks. Gap: no automated axe or Playwright device × language matrix. |
+| Performance | 9 | 10 | Initial bundle cut from **494 kB → ~208 kB gzip** (main chunk 418 kB / 122 kB gzip, lucide 295 kB / 85 kB gzip) by code-splitting 12 views and 7 modals; every other view/modal loads on demand. Gap: slightly above the 200 kB budget and no Lighthouse CI budget file. |
+| Tests | 7 | 10 | 38 unit tests green (`bookingValidation`, `readerInfo`, `cardLockScope`, `cardSpecialDecode`, `roomReadiness`, `mdbImport`) + i18n parity gate. Gap: no component or E2E tests. |
+| Documentation | 4 | 5 | `README`, `CHANGELOG`, `docs/ARCHITECTURE.md`, `docs/I18N.md`, `docs/RELEASE.md`, CardLock specs. Gap: `docs/COMPLIANCE.md` and `docs/BRANDING.md` missing. |
 
-**Total Score: 100/100**
+**Total: 88/100**
+
+## 2026-11-05 — Performance, dependencies and i18n gate
+
+Measured with `npm run build` (Vite 8 / rolldown) before and after:
+
+| Metric | Before | After |
+|---|---|---|
+| Initial JS (gzip) | ~494 kB | ~208 kB |
+| `index-*.js` | ~1.75 MB | 418 kB (122 kB gzip) |
+| Lazy chunks | none | 12 views + 7 modals + `jspdf`/`html2canvas` |
+
+Changes:
+
+- `App.tsx`: eager imports reduced to the landing shell (`TopBar`, `Sidebar`, `OfflineBanner`,
+  `PlanningTimeline`, `LegendBar`, `BookingModal`); every other view/modal is `React.lazy`
+  behind `Suspense` and modals mount only while open.
+- Removed unused dependencies (verified 0 imports): `d3`, `@types/d3`, `motion`,
+  `@google/genai`, `express`, `@types/express`, `dotenv`, `buffer`, `autoprefixer`, `esbuild`
+  → `npm install` removed 192 packages.
+- Removed dead component `DomainRoleSelector.tsx` (superseded by the `TopBar` switcher, imported nowhere).
+- Replaced duplicated `bg-slate-50 dark:bg-slate-950` wrappers (10 screens) with the inherited
+  `pms-canvas` background token; added the `pms-view-loading` fallback skeleton.
+- Added `npm run i18n:check` (`scripts/check-i18n.ts`) and wired it into the CI *Regression tests* job.
+- Documentation: `docs/ARCHITECTURE.md` (shell, lazy map, source layout, data flow) and
+  `docs/I18N.md` (key contract, placeholders, RTL checklist) added.
 
 ## 2026-10-27 — CardInfo synchronisation (ID + Operator Code)
 
@@ -41,5 +70,5 @@ Fix shipped:
 Verified on a **copy** of the real database (never the original): 2 rows
 inserted (`GongHao = Admin`), 1 already-present row skipped, second run
 idempotent (0 inserted / 3 present), backup created, Unicode preserved
-(`é` = U+00E9, `غرفة` = U+063A U+0631 U+0641 U+0629), apostrophe stored
+(`é` = U+00E9, `غرفة` = U+063A U+0631 U+0641 U+0629`), apostrophe stored
 verbatim. `scripts/verify-cardinfo.ts` → **31/31 green**.
