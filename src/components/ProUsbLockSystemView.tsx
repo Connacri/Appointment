@@ -256,7 +256,7 @@ export const ProUsbLockSystemView: React.FC = () => {
       no,
       label: buildingNames.get(no)
         ? `${buildingNames.get(no)} (Bâtiment ${no} — ${mdbRooms.filter((room) => room.building === no).length} chambres)`
-        : `Bâtiment ${no + (mdbSnapshot ? 1 : 0)}${mdbSnapshot ? ` (ID ${no})` : ''}`,
+        : `Bâtiment ${no}${mdbSnapshot ? ` (ID ${no})` : ''}`,
     }));
 
     const floorNumbers = mdbSnapshot
