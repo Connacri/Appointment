@@ -326,7 +326,7 @@ export const HelpCenterView: React.FC = () => {
   const isRtl = locale === 'ar';
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50 dark:bg-slate-950" dir={isRtl ? 'rtl' : 'ltr'}>
+    <div className="flex-1 min-h-0 overflow-y-auto" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8 space-y-6">
         <header className="rounded-2xl bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 p-5 sm:p-7 text-white shadow-sm">
           <div className="flex items-start gap-3">

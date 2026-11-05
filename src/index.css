@@ -349,6 +349,27 @@
 }
 
 /* 
+  VIEW LOADING FALLBACK
+  Visible only while a code-split view chunk is fetched
+*/
+
+@layer components {
+  .pms-view-loading {
+    display: block;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: var(--pms-radius-full);
+    border: 2px solid rgb(var(--pms-border));
+    border-top-color: rgb(var(--pms-accent));
+    animation: pms-spin 700ms linear infinite;
+  }
+}
+
+@keyframes pms-spin {
+  to { rotate: 360deg; }
+}
+
+/* 
   REDUCED MOTION — Fewer and gentler, not zero
 */
 

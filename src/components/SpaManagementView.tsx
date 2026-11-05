@@ -265,7 +265,7 @@ export const SpaManagementView: React.FC = () => {
   });
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-4 md:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-3 sm:space-y-4 md:space-y-6">
+    <div className="flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-4 md:p-6 overflow-y-auto overscroll-contain space-y-3 sm:space-y-4 md:space-y-6">
       {/* 1. TOP HEADER & KPI METRICS */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
         <div>

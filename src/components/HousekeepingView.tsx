@@ -59,7 +59,7 @@ export const HousekeepingView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain bg-slate-50 dark:bg-slate-950 space-y-3 sm:space-y-4">
+    <div className="flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain space-y-3 sm:space-y-4">
       <div>
         <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <Sparkles size={18} className="text-emerald-500 shrink-0" />

@@ -111,7 +111,7 @@ export const TasksManagementView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 min-w-0 min-h-0 w-full max-w-full flex flex-col md:flex-row h-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <div className="flex-1 min-w-0 min-h-0 w-full max-w-full flex flex-col md:flex-row h-full overflow-hidden">
       {/* Left / Center Tasks Workspace */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col h-full overflow-hidden p-2.5 sm:p-4 md:p-6 space-y-3 sm:space-y-4">
         {/* Top Header */}
