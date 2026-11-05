@@ -437,7 +437,7 @@ export const BookingAnalyticsView: React.FC = () => {
       blue: 'from-sky-50/90 via-white to-white dark:from-sky-950/35 dark:via-slate-900 dark:to-slate-900',
     };
     return (
-      <article className={`group relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br ${surfaces[tone] || surfaces.blue} p-3 shadow-[0_4px_16px_rgba(30,64,175,0.055)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-4`}>
+      <article className={`group relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br ${surfaces[tone] || surfaces.blue} p-3 shadow-[0_4px_16px_rgba(30,64,175,0.055)] transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-4`}>
         <span className={`absolute inset-x-0 top-0 h-0.5 ${accent}`} />
         <div className="flex items-start justify-between gap-2">
           <span className="min-w-0 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:text-[11px]">{label}</span>
@@ -482,7 +482,7 @@ export const BookingAnalyticsView: React.FC = () => {
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-1 rounded-full border border-slate-200/80 bg-white/85 p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900">
           {(['30d', '90d', '365d'] as RangeKey[]).map(key => (
-            <button key={key} type="button" onClick={() => setRange(key)} aria-pressed={range === key} className={`min-h-9 rounded-full px-3.5 text-[11px] font-bold transition-all sm:px-4 ${range === key ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+            <button key={key} type="button" onClick={() => setRange(key)} aria-pressed={range === key} className={`min-h-9 rounded-full px-3.5 text-[11px] font-bold transition sm:px-4 ${range === key ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
               {key === '30d' ? t('30 j', '30 days', '30 يوم') : key === '90d' ? t('90 j', '90 days', '90 يوم') : t('12 mois', '12 months', '12 شهر')}
             </button>
           ))}

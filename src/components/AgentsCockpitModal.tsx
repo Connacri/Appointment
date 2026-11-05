@@ -123,12 +123,12 @@ export const AgentsCockpitModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 md:p-6 bg-black/75 backdrop-blur-xs overflow-y-auto pms-modal-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget) setIsCockpitOpen(false);
       }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] my-auto">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] my-auto pms-modal">
         {/* Header Responsive */}
         <div className="py-2.5 sm:py-3 border-b border-slate-200 dark:border-slate-800 px-3.5 sm:px-6 flex items-center justify-between bg-slate-50 dark:bg-slate-850 gap-2.5 sm:gap-3 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -392,7 +392,7 @@ export const AgentsCockpitModal: React.FC = () => {
                       key={track}
                       type="button"
                       onClick={() => setSelectedTrack(track)}
-                      className={`min-h-[40px] py-2 rounded-xl text-xs font-bold uppercase border transition-all cursor-pointer ${
+                      className={`min-h-[40px] py-2 rounded-xl text-xs font-bold uppercase border transition cursor-pointer ${
                         selectedTrack === track
                           ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                           : 'border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -533,7 +533,7 @@ export const AgentsCockpitModal: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsCockpitOpen(false)}
-            className="min-h-[40px] px-5 py-2 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 rounded-xl font-bold transition-all shrink-0 cursor-pointer shadow-xs focus-visible:ring-2 focus-visible:ring-slate-400"
+            className="min-h-[40px] px-5 py-2 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 rounded-xl font-bold transition shrink-0 cursor-pointer shadow-xs focus-visible:ring-2 focus-visible:ring-slate-400"
           >
             Fermer
           </button>

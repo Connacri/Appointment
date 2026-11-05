@@ -83,7 +83,7 @@ export const LegalModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-slate-950/70 p-2 backdrop-blur-sm animate-in fade-in sm:p-5"
+      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-slate-950/70 p-2 backdrop-blur-sm sm:p-5 pms-modal-backdrop"
       dir={isAr ? 'rtl' : 'ltr'}
       onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}
     >
@@ -91,7 +91,7 @@ export const LegalModal: React.FC = () => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="legal-dialog-title"
-        className="my-auto flex max-h-[min(820px,94dvh)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-[0_30px_100px_-24px_rgba(0,0,0,.65)] dark:border-slate-700 dark:bg-slate-950 sm:rounded-3xl"
+        className="my-auto flex max-h-[min(820px,94dvh)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-[0_30px_100px_-24px_rgba(0,0,0,.65)] dark:border-slate-700 dark:bg-slate-950 sm:rounded-3xl pms-modal"
       >
         <header className="relative shrink-0 overflow-hidden border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-6">
           <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-blue-500/10 to-transparent" />

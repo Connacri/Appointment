@@ -480,7 +480,7 @@ export const PlanningTimeline: React.FC = () => {
             setSelectedHousekeepingRoom({ id: resourceId, name: resourceName || '', status: status || 'clean' });
           }
         }}
-        className={`relative z-20 w-3.5 h-3.5 rounded-full ${colorClass} shrink-0 cursor-pointer hover:scale-125 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 shadow-2xs pointer-events-auto`}
+        className={`relative z-20 w-3.5 h-3.5 rounded-full ${colorClass} shrink-0 cursor-pointer hover:scale-125 transition focus:outline-none focus:ring-2 focus:ring-blue-500 ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 shadow-2xs pointer-events-auto`}
         title={`État : ${label} — Cliquez pour consulter ou modifier le statut`}
         aria-label={`État de la chambre : ${label}. Cliquez pour consulter ou modifier le statut`}
       />
@@ -649,7 +649,7 @@ export const PlanningTimeline: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="availability-help-title"
-            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-2xl animate-in fade-in zoom-in-95"
+            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-2xl pms-modal"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2.5">
@@ -719,7 +719,7 @@ export const PlanningTimeline: React.FC = () => {
         <button
           type="button"
           onClick={scrollToToday}
-          className="absolute top-[42px] sm:top-[42px] right-2 sm:right-6 z-[95] px-3 py-1 rounded-full text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/70 shadow-md backdrop-blur-md flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-all cursor-pointer select-none active:scale-95 group"
+          className="absolute top-[42px] sm:top-[42px] right-2 sm:right-6 z-[95] px-3 py-1 rounded-full text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/70 shadow-md backdrop-blur-md flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer select-none active:scale-95 group"
           title={language === 'fr' ? 'Centrer la vue sur Aujourd’hui' : language === 'ar' ? 'الانتقال إلى اليوم' : 'Scroll to Today'}
         >
           <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
@@ -1127,7 +1127,7 @@ export const PlanningTimeline: React.FC = () => {
                                   if (!isMobileScreen) schedulePreviewClose();
                                 }}
                                 style={posStyle}
-                                className={`absolute top-1 sm:top-1.5 h-8 sm:h-9 rounded-md px-1 sm:px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-xs hover:brightness-105 active:scale-[0.98] transition-all z-10 border ${statusStyle.bg} ${statusStyle.border}`}
+                                className={`absolute top-1 sm:top-1.5 h-8 sm:h-9 rounded-md px-1 sm:px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-xs hover:brightness-105 active:scale-[0.98] transition z-10 border ${statusStyle.bg} ${statusStyle.border}`}
                               >
                                     <div className="flex items-center gap-1.5 truncate min-w-0">
                                       {/* Person icons: if multiple occupants occupy the room, render stacked group of person icons */}
@@ -1269,8 +1269,8 @@ export const PlanningTimeline: React.FC = () => {
               ? roomStyle
               : { panel: 'border-blue-300 dark:border-blue-800', icon: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300', accent: 'bg-blue-500', statusLabel: language === 'fr' ? 'Règle de réservation' : language === 'ar' ? 'قاعدة الحجز' : 'Booking rule' };
             return (
-              <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 backdrop-blur-[2px] p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setTimelineNotice(null); }}>
-                <section role="alertdialog" aria-modal="true" aria-labelledby="timeline-notice-title" className={`w-full max-w-sm overflow-hidden rounded-2xl border bg-white shadow-2xl dark:bg-slate-900 ${panel.panel}`}>
+              <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 backdrop-blur-[2px] p-4 pms-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setTimelineNotice(null); }}>
+                <section role="alertdialog" aria-modal="true" aria-labelledby="timeline-notice-title" className={`w-full max-w-sm overflow-hidden rounded-2xl border bg-white shadow-2xl dark:bg-slate-900 ${panel.panel} pms-modal`}>
                   <div className={`h-1.5 w-full ${panel.accent}`} />
                   <div className="p-4 sm:p-5">
                     <div className="flex items-start gap-3">
@@ -1311,7 +1311,7 @@ export const PlanningTimeline: React.FC = () => {
                 left: `${Math.min(window.innerWidth - 270, Math.max(10, activePreviewBooking.x))}px`,
                 top: `${Math.min(window.innerHeight - 250, activePreviewBooking.y ?? 100)}px`,
               }}
-              className="w-68 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-3 z-50 text-xs animate-in fade-in zoom-in-95 pointer-events-auto"
+              className="w-68 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-3 z-50 text-xs pointer-events-auto pms-pop"
               onMouseEnter={cancelPreviewClose}
               onMouseLeave={schedulePreviewClose}
             >
@@ -1399,8 +1399,8 @@ export const PlanningTimeline: React.FC = () => {
 
           {/* Mobile Touch Action Sheet for Smartphone Tap */}
           {activePreviewBooking && activePreviewBooking.isMobileSheet && (
-            <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-2xs flex items-end justify-center p-0 sm:p-4">
-              <div className="w-full sm:max-w-md max-h-[88dvh] overflow-y-auto bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl space-y-3 animate-in slide-in-from-bottom-5">
+            <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-2xs flex items-end justify-center p-0 sm:p-4 pms-modal-backdrop">
+              <div className="w-full sm:max-w-md max-h-[88dvh] overflow-y-auto bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl space-y-3 pms-slide-up pms-sheet">
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-slate-900 dark:text-white text-sm">

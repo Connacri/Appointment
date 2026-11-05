@@ -180,7 +180,7 @@ export const DynamicPricingView: React.FC = () => {
     <div className="flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain space-y-3 sm:space-y-4">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-3.5 py-2 rounded-xl shadow-xl text-xs font-semibold flex items-center gap-2 border border-slate-700 animate-in fade-in slide-in-from-bottom-2">
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-3.5 py-2 rounded-xl shadow-xl text-xs font-semibold flex items-center gap-2 border border-slate-700 pms-slide-up">
           <Check size={14} className="text-emerald-400" />
           <span>{toastMessage}</span>
         </div>

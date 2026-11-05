@@ -43,12 +43,12 @@ export const CardCreationProgressModal: React.FC<CardCreationProgressModalProps>
 
   return (
     <div
-      className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs pms-modal-backdrop"
       role="dialog"
       aria-modal="true"
       aria-label="Progression de création de carte"
     >
-      <div className="bg-white dark:bg-slate-900 border-2 border-blue-500/40 dark:border-blue-400/40 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center text-center relative overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border-2 border-blue-500/40 dark:border-blue-400/40 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center text-center relative overflow-hidden pms-modal">
         {/* Glow de fond */}
         <div className="absolute -top-16 -left-16 w-36 h-36 bg-blue-500/10 dark:bg-blue-400/10 rounded-full blur-2xl pointer-events-none" />
         <div className="absolute -bottom-16 -right-16 w-36 h-36 bg-emerald-500/10 dark:bg-emerald-400/10 rounded-full blur-2xl pointer-events-none" />
@@ -85,7 +85,7 @@ export const CardCreationProgressModal: React.FC<CardCreationProgressModalProps>
               cx="50"
               cy="50"
               r={radius}
-              className="text-blue-600 dark:text-blue-400 transition-all duration-300 ease-out"
+              className="text-blue-600 dark:text-blue-400 transition duration-300 ease-out"
               strokeWidth="7"
               strokeDasharray={circumference}
               strokeDashoffset={strokeDashoffset}
@@ -98,7 +98,7 @@ export const CardCreationProgressModal: React.FC<CardCreationProgressModalProps>
           {/* Contenu central dans le cercle */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             {progress >= 100 ? (
-              <CheckCircle2 size={36} className="text-emerald-500 animate-in zoom-in-75 duration-200" />
+              <CheckCircle2 size={36} className="text-emerald-500 pms-pop" />
             ) : (
               <>
                 <span className="text-2xl font-black tracking-tight text-slate-900 dark:text-white font-mono">

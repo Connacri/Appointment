@@ -280,7 +280,7 @@ export const TasksManagementView: React.FC = () => {
                 <div
                   key={t.id}
                   onClick={() => setSelectedTaskId(t.id)}
-                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                  className={`p-3.5 rounded-2xl border transition cursor-pointer ${
                     isSelected
                       ? 'bg-blue-50/40 dark:bg-blue-950/20 border-blue-500 shadow-sm'
                       : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300'
@@ -461,7 +461,7 @@ export const TasksManagementView: React.FC = () => {
               {selectedTask.status !== 'done' && (
                 <button
                   onClick={() => updateTaskStatus(selectedTask.id, 'done')}
-                  className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl font-medium text-xs shadow-md shadow-emerald-500/20 transition-all cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl font-medium text-xs shadow-md shadow-emerald-500/20 transition cursor-pointer"
                 >
                   <CheckCircle2 size={16} />
                   <span>{language === 'fr' ? 'Valider & Déduire du Stock' : 'Complete & Deduct Stock'}</span>
@@ -471,7 +471,7 @@ export const TasksManagementView: React.FC = () => {
               {selectedTask.status === 'pending' && (
                 <button
                   onClick={() => updateTaskStatus(selectedTask.id, 'doing')}
-                  className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-white py-2 rounded-xl font-medium text-xs shadow-xs transition-all cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-white py-2 rounded-xl font-medium text-xs shadow-xs transition cursor-pointer"
                 >
                   <Clock size={16} />
                   <span>{language === 'fr' ? 'Démarrer l’intervention' : 'Start Working'}</span>
@@ -481,7 +481,7 @@ export const TasksManagementView: React.FC = () => {
               {selectedTask.status === 'done' && (
                 <button
                   onClick={() => updateTaskStatus(selectedTask.id, 'pending')}
-                  className="w-full flex items-center justify-center gap-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-xl font-medium text-xs transition-all cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-xl font-medium text-xs transition cursor-pointer"
                 >
                   <RefreshCw size={14} />
                   <span>{language === 'fr' ? 'Rouvrir la tâche' : 'Reopen Task'}</span>
@@ -525,8 +525,8 @@ export const TasksManagementView: React.FC = () => {
 
       {/* New Task Modal */}
       {isNewTaskOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs pms-modal-backdrop">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 pms-modal">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Sparkles size={18} className="text-blue-500" />
               <span>{language === 'fr' ? 'Créer une tâche / livraison' : 'Create Task or Delivery'}</span>

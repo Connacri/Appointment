@@ -43,12 +43,12 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
       role="dialog"
       aria-modal="true"
       aria-labelledby="about-modal-title"
-      className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200"
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md overflow-y-auto pms-modal-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative w-full max-w-3xl rounded-3xl border border-cyan-500/30 bg-slate-950 text-slate-100 shadow-[0_0_60px_rgba(6,182,212,0.15)] overflow-hidden my-auto">
+      <div className="relative w-full max-w-3xl rounded-3xl border border-cyan-500/30 bg-slate-950 text-slate-100 shadow-[0_0_60px_rgba(6,182,212,0.15)] overflow-hidden my-auto pms-modal">
         {/* Banner with Geometric Polygonal Background Accent */}
         <div className="relative w-full h-44 sm:h-52 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 overflow-hidden border-b border-cyan-500/20">
           {/* Stylized polygon mesh representation matching HEADER RMZ */}
@@ -152,7 +152,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             <div className="flex items-center gap-2">
               <a
                 href="tel:+213696410953"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-all shadow-md shadow-cyan-600/30"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition shadow-md shadow-cyan-600/30"
               >
                 <Phone size={13} />
                 <span>0696.410.953</span>

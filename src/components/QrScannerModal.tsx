@@ -204,12 +204,12 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 bg-black/75 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 bg-black/75 backdrop-blur-xs overflow-y-auto pms-modal-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col my-auto max-h-[94dvh]">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col my-auto max-h-[94dvh] pms-modal">
         {/* Header */}
         <div className="border-b border-slate-200 dark:border-slate-800 px-5 py-4 flex items-center justify-between bg-slate-50 dark:bg-slate-850">
           <div className="flex items-center gap-2.5">
@@ -244,7 +244,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
         <div className="p-5 overflow-y-auto space-y-4 text-xs">
           {/* Success Receipt View */}
           {successReceipt && (
-            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500/40 rounded-2xl space-y-3 animate-in zoom-in-95">
+            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500/40 rounded-2xl space-y-3 pms-pop">
               <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-200 font-bold text-sm">
                 <CheckCircle2 size={20} className="text-emerald-600" />
                 <span>Enregistrement & Check-in Confirmé !</span>
@@ -281,7 +281,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
 
           {/* Active Scanned Client Card */}
           {selectedScannedBooking && (
-            <div className="p-4 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-300 dark:border-blue-800 rounded-2xl space-y-3 animate-in fade-in">
+            <div className="p-4 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-300 dark:border-blue-800 rounded-2xl space-y-3 pms-fade">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <User size={16} className="text-blue-600" />
@@ -408,7 +408,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
                 <div
                   key={bkg.id}
                   onClick={() => handleSelectBooking(bkg)}
-                  className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-500 bg-white dark:bg-slate-850 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 cursor-pointer flex items-center justify-between transition-all"
+                  className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-500 bg-white dark:bg-slate-850 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 cursor-pointer flex items-center justify-between transition"
                 >
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs">

@@ -124,7 +124,7 @@ const MainLayout: React.FC = () => {
         {/* Right Main Working View */}
         <div className="relative z-0 flex-1 flex flex-col h-full overflow-hidden min-w-0">
 
-          <main className="flex-1 flex flex-col overflow-hidden relative">
+          <main key={activeView} className="flex-1 flex flex-col overflow-hidden relative pms-fade">
             <Suspense fallback={<ViewFallback />}>
               {activeView === 'planning' && (
                 <>

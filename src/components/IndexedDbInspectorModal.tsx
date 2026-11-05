@@ -308,7 +308,7 @@ export const IndexedDbInspectorModal: React.FC<{
   return (
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
-      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-slate-950/75 p-2 backdrop-blur-sm animate-in fade-in sm:p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-slate-950/75 p-2 backdrop-blur-sm sm:p-4 pms-modal-backdrop"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -317,7 +317,7 @@ export const IndexedDbInspectorModal: React.FC<{
         role="dialog"
         aria-modal="true"
         aria-labelledby="indexeddb-inspector-title"
-        className="my-auto flex max-h-[96dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-2xl dark:border-slate-700 dark:bg-slate-950 sm:rounded-3xl"
+        className="my-auto flex max-h-[96dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-2xl dark:border-slate-700 dark:bg-slate-950 sm:rounded-3xl pms-modal"
       >
         <header className="relative shrink-0 overflow-hidden bg-slate-950 px-4 py-4 text-white sm:px-6 sm:py-5">
           <div className="pointer-events-none absolute -right-12 -top-24 h-56 w-56 rounded-full bg-cyan-500/15 blur-3xl" />

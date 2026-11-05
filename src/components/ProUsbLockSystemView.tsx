@@ -939,7 +939,7 @@ export const ProUsbLockSystemView: React.FC = () => {
             type="button"
             onClick={handleConnectHardware}
             disabled={isConnecting}
-            className="h-8 sm:h-9 px-2.5 sm:px-3 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-all flex items-center gap-1.5 shadow-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="h-8 sm:h-9 px-2.5 sm:px-3 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition flex items-center gap-1.5 shadow-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
             title="Demande au navigateur l'autorisation d'accéder à l'encodeur proUSB physique via navigator.hid.requestDevice"
           >
             <Usb size={14} className={isConnecting ? 'animate-pulse' : ''} />
@@ -972,7 +972,7 @@ export const ProUsbLockSystemView: React.FC = () => {
       {/* Toast Alert */}
       {statusMessage && (
         <div
-          className={`px-3 py-1.5 text-xs flex items-center justify-between transition-all ${
+          className={`px-3 py-1.5 text-xs flex items-center justify-between transition ${
             statusMessage.type === 'success'
               ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-200 border-b border-emerald-200 dark:border-emerald-800'
               : statusMessage.type === 'error'
@@ -1225,7 +1225,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                   <button
                     onClick={handleIssueGuestCard}
                     disabled={isWriting}
-                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 disabled:opacity-75 cursor-pointer"
+                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md transition flex items-center gap-2 disabled:opacity-75 cursor-pointer"
                   >
                     {isWriting ? (
                       <div className="relative w-4 h-4 shrink-0">
@@ -1612,7 +1612,7 @@ export const ProUsbLockSystemView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowSpecialCardModal(true)}
-                className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-bold rounded-xl text-xs shadow-md transition flex items-center gap-2 cursor-pointer"
               >
                 <KeyRound size={15} />
                 <span>🔐 Créer Carte Spéciale (avec mot de passe)</span>
@@ -1642,7 +1642,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                         setShowSpecialCardModal(true);
                       }
                     }}
-                    className={`p-3 rounded-xl border text-left flex flex-col gap-2 transition-all ${
+                    className={`p-3 rounded-xl border text-left flex flex-col gap-2 transition ${
                       isSelected
                         ? btn.type === 'special'
                           ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 shadow-xs'
@@ -1773,7 +1773,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                 <button
                   onClick={handleIssueStaffCard}
                   disabled={isWriting}
-                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-75"
+                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-75"
                 >
                   {isWriting ? (
                     <div className="relative w-4 h-4 shrink-0">
@@ -2676,12 +2676,12 @@ export const ProUsbLockSystemView: React.FC = () => {
       {/* MODAL: CRÉATION CARTE SPÉCIALE AVEC MOT DE PASSE */}
       {showSpecialCardModal && (
         <div
-          className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-xs overflow-y-auto pms-modal-backdrop"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowSpecialCardModal(false);
           }}
         >
-          <div className="bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col my-auto text-xs">
+          <div className="bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col my-auto text-xs pms-modal">
             {/* Modal Header */}
             <div className="p-4 bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600 text-white flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -2826,7 +2826,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isWriting}
-                  className="px-5 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-75"
+                  className="px-5 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-bold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-75"
                 >
                   <ShieldCheck size={16} />
                   <span>Encoder la Carte Spéciale</span>

@@ -203,12 +203,12 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
 
   return (
     <div
-      className="fixed inset-0 z-[30000] flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[30000] flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm pms-modal-backdrop"
       role="dialog"
       aria-modal="true"
       aria-labelledby="establishment-modal-title"
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full shadow-2xl flex flex-col max-h-[94vh] overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full shadow-2xl flex flex-col max-h-[94vh] overflow-hidden pms-modal">
         {/* Modal Header */}
         <div className="px-3.5 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-blue-50/60 via-indigo-50/40 to-transparent dark:from-blue-950/30 dark:via-slate-900 dark:to-transparent shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3">
@@ -282,7 +282,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
         <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
           {/* TAB 1: IDENTITY & TYPE */}
           {activeTab === 'identity' && (
-            <div className="space-y-5 animate-in fade-in">
+            <div className="space-y-5 pms-fade">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -411,7 +411,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
 
           {/* TAB 2: LOGO & VISUAL */}
           {activeTab === 'logo' && (
-            <div className="space-y-6 animate-in fade-in">
+            <div className="space-y-6 pms-fade">
               <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800">
                 {/* Logo Preview */}
                 <div className="relative w-28 h-28 rounded-2xl bg-white dark:bg-slate-900 border-2 border-dashed border-blue-400 dark:border-blue-500/50 flex items-center justify-center p-2 shadow-inner shrink-0 overflow-hidden">
@@ -472,7 +472,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                         key={preset.id}
                         type="button"
                         onClick={() => handleSelectPresetLogo(preset.svgDataUrl)}
-                        className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
+                        className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition cursor-pointer ${
                           isSelected
                             ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 shadow-xs ring-2 ring-blue-500/20'
                             : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800'
@@ -504,7 +504,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
 
           {/* TAB 3: CONTACT & LOCATION */}
           {activeTab === 'contact' && (
-            <div className="space-y-4 animate-in fade-in">
+            <div className="space-y-4 pms-fade">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -629,7 +629,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
 
           {/* TAB 4: FISCAL & BANKING (INVOICES & QUOTES) */}
           {activeTab === 'fiscal' && (
-            <div className="space-y-4 animate-in fade-in">
+            <div className="space-y-4 pms-fade">
               <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-xl text-blue-900 dark:text-blue-300 leading-relaxed text-xs">
                 Ces mentions légales obligatoires apparaitront dans le pied de page et les mentions fiscales de toutes vos <strong>factures</strong> et de vos <strong>devis</strong>, assurant une parfaite conformité comptable.
               </div>
@@ -760,7 +760,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
 
           {/* TAB 5: BUILDINGS, FLOORS AND ROOMS */}
           {activeTab === 'structure' && (
-            <div className="space-y-5 animate-in fade-in">
+            <div className="space-y-5 pms-fade">
               <section className="rounded-2xl border border-blue-200 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-950/20 p-4 space-y-3">
                 <div className="flex items-center gap-2 text-blue-900 dark:text-blue-200 font-extrabold text-sm">
                   <Database size={17} /> Importer la base proUSB CardLock.mdb
@@ -846,7 +846,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
 
               <button
                 type="submit"
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-extrabold rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center gap-2 cursor-pointer"
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-extrabold rounded-xl shadow-md shadow-blue-500/20 transition flex items-center gap-2 cursor-pointer"
               >
                 <CheckCircle2 size={16} />
                 <span>Enregistrer & Appliquer à l'Établissement</span>

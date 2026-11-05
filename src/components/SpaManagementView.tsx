@@ -299,7 +299,7 @@ export const SpaManagementView: React.FC = () => {
               setSelectedTreatmentForBooking(null);
               setIsNewBookingModalOpen(true);
             }}
-            className="flex items-center gap-1.5 h-8 sm:h-9 px-3 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
+            className="flex items-center gap-1.5 h-8 sm:h-9 px-3 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer"
           >
             <Plus size={15} />
             <span>{language === 'fr' ? 'Nouveau Soin Spa' : language === 'ar' ? 'حجز موعد سبا' : 'New Spa Booking'}</span>
@@ -308,7 +308,7 @@ export const SpaManagementView: React.FC = () => {
           <button
             type="button"
             onClick={() => window.print()}
-            className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
+            className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer"
             title="Imprimer le planning du jour"
           >
             <Printer size={14} />
@@ -459,7 +459,7 @@ export const SpaManagementView: React.FC = () => {
                 return (
                   <div
                     key={apt.id}
-                    className={`bg-white dark:bg-slate-900 border rounded-xl p-3 sm:p-4 shadow-xs flex flex-col justify-between space-y-3 transition-all ${
+                    className={`bg-white dark:bg-slate-900 border rounded-xl p-3 sm:p-4 shadow-xs flex flex-col justify-between space-y-3 transition ${
                       isCurrent
                         ? 'border-rose-400 dark:border-rose-600/80 ring-1 ring-rose-400/40'
                         : 'border-slate-200 dark:border-slate-800'
@@ -847,12 +847,12 @@ export const SpaManagementView: React.FC = () => {
       {/* 8. MODAL NOUVEAU RENDEZ-VOUS SPA */}
       {isNewBookingModalOpen && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 bg-black/75 backdrop-blur-xs overflow-y-auto pms-modal-backdrop"
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsNewBookingModalOpen(false);
           }}
         >
-          <div role="dialog" aria-modal="true" className="pms-dialog-panel max-w-lg w-full flex flex-col max-h-[92dvh] my-auto">
+          <div role="dialog" aria-modal="true" className="pms-dialog-panel max-w-lg w-full flex flex-col max-h-[92dvh] my-auto pms-modal">
             {/* Header */}
             <div className="border-b border-slate-200 dark:border-slate-800 px-5 py-3.5 flex items-center justify-between bg-slate-50 dark:bg-slate-850 shrink-0">
               <div className="flex items-center gap-2.5">
@@ -1110,12 +1110,12 @@ export const SpaManagementView: React.FC = () => {
       {/* 9. MODAL FICHE SOIN & REÇU FACTURATION */}
       {receiptModalAppointment && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 bg-black/75 backdrop-blur-xs pms-modal-backdrop"
           onClick={(e) => {
             if (e.target === e.currentTarget) setReceiptModalAppointment(null);
           }}
         >
-          <div role="dialog" aria-modal="true" className="pms-dialog-panel max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden p-5 space-y-4">
+          <div role="dialog" aria-modal="true" className="pms-dialog-panel max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden p-5 space-y-4 pms-modal">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Flower2 className="text-rose-500" size={18} />

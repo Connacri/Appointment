@@ -184,7 +184,7 @@ export const MyBookingsView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsNewBookingModalOpen(true)}
-                className="px-5 py-2.5 bg-white text-blue-900 hover:bg-blue-50 font-extrabold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2 hover:scale-102"
+                className="px-5 py-2.5 bg-white text-blue-900 hover:bg-blue-50 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center gap-2 hover:scale-102"
               >
                 <Plus size={16} strokeWidth={3} />
                 <span>Réserver en ligne maintenant</span>
@@ -347,7 +347,7 @@ export const MyBookingsView: React.FC = () => {
             return (
               <div
                 key={bkg.id}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3 sm:space-y-4"
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between space-y-3 sm:space-y-4"
               >
                 <div>
                   {/* Sector Badge & Status */}
@@ -407,7 +407,7 @@ export const MyBookingsView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setActiveQrPassBooking(bkg)}
-                    className="w-full h-9 sm:h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl sm:rounded-2xl text-xs shadow-xs transition-all flex items-center justify-center gap-2 group cursor-pointer"
+                    className="w-full h-9 sm:h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl sm:rounded-2xl text-xs shadow-xs transition flex items-center justify-center gap-2 group cursor-pointer"
                   >
                     <QrCode size={15} className="group-hover:scale-110 transition-transform" />
                     <span>Pass QR Code d'Arrivée</span>

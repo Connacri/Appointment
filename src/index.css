@@ -296,6 +296,20 @@
     animation: pms-fade-in var(--duration-slow) var(--ease-out) both;
   }
 
+  /* Content-level motion: step panes, result panels, floating previews, toasts. */
+  .pms-fade {
+    animation: pms-fade-in var(--duration-normal) var(--ease-out) both;
+  }
+
+  .pms-pop {
+    transform-origin: center;
+    animation: pms-pop-in var(--duration-medium) var(--ease-spring) both;
+  }
+
+  .pms-slide-up {
+    animation: pms-slide-up var(--duration-slow) var(--ease-out) both;
+  }
+
   /* Drawer / sheet — slides in from the reading edge. */
   .pms-drawer {
     animation: pms-drawer-in var(--duration-slower) var(--ease-drawer) both;
@@ -393,6 +407,9 @@
     .pms-drawer,
     .pms-sheet,
     .pms-toast,
+    .pms-fade,
+    .pms-pop,
+    .pms-slide-up,
     .pms-stagger > * {
       animation: none;
       opacity: 1;
@@ -560,35 +577,6 @@
     transition: box-shadow var(--duration-medium) var(--ease-out);
   }
 
-  .pms-card:hover {
-    box-shadow: var(--pms-shadow-md);
-  }
-
-  .pms-page-header {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-  }
-
-  .pms-toolbar {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-
-  .pms-table-wrap {
-    width: 100%;
-    min-width: 0;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-
   .pms-dialog-panel {
     width: min(100%, 48rem);
     max-height: min(92dvh, 56rem);
@@ -598,6 +586,15 @@
     border-radius: var(--pms-radius-2xl);
     background: rgb(var(--pms-surface));
     box-shadow: var(--pms-shadow-2xl);
+  }
+}
+
+/* Card hover lift only where a real pointer exists — touch must not lift cards. */
+@media (hover: hover) and (pointer: fine) {
+  @layer components {
+    .pms-card:hover {
+      box-shadow: var(--pms-shadow-md);
+    }
   }
 }
 
@@ -643,27 +640,6 @@
   /* Keep action rows usable without forcing the entire dialog wider. */
   [class*="fixed"][class*="inset-0"] :where(form > div:last-child, .dialog-actions) {
     flex-wrap: wrap;
-  }
-
-  .pms-page-header > :where(div:first-child) {
-    min-width: 0;
-    flex: 1 1 12rem;
-  }
-
-  .pms-toolbar {
-    max-width: 100%;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    padding-bottom: 0.125rem;
-    scrollbar-width: thin;
-  }
-
-  .pms-toolbar > * {
-    flex-shrink: 0;
-  }
-
-  .pms-table-wrap table {
-    min-width: 38rem;
   }
 }
 

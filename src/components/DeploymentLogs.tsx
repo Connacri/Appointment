@@ -157,9 +157,9 @@ export const DeploymentLogs: React.FC<DeploymentLogsProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-xs duration-150 pms-modal-backdrop">
       <div
-        className={`bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100 transition-all ${
+        className={`bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100 transition-all pms-modal ${
           isFullScreen
             ? 'w-full h-full rounded-none'
             : 'w-full max-w-5xl h-[85vh] max-h-[850px]'

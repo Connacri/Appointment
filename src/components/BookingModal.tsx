@@ -963,7 +963,7 @@ export const BookingModal: React.FC = () => {
                     setGuestType('algerian');
                     setForeignNationality('Algérienne');
                   }}
-                  className={`py-1.5 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`py-1.5 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                     guestType === 'algerian'
                       ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -978,7 +978,7 @@ export const BookingModal: React.FC = () => {
                     setGuestType('foreigner');
                     if (foreignNationality === 'Algérienne') setForeignNationality('Française');
                   }}
-                  className={`py-1.5 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`py-1.5 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                     guestType === 'foreigner'
                       ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -1182,7 +1182,7 @@ export const BookingModal: React.FC = () => {
                         key={plan.id}
                         type="button"
                         onClick={() => setSelectedMealPlanId(plan.id)}
-                        className={`p-2 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                        className={`p-2 rounded-xl border text-left flex flex-col justify-between transition cursor-pointer ${
                           isSelected
                             ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-950/60 ring-2 ring-blue-500 shadow-xs'
                             : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600'
@@ -1254,7 +1254,7 @@ export const BookingModal: React.FC = () => {
                                 : [...selectedDietary, diet.id]
                             );
                           }}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                          className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition cursor-pointer ${
                             isChecked
                               ? 'bg-emerald-600 text-white shadow-xs'
                               : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'

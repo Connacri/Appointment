@@ -40,7 +40,7 @@ export const CardResultDialog: React.FC<CardResultDialogProps> = ({ result, onCl
 
   return (
     <div
-      className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in"
+      className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs pms-modal-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -49,7 +49,7 @@ export const CardResultDialog: React.FC<CardResultDialogProps> = ({ result, onCl
       aria-labelledby="card-result-title"
     >
       <div
-        className={`bg-white dark:bg-slate-900 border-2 rounded-2xl max-w-md w-full shadow-2xl overflow-hidden ${
+        className={`bg-white dark:bg-slate-900 border-2 rounded-2xl max-w-md w-full shadow-2xl overflow-hidden pms-modal ${
           success ? 'border-emerald-400 dark:border-emerald-600' : 'border-rose-400 dark:border-rose-600'
         }`}
       >

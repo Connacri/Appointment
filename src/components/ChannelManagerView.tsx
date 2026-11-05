@@ -292,7 +292,7 @@ export const ChannelManagerView: React.FC = () => {
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setIsAddChannelModalOpen(true)}
-            className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
+            className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer"
           >
             <Plus size={14} />
             <span>{language === 'fr' ? 'Connecter' : language === 'ar' ? 'إضافة قناة' : 'Connect'}</span>
@@ -301,7 +301,7 @@ export const ChannelManagerView: React.FC = () => {
           <button
             onClick={handleSyncAll}
             disabled={isSyncingAll}
-            className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs transition disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw size={14} className={isSyncingAll ? 'animate-spin' : ''} />
             <span>{isSyncingAll ? (language === 'fr' ? 'Synchro...' : 'Syncing...') : (language === 'fr' ? 'Tout Synchro' : 'Sync All')}</span>
@@ -372,7 +372,7 @@ export const ChannelManagerView: React.FC = () => {
       <div className="flex border-b border-slate-200 dark:border-slate-800 gap-2 overflow-x-auto text-xs font-semibold no-scrollbar">
         <button
           onClick={() => setActiveTab('alerts')}
-          className={`flex items-center gap-2 pb-2.5 px-3 border-b-2 transition-all shrink-0 ${
+          className={`flex items-center gap-2 pb-2.5 px-3 border-b-2 transition shrink-0 ${
             activeTab === 'alerts'
               ? 'border-rose-500 text-rose-600 dark:text-rose-400'
               : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
@@ -389,7 +389,7 @@ export const ChannelManagerView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('channels')}
-          className={`flex items-center gap-2 pb-2.5 px-3 border-b-2 transition-all shrink-0 ${
+          className={`flex items-center gap-2 pb-2.5 px-3 border-b-2 transition shrink-0 ${
             activeTab === 'channels'
               ? 'border-blue-500 text-blue-600 dark:text-blue-400'
               : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
@@ -401,7 +401,7 @@ export const ChannelManagerView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('parity')}
-          className={`flex items-center gap-2 pb-2.5 px-3 border-b-2 transition-all shrink-0 ${
+          className={`flex items-center gap-2 pb-2.5 px-3 border-b-2 transition shrink-0 ${
             activeTab === 'parity'
               ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
               : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
@@ -413,7 +413,7 @@ export const ChannelManagerView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('logs')}
-          className={`flex items-center gap-2 pb-2.5 px-3 border-b-2 transition-all shrink-0 ${
+          className={`flex items-center gap-2 pb-2.5 px-3 border-b-2 transition shrink-0 ${
             activeTab === 'logs'
               ? 'border-blue-500 text-blue-600 dark:text-blue-400'
               : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
@@ -425,7 +425,7 @@ export const ChannelManagerView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('keystore_guide')}
-          className={`flex items-center gap-2 pb-2.5 px-3 border-b-2 transition-all shrink-0 ${
+          className={`flex items-center gap-2 pb-2.5 px-3 border-b-2 transition shrink-0 ${
             activeTab === 'keystore_guide'
               ? 'border-amber-500 text-amber-600 dark:text-amber-400'
               : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
@@ -497,7 +497,7 @@ export const ChannelManagerView: React.FC = () => {
                 return (
                   <div
                     key={alt.id}
-                    className={`p-3.5 md:p-4 rounded-xl border transition-all ${
+                    className={`p-3.5 md:p-4 rounded-xl border transition ${
                       alt.isResolved
                         ? 'bg-slate-50/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60'
                         : isCrit
@@ -849,8 +849,8 @@ export const ChannelManagerView: React.FC = () => {
 
       {/* MODAL 1: CONNECT NEW CHANNEL */}
       {isAddChannelModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 md:p-6 space-y-4">
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 pms-modal-backdrop">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 md:p-6 space-y-4 pms-modal">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Globe className="text-blue-500" size={18} />
@@ -972,8 +972,8 @@ export const ChannelManagerView: React.FC = () => {
 
       {/* MODAL 2: CONFIGURE CHANNEL & ROOM MAPPING */}
       {configuringChannel && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 md:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 pms-modal-backdrop">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 md:p-6 space-y-4 max-h-[90vh] overflow-y-auto pms-modal">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <span className="text-xl">{configuringChannel.logo}</span>
@@ -1089,8 +1089,8 @@ export const ChannelManagerView: React.FC = () => {
 
       {/* MODAL 3: CONFLICT RESOLUTION WORKFLOW */}
       {resolvingAlert && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 md:p-6 space-y-4">
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 pms-modal-backdrop">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 md:p-6 space-y-4 pms-modal">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <ShieldAlert className="text-rose-500" size={20} />
@@ -1123,7 +1123,7 @@ export const ChannelManagerView: React.FC = () => {
                 <div className="space-y-2">
                   <label
                     onClick={() => setSelectedResolutionOption('reassign')}
-                    className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                    className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition ${
                       selectedResolutionOption === 'reassign'
                         ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-500'
                         : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
@@ -1148,7 +1148,7 @@ export const ChannelManagerView: React.FC = () => {
 
                   <label
                     onClick={() => setSelectedResolutionOption('upgrade')}
-                    className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                    className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition ${
                       selectedResolutionOption === 'upgrade'
                         ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500'
                         : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
@@ -1173,7 +1173,7 @@ export const ChannelManagerView: React.FC = () => {
 
                   <label
                     onClick={() => setSelectedResolutionOption('cancel')}
-                    className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                    className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition ${
                       selectedResolutionOption === 'cancel'
                         ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-500'
                         : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'

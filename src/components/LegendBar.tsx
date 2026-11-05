@@ -82,7 +82,7 @@ export const LegendBar: React.FC = () => {
         <button
           type="button"
           onClick={() => setIsMobileExpanded(!isMobileExpanded)}
-          className="px-2.5 py-1 text-[10px] font-bold rounded-full bg-slate-900/90 text-white dark:bg-slate-100 dark:text-slate-900 shadow-md backdrop-blur border border-white/20 transition-all cursor-pointer flex items-center gap-1.5"
+          className="px-2.5 py-1 text-[10px] font-bold rounded-full bg-slate-900/90 text-white dark:bg-slate-100 dark:text-slate-900 shadow-md backdrop-blur border border-white/20 transition cursor-pointer flex items-center gap-1.5"
           aria-expanded={isMobileExpanded}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
@@ -95,7 +95,7 @@ export const LegendBar: React.FC = () => {
       <footer
         className={`${
           isMobileExpanded
-            ? 'fixed bottom-0 inset-x-0 z-50 p-2.5 shadow-2xl animate-in slide-in-from-bottom flex flex-wrap max-h-48'
+            ? 'fixed bottom-0 inset-x-0 z-50 p-2.5 shadow-2xl pms-slide-up flex flex-wrap max-h-48'
             : 'hidden sm:flex h-8'
         } bg-slate-50/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 px-3 items-center gap-1.5 overflow-x-auto shrink-0 select-none text-[11px] backdrop-blur`}
       >

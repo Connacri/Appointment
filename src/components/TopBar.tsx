@@ -200,7 +200,7 @@ export const TopBar: React.FC = () => {
         <button
           type="button"
           onClick={() => setCurrentDomain('hotel')}
-          className={`px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+          className={`px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
             currentDomain === 'hotel'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white bg-slate-900/60'
@@ -215,7 +215,7 @@ export const TopBar: React.FC = () => {
         <button
           type="button"
           onClick={() => setCurrentDomain('resort')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
             currentDomain === 'resort'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white bg-slate-900/60'
@@ -346,7 +346,7 @@ export const TopBar: React.FC = () => {
         <button
           type="button"
           onClick={handlePhysicalUsbClick}
-          className={`h-8 px-1.5 sm:px-3 rounded-lg text-[11px] sm:text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs ${
+          className={`h-8 px-1.5 sm:px-3 rounded-lg text-[11px] sm:text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-xs ${
             usbStatus === 'connected'
               ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
               : 'bg-rose-950/80 hover:bg-rose-900/80 text-rose-300 border border-rose-700/60'

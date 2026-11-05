@@ -165,12 +165,12 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 bg-black/75 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 bg-black/75 backdrop-blur-xs overflow-y-auto pms-modal-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden flex flex-col my-auto max-h-[94dvh]">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden flex flex-col my-auto max-h-[94dvh] pms-modal">
         {/* Pass Top Banner */}
         <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 p-5 text-white relative">
           <button
@@ -327,7 +327,7 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
 
           {/* Cash Payment Settlement Flow (If cash chosen & not yet checked-in or paid) */}
           {isCashFlowOpen && isCashPaymentPending && (
-            <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl space-y-3 animate-in zoom-in-95">
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl space-y-3 pms-pop">
               <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-bold text-xs">
                 <Banknote size={16} />
                 <span>Règlement en Espèces / Cash à l'Arrivée</span>
@@ -384,7 +384,7 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
               <button
                 type="button"
                 onClick={handleSelfCheckIn}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-xs"
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 text-xs"
               >
                 <CheckCircle2 size={16} />
                 <span>

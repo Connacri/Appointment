@@ -250,7 +250,7 @@ export const StockManagementView: React.FC = () => {
             return (
               <div
                 key={item.id}
-                className={`p-4 rounded-2xl border transition-all ${
+                className={`p-4 rounded-2xl border transition ${
                   isLow
                     ? 'bg-rose-50/20 dark:bg-rose-950/10 border-rose-300 dark:border-rose-900/50 shadow-xs'
                     : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs'
@@ -422,8 +422,8 @@ export const StockManagementView: React.FC = () => {
 
       {/* Stock Movement Dialog */}
       {movementModal.open && movementModal.item && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs pms-modal-backdrop">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 pms-modal">
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
               {movementModal.type === 'in'
                 ? `Entrée en Stock : ${movementModal.item.name}`

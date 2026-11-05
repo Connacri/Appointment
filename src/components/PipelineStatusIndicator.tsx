@@ -203,7 +203,7 @@ export const PipelineStatusIndicator: React.FC = () => {
         onClick={() => setIsOpen(!isOpen)}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all select-none ${badge.bg} hover:opacity-90 active:scale-98`}
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition select-none ${badge.bg} hover:opacity-90 active:scale-98`}
         title={`Pipeline: ${specificStatus} · Last run duration: ${currentRun.duration} (Run #${currentRun.id})`}
       >
         <span className="relative flex h-2 w-2">
@@ -243,7 +243,7 @@ export const PipelineStatusIndicator: React.FC = () => {
 
       {/* Floating Hover Tooltip: Showing Last Run Duration */}
       {isHovered && !isOpen && (
-        <div className="absolute right-0 top-full mt-1.5 z-40 bg-slate-900/95 dark:bg-slate-800/95 text-white text-[11px] font-sans px-3 py-2 rounded-xl shadow-xl border border-slate-700/80 whitespace-nowrap pointer-events-none animate-in fade-in zoom-in-95 duration-100 flex flex-col gap-0.5">
+        <div className="absolute right-0 top-full mt-1.5 z-40 bg-slate-900/95 dark:bg-slate-800/95 text-white text-[11px] font-sans px-3 py-2 rounded-xl shadow-xl border border-slate-700/80 whitespace-nowrap pointer-events-none duration-100 flex flex-col gap-0.5 pms-dropdown pms-dropdown-end">
           <div className="flex items-center gap-1.5">
             <Clock size={12} className="text-blue-400 shrink-0" />
             <span className="text-slate-300">
@@ -262,7 +262,7 @@ export const PipelineStatusIndicator: React.FC = () => {
 
       {/* Popover Card */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden duration-150 pms-dropdown pms-dropdown-end">
           {/* Header */}
           <div className="p-3.5 bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
