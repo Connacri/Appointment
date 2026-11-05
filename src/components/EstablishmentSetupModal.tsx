@@ -59,7 +59,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   onClose,
   isFirstLaunch = false,
 }) => {
-  const { establishmentProfile, setEstablishmentProfile, language, currency, setCurrency, resourceGroups, setResourceGroups, setBookings, setSelectedEstablishmentId } = useApp();
+  const { establishmentProfile, setEstablishmentProfile, language, currency, setCurrency, resourceGroups, setResourceGroups, setBookings, setSelectedEstablishmentId, setHasOnboarded } = useApp();
 
   const [activeTab, setActiveTab] = useState<'identity' | 'logo' | 'contact' | 'fiscal' | 'structure'>('identity');
   const [formData, setFormData] = useState<EstablishmentProfile>(() => {
@@ -207,8 +207,8 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = (e?: React.FormEvent) => {
+    e?.preventDefault();
     const updated: EstablishmentProfile = {
       ...formData,
       logoUrl: customLogoPreview,
@@ -220,6 +220,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
       setCurrency(updated.defaultCurrency);
     }
 
+    setHasOnboarded(true);
     localStorage.setItem('omnibook_onboarding_completed', 'true');
     playSuccessFeedback();
     onClose();
@@ -898,7 +899,8 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
               )}
 
               <button
-                type="submit"
+                type="button"
+                onClick={() => handleSave()}
                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-extrabold rounded-xl shadow-md shadow-blue-500/20 transition flex items-center gap-2 cursor-pointer"
               >
                 <CheckCircle2 size={16} />
