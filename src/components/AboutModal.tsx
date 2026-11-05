@@ -18,6 +18,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import headerImage from '../../assets/branding/HEADER RMZ.jpg';
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -51,37 +52,15 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
       <div className="relative w-full max-w-3xl rounded-3xl border border-cyan-500/30 bg-slate-950 text-slate-100 shadow-[0_0_60px_rgba(6,182,212,0.15)] overflow-hidden my-auto pms-modal">
         {/* Banner with Geometric Polygonal Background Accent */}
         <div className="relative w-full h-44 sm:h-52 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 overflow-hidden border-b border-cyan-500/20">
-          {/* Stylized polygon mesh representation matching HEADER RMZ */}
-          <svg
-            className="absolute inset-0 w-full h-full opacity-35"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 1000 300"
-            preserveAspectRatio="none"
-          >
-            <defs>
-              <linearGradient id="poly1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#0284c7" stopOpacity="0.8" />
-                <stop offset="100%" stopColor="#0369a1" stopOpacity="0.2" />
-              </linearGradient>
-              <linearGradient id="poly2" x1="0%" y1="100%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.6" />
-                <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.1" />
-              </linearGradient>
-              <linearGradient id="poly3" x1="100%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#475569" stopOpacity="0.7" />
-                <stop offset="100%" stopColor="#1e293b" stopOpacity="0.3" />
-              </linearGradient>
-            </defs>
-            <polygon points="0,0 200,0 120,160 0,220" fill="url(#poly1)" />
-            <polygon points="200,0 350,110 120,160" fill="url(#poly2)" />
-            <polygon points="350,110 500,0 600,140 380,260" fill="url(#poly3)" />
-            <polygon points="500,0 800,0 720,180 600,140" fill="url(#poly1)" />
-            <polygon points="800,0 1000,0 1000,180 720,180" fill="url(#poly2)" />
-            <polygon points="0,220 120,160 280,300 0,300" fill="url(#poly3)" />
-            <polygon points="120,160 380,260 280,300" fill="url(#poly1)" />
-            <polygon points="600,140 720,180 840,300 520,300" fill="url(#poly2)" />
-            <polygon points="720,180 1000,180 1000,300 840,300" fill="url(#poly3)" />
-          </svg>
+          {/* Asset image from assets/branding — single source of truth for the header */}
+          <img
+            src={headerImage}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-40"
+            loading="lazy"
+            decoding="async"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-950/80 via-slate-900/40 to-slate-950/80" />
 
           {/* Close button */}
           <button

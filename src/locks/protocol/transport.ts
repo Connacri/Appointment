@@ -289,9 +289,28 @@ export class WebHidTransport implements LockTransport {
     const hid = (navigator as any).hid;
     let scanInProgress = false;
     const scanAndConnect = async () => {
-      if (!this.autoConnectEnabled || this.isOpen() || scanInProgress) return;
+      if (!this.autoConnectEnabled || scanInProgress) return;
       scanInProgress = true;
       try {
+        // Detect physical unplug even when the native 'disconnect' event is missed.
+        if (this.device) {
+          try {
+            const known = await hid.getDevices();
+            const stillThere = Array.isArray(known) && known.some((d: any) => d === this.device);
+            if (!stillThere) {
+              this.onLog?.('error', 'Device disconnected unexpectedly.');
+              this.device = null;
+              for (const resolver of this.pendingResolvers) resolver(null);
+              this.pendingResolvers = [];
+              this.onConnectionChange?.();
+              return;
+            }
+          } catch {
+            // ignore; fall through to normal scan
+          }
+        }
+        if (this.isOpen()) return;
+
         // getDevices lists only devices already authorized by the user.
         // WebHID deliberately requires a user gesture for first-time permission.
         const devices = await hid.getDevices();
@@ -315,7 +334,17 @@ export class WebHidTransport implements LockTransport {
 
     // Native HID events react immediately to plug/unplug; a short scan is fallback.
     hid.addEventListener?.('connect', scanAndConnect);
-    hid.addEventListener?.('disconnect', () => this.onConnectionChange?.());
+    hid.addEventListener?.('disconnect', (event: any) => {
+      // Null the device when OUR encoder is unplugged, so isOpen() reflects reality.
+      const removed = event?.device;
+      if (this.device && (!removed || removed === this.device)) {
+        this.onLog?.('error', 'Device disconnected unexpectedly.');
+        this.device = null;
+        for (const resolver of this.pendingResolvers) resolver(null);
+        this.pendingResolvers = [];
+      }
+      this.onConnectionChange?.();
+    });
     void scanAndConnect();
     this.autoConnectTimer = setInterval(() => { void scanAndConnect(); }, 750);
   }
