@@ -221,7 +221,7 @@ export const Sidebar: React.FC = () => {
   const renderContent = (isMobileView: boolean) => (
     <div className={`flex flex-col min-h-full select-none ${isMobileView ? "workspace-sidebar-scroll overflow-y-auto overscroll-y-contain" : "h-full min-h-0 overflow-hidden"}`}>
       {/* Brand Header */}
-      <div className="min-h-[68px] border-b border-slate-800/80 px-4 flex items-center justify-between shrink-0 bg-slate-950">
+      <div className="min-h-[68px] border-b border-white/5 px-4 flex items-center justify-between shrink-0">
         {(!isCollapsed || isMobileView) && (
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-bold text-sm shadow-xs">
@@ -404,32 +404,34 @@ export const Sidebar: React.FC = () => {
         </section>
       )}
       {/* Navigation List */}
-      <nav aria-label={language === "fr" ? "Navigation principale" : language === "ar" ? "التنقل الرئيسي" : "Main navigation"} className={`py-3 px-2.5 space-y-1.5 ${isMobileView ? "flex-none overflow-visible" : "flex-1 min-h-0 overflow-y-auto overscroll-y-contain"}`}>
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeView === item.view;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => handleNavClick(item.view)}
-              aria-current={isActive ? "page" : undefined}
-              className={`workspace-nav-item w-full flex items-center gap-3 px-3 min-h-11 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
-                isActive
-                  ? 'bg-blue-600 text-white shadow-xs font-bold'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
-              }`}
-              title={item.label}
-            >
-              <Icon size={18} className="shrink-0" />
-              {(!isCollapsed || isMobileView) && <span className="truncate">{item.label}</span>}
-            </button>
-          );
-        })}
+      <nav aria-label={language === "fr" ? "Navigation principale" : language === "ar" ? "التنقل الرئيسي" : "Main navigation"} className={`py-3 px-2.5 ${isMobileView ? "flex-none overflow-visible" : "flex-1 min-h-0 overflow-y-auto overscroll-y-contain"}`}>
+        <div className="pms-stagger flex flex-col gap-1.5">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeView === item.view;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleNavClick(item.view)}
+                aria-current={isActive ? "page" : undefined}
+                className={`workspace-nav-item w-full flex items-center gap-3 px-3 min-h-11 py-2.5 rounded-xl text-xs font-semibold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-sm font-bold'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+                }`}
+                title={item.label}
+              >
+                <Icon size={18} className="shrink-0" />
+                {(!isCollapsed || isMobileView) && <span className="truncate">{item.label}</span>}
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
       {/* Sidebar Footer: IndexedDB, AGENTS.md Cockpit & Legal */}
-      <div className="p-3 border-t border-slate-800/80 space-y-1.5 bg-slate-950 shrink-0">
+      <div className="p-3 border-t border-white/5 space-y-1.5 bg-slate-950/40 shrink-0">
         <button
           type="button"
           onClick={() => {
@@ -490,7 +492,7 @@ export const Sidebar: React.FC = () => {
     <>
       {/* Desktop Persistent Sidebar */}
       <aside
-        className={`workspace-sidebar hidden md:flex bg-slate-950 text-slate-300 flex-col shrink-0 border-r border-slate-800/80 transition-[width] duration-200 ease-out z-30 ${
+        className={`workspace-sidebar pms-material-sidebar hidden md:flex text-slate-300 flex-col shrink-0 border-r border-white/5 transition-[width] duration-200 ease-out z-30 ${
           isCollapsed ? 'w-16' : 'w-64'
         }`}
       >
@@ -500,22 +502,20 @@ export const Sidebar: React.FC = () => {
       {/* Mobile Drawer (Modal Overlay) */}
       {isSidebarMobileOpen && (
         <div
-          className="fixed inset-0 z-[9990] md:hidden flex animate-in fade-in"
+          className="fixed inset-0 z-[9990] md:hidden flex pms-modal-backdrop"
           dir={isRtl ? 'rtl' : 'ltr'}
         >
           <button
             type="button"
             aria-label={language === 'fr' ? 'Fermer le menu' : language === 'ar' ? 'إغلاق القائمة' : 'Close navigation'}
-            className="absolute inset-0 w-full h-full bg-slate-950/70 backdrop-blur-[2px] transition-opacity"
+            className="absolute inset-0 w-full h-full bg-slate-950/70 backdrop-blur-[2px]"
             onClick={() => setIsSidebarMobileOpen(false)}
           />
           <aside
             role="dialog"
             aria-modal="true"
             aria-label={language === 'fr' ? 'Navigation principale' : language === 'ar' ? 'القائمة الرئيسية' : 'Main navigation'}
-            className={`relative z-10 flex h-[100dvh] min-h-0 w-[min(20rem,88vw)] max-w-[88vw] flex-col bg-slate-900 text-slate-300 shadow-2xl overscroll-contain animate-in duration-200 ${
-              isRtl ? 'mr-auto slide-in-from-right' : 'ml-0 slide-in-from-left'
-            }`}
+            className={`relative z-10 flex h-[100dvh] min-h-0 w-[min(20rem,88vw)] max-w-[88vw] flex-col pms-material-sidebar text-slate-300 shadow-2xl overscroll-contain pms-drawer ${isRtl ? 'mr-auto' : 'ml-0'}`}
             style={{
               paddingTop: 'env(safe-area-inset-top)',
               paddingBottom: 'env(safe-area-inset-bottom)',

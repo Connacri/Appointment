@@ -19,3 +19,7 @@ tools/re-proUSB/local.env
 # Local tool installs (external repos with their own licenses/history; not project source)
 /heretic/
 /freellmapi/
+
+# Agent skills installed locally with `npx skills add` (third-party content, not project source)
+.agents/
+skills-lock.json

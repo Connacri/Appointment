@@ -6,16 +6,6 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ## [Unreleased]
 
-### Fixed
-- **Import CardLock** : conservation de `BldNo = 0` et `FlrNo = 0`, repli sur `RomID2` puis `RomID` lorsque `RoomNo` est vide, inventaire de toutes les tables Access et refus de créer des chambres depuis les séjours orphelins. Les statuts inconnus restent non renseignés ; les séjours CardLock précédents sont remplacés lors d'un nouvel import.
-- **Inventaire proUSB** : affichage du nombre de lignes, des colonnes et de la nature système/métier de chaque table, y compris quand `mdb-reader` n'expose les colonnes que par les lignes retournées.
-- **Traçabilité des releases** : le tag et le titre des releases créées sur `main` dérivent désormais de la version de `package.json` au lieu du `v2.4.0-build.*` codé en dur ; tag, titre et noms d'artefacts sont alignés.
-
-### Documentation
-- Analyse du schéma CardLock, de ses relations métier et procédure novice d'import ajoutées au README et au Centre d'aide.
-- [Release, signature et déploiement](./docs/RELEASE.md) : jobs du pipeline, nommage versionné, secrets (noms uniquement), vérification et dépannage GitHub Pages.
-
-
 ### Added
 
 - **Identification réelle de l'encodeur USB (`IniCard` mode 2)** : l'application interroge l'encodeur (`AA 01 56 FD`, complété par des `0xCC`), analyse le bloc d'identification renvoyé par le matériel et affiche le numéro d'encodeur (`Reader_000016`, format `%.6d` de CardLock) ainsi que le **machine code** du lecteur (« Current Reader No. » : octets 5..8 du rapport, par exemple `5012 14D2`). Le préfixe `50 12` est constant pour toutes les familles proUSB/M9/proEM ; les octets suivants identifient le lecteur et changent avec lui. La valeur est visible dans le bandeau USB, la fiche encodeur et le journal HID.
@@ -26,15 +16,19 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 - **Lecture totale de n'importe quelle carte** : le décodeur ne rejette plus rien. Une carte d'un autre système (en-tête `C9 12` absent) est affichée avec ses octets bruts, sans qu'aucun champ ne soit inventé ; une trame courte est complétée et signalée ; les octets `[4..5]`, `[6..8]` et `[13..15]` sont désormais exposés. L'interface affiche un bandeau « autre système », le site, le contrôle `~site`, la liste des anomalies et une table octet par octet.
 - **Distinction clé de recherche / ID `CardInfo`** : l'application affichait `Mid(CardData,19,8)` sous l'étiquette « ID », alors que l'ID du logiciel d'origine est l'AutoNumber de `CardInfo`. Les deux valeurs sont maintenant affichées séparément (`Clé de recherche` et `ID dans CardInfo` / `Operator Code`), avec « absent » si la ligne n'existe pas encore.
 
-### Fixed
+### Changed
 
+- **Design system et interface responsive** : refonte transversale de l'interface, appliquée à tous les écrans. `src/index.css` centralise les jetons (couleurs sémantiques, rayons, ombres, espacements, durées, courbes `--ease-*`, échelle de `z-index`) au lieu de valeurs dispersées. Ajout de primitives d'interaction : retour immédiat au press via la propriété `scale` (compatible avec les utilitaires `translate`), focus visible accessible, suppression du surlignage tactile et du délai de 300 ms, champs à 16 px sur mobile pour empêcher le zoom iOS. Les menus, modales, tiroirs, feuilles mobiles, toasts et listes utilisent des animations de montage qui restent sur le compositeur (`scale` / `translate` / `opacity`), avec un repli statique sous `prefers-reduced-motion`. La barre supérieure et la navigation passent en matériaux translucides (`backdrop-filter`), désactivés sous `prefers-reduced-transparency` et renforcés sous `prefers-contrast`. Typographie à approche par taille (titres resserrés, texte courant neutre), chiffres tabulaires dans les tableaux et retour à la ligne des valeurs longues. `viewport-fit=cover`, encoches et barres de gestes respectées, `theme-color` clair et sombre. Les classes `animate-in` / `fade-in` / `zoom-in-95` (plugin `tailwindcss-animate` absent, donc inopérantes) ont été retirées.
+
+### Fixed
+- **Import CardLock** : conservation de `BldNo = 0` et `FlrNo = 0`, repli sur `RomID2` puis `RomID` lorsque `RoomNo` est vide, inventaire de toutes les tables Access et refus de créer des chambres depuis les séjours orphelins. Les statuts inconnus restent non renseignés ; les séjours CardLock précédents sont remplacés lors d'un nouvel import.
+- **Inventaire proUSB** : affichage du nombre de lignes, des colonnes et de la nature système/métier de chaque table, y compris quand `mdb-reader` n'expose les colonnes que par les lignes retournées.
+- **Traçabilité des releases** : le tag et le titre des releases créées sur `main` dérivent désormais de la version de `package.json` au lieu du `v2.4.0-build.*` codé en dur ; tag, titre et noms d'artefacts sont alignés.
 - **Machine code affiché décalé d'un octet (`3950 1214` au lieu de `5012 14D2`)** : WebHID livre chaque rapport d'entrée précédé de son report ID, que `WebHidTransport` conserve en tête du tampon, alors que CardLock passe le tampon de la DLL directement à son parser. L'offset fixe `Copy(rapportHex, 11, 8)` lisait donc les octets 4..7 du bloc d'identification. Le machine code est désormais ancré sur la signature du bloc (`55 21 01` + `52|55|56 39` + `50 12`), avec repli sur l'offset d'origine ; un rapport avec ou sans report ID donne la même valeur. Régression couverte par deux tests (report ID `0x00` et `0x40`).
 - **Validation des réservations** : validation stricte des dates calendaires `YYYY-MM-DD` pour tous les secteurs avant toute modification d'état ; les dates impossibles comme le 31 février sont refusées.
 - **Confirmation des paiements cash** : l'absence de confirmation d'encaissement ne règle plus une réservation en attente ; l'encaissement exige un montant reçu au moins égal au montant dû, et le calcul du check-in est déterministe.
 - **Purge locale et conformité** : la purge réinitialise les collections utilisateur, retire toutes les clés locales préfixées par l'application, vide les données proUSB et attend la fin de la transaction IndexedDB. Une erreur de stockage empêche désormais l'écran d'annoncer un succès. Le texte légal précise que cette purge locale ne supprime pas les données distantes.
 - **Cohérence IndexedDB/IndexedDB** : les réservations et ressources sont persistées comme instantanés atomiques ; les enregistrements supprimés de l'état React ne restent plus dans les object stores. Les erreurs d'ouverture ou de transaction IndexedDB remontent au lieu d'être masquées.
-
-
 - **Cartes de fonction (Passe Générale, Étage, Bâtiment, Urgence, Groupe) non fonctionnelles** : `encodeCommissioningCard` ne comportait aucun cas pour ces familles — les boutons du onglet « Mise en service » écrivaient une trame quasi vide dont l'octet `[9]=0x00`, c'est-à-dire une fausse carte *reset*. Ces familles déléguent désormais à l'encodeur Master vérifié (`0xB0`/`0xD0`/`0xC0`/`0xA0`), et la famille Groupe (`0x80`) a été ajoutée. Vérifié sur matériel réel.
 - **Site codé en dur `24B6` sur les cartes de fonction** : `encodeCommissioningCard` utilisait `DEFAULT_SITE_LOW` (24B6) pour les cartes groupe/checkout/limite alors que votre système est `033B` — la serrure rejette ces cartes (« pas une carte de ce système »). Le site provient désormais du template importé (`CardLock.mdb`), avec repli sur le site intégré.
 - **Master / Urgence : site réel par défaut** : une serrure commissionnée `033B` refuse une carte de fonction à site `0000` (wildcard acceptée uniquement après un hard reset, avant commissionnement). Les cartes Master et Urgence portent désormais le vrai site d'installation par défaut ; le site `0000` n'est écrit que si l'option « universelle » est demandée explicitement. `issueMasterCard` prend le site dans le template importé au lieu de retomber sur `24B6` quand aucune base n'est chargée.
@@ -45,8 +39,11 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 - **Écriture qui ne fonctionnait qu'une seule fois jusqu'au rafraîchissement de la page** : les accusés de réception HID restaient dans la file d'entrée et la lecture de vérification consommait celui de l'écriture précédente. Le transport expose maintenant `drain()`, appelé avant chaque écriture et chaque lecture, et `transact()` ignore les trames plus courtes que 16 octets au lieu de les prendre pour la carte.
 - **Message d'écriture inexploitable** : l'erreur « L'écriture n'a pas pu être vérifiée en relecture » indique désormais la trame écrite, la trame relue et la cause réelle (timeout, erreur transport, contenu différent) avec la vérification à effectuer.
 - **Import de l'ancienne base vers le planning/Gantt** : l'import de `CardLock.mdb` propose maintenant d'importer aussi les chambres (bâtiments → groupes, chambres → ressources) et les séjours clients (comeTime/goTime → réservations) dans le planning/Gantt, afin de ne pas repartir d'une base vide. Les cartes restent disponibles pour l'ID/Operator Code.
-
 - **ID et Operator Code absents dans `CardLock.exe`** : la base réellement utilisée par le logiciel d'origine est celle du **VirtualStore** (`%LOCALAPPDATA%\VirtualStore\Program Files (x86)\…\CardLock.mdb`), car Windows virtualise les écritures des applications 32 bits installées sous `Program Files (x86)`. La copie de `Program Files` était figée depuis 2023 (62 cartes) alors que la copie vivante en contenait 88. Le script **Synchroniser CardLock.mdb** détecte maintenant la base vivante à l'exécution (copie la plus récente, option `--mdb` pour forcer), ne demande plus d'élévation pour le VirtualStore, avertit si `CardLock.exe` est encore ouvert, **relit chaque ligne** et affiche l'`ID` et l'`Operator Code` obtenus. L'écran d'import et la documentation pointent vers la base vivante.
+
+### Documentation
+- Analyse du schéma CardLock, de ses relations métier et procédure novice d'import ajoutées au README et au Centre d'aide.
+- [Release, signature et déploiement](./docs/RELEASE.md) : jobs du pipeline, nommage versionné, secrets (noms uniquement), vérification et dépannage GitHub Pages.
 
 ## [1.2.0] - 2026-10-24
 

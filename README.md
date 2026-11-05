@@ -60,6 +60,10 @@ L'interface est construite avec React 19 et TypeScript. Elle fonctionne comme ap
 - **Retour audio et haptique** pour certaines interactions.
 - **Exports** : génération de documents PDF et export iCalendar (.ics) selon les modules.
 
+### Design system
+
+L'interface partage un design system unique défini dans [`src/index.css`](./src/index.css) : jetons sémantiques (couleurs, rayons, ombres, espacements, durées, courbes `--ease-*`, échelle de `z-index`), primitives d'interaction (press instantané, focus visible, cibles tactiles ≥ 44 px) et animations de montage pour les menus, modales, tiroirs et toasts. La barre supérieure et la navigation utilisent des matériaux translucides (`backdrop-filter`) désactivés automatiquement sous `prefers-reduced-transparency` et `prefers-contrast`. La mise en page est mobile-first et edge-to-edge (`viewport-fit=cover`, encoches et barres de gestes), avec une typographie à approche par taille, des chiffres tabulaires dans les tableaux et un repli statique sous `prefers-reduced-motion`. Les nouveaux composants doivent réutiliser ces jetons et primitives plutôt que réintroduire des valeurs ou des animations ad hoc.
+
 ## Architecture technique
 
 | Couche | Technologies |

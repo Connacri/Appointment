@@ -170,10 +170,10 @@ export const TopBar: React.FC = () => {
   const isRtl = language === 'ar';
 
   return (
-    <header className="pms-app-topbar w-full bg-[#0a0f1d] text-slate-100 border-b border-slate-800/80 px-2 sm:px-4 py-2 flex flex-wrap md:flex-nowrap items-center justify-between gap-2 sm:gap-3 shrink-0 select-none z-40 relative">
+    <header className="pms-app-topbar pms-material-bar pms-material-edge w-full text-slate-100 border-b px-2 sm:px-4 py-2 flex flex-wrap md:flex-nowrap items-center justify-between gap-2 sm:gap-3 shrink-0 select-none z-40 relative">
       {/* Toast notice for USB or status */}
       {usbNotice && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-cyan-500/50 text-cyan-200 text-xs shadow-xl z-50 animate-in fade-in flex items-center gap-2">
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-cyan-500/50 text-cyan-200 text-xs shadow-xl z-50 pms-toast flex items-center gap-2">
           <Info size={14} className="text-cyan-400" />
           <span>{usbNotice}</span>
         </div>
@@ -250,7 +250,7 @@ export const TopBar: React.FC = () => {
           {isRoleMenuOpen && (
             <div
               dir={isRtl ? 'rtl' : 'ltr'}
-              className="absolute top-full mt-1.5 left-0 w-52 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-1.5 z-50 text-xs animate-in fade-in zoom-in-95"
+              className="absolute top-full mt-1.5 left-0 w-52 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-1.5 z-50 text-xs pms-dropdown"
             >
               <div className="px-2 py-1 text-[10px] font-bold uppercase text-slate-400 border-b border-slate-800 mb-1">
                 {language === 'fr' ? 'Sélectionnez un rôle' : language === 'ar' ? 'اختر الدور' : 'Select a role'}
@@ -424,7 +424,7 @@ export const TopBar: React.FC = () => {
           {isMoreMenuOpen && (
             <div
               dir={isRtl ? 'rtl' : 'ltr'}
-              className="absolute top-full mt-1.5 right-0 w-64 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-2 z-50 text-xs space-y-1 animate-in fade-in zoom-in-95"
+              className="absolute top-full mt-1.5 right-0 w-64 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-2 z-50 text-xs space-y-1 pms-dropdown pms-dropdown-end"
             >
               {/* Language switcher */}
               <div className="px-2 py-1 text-[10px] font-bold uppercase text-slate-400">

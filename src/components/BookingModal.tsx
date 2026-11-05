@@ -714,12 +714,12 @@ export const BookingModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-xs pms-modal-backdrop overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) closeModal();
       }}
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="booking-dialog-title" className="pms-dialog-panel w-full max-w-2xl flex flex-col max-h-[96dvh] sm:max-h-[94dvh] h-[96dvh] sm:h-auto my-0 sm:my-auto rounded-t-3xl sm:rounded-2xl overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-labelledby="booking-dialog-title" className="pms-dialog-panel pms-modal pms-sheet w-full max-w-2xl flex flex-col max-h-[96dvh] sm:max-h-[94dvh] h-[96dvh] sm:h-auto my-0 sm:my-auto rounded-t-3xl sm:rounded-2xl overflow-hidden">
         {/* Modal Dedicated Domain Header */}
         <div className="border-b border-slate-200 dark:border-slate-800 px-4 sm:px-5 pt-3 sm:pt-4 pb-3 sm:py-4 flex items-center justify-between bg-slate-50 dark:bg-slate-850 shrink-0 gap-3">
           <div className="flex items-center gap-3">
@@ -1778,12 +1778,12 @@ export const BookingModal: React.FC = () => {
       {/* ALGERIAN POLICE REGISTRATION SHEET MODAL (Fiche Individuelle de Police) */}
       {showPoliceSheetModal && (
         <div
-          className="fixed inset-0 z-[10000] flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-xs pms-modal-backdrop overflow-y-auto"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowPoliceSheetModal(false);
           }}
         >
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] my-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] my-auto pms-modal">
             {/* Header */}
             <div className="p-4 bg-emerald-700 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1969,8 +1969,8 @@ export const BookingModal: React.FC = () => {
       )}
 
       {roomStatusAlert && (
-        <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/70 p-4" role="alertdialog" aria-modal="true" aria-labelledby="room-status-alert-title">
-          <div className="w-full max-w-md rounded-2xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-3">
+        <div className="fixed inset-0 z-[12000] flex items-center justify-center p-4 bg-black/70 pms-modal-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="room-status-alert-title">
+          <div className="w-full max-w-md rounded-2xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-3 pms-modal">
             <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400"><AlertCircle size={22} /><h3 id="room-status-alert-title" className="font-extrabold text-base">{language === 'ar' ? 'لا يمكن إنشاء الحجز' : language === 'en' ? 'Reservation blocked' : 'Réservation impossible'}</h3></div>
             <p className="text-sm text-slate-700 dark:text-slate-200">{language === 'ar' ? 'يجب أن تكون الغرفة نظيفة ومتاحة (الحالة الخضراء) قبل إنشاء الحجز.' : language === 'en' ? 'The room must be clean and available (green status) before a reservation can be created.' : 'La chambre doit être propre et disponible (statut vert) avant de créer une réservation.'}</p>
             <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 text-sm space-y-1">
