@@ -406,7 +406,17 @@ Octet 13-15: Date de fin
 
 **Différence avec Master** :
 - Octet 4 = numéro d'étage (1-6)
+- Octet 5 = `0x00` (champ niveau `[4..5]`, jamais l'heure de début)
+- Octet 7 = `0x80 | BldNo` (bâtiment réel de la base importée, 0-15)
 - Octet 9 = `0xD0 | cardIndex`
+
+> **Note d'implémentation.** Le bâtiment est indispensable : sans lui, la
+> carte ouvre le même étage dans tous les bâtiments (périmètre erroné observé
+> sur matériel). Le nibble bas de l'octet 7 porte le `BldNo` ; la valeur 0 est
+> aussi le `BldNo` réel du bâtiment 0, donc une carte liée au bâtiment 0 est
+> indiscernable d'une carte « tous bâtiments » — c'est une limite du format,
+> pas un choix de l'application. Aucune valeur par défaut n'est inventée :
+> l'encodeur refuse une carte étage sans bâtiment.
 
 **Ce que fait la serrure** :
 1. Vérifie le code site
@@ -421,7 +431,17 @@ Octet 13-15: Date de fin
 
 **Différence** :
 - Octet 4 = numéro de bâtiment (1-3)
+- Octet 5 = `0x00`
+- Octet 7 = `0x80 | BldNo` (même bâtiment que l'octet 4, pour que les deux
+  lectures possibles de la serrure retombent sur le même périmètre)
 - Octet 9 = `0xC0 | cardIndex`
+
+> **Note d'implémentation.** L'octet 4 seul ne suffisait pas : la serrure
+> pouvait interpréter la valeur comme un niveau et ouvrir un autre périmètre.
+> Le bâtiment est donc dupliqué dans l'octet 7. À confirmer sur matériel avec
+> un encodeur réel (lecture de la carte après écriture + test d'ouverture sur
+> deux bâtiments).
+
 
 ### 4.7 Carte Urgence (Emergency Card) — 0xA0
 

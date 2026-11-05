@@ -163,6 +163,23 @@ function randomTail(): [number, number, number] {
   return [bytes[0], bytes[1], bytes[2]];
 }
 
+/** CardLock numeric identifiers are bytes: BldNo fits in the low nibble of byte [7]. */
+export const MAX_CARDLOCK_BUILDING = 0x0f;
+/** Floor numbers live in byte [4]; the guest layout keeps 7 bits for the floor. */
+export const MAX_CARDLOCK_FLOOR = 0x7f;
+
+/**
+ * Rejects an identifier that the card layout cannot hold instead of silently
+ * masking it. Masking is dangerous here: `16 & 0x0f === 0` would turn an
+ * out-of-range building into the wildcard "all buildings" value.
+ */
+function assertCardLockNumber(value: number, max: number, label: string): number {
+  if (!Number.isInteger(value) || value < 0 || value > max) {
+    throw new Error(`${label} invalide : ${value}. Valeurs admises : 0 à ${max}.`);
+  }
+  return value;
+}
+
 export interface EncodeGuestCardParams {
   roomNumber: string; // e.g. "101", "205", "1-101"
   buildingNo?: number;
@@ -192,7 +209,8 @@ export function encodeGuestCard(params: EncodeGuestCardParams): Uint8Array {
   const card = new Uint8Array(16);
   const cleanRoom = params.roomNumber.replace(/^[0-9]+-/, '');
   const roomNum = parseInt(cleanRoom, 10) || 101;
-  const floorNo = params.floorNo ?? Math.floor(roomNum / 100);
+  const floorNo = assertCardLockNumber(params.floorNo ?? Math.floor(roomNum / 100), MAX_CARDLOCK_FLOOR, 'Numéro d’étage');
+  const buildingNo = assertCardLockNumber(params.buildingNo ?? 1, MAX_CARDLOCK_BUILDING, 'Numéro de bâtiment');
   const roomMod = roomNum % 100;
   const index = (params.cardIndex ?? 1) & 0x0f;
 
@@ -210,7 +228,7 @@ export function encodeGuestCard(params: EncodeGuestCardParams): Uint8Array {
   card[4] = 0x63 | 0x80; // Constant sentinel 99 with high bit set = 0xE3
   card[5] = (roomMod & 0x7f) | 0x80; // room mod 100 e.g. room 1 -> 0x81, room 5 -> 0x85
   card[6] = (floorNo & 0x7f) | 0x80; // floor div 100 e.g. floor 1 -> 0x81, floor 2 -> 0x82
-  card[7] = (params.buildingNo ?? 1) & 0x0f; // Building identifier (CardLock BldNo)
+  card[7] = buildingNo; // Building identifier (CardLock BldNo)
   card[8] = params.options?.openPublicDoor ? 0x01 : 0x00;
   card[9] = 0x60 | index; // 0x60 family + card index
 
@@ -298,29 +316,65 @@ export function encodeMasterCard(params: EncodeMasterCardParams): Uint8Array {
   card[2] = wildcardSite ? 0x00 : (siteLow >> 8) & 0xff;
   card[3] = wildcardSite ? 0x00 : siteLow & 0xff;
 
+  // Scope layout, shared with the verified guest record:
+  //   [4] = level  → 0xFF opens every level (master / emergency),
+  //                  a floor number for the FloorCard, the building for the BuildingCard;
+  //   [7] = 0x80 | BldNo  → the building the card is bound to.
+  // The genuine master record (`C9 12 03 3B FF 00 29 80 00 B0 …`) writes
+  // [7] = 0x80 with a zero building nibble, i.e. "all buildings". A card that
+  // omits the building therefore opens the same floor in every building — the
+  // wrong perimeter reported on hardware for the FloorCard. The BuildingCard
+  // keeps [4] = BldNo (documented layout) *and* now carries the building in
+  // [7], so a lock that reads either field lands on the right scope.
+  const buildingScope = (): number => {
+    if (params.buildingNo === undefined) {
+      throw new Error(
+        `Carte ${type.toUpperCase()} : le numéro de bâtiment est obligatoire. Sélectionnez un bâtiment réel de la base importée.`,
+      );
+    }
+    return assertCardLockNumber(params.buildingNo, MAX_CARDLOCK_BUILDING, 'Numéro de bâtiment');
+  };
+
   switch (type) {
-    case 'floor':
-      card[4] = (params.floorNo ?? 1) & 0xff;
+    case 'floor': {
+      if (params.floorNo === undefined) {
+        throw new Error(
+          'Carte ÉTAGE : le numéro d’étage est obligatoire. Sélectionnez un étage réel du bâtiment choisi.',
+        );
+      }
+      card[4] = assertCardLockNumber(params.floorNo, MAX_CARDLOCK_FLOOR, 'Numéro d’étage');
+      card[7] = 0x80 | buildingScope();
       card[9] = 0xd0 | index; // 0xD0 family for FloorCard
       break;
-    case 'building':
-      card[4] = (params.buildingNo ?? 1) & 0xff;
+    }
+    case 'building': {
+      const buildingNo = buildingScope();
+      card[4] = buildingNo;
+      card[7] = 0x80 | buildingNo;
       card[9] = 0xc0 | index; // 0xC0 family for BuildingCard
       break;
+    }
     case 'emergency':
       card[4] = 0xff;
+      card[7] = 0x80;
       card[9] = 0xa0 | index; // 0xA0 family for EmergencyCard
       break;
     case 'master':
     default:
       card[4] = 0xff; // Master opens all
+      card[7] = 0x80;
       card[9] = 0xb0 | index; // 0xB0 family for MasterCard
       break;
   }
 
+  // Byte [5] — the only genuine staff record (`C9 12 03 3B FF 00 29 80 00 B0
+  // 94 4C 5A …`) carries 0x00 while its [10..12] stamp decodes to 17:26, so
+  // [5] is not derived from the validity start time: it belongs to the
+  // [4..5] level field (master = FF 00). A previous attempt to derive it from
+  // the start hour was reverted; do not reintroduce that without a hardware
+  // capture showing the lock needs it.
   card[5] = 0x00;
   card[6] = params.nonce !== undefined ? params.nonce & 0xff : pseudoRand(index + 29); // Per-card nonce
-  card[7] = 0x80;
   card[8] = 0x00;
 
   const [s0, s1, s2] = packDateTime(
@@ -677,7 +731,7 @@ function resolveCardType(byte9: number): ProUsbCardType {
  * guesswork:
  *   ResetCard   → [4..5] = ~site, [13..15] = random padding
  *   GuestCard   → [4] sentinel, [5] room, [6] floor, [7] building, [13..15] end
- *   MasterCard  → [4] level, [6] nonce, [7] p6<<4, [13..15] end
+ *   MasterCard  → [4] level, [5] level low byte, [6] nonce, [7] 0x80 | building, [13..15] end
  *
  * Consequences for reading:
  *   • a system card has **no expiry date** — [13..15] is random, so it is
@@ -801,8 +855,24 @@ export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedPro
       else if (!end) notes.push('Fin de validité illisible (octets [13..15]) : seule la date de début est affichée.');
     }
   } else if (type === 'master' || type === 'floor' || type === 'building' || type === 'emergency') {
-    if (type === 'floor') decoded.floorNo = bytes[4];
-    if (type === 'building') decoded.buildingNo = bytes[4];
+    // [7] low nibble = the building the staff card is bound to (0 = all).
+    const scopedBuilding = bytes[7] & 0x0f;
+    if (type === 'floor') {
+      decoded.floorNo = bytes[4];
+      decoded.buildingNo = scopedBuilding;
+      if (bytes[4] > MAX_CARDLOCK_FLOOR) {
+        notes.push(`Numéro d’étage hors plage en [4] : ${bytes[4]} (attendu 0 à ${MAX_CARDLOCK_FLOOR}).`);
+      }
+    }
+    if (type === 'building') {
+      decoded.buildingNo = bytes[4];
+      if (scopedBuilding !== 0 && scopedBuilding !== bytes[4]) {
+        notes.push(`Incohérence de bâtiment : [4] = ${bytes[4]} mais [7] = ${scopedBuilding}.`);
+      }
+    }
+    if ((type === 'master' || type === 'emergency') && scopedBuilding !== 0) {
+      decoded.buildingNo = scopedBuilding;
+    }
 
     const start = unpackStamp(bytes[10], bytes[11], bytes[12], {
       refYear: new Date().getFullYear(),

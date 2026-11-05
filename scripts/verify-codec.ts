@@ -78,6 +78,8 @@ check(
 // ── CardInfo ID 39 — master B0, 2018-04-09 17:26 → 2019-04-09 23:59
 // The genuine record writes wildcard site 0000 (universal master) — only
 // reproduced when `universal: true` is passed explicitly.
+// Byte [5] is part of the [4..5] level field (FF 00) and stays 0x00 even
+// though [10..12] decodes to 17:26 — it is not the start hour.
 check(
   'master 0xB0 (universal)',
   'C9 12 00 00 FF 00 29 80 00 B0 94 4C 5A A4 4D FB',
@@ -109,6 +111,45 @@ check(
     },
     siteCodeLow: 0x033b,
   }),
+);
+
+// ── Staff scope: FloorCard / BuildingCard bind the building in [7] (0x80 | BldNo)
+const staffValidity = {
+  startYear: 2026, startMonth: 11, startDay: 4, startHour: 8, startMinute: 20,
+  endYear: 2027, endMonth: 11, endDay: 4, endHour: 23, endMinute: 59,
+};
+const floorCard = encodeMasterCard({
+  cardType: 'floor', floorNo: 2, buildingNo: 3, cardIndex: 5, nonce: 0x29, siteCodeLow: 0x033b, validity: staffValidity,
+});
+ok(
+  'carte étage → [4] étage 2, [7] bâtiment 3, famille 0xD5',
+  floorCard[4] === 2 && floorCard[5] === 0x00 && floorCard[7] === 0x83 && floorCard[9] === 0xd5,
+  hex(floorCard),
+);
+const buildingCard = encodeMasterCard({
+  cardType: 'building', buildingNo: 3, cardIndex: 2, nonce: 0x29, siteCodeLow: 0x033b, validity: staffValidity,
+});
+ok(
+  'carte bâtiment → [4] bâtiment 3, [7] bâtiment 3, famille 0xC2',
+  buildingCard[4] === 3 && buildingCard[7] === 0x83 && buildingCard[9] === 0xc2,
+  hex(buildingCard),
+);
+const decodedFloorCard = decodeCardRecord(floorCard);
+ok(
+  'décodage carte étage → étage 2 / bâtiment 3',
+  decodedFloorCard.type === 'floor' && decodedFloorCard.floorNo === 2 && decodedFloorCard.buildingNo === 3,
+  `étage ${decodedFloorCard.floorNo}, bâtiment ${decodedFloorCard.buildingNo}`,
+);
+ok(
+  'carte étage sans bâtiment refusée (jamais de bâtiment inventé)',
+  (() => {
+    try {
+      encodeMasterCard({ cardType: 'floor', floorNo: 2, siteCodeLow: 0x033b, validity: staffValidity });
+      return false;
+    } catch {
+      return true;
+    }
+  })(),
 );
 
 // ── System card 0x0E with the 2026-10-25 09:24 issue stamp read from the encoder.

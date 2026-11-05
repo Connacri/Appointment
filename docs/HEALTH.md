@@ -14,10 +14,35 @@ Score: **88/100** (Refreshed: 2026-11-05)
 | i18n + RTL | 9 | 10 | 111 keys × fr/en/ar, `npm run i18n:check` enforced in CI, `dir`/`lang` driven by `AppContext`, RTL logical properties in the shell. Gap: several screens still branch on `language === 'fr'` inline, and the default language is `fr` instead of `en`. |
 | Responsive + accessibility | 8 | 10 | Mobile-first breakpoints, safe areas, 44 px targets, visible focus, reduced-motion/transparency/contrast fallbacks. Gap: no automated axe or Playwright device × language matrix. |
 | Performance | 9 | 10 | Initial bundle cut from **494 kB → ~208 kB gzip** (main chunk 418 kB / 122 kB gzip, lucide 295 kB / 85 kB gzip) by code-splitting 12 views and 7 modals; every other view/modal loads on demand. Gap: slightly above the 200 kB budget and no Lighthouse CI budget file. |
-| Tests | 7 | 10 | 38 unit tests green (`bookingValidation`, `readerInfo`, `cardLockScope`, `cardSpecialDecode`, `roomReadiness`, `mdbImport`) + i18n parity gate. Gap: no component or E2E tests. |
+| Tests | 7 | 10 | 45 unit tests green (`bookingValidation`, `readerInfo`, `cardLockScope`, `cardSpecialDecode`, `roomReadiness`, `mdbImport`) + i18n parity gate. Gap: no component or E2E tests. |
 | Documentation | 4 | 5 | `README`, `CHANGELOG`, `docs/ARCHITECTURE.md`, `docs/I18N.md`, `docs/COMPLIANCE.md`, `docs/RELEASE.md`, CardLock specs. Gap: `docs/BRANDING.md` missing (splash assets absent). |
 
 **Total: 88/100**
+
+## 2026-11-05 — Staff card scope: Floor / Building (no score change)
+
+Reported on hardware: a FloorCard opened the same floor in every building, and a
+BuildingCard opened the wrong perimeter. Root cause in `encodeMasterCard`: the
+building was never written, so byte `[7]` stayed `0x80` (building nibble `0`) —
+the wildcard "all buildings" value used by the genuine master record.
+
+- FloorCard: `[4] = floorNo`, `[7] = 0x80 | BldNo` (real BldNo from `CardLock.mdb`).
+- BuildingCard: `[4] = BldNo` (documented layout) **and** `[7] = 0x80 | BldNo`, so a
+  lock reading either field lands on the same scope.
+- Master / Emergency keep the wildcard `[7] = 0x80` (building nibble `0`).
+- Building numbers are now validated (`0..15`) instead of being masked with `& 0x0f`:
+  building `16` used to become `0`, i.e. "all buildings". Floor `0..127`, same rule.
+  A Floor/Building card without a building is refused — no invented default.
+- Guest cards use the same validation for their `[7]` building nibble.
+
+Verified locally: `npm test` 45/45, `npm run lint` clean, `scripts/verify-codec.ts`
+TOUT EST VERT (genuine master record `C9 12 03 3B FF 00 29 80 00 B0 …` still matches).
+
+Not verified: firmware acceptance of the new `[7]` building nibble — needs a real
+encoder capture and an opening test on two buildings. `byte[5]` stays `0x00`: the only
+genuine staff record carries `0x00` while `[10..12]` decodes to 17:26, so the earlier
+"start hour" theory is not supported by the data.
+
 
 ## 2026-11-05 — Agent context hygiene (no score change)
 
