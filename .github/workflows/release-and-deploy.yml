@@ -91,6 +91,37 @@ jobs:
 
           echo "Legal pages verified in production build dist/ (existence, RTL, no placeholders, README links)."
 
+      - name: Cancel stuck GitHub Pages deployments
+        uses: actions/github-script@v7
+        continue-on-error: true
+        with:
+          script: |
+            const { data: deployments } = await github.rest.repos.listDeployments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              environment: 'github-pages',
+              per_page: 20,
+            });
+            for (const d of deployments) {
+              const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                deployment_id: d.id,
+                per_page: 1,
+              });
+              const latest = statuses[0];
+              if (!latest || (latest.state !== 'success' && latest.state !== 'inactive' && latest.state !== 'failure' && latest.state !== 'error')) {
+                core.info(`Canceling deployment ${d.id} (${d.sha})`);
+                await github.rest.repos.createDeploymentStatus({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  deployment_id: d.id,
+                  state: 'inactive',
+                  description: 'Canceled by CI before new Pages deploy',
+                }).catch(() => {});
+              }
+            }
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v4
 
@@ -106,6 +137,25 @@ jobs:
           name: web-build
           path: web-build-v*.zip
           retention-days: 30
+
+      - name: Remove stale github-pages artifacts (avoids duplicate-artifact errors on rerun)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const stale = (artifacts.data.artifacts || []).filter(a => a.name === 'github-pages');
+            for (const a of stale) {
+              core.info(`Deleting stale github-pages artifact ${a.id}`);
+              await github.rest.actions.deleteArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: a.id,
+              }).catch(e => core.warning(`Could not delete artifact ${a.id}: ${e.message}`));
+            }
 
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
