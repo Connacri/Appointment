@@ -19,6 +19,36 @@ Score: **88/100** (Refreshed: 2026-11-05)
 
 **Total: 88/100**
 
+## 2026-11-05 — Agent context hygiene (no score change)
+
+Every request used to carry ~21 k tokens of `AGENTS.md` plus five MCP servers
+(~290 tool schemas). Measured and fixed:
+
+| Item | Before | After |
+|---|---|---|
+| `AGENTS.md` | 82,395 bytes (~20.6 k tokens) | 41,335 bytes (~10.3 k tokens) |
+| MCP tool schemas in context | firebase 19 · google-play 16 · rea 207 · render 28 · supabase 20 | 0 (servers configured but disabled) |
+| Global `rea` server | connected (207 tools) | disabled |
+| Render / Swift / Expo / Sonner skills | advertised | denied |
+
+- Moved the owner bootstrap to `docs/ci/OWNER-BOOTSTRAP.md` and the optional
+  advanced-quality reference to `docs/ci/QUALITY-ADVANCED.md`.
+- Deleted three stale appendices instead of moving them: the old Appendix B (an outdated
+  copy of `scripts/bootstrap-secrets.sh` that pushed the wrong secret names), Appendix C
+  (`ci-release.yml`, never shipped, contradicted the real pipeline) and Appendix G
+  (duplicate of `docs/RELEASE.md`).
+- Corrected the secret/variable inventory to what CI actually reads
+  (`ANDROID_KEYSTORE_BASE64`, `PLAY_STORE_JSON_KEY`, `PLAY_STORE_JSON_KEY_PRESENT`, …).
+- Repaired the double-encoded mojibake (UTF-8 → CP1252 → UTF-8) that made the whole
+  contract unreadable in places.
+- Added the project `opencode.json`: Supabase scoped to this project in read-only mode,
+  everything else disabled, Render/Swift/Expo/Sonner skills denied. Documented in
+  `docs/SUPABASE_MCP.md`.
+
+Verified: Quality Checks + Production Release green on `2dfe231`, Pages legal pages
+HTTP 200 in fr/en/ar. Score unchanged: this is operational hygiene, not a product area.
+
+
 ## 2026-11-05 — Legal pages rebuilt from a code audit
 
 The published `/privacy/` and `/delete-account/` pages described a different product

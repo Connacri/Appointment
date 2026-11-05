@@ -179,6 +179,8 @@ Les artefacts de release utilisent le préfixe `Appointment-PMS` et la version d
 - [Scorecard de santé engineering](./docs/HEALTH.md)
 - [Plan de synchronisation Supabase](./docs/SUPABASE_SYNC_PLAN.md)
 - [Release, signature et déploiement](./docs/RELEASE.md)
+- [Bootstrap propriétaire (keystore, secrets, Play, Firebase)](./docs/ci/OWNER-BOOTSTRAP.md)
+- [Qualité avancée optionnelle (E2E, Lighthouse, CodeQL)](./docs/ci/QUALITY-ADVANCED.md)
 - [Analyse des tables et relations CardLock.mdb](./docs/CARDLOCK_DATABASE_ANALYSIS.md)
 - [Tutoriel d'import CardLock.mdb](./docs/PROUSB_MDB_IMPORT_GUIDE.md)
 - [Spécification du système proUSB](./docs/PROUSB_SPECIFICATION.md)
