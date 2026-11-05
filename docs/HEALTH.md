@@ -43,6 +43,25 @@ encoder capture and an opening test on two buildings. `byte[5]` stays `0x00`: th
 genuine staff record carries `0x00` while `[10..12]` decodes to 17:26, so the earlier
 "start hour" theory is not supported by the data.
 
+CI: commit `3169678` — Quality Checks run `42119574666` ✅ and Production Release
+`42119574740` ✅ (signed APK + AAB, Windows EXE, GitHub Release `v1.2.0-build.416`,
+Pages deployed; `/`, `/privacy/`, `/delete-account/` and the Arabic variants return 200).
+
+## 2026-11-05 — Account-deletion wording (no score change)
+
+Audited the compliance copy after the local-data purge was confused with account
+deletion. The unused i18n key `deleteAccountInAppBtn` still claimed "Delete My Account
+& Purge Data (In-App §19.3)" while the real action only erases on-device data. Renamed
+to `purgeLocalDataBtn` with accurate fr/en/ar labels; the interface and the marketing
+copy now never promise an account deletion that has no backend.
+
+`docs/COMPLIANCE.md` gained the full contract for the future Edge Function
+(`/functions/v1/delete-account`: JWT identity, re-authentication, deletion order,
+shared-workspace `409`, audit row, legal sync). The Play *Data safety* answer now states
+that the in-app purge is **not** account deletion and points to the web request page.
+
+Verified locally: lint clean, 45/45 tests, i18n parity 111 keys × 3 languages.
+
 
 ## 2026-11-05 — Agent context hygiene (no score change)
 

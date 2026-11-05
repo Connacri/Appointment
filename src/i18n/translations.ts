@@ -454,10 +454,10 @@ export const translations = {
     en: 'Privacy & Account Management Center',
     ar: 'مركز الخصوصية وإدارة بيانات الحساب',
   },
-  deleteAccountInAppBtn: {
-    fr: 'Supprimer mon compte & purger mes données (In-App §19.3)',
-    en: 'Delete My Account & Purge Data (In-App §19.3)',
-    ar: 'حذف حسابي ومسح كافة بياناتي نهائياً (§19.3)',
+  purgeLocalDataBtn: {
+    fr: 'Effacer les données de cet appareil',
+    en: 'Clear data on this device',
+    ar: 'مسح بيانات هذا الجهاز',
   },
   deleteAccountWarning: {
     fr: 'Action irréversible : les réservations, paramètres, données proUSB et autres données stockées localement dans cette application seront supprimés. Cette purge locale ne supprime pas les données conservées par un service distant.',

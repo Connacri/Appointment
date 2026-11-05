@@ -62,6 +62,26 @@ No other third party receives application data.
 **Never publish a deletion promise the system cannot keep.** If a flow is added or removed,
 update this table, the privacy policy and the delete-account pages together.
 
+### 5.1 Contract for the future in-app account deletion endpoint
+
+Not deployed. This is the exact behaviour the UI and legal pages may advertise **only after**
+the endpoint below exists and has been exercised once end to end. Until then the copy must keep
+saying that the in-app purge is local-only.
+
+| Item | Requirement |
+|---|---|
+| Endpoint | `POST /functions/v1/delete-account` (Supabase Edge Function), authenticated with the caller's Supabase JWT — never a service-role key from the client |
+| Input | Empty body. The target user is taken from the verified JWT (`sub`); the client cannot pass another user id |
+| Re-authentication | The UI must require a fresh sign-in or password confirmation before calling the function, so a stolen unlocked device cannot erase an account silently |
+| Identity check | `auth.getUser(jwt)` must succeed server-side; a missing/expired token returns `401` and deletes nothing |
+| Deletion order | 1. `storage.objects` files owned by the workspace, 2. child rows (`booking_payments`, `invoice_items`, `stock_movements`, `pms_tasks`, `audit_events`), 3. parent rows (`bookings`, `invoices`, `resources`, `resource_groups`, `guests`, `dynamic_rates`, `stock_items`, `establishments`), 4. `workspace_members`, 5. `workspaces` owned by the user, 6. `profiles`, 7. `auth.users` via the Admin API |
+| Shared workspaces | If the user is not the sole owner, the function must delete only their membership and personal rows and return `409` with the reason instead of destroying a workspace other people use |
+| Transactionality | One SQL transaction for the database part; storage cleanup may retry, but a partial run must leave the account intact and report `failed` — never a half-deleted auth record |
+| Response | `204` on success, `401` unauthenticated, `409` shared workspace, `500` with a correlation id; no internal detail in the body |
+| Audit | Write one `audit_events` row (`action = 'account_deleted'`, actor hash, timestamp) retained separately from the deleted data |
+| Legal sync | The same change must update `public/delete-account/{fr,en,ar}/`, `public/privacy/{fr,en,ar}/`, this file and the Play Data safety answer |
+
+
 ## 6. Google Play Data safety mapping
 
 | Play question | Answer |
@@ -70,7 +90,7 @@ update this table, the privacy policy and the delete-account pages together.
 | Data shared | **No** |
 | Data sold | **No** |
 | Data in transit | HTTPS to Supabase only when an account is used |
-| Account deletion supported | Yes — in-app local purge + web request page (`SITE_URL/delete-account/`) |
+| Account deletion supported | Yes — the web request page (`SITE_URL/delete-account/`) with email verification. The in-app purge erases only on-device data and is **not** an account deletion, so it is not claimed as one. |
 | Security practices | Transport encryption (HTTPS), data encrypted in transit; local data protected by the device |
 | Mandatory declarations | None (no location, no contacts, no photos stored, no ads, no children's data) |
 
@@ -78,7 +98,7 @@ update this table, the privacy policy and the delete-account pages together.
 
 1. **Legal entity name** of the publisher is not stated in the repository; the policy only
    names the data protection contact. Confirm the legal wording with a lawyer.
-2. In-app account deletion requires a backend endpoint; until it exists, the web
+2. In-app account deletion requires a backend endpoint (contract in §5.1); until it exists, the web
    `mailto:` channel is the only server-side path.
 3. Retention of accounting records (invoices) is whatever the operator's own legal
    obligations are — invoices live locally in the app and are not held by us.
