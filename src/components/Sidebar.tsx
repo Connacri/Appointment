@@ -694,8 +694,8 @@ export const Sidebar: React.FC = () => {
             aria-label={language === 'fr' ? 'Navigation principale' : language === 'ar' ? 'القائمة الرئيسية' : 'Main navigation'}
             className={`relative z-10 flex h-[100dvh] max-h-[100dvh] min-h-0 w-[min(20rem,88vw)] max-w-[88vw] flex-col overflow-hidden border-r border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] text-slate-800 dark:text-slate-300 shadow-2xl pms-drawer ${isRtl ? 'mr-auto border-l border-r-0' : 'ml-0'}`}
             style={{
-              paddingTop: 'env(safe-area-inset-top)',
-              paddingBottom: 'env(safe-area-inset-bottom)',
+              paddingTop: 'var(--pms-safe-area-top, env(safe-area-inset-top, 0px))',
+              paddingBottom: 'var(--pms-safe-area-bottom, env(safe-area-inset-bottom, 0px))',
             }}
           >
             {renderContent(true)}

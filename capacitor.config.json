@@ -1,1 +1,11 @@
-{ "appId": "com.planning.oran", "appName": "Appointment PMS", "webDir": "dist" }
+{
+  "appId": "com.planning.oran",
+  "appName": "Appointment PMS",
+  "webDir": "dist",
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}
