@@ -23,6 +23,22 @@ public class MainActivity extends BridgeActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         captureIncomingIntent(intent);
+        if (hasWindowFocus()) dispatchPendingIntent(intent);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        dispatchPendingIntent(getIntent());
+    }
+
+    private void dispatchPendingIntent(Intent intent) {
+        if (intent == null || intent.getBooleanExtra("appointment_video_intent_dispatched", false)) return;
+        boolean isShare = Intent.ACTION_SEND.equals(intent.getAction());
+        boolean isBubbleTap = intent.getBooleanExtra(VideoBubbleIntents.EXTRA_OPEN_QUICK_ADD, false);
+        if (!isShare && !isBubbleTap) return;
+        intent.putExtra("appointment_video_intent_dispatched", true);
+        setIntent(intent);
         dispatchIncomingIntent(intent);
     }
 
