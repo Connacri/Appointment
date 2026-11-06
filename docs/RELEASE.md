@@ -73,17 +73,27 @@ Ne jamais committer de keystore, `.env`, JSON de service account ou mot de passe
 
 1. `gh run watch <run_id> --exit-status`
 2. Vérifier que les quatre jobs sont verts et que la release contient les artefacts versionnés.
-3. Vérifier `/`, `/privacy/`, `/delete-account/` et leurs variantes `fr/`, `en/`, `ar/` en HTTP 200.
-4. En cas d'échec : lire `gh run view <run_id> --log-failed`, corriger la cause racine, pousser un nouveau commit.
+3. Le job Pages compare automatiquement l'asset `assets/index-*.js` servi par
+   `https://connacri.github.io/Appointment/` avec celui du build (10 minutes de réessais pour la
+   propagation CDN) : un site resté sur l'ancien build fait échouer le run.
+4. Vérifier `/`, `/privacy/`, `/delete-account/` et leurs variantes `fr/`, `en/`, `ar/` en HTTP 200.
+5. En cas d'échec : lire `gh run view <run_id> --log-failed`, corriger la cause racine, pousser un nouveau commit.
 
 ## 6. Dépannage Pages (leçon apprise)
 
-- `deploy-pages` échoue avec `Timeout reached` / `updating_pages` : incident transitoire.
-  Ne pas relancer **uniquement** le job Pages : le re-run ré-upload l'artefact `github-pages`
-  dans le même run et le déploiement suivant échoue avec
-  `Multiple artifacts named "github-pages"`.
-- Un déploiement Pages est identifié par le SHA du commit. Relancer le même SHA peut être
-  annulé (`Deployment cancelled.`).
-- Solution fiable : pousser un **nouveau commit** (ou lancer `workflow_dispatch` sur un
+- `deploy-pages` échoue avec `Timeout reached` / `updating_pages` : incident transitoire. Le délai
+  demandé est plafonné à **10 minutes** par l'action (`timeout value is greater than the allowed
+  maximum`), donc augmenter `timeout:` au-delà de `600000` ne change rien. Ne jamais masquer cet
+  échec avec `continue-on-error` : c'est ainsi qu'un correctif a pu rester absent du site alors que
+  le job était vert.
+- Un déploiement Pages est identifié par le SHA du commit. Un déploiement bloqué peut être annulé :
+  `gh api --method POST repos/<owner>/<repo>/pages/deployments/<sha>/cancel` (le `<sha>` est celui
+  du commit, pas l'ID du deployment Actions). Vérifier ensuite son état avec
+  `gh api repos/<owner>/<repo>/pages/deployments/<sha>` jusqu'à `deployment_cancelled`.
+- Ne pas relancer **uniquement** le job Pages sans vérifier l'artefact : le re-run ré-upload
+  `github-pages` dans le même run et le déploiement échoue avec
+  `Multiple artifacts named "github-pages"`. Depuis l'ajout de `actions: write`, l'étape de nettoyage
+  peut supprimer l'ancien artefact ; si la suppression échoue encore, pousser un **nouveau commit**.
+- Solution la plus fiable : pousser un **nouveau commit** (ou lancer `workflow_dispatch` sur un
   commit différent) afin d'obtenir un nouveau SHA et un nouvel artefact Pages.
 - Ne jamais supprimer ni déplacer un tag publié ; corriger en avant avec un nouveau build.
