@@ -20,7 +20,7 @@ final class VideoBubbleIntents {
             candidate = intent.getData().toString();
         }
         if (TextUtils.isEmpty(candidate) && intent.getClipData() != null && intent.getClipData().getItemCount() > 0) {
-            CharSequence text = intent.getClipData().getItemAt(0).coerceToText(null);
+            CharSequence text = intent.getClipData().getItemAt(0).getText();
             if (text != null) candidate = text.toString();
         }
         if (TextUtils.isEmpty(candidate)) return null;
