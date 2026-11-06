@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -28,6 +28,11 @@ import { ResourceGroup, ResourceItem, TimelineBooking, BookingStatus } from '../
 import { statusConfig } from './LegendBar';
 import { downloadICS } from '../utils/icsExport';
 import { useTimelineSync } from '../hooks/useTimelineSync';
+import {
+  shouldStartTimelineDrag,
+  computeTimelineDragScroll,
+  TimelineDragState,
+} from '../utils/timelineDragPan';
 
 export const PlanningTimeline: React.FC = () => {
   const {
@@ -72,43 +77,131 @@ export const PlanningTimeline: React.FC = () => {
   }, [hotelBuildingOptions, selectedEstablishmentId, setSelectedEstablishmentId]);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const dragPanRef = useRef<{ pointerId: number; x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
+  const dragPanRef = useRef<TimelineDragState | null>(null);
+  const [isHeaderDragging, setIsHeaderDragging] = useState(false);
   const suppressClickRef = useRef(false);
-  const onTimelinePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+
+  const cleanupDrag = useCallback(() => {
+    const d = dragPanRef.current;
+    if (!d) return;
+    try {
+      if (d.capturingEl && d.capturingEl.hasPointerCapture(d.pointerId)) {
+        d.capturingEl.releasePointerCapture(d.pointerId);
+      }
+    } catch {
+      // Ignore if pointer capture was already released or unsupported
+    }
+    const moved = d.moved;
+    dragPanRef.current = null;
+    setIsHeaderDragging(false);
+    if (moved) {
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 50);
+    }
+  }, []);
+
+  const onTimelinePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    if (target.closest('button,a,input,select,textarea,[role="button"],[data-booking-card="true"],[data-gantt-group-toggle="true"]')) return;
+    const isInteractive = Boolean(
+      target.closest(
+        'button,a,input,select,textarea,[role="button"],[data-booking-card="true"],[data-gantt-group-toggle="true"]'
+      )
+    );
+
+    if (
+      !shouldStartTimelineDrag({
+        pointerType: e.pointerType,
+        button: e.button,
+        buttons: e.buttons,
+        isInteractiveTarget: isInteractive,
+      })
+    ) {
+      return;
+    }
+
     const el = scrollContainerRef.current;
     if (!el) return;
-    dragPanRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop, moved: false };
-    el.setPointerCapture(e.pointerId);
-  };
-  // Mouse drag pans horizontally only. Vertical movement remains native mouse-wheel scrolling.
-  const onTimelinePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+
+    const headerEl = e.currentTarget;
+    try {
+      headerEl.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore if pointer capture fails
+    }
+
+    dragPanRef.current = {
+      pointerId: e.pointerId,
+      capturingEl: headerEl,
+      startX: e.clientX,
+      startScrollLeft: el.scrollLeft,
+      moved: false,
+    };
+    setIsHeaderDragging(true);
+  }, []);
+
+  // Mouse drag pans horizontally ONLY while user actively holds the primary click down.
+  // Hovering or moving cursor without click never triggers horizontal scroll.
+  const onTimelinePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const d = dragPanRef.current;
-    const el = scrollContainerRef.current;
-    if (!d || !el || d.pointerId !== e.pointerId) return;
-    const dx = e.clientX - d.x;
-    if (Math.abs(dx) < 4) return;
+    if (!d || d.pointerId !== e.pointerId) return;
+
+    const result = computeTimelineDragScroll({
+      dragState: d,
+      pointerId: e.pointerId,
+      clientX: e.clientX,
+      buttons: e.buttons,
+      minDistanceThreshold: 4,
+    });
+
+    if (result.shouldCancel) {
+      cleanupDrag();
+      return;
+    }
+
+    if (!result.shouldScroll) return;
+
     d.moved = true;
     suppressClickRef.current = true;
     e.preventDefault();
-    el.scrollLeft = d.left - dx;
-  };
-  const onTimelinePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
-    const d = dragPanRef.current;
+
     const el = scrollContainerRef.current;
-    if (!d || d.pointerId !== e.pointerId) return;
-    if (el && el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
-    dragPanRef.current = null;
-    if (d.moved) window.setTimeout(() => { suppressClickRef.current = false; }, 0);
-  };
-  const onTimelineClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (el) {
+      el.scrollLeft = result.newScrollLeft;
+    }
+  }, [cleanupDrag]);
+
+  const onTimelinePointerEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragPanRef.current || dragPanRef.current.pointerId !== e.pointerId) return;
+    cleanupDrag();
+  }, [cleanupDrag]);
+
+  const onTimelineClickCapture = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!suppressClickRef.current) return;
     e.preventDefault();
     e.stopPropagation();
     suppressClickRef.current = false;
-  };
+  }, []);
+
+  // Window-level failsafe to cancel drag if mouse is released anywhere outside the header
+  useEffect(() => {
+    const handleGlobalRelease = () => {
+      if (dragPanRef.current) {
+        cleanupDrag();
+      }
+    };
+    window.addEventListener('pointerup', handleGlobalRelease);
+    window.addEventListener('pointercancel', handleGlobalRelease);
+    window.addEventListener('mouseup', handleGlobalRelease);
+    window.addEventListener('blur', handleGlobalRelease);
+
+    return () => {
+      window.removeEventListener('pointerup', handleGlobalRelease);
+      window.removeEventListener('pointercancel', handleGlobalRelease);
+      window.removeEventListener('mouseup', handleGlobalRelease);
+      window.removeEventListener('blur', handleGlobalRelease);
+    };
+  }, [cleanupDrag]);
 
 
   // Persist the user's last selected density and day-column width.
@@ -883,15 +976,23 @@ export const PlanningTimeline: React.FC = () => {
             </div>
           )}
 
-          {/* Timeline Header: Days row (Cursor grab only on dates to pan horizontally) */}
+          {/* Timeline Header: Days row (Drag horizontally only when holding click) */}
           <div
             onPointerDown={onTimelinePointerDown}
             onPointerMove={onTimelinePointerMove}
             onPointerUp={onTimelinePointerEnd}
             onPointerCancel={onTimelinePointerEnd}
             data-gantt-day-header="true"
-            className={`${dayHeaderHeightClass} shrink-0 border-b border-slate-200 dark:border-slate-800 flex bg-white dark:bg-slate-900 sticky top-0 z-[70] isolate select-none transition-[height,min-height,max-height] duration-200 cursor-grab active:cursor-grabbing`}
-            title="Glisser sur les dates pour déplacer le calendrier horizontalement"
+            className={`${dayHeaderHeightClass} shrink-0 border-b border-slate-200 dark:border-slate-800 flex bg-white dark:bg-slate-900 sticky top-0 z-[70] isolate select-none transition-[height,min-height,max-height] duration-200 ${
+              isHeaderDragging ? 'cursor-grabbing' : 'cursor-grab'
+            }`}
+            title={
+              language === 'fr'
+                ? 'Maintenir le clic et glisser pour faire défiler le calendrier'
+                : language === 'ar'
+                ? 'اضغط مع الاستمرار واسحب لتمرير التقويم'
+                : 'Click and drag to scroll timeline'
+            }
           >
             {timelineDays.map((day) => (
               <div key={day.dateStr} style={{ width: `${colWidth}px` }} className={`shrink-0 border-r border-slate-200/70 dark:border-slate-800/70 flex flex-col items-center justify-center gap-0.5 px-1 transition-colors relative h-full overflow-hidden ${day.isToday ? "bg-rose-50/40 dark:bg-rose-950/25 ring-1 ring-inset ring-rose-400/40" : day.isWeekend ? "bg-slate-50/50 dark:bg-slate-900/40" : ""}`}>
