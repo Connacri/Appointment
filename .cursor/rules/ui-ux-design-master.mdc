@@ -1,6 +1,6 @@
 ---
 description: "Load the repository UI/UX master skill for interface work."
-globs: ["src/**/*.{tsx,ts,jsx,js,css,scss}", "src/**/*"]
+globs: "src/**/*.{tsx,jsx,css,scss}"
 alwaysApply: false
 ---
 
