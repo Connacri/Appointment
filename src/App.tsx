@@ -146,23 +146,37 @@ const MainLayout: React.FC = () => {
   const [hasOpenedVideoHub, setHasOpenedVideoHub] = React.useState(activeView === 'videos');
 
   React.useEffect(() => {
-    const receiveVideoShare = (event: Event) => {
-      const detail = (event as CustomEvent<{ url?: string; openQuickAdd?: boolean }>).detail;
-      if (detail?.url) {
-        try { localStorage.setItem('appointment_pending_video_share', detail.url); } catch { /* storage may be unavailable */ }
+    const openHackTube = (url?: string | null, openQuickAdd = false) => {
+      if (url) {
+        try { localStorage.setItem('appointment_pending_video_share', url); } catch { /* storage may be unavailable */ }
       }
-      if (detail?.openQuickAdd || detail?.url) {
+      if (openQuickAdd || url) {
         try { localStorage.setItem('appointment_open_hacktube_quick_add', '1'); } catch { /* storage may be unavailable */ }
         setActiveView('videos');
       }
     };
 
+    const receiveVideoShare = (event: Event) => {
+      const detail = (event as CustomEvent<{ url?: string; openQuickAdd?: boolean }>).detail;
+      if (!detail?.url && detail?.openQuickAdd) {
+        // The user tapped the bubble: read the clipboard only now, with the app foregrounded.
+        VideoBubble.getPendingShare()
+          .then((pending) => {
+            openHackTube(pending?.url, true);
+            if (pending?.url) {
+              window.dispatchEvent(new CustomEvent('appointment-video-share', { detail: { url: pending.url, openQuickAdd: true } }));
+            }
+          })
+          .catch(() => openHackTube(undefined, true));
+        return;
+      }
+      openHackTube(detail?.url, Boolean(detail?.openQuickAdd));
+    };
+
     window.addEventListener('appointment-video-share', receiveVideoShare);
     VideoBubble.getPendingShare()
       .then((pending) => {
-        if (pending?.url || pending?.openQuickAdd) {
-          receiveVideoShare(new CustomEvent('appointment-video-share', { detail: pending }));
-        }
+        if (pending?.url || pending?.openQuickAdd) openHackTube(pending.url, pending.openQuickAdd);
       })
       .catch(() => { /* Native bridge is unavailable in the web build. */ });
 
