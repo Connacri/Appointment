@@ -1,0 +1,15 @@
+---
+description: "Load the repository UI/UX master skill for interface work."
+globs: ["src/**/*.{tsx,ts,jsx,js,css,scss}", "src/**/*"]
+alwaysApply: false
+---
+
+# UI/UX master skill (mandatory for matching UI work)
+
+Before creating, editing, reviewing, auditing, or redesigning a UI, read
+`.agents/skills/ui-ux-design-master/SKILL.md` in full and follow it. This includes
+responsive/mobile behavior, accessibility, design tokens, platform conventions,
+Arabic RTL, i18n, and the pre-delivery checklist.
+
+Do not treat this pointer as a replacement for the full skill. If it is unavailable,
+state that limitation.
