@@ -62,6 +62,10 @@ export const TopBar: React.FC = () => {
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [isSectorMenuOpen, setIsSectorMenuOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [operatorName, setOperatorName] = useState(() => localStorage.getItem('pms_operator_name') || 'Réception');
+  const [operatorPin, setOperatorPin] = useState('');
+  const [isOperatorAuthenticated, setIsOperatorAuthenticated] = useState(() => localStorage.getItem('pms_operator_auth') !== 'false');
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
 
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -336,16 +340,22 @@ export const TopBar: React.FC = () => {
 
       {/* RIGHT SECTION: Auth, Local Storage, USB, Currency, + Nouveau, More ⋮ all inline on one row */}
       <div className="pms-app-topbar-actions flex flex-nowrap items-center gap-1 sm:gap-1.5 shrink-0">
-        {/* Auth / Cloud Connection button */}
+        {/* User / Operator Authentication button */}
         <button
           type="button"
           onClick={() => setIsAuthModalOpen(true)}
-          className="h-8 px-2 sm:px-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0"
-          title={language === 'fr' ? 'Connexion & Authentification Cloud / Supabase' : language === 'ar' ? 'تسجيل الدخول ومزامنة السحابة' : 'Auth & Cloud Login'}
-          aria-label={language === 'fr' ? 'Connexion' : language === 'ar' ? 'دخول' : 'Auth'}
+          className={`h-8 px-2 sm:px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 ${
+            isOperatorAuthenticated
+              ? 'border-emerald-300 dark:border-emerald-700/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100'
+              : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100'
+          }`}
+          title={`${language === 'fr' ? 'Session Utilisateur / Opérateur :' : language === 'ar' ? 'جلسة المشغل :' : 'Operator Session:'} ${operatorName} (${currentRoleObj.label[language] || currentRole}) — ${language === 'fr' ? 'Cliquer pour vous authentifier' : language === 'ar' ? 'اضغط لإدارة الحساب' : 'Click to authenticate'}`}
+          aria-label={language === 'fr' ? 'Connexion Opérateur' : language === 'ar' ? 'دخول المشغل' : 'Operator Login'}
         >
-          <UserCheck size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
-          <span className="hidden lg:inline">{language === 'fr' ? 'Connexion' : language === 'ar' ? 'دخول' : 'Auth'}</span>
+          <UserCheck size={14} className={isOperatorAuthenticated ? 'text-emerald-600 dark:text-emerald-400 shrink-0' : 'text-blue-600 dark:text-blue-400 shrink-0'} />
+          <span className="hidden lg:inline font-bold">
+            {isOperatorAuthenticated ? operatorName : (language === 'fr' ? 'Connexion' : language === 'ar' ? 'دخول' : 'Login')}
+          </span>
         </button>
 
         {/* Local database activity indicator */}
@@ -567,86 +577,166 @@ export const TopBar: React.FC = () => {
         </div>
       </div>
 
-      {/* Cloud Authentication Modal */}
+      {/* User / Operator Authentication Modal - Displayed strictly ON TOP of all UI */}
       {isAuthModalOpen && (
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4"
-          role="presentation"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="auth-modal-title"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) setIsAuthModalOpen(false);
           }}
         >
           <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="auth-modal-title"
-            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4"
+            className="w-full max-w-md rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-5 relative"
+            dir={isRtl ? 'rtl' : 'ltr'}
           >
+            {/* Modal Header */}
             <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/70 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                  <UserCheck size={20} />
+              <div className="flex items-center gap-3">
+                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-md ${isOperatorAuthenticated ? 'bg-gradient-to-tr from-emerald-600 to-teal-500' : 'bg-gradient-to-tr from-blue-600 to-indigo-500'}`}>
+                  <UserCheck size={22} />
                 </div>
                 <div>
-                  <h2 id="auth-modal-title" className="text-base font-bold text-slate-900 dark:text-white">
-                    {language === 'fr' ? 'Connexion & Authentification Cloud' : language === 'ar' ? 'تسجيل الدخول ومزامنة السحابة' : 'Cloud Login & Auth'}
+                  <h2 id="auth-modal-title" className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                    {language === 'fr' ? 'Authentification & Session Opérateur' : language === 'ar' ? 'مصادقة وجلسة المشغل' : 'Operator Authentication & Session'}
                   </h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {language === 'fr' ? 'Accès direct multi-postes et synchronisation' : language === 'ar' ? 'الوصول المباشر والمزامنة السحابية' : 'Multi-station access & cloud sync'}
+                    {language === 'fr' ? 'Contrôle des accès locaux et profil utilisateur' : language === 'ar' ? 'التحكم في الوصول المحلي وملف المستخدم' : 'Local access control & operator profile'}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsAuthModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 aria-label={language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 p-3.5 space-y-2 text-xs">
+            {authNotice && (
+              <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                <span>{authNotice}</span>
+              </div>
+            )}
+
+            {/* Current Active Status */}
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 p-4 space-y-2.5 text-xs">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  {language === 'fr' ? 'Mode de fonctionnement :' : language === 'ar' ? 'وضع التشغيل:' : 'Operating Mode:'}
+                  {language === 'fr' ? 'Statut de session :' : language === 'ar' ? 'حالة الجلسة:' : 'Session status:'}
                 </span>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold text-[10px]">
-                  {language === 'fr' ? 'Local d’abord (IndexedDB)' : language === 'ar' ? 'محلي أولاً' : 'Local-First'}
+                <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] flex items-center gap-1.5 ${
+                  isOperatorAuthenticated
+                    ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${isOperatorAuthenticated ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                  {isOperatorAuthenticated
+                    ? (language === 'fr' ? 'Opérateur Connecté' : language === 'ar' ? 'المشغل متصل' : 'Operator Logged In')
+                    : (language === 'fr' ? 'Session Invité / Non authentifiée' : language === 'ar' ? 'غير مسجل' : 'Guest Session')}
                 </span>
               </div>
-              <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-[11px]">
-                {language === 'fr'
-                  ? 'Vos données sont stockées de façon sécurisée et permanente dans votre navigateur. Vous pouvez également connecter un projet Supabase pour la synchronisation cloud.'
-                  : language === 'ar'
-                  ? 'يتم تخزين بياناتك محلياً بشكل دائم وآمن على متصفحك. يمكنك ربط مشروع Supabase للمزامنة السحابية.'
-                  : 'Your data is securely stored locally in your browser. You can also connect a Supabase project for multi-device sync.'}
-              </p>
-            </div>
 
-            <div className="flex flex-col gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAuthModalOpen(false);
-                  setIsIndexedDBOpen(true);
-                }}
-                className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
-              >
-                <Database size={15} />
-                <span>
-                  {language === 'fr' ? 'Gérer les clés Supabase & Sauvegarde' : language === 'ar' ? 'إدارة مفاتيح Supabase والنسخ الاحتياطي' : 'Manage Supabase Keys & Backup'}
+              <div className="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                <span>{language === 'fr' ? 'Rôle actif :' : language === 'ar' ? 'الدور الحالي:' : 'Active role:'}</span>
+                <span className="font-bold text-slate-900 dark:text-white uppercase font-mono bg-white dark:bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                  {currentRoleObj.label[language] || currentRole}
                 </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsAuthModalOpen(false)}
-                className="w-full py-2 px-4 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium text-xs transition-colors cursor-pointer"
-              >
-                {language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}
-              </button>
+              </div>
             </div>
+
+            {/* Operator Login Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                localStorage.setItem('pms_operator_name', operatorName || 'Réception');
+                localStorage.setItem('pms_operator_auth', 'true');
+                setIsOperatorAuthenticated(true);
+                setAuthNotice(
+                  language === 'fr'
+                    ? `Authentifié avec succès en tant que ${operatorName || 'Réception'} !`
+                    : language === 'ar'
+                    ? `تم تسجيل الدخول بنجاح باسم ${operatorName || 'الاستقبال'}!`
+                    : `Logged in successfully as ${operatorName || 'Front Desk'}!`
+                );
+                setTimeout(() => {
+                  setAuthNotice(null);
+                  setIsAuthModalOpen(false);
+                }, 1200);
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">
+                  {language === 'fr' ? 'Nom ou Matricule Opérateur :' : language === 'ar' ? 'اسم المشغل أو الرقم الوظيفي:' : 'Operator Name or ID:'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={operatorName}
+                  onChange={(e) => setOperatorName(e.target.value)}
+                  placeholder={language === 'fr' ? 'Ex: Réception Amina / Gérant' : language === 'ar' ? 'مثال: موظف الاستقبال' : 'e.g. Front Desk Amina'}
+                  className="w-full h-9 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">
+                  {language === 'fr' ? 'Code PIN rapide (4 chiffres) :' : language === 'ar' ? 'رمز PIN السريع (4 أرقام):' : 'Quick PIN Code (4 digits):'}
+                </label>
+                <input
+                  type="password"
+                  maxLength={6}
+                  value={operatorPin}
+                  onChange={(e) => setOperatorPin(e.target.value)}
+                  placeholder="••••"
+                  className="w-full h-9 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white font-mono text-center tracking-widest text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">
+                  {language === 'fr' ? 'PIN par défaut : 1234 (facultatif pour la session locale)' : language === 'ar' ? 'رمز PIN الافتراضي: 1234' : 'Default PIN: 1234 (optional for local)'}
+                </span>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                <button
+                  type="submit"
+                  className="flex-1 h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                >
+                  <UserCheck size={15} />
+                  <span>{language === 'fr' ? 'Valider & Authentifier' : language === 'ar' ? 'تأكيد وتسجيل الدخول' : 'Sign in & Authenticate'}</span>
+                </button>
+
+                {isOperatorAuthenticated && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.setItem('pms_operator_auth', 'false');
+                      setIsOperatorAuthenticated(false);
+                      setCurrentRole('client');
+                      setAuthNotice(
+                        language === 'fr'
+                          ? 'Session déconnectée. Vous êtes en mode invité.'
+                          : language === 'ar'
+                          ? 'تم قفل الجلسة وتسجيل الخروج.'
+                          : 'Logged out. Session locked.'
+                      );
+                      setTimeout(() => {
+                        setAuthNotice(null);
+                        setIsAuthModalOpen(false);
+                      }, 1000);
+                    }}
+                    className="h-9 px-3 rounded-xl border border-rose-300 dark:border-rose-800/60 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <span>{language === 'fr' ? 'Verrouiller / Quitter' : language === 'ar' ? 'قفل الجلسة' : 'Lock / Logout'}</span>
+                  </button>
+                )}
+              </div>
+            </form>
           </div>
         </div>
       )}

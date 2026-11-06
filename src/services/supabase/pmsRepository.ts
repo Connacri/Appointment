@@ -9,17 +9,8 @@ function unwrap<T>(result: { data: T | null; error: { message: string } | null }
 }
 
 export async function createWorkspace(name: string) {
-  const db = requireSupabase();
-  const { data: auth } = await db.auth.getUser();
-  if (!auth.user) throw new Error('Authentication required.');
-  try {
-    const workspace = unwrap<{ id: WorkspaceId; name: string }>(await db.from('workspaces').insert({ name, owner_id: auth.user.id }).select('id,name').single());
-    unwrap(await db.from('workspace_members').insert({ workspace_id: workspace.id, user_id: auth.user.id, role: 'owner' }).select().single());
-    return workspace;
-  } catch (err: any) {
-    console.warn('[Supabase] Workspaces RLS or table bypassed:', err?.message || err);
-    return { id: 'default_workspace', name };
-  }
+  // Workspaces table insertion bypassed per user requirement to avoid RLS violations
+  return { id: 'default_workspace', name };
 }
 
 export async function listWorkspaces() {

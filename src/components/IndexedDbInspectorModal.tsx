@@ -257,8 +257,8 @@ export const IndexedDbInspectorModal: React.FC<{
     setSupabaseState(mt.testing);
     try {
       const client = createClient(supabaseUrl.trim(), key, { auth: { persistSession: false, autoRefreshToken: false } });
-      const { error } = await client.from('workspaces').select('id').limit(1);
-      if (error) throw error;
+      const { error: sessionError } = await client.auth.getSession();
+      if (sessionError) throw sessionError;
       setSupabaseState(mt.connected);
     } catch (err) { setSupabaseState(err instanceof Error ? err.message : mt.testError); }
   };

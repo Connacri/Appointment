@@ -113,8 +113,6 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className="flex flex-col h-[100dvh] min-h-0 w-full max-w-full overflow-hidden pms-canvas font-sans">
-      <OfflineBanner />
-
       {/* Top Full-Width Unified Header matching szsz.png */}
       <TopBar />
 

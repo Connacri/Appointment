@@ -24,7 +24,14 @@ import {
   Award,
   CreditCard,
   Edit3,
+  CheckSquare,
+  Square,
+  FileDown,
+  Percent,
+  X,
+  XCircle,
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 import { useApp } from '../context/AppContext';
 import { statusConfig } from './LegendBar';
 import { downloadICS } from '../utils/icsExport';
@@ -46,6 +53,8 @@ export const MyBookingsView: React.FC = () => {
     setIsQrScannerOpen,
     currentDomain,
     currency,
+    updateBooking,
+    updateBookingStatus,
   } = useApp();
 
   const isClientRole = currentRole === 'client';
@@ -54,6 +63,14 @@ export const MyBookingsView: React.FC = () => {
   const [editName, setEditName] = useState(clientProfile.name);
   const [editEmail, setEditEmail] = useState(clientProfile.email);
   const [editPhone, setEditPhone] = useState(clientProfile.phone);
+
+  // Bulk actions states
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
+  const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
+  const [discountValue, setDiscountValue] = useState<number>(10);
+  const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null);
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,6 +91,138 @@ export const MyBookingsView: React.FC = () => {
     if (filterTab === 'cash_pending') return b.paymentStatus === 'pending' && b.totalPrice > 0;
     return true;
   });
+
+  const isAllSelected = filtered.length > 0 && filtered.every((b) => selectedIds.includes(b.id));
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtered.map((b) => b.id));
+    }
+  };
+
+  const handleToggleSelectOne = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  // Batch 1: Cancel selected bookings
+  const handleBatchCancel = () => {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    selectedIds.forEach((id) => {
+      updateBookingStatus(id, 'cancelled');
+    });
+    setSelectedIds([]);
+    setIsCancelConfirmOpen(false);
+    setBulkNotice(
+      language === 'fr'
+        ? `${count} réservation(s) annulée(s) avec succès.`
+        : language === 'ar'
+        ? `تم إلغاء ${count} حجز بنجاح.`
+        : `${count} booking(s) cancelled successfully.`
+    );
+    setTimeout(() => setBulkNotice(null), 4000);
+  };
+
+  // Batch 2: Export selected bookings to PDF
+  const handleBatchExportPdf = () => {
+    if (selectedIds.length === 0) return;
+    const selectedBookings = bookings.filter((b) => selectedIds.includes(b.id));
+
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.setTextColor(30, 41, 59);
+    doc.text(
+      language === 'fr'
+        ? 'Rapport des Réservations Sélectionnées'
+        : language === 'ar'
+        ? 'تقرير الحجوزات المحددة'
+        : 'Selected Bookings Summary Report',
+      14,
+      18
+    );
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    const nowStr = new Date().toLocaleString();
+    doc.text(
+      `Date d'export : ${nowStr} | Total : ${selectedBookings.length} dossier(s)`,
+      14,
+      25
+    );
+
+    let y = 35;
+    selectedBookings.forEach((b, idx) => {
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.setFillColor(248, 250, 252);
+      doc.rect(14, y - 4, 182, 18, 'F');
+
+      doc.setFontSize(10.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(15, 23, 42);
+      doc.text(`${idx + 1}. ${b.guestName} — ${b.resourceName}`, 16, y + 2);
+
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      doc.text(
+        `Dates: ${b.startDate} -> ${b.endDate} | Statut: ${b.status} | Montant: ${b.totalPrice} ${currency} (${b.paymentStatus})`,
+        16,
+        y + 8
+      );
+
+      y += 22;
+    });
+
+    doc.save(`reservations-selection-${new Date().toISOString().slice(0, 10)}.pdf`);
+    setBulkNotice(
+      language === 'fr'
+        ? `${selectedBookings.length} réservation(s) exportée(s) en PDF.`
+        : language === 'ar'
+        ? `تم تصدير ${selectedBookings.length} حجز إلى PDF.`
+        : `${selectedBookings.length} booking(s) exported to PDF.`
+    );
+    setTimeout(() => setBulkNotice(null), 4000);
+  };
+
+  // Batch 3: Apply Discount to selected bookings
+  const handleApplyDiscount = () => {
+    if (selectedIds.length === 0 || discountValue <= 0) return;
+    const count = selectedIds.length;
+    selectedIds.forEach((id) => {
+      const bkg = bookings.find((b) => b.id === id);
+      if (!bkg) return;
+      let newPrice = bkg.totalPrice;
+      if (discountType === 'percent') {
+        newPrice = Math.max(0, Math.round(bkg.totalPrice * (1 - discountValue / 100)));
+      } else {
+        newPrice = Math.max(0, Math.round(bkg.totalPrice - discountValue));
+      }
+      updateBooking(id, {
+        totalPrice: newPrice,
+        notes:
+          (bkg.notes || '') +
+          (bkg.notes ? ' | ' : '') +
+          `[Remise ${discountValue}${discountType === 'percent' ? '%' : ` ${currency}`}]`,
+      });
+    });
+    setSelectedIds([]);
+    setIsDiscountModalOpen(false);
+    setBulkNotice(
+      language === 'fr'
+        ? `Remise de ${discountValue}${discountType === 'percent' ? '%' : ` ${currency}`} appliquée à ${count} réservation(s).`
+        : language === 'ar'
+        ? `تم تطبيق خصم ${discountValue}${discountType === 'percent' ? '%' : ` ${currency}`} على ${count} حجز.`
+        : `Discount of ${discountValue}${discountType === 'percent' ? '%' : ` ${currency}`} applied to ${count} booking(s).`
+    );
+    setTimeout(() => setBulkNotice(null), 4000);
+  };
 
   const getSectorBadge = (sector: string) => {
     switch (sector) {
@@ -136,7 +285,14 @@ export const MyBookingsView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain space-y-4 sm:space-y-5">
+    <div className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 lg:p-6 overflow-y-auto overscroll-contain space-y-4 sm:space-y-5 relative">
+      {/* Bulk action feedback toast */}
+      {bulkNotice && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-slate-900 text-white rounded-xl shadow-2xl border border-blue-500/50 text-xs font-semibold flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          <CheckCircle size={15} className="text-emerald-400 shrink-0" />
+          <span>{bulkNotice}</span>
+        </div>
+      )}
       {/* 1. CLIENT ACCOUNT DASHBOARD CARD (When in client role) */}
       {isClientRole && (
         <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-emerald-600 rounded-3xl p-5 md:p-6 text-white shadow-xl relative overflow-hidden">
@@ -275,48 +431,74 @@ export const MyBookingsView: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. FILTER TABS */}
-      <div className="flex items-center gap-1 sm:gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto text-xs no-scrollbar">
-        <button
-          onClick={() => setFilterTab('all')}
-          className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg font-medium transition-colors shrink-0 cursor-pointer ${
-            filterTab === 'all'
-              ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-bold'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
-          }`}
-        >
-          {language === 'fr' ? 'Tous' : language === 'ar' ? 'الكل' : 'All'} ({bookings.length})
-        </button>
-        <button
-          onClick={() => setFilterTab('confirmed')}
-          className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg font-medium transition-colors shrink-0 cursor-pointer ${
-            filterTab === 'confirmed'
-              ? 'bg-sky-600 text-white font-bold'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
-          }`}
-        >
-          {language === 'fr' ? 'Confirmés' : language === 'ar' ? 'مؤكدة' : 'Confirmed'}
-        </button>
-        <button
-          onClick={() => setFilterTab('checked_in')}
-          className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg font-medium transition-colors shrink-0 cursor-pointer ${
-            filterTab === 'checked_in'
-              ? 'bg-emerald-600 text-white font-bold'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
-          }`}
-        >
-          {language === 'fr' ? 'Présents' : language === 'ar' ? 'حاضرون' : 'Checked-in'}
-        </button>
-        <button
-          onClick={() => setFilterTab('cash_pending')}
-          className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg font-medium transition-colors shrink-0 cursor-pointer ${
-            filterTab === 'cash_pending'
-              ? 'bg-amber-600 text-white font-bold'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
-          }`}
-        >
-          {language === 'fr' ? 'Espèces au comptoir' : language === 'ar' ? 'نقد عند الاستقبال' : 'Cash on arrival'}
-        </button>
+      {/* 3. FILTER TABS & BULK SELECT ALL */}
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+        <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto text-xs no-scrollbar">
+          <button
+            onClick={() => setFilterTab('all')}
+            className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg font-medium transition-colors shrink-0 cursor-pointer ${
+              filterTab === 'all'
+                ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+            }`}
+          >
+            {language === 'fr' ? 'Tous' : language === 'ar' ? 'الكل' : 'All'} ({bookings.length})
+          </button>
+          <button
+            onClick={() => setFilterTab('confirmed')}
+            className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg font-medium transition-colors shrink-0 cursor-pointer ${
+              filterTab === 'confirmed'
+                ? 'bg-sky-600 text-white font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+            }`}
+          >
+            {language === 'fr' ? 'Confirmés' : language === 'ar' ? 'مؤكدة' : 'Confirmed'}
+          </button>
+          <button
+            onClick={() => setFilterTab('checked_in')}
+            className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg font-medium transition-colors shrink-0 cursor-pointer ${
+              filterTab === 'checked_in'
+                ? 'bg-emerald-600 text-white font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+            }`}
+          >
+            {language === 'fr' ? 'Présents' : language === 'ar' ? 'حاضرون' : 'Checked-in'}
+          </button>
+          <button
+            onClick={() => setFilterTab('cash_pending')}
+            className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg font-medium transition-colors shrink-0 cursor-pointer ${
+              filterTab === 'cash_pending'
+                ? 'bg-amber-600 text-white font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+            }`}
+          >
+            {language === 'fr' ? 'Espèces au comptoir' : language === 'ar' ? 'نقد عند الاستقبال' : 'Cash on arrival'}
+          </button>
+        </div>
+
+        {/* Bulk Select All Button */}
+        {filtered.length > 0 && (
+          <button
+            type="button"
+            onClick={handleToggleSelectAll}
+            className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl border transition-colors shrink-0 cursor-pointer shadow-2xs ${
+              isAllSelected
+                ? 'bg-blue-50 dark:bg-blue-950/70 border-blue-400 text-blue-700 dark:text-blue-300 font-bold'
+                : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
+            }`}
+            title={isAllSelected ? 'Désélectionner tout' : 'Sélectionner tout'}
+          >
+            {isAllSelected ? <CheckSquare size={14} className="text-blue-600 dark:text-blue-400" /> : <Square size={14} className="text-slate-400" />}
+            <span className="hidden sm:inline">
+              {isAllSelected
+                ? (language === 'fr' ? 'Tout désélectionner' : language === 'ar' ? 'إلغاء تحديد الكل' : 'Deselect all')
+                : (language === 'fr' ? 'Tout sélectionner' : language === 'ar' ? 'تحديد الكل' : 'Select all')}
+            </span>
+            <span className="text-[10px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono font-bold">
+              {selectedIds.length}/{filtered.length}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* 4. BOOKINGS CARDS GRID */}
@@ -357,15 +539,38 @@ export const MyBookingsView: React.FC = () => {
             const isCashPending = bkg.paymentStatus === 'pending' && bkg.totalPrice > 0;
             const isCheckedIn = bkg.status === 'checked_in';
 
+            const isSelected = selectedIds.includes(bkg.id);
+
             return (
               <div
                 key={bkg.id}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between space-y-3 sm:space-y-4"
+                className={`border rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between space-y-3 sm:space-y-4 relative ${
+                  isSelected
+                    ? 'border-blue-500 bg-blue-50/20 dark:bg-blue-950/30 ring-2 ring-blue-500/40'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+                }`}
               >
                 <div>
-                  {/* Sector Badge & Status */}
+                  {/* Sector Badge, Checkbox & Status */}
                   <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
-                    {getSectorBadge(bkg.sector)}
+                    <div className="flex items-center gap-2">
+                      {/* Checkbox for Bulk Actions */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSelectOne(bkg.id)}
+                        className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'text-blue-600 bg-blue-100 dark:bg-blue-950 ring-1 ring-blue-500'
+                            : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                        title={isSelected ? 'Désélectionner' : 'Sélectionner pour actions groupées'}
+                        aria-label="Sélectionner la réservation"
+                      >
+                        {isSelected ? <CheckSquare size={17} /> : <Square size={17} />}
+                      </button>
+                      {getSectorBadge(bkg.sector)}
+                    </div>
+
                     <span
                       className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
                         isCheckedIn
@@ -449,6 +654,230 @@ export const MyBookingsView: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* 5. FLOATING / STICKY BULK ACTIONS BAR */}
+      {selectedIds.length > 0 && (
+        <aside
+          aria-label={language === 'fr' ? 'Actions groupées' : language === 'ar' ? 'إجراءات جماعية' : 'Bulk actions'}
+          className="sticky bottom-3 z-40 w-full rounded-2xl bg-slate-900/95 dark:bg-slate-800/95 backdrop-blur-md text-white p-3 sm:p-3.5 shadow-2xl border border-slate-700/80 flex flex-wrap items-center justify-between gap-2.5 animate-in fade-in slide-in-from-bottom-2 duration-200"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+              <CheckSquare size={16} />
+            </div>
+            <div>
+              <div className="text-xs font-extrabold flex items-center gap-1.5">
+                <span>{selectedIds.length}</span>
+                <span>{language === 'fr' ? 'réservation(s) sélectionnée(s)' : language === 'ar' ? 'حجوزات محددة' : 'booking(s) selected'}</span>
+              </div>
+              <span className="text-[10px] text-slate-300">
+                {language === 'fr' ? 'Actions rapides en un clic' : language === 'ar' ? 'إجراءات بنقرة واحدة' : 'Single-click actions'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            {/* Batch Cancel */}
+            <button
+              type="button"
+              onClick={() => setIsCancelConfirmOpen(true)}
+              className="h-8 px-2.5 sm:px-3 rounded-xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              title={language === 'fr' ? 'Annuler les réservations sélectionnées' : language === 'ar' ? 'إلغاء الحجوزات المحددة' : 'Batch Cancel'}
+            >
+              <Trash2 size={13} />
+              <span>{language === 'fr' ? 'Annulation groupée' : language === 'ar' ? 'إلغاء جماعي' : 'Batch Cancel'}</span>
+            </button>
+
+            {/* Export to PDF */}
+            <button
+              type="button"
+              onClick={handleBatchExportPdf}
+              className="h-8 px-2.5 sm:px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              title={language === 'fr' ? 'Exporter la sélection en PDF' : language === 'ar' ? 'تصدير التحديد إلى PDF' : 'Export selection to PDF'}
+            >
+              <FileDown size={13} />
+              <span>{language === 'fr' ? 'Exporter en PDF' : language === 'ar' ? 'تصدير PDF' : 'Export PDF'}</span>
+            </button>
+
+            {/* Apply Discount */}
+            <button
+              type="button"
+              onClick={() => setIsDiscountModalOpen(true)}
+              className="h-8 px-2.5 sm:px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              title={language === 'fr' ? 'Appliquer une remise aux réservations sélectionnées' : language === 'ar' ? 'تطبيق خصم على الحجوزات المحددة' : 'Apply Discount'}
+            >
+              <Percent size={13} />
+              <span>{language === 'fr' ? 'Appliquer remise' : language === 'ar' ? 'تطبيق خصم' : 'Apply Discount'}</span>
+            </button>
+
+            {/* Deselect All */}
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="h-8 px-2 sm:px-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+              title={language === 'fr' ? 'Tout désélectionner' : language === 'ar' ? 'إلغاء التحديد' : 'Deselect all'}
+            >
+              <X size={13} />
+              <span className="hidden sm:inline">{language === 'fr' ? 'Désélectionner' : language === 'ar' ? 'إلغاء' : 'Deselect'}</span>
+            </button>
+          </div>
+        </aside>
+      )}
+
+      {/* Confirmation Modal: Batch Cancel */}
+      {isCancelConfirmOpen && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-sm rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-950/70 flex items-center justify-center">
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                  {language === 'fr' ? 'Confirmer l’annulation groupée' : language === 'ar' ? 'تأكيد الإلغاء الجماعي' : 'Confirm Batch Cancellation'}
+                </h3>
+                <span className="text-xs text-slate-500">
+                  {selectedIds.length} {language === 'fr' ? 'dossier(s) concerné(s)' : language === 'ar' ? 'حجز محدد' : 'booking(s)'}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              {language === 'fr'
+                ? `Voulez-vous vraiment annuler les ${selectedIds.length} réservations sélectionnées ? Leur statut passera à "Annulé".`
+                : language === 'ar'
+                ? `هل أنت متأكد من رغبتك في إلغاء ${selectedIds.length} حجز محدد؟ سيتم تحويل حالتها إلى "ملغاة".`
+                : `Are you sure you want to cancel the ${selectedIds.length} selected bookings? Their status will be set to "Cancelled".`}
+            </p>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsCancelConfirmOpen(false)}
+                className="flex-1 h-9 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                {language === 'fr' ? 'Retour' : language === 'ar' ? 'تراجع' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleBatchCancel}
+                className="flex-1 h-9 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+              >
+                {language === 'fr' ? 'Oui, Annuler tout' : language === 'ar' ? 'نعم، إلغاء الكل' : 'Yes, Cancel All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Apply Discount */}
+      {isDiscountModalOpen && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-sm rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-emerald-600">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/70 flex items-center justify-center">
+                <Percent size={20} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                  {language === 'fr' ? 'Appliquer une Remise Groupée' : language === 'ar' ? 'تطبيق خصم جماعي' : 'Apply Bulk Discount'}
+                </h3>
+                <span className="text-xs text-slate-500">
+                  {selectedIds.length} {language === 'fr' ? 'réservation(s) sélectionnée(s)' : language === 'ar' ? 'حجز محدد' : 'booking(s)'}
+                </span>
+              </div>
+            </div>
+
+            {/* Type selector: % vs Fixed */}
+            <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setDiscountType('percent')}
+                className={`h-8 rounded-xl border transition-colors cursor-pointer ${
+                  discountType === 'percent'
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                {language === 'fr' ? 'Pourcentage (%)' : language === 'ar' ? 'نسبة مئوية (%)' : 'Percentage (%)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiscountType('fixed')}
+                className={`h-8 rounded-xl border transition-colors cursor-pointer ${
+                  discountType === 'fixed'
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                {language === 'fr' ? `Montant fixe (${currency})` : language === 'ar' ? `مبلغ ثابت (${currency})` : `Fixed (${currency})`}
+              </button>
+            </div>
+
+            {/* Quick Presets */}
+            {discountType === 'percent' ? (
+              <div className="flex items-center gap-1.5">
+                {[5, 10, 15, 20, 25].map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setDiscountValue(val)}
+                    className={`flex-1 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                      discountValue === val
+                        ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-400'
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800'
+                    }`}
+                  >
+                    -{val}%
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {/* Input Value */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {discountType === 'percent'
+                  ? (language === 'fr' ? 'Valeur du rabais (%) :' : language === 'ar' ? 'قيمة الخصم (%) :' : 'Discount Value (%):')
+                  : (language === 'fr' ? `Montant du rabais (${currency}) :` : language === 'ar' ? `قيمة الخصم (${currency}) :` : `Discount Value (${currency}):`)}
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={discountType === 'percent' ? 100 : 999999}
+                value={discountValue}
+                onChange={(e) => setDiscountValue(Math.max(1, Number(e.target.value) || 0))}
+                className="w-full h-9 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white font-mono text-center font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsDiscountModalOpen(false)}
+                className="flex-1 h-9 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                {language === 'fr' ? 'Annuler' : language === 'ar' ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyDiscount}
+                className="flex-1 h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+              >
+                {language === 'fr' ? 'Appliquer' : language === 'ar' ? 'تطبيق' : 'Apply'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

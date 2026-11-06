@@ -29,6 +29,7 @@ import {
   ShieldCheck,
   User,
   Palette,
+  LogOut,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -228,7 +229,7 @@ export const Sidebar: React.FC = () => {
     const showCompact = isCollapsed && !isMobileView;
 
     return (
-      <div className={`flex flex-col select-none ${isMobileView ? 'flex-1 min-h-0 w-full workspace-sidebar-scroll overflow-y-auto overscroll-y-contain pb-10' : 'h-full min-h-0 overflow-hidden'}`}>
+      <div className="flex-1 min-h-0 w-full workspace-sidebar-scroll overflow-y-auto overscroll-y-contain pb-10 flex flex-col select-none">
         {/* Brand Header */}
         <div className={`min-h-[64px] border-b border-slate-200 dark:border-white/5 flex items-center shrink-0 ${showCompact ? 'flex-col justify-center px-1 py-2 gap-1.5' : 'justify-between px-4'}`}>
           {!showCompact ? (
@@ -275,38 +276,44 @@ export const Sidebar: React.FC = () => {
           )}
         </div>
 
-        {/* For mobile view: Render the navigation tabs right here at the top! */}
-        {isMobileView && (
-          <nav
-            aria-label={language === 'fr' ? 'Navigation principale' : language === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'}
-            className="py-2.5 px-3 flex-none overflow-visible border-b border-slate-200/80 dark:border-slate-800/80"
-          >
-            <div className="flex flex-col gap-1.5">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeView === item.view;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleNavClick(item.view)}
-                    aria-current={isActive ? 'page' : undefined}
-                    aria-label={item.label}
-                    title={item.label}
-                    className={`workspace-nav-item cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 transition-colors w-full flex items-center gap-3 px-3 min-h-11 py-2.5 rounded-xl text-xs font-semibold ${
-                      isActive
-                        ? 'bg-blue-600 text-white shadow-sm font-bold'
-                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
-                    }`}
-                  >
-                    <Icon size={18} className="shrink-0" />
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
-        )}
+        {/* Global Navigation List: unified for desktop, tablet, and mobile */}
+        <nav
+          aria-label={language === 'fr' ? 'Navigation principale' : language === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'}
+          className={`py-2.5 ${showCompact ? 'px-1.5' : 'px-3'} flex-none border-b border-slate-200/80 dark:border-slate-800/80`}
+        >
+          <div className="flex flex-col gap-1.5">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeView === item.view;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleNavClick(item.view)}
+                  aria-current={isActive ? 'page' : undefined}
+                  aria-label={item.label}
+                  title={item.label}
+                  className={`workspace-nav-item cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 transition-colors ${
+                    showCompact
+                      ? `mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl ${
+                          isActive
+                            ? 'bg-blue-600 text-white shadow-sm font-bold ring-2 ring-blue-500/30'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
+                        }`
+                      : `w-full flex items-center gap-3 px-3 min-h-11 py-2.5 rounded-xl text-xs font-semibold ${
+                          isActive
+                            ? 'bg-blue-600 text-white shadow-sm font-bold'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
+                        }`
+                  }`}
+                >
+                  <Icon size={18} className="shrink-0" />
+                  {!showCompact && <span className="truncate">{item.label}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
 
         {/* Mobile profile switcher: collapsible */}
         {isMobileView && (
@@ -464,46 +471,7 @@ export const Sidebar: React.FC = () => {
           </section>
         )}
 
-        {/* Desktop Navigation List (rendered only in desktop view) */}
-        {!isMobileView && (
-          <nav
-            aria-label={language === 'fr' ? 'Navigation principale' : language === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'}
-            className={`py-3 ${showCompact ? 'px-1.5' : 'px-2.5'} flex-1 min-h-0 overflow-y-auto overscroll-y-contain`}
-          >
-            <div className="pms-stagger flex flex-col gap-1.5">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeView === item.view;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleNavClick(item.view)}
-                    aria-current={isActive ? 'page' : undefined}
-                    aria-label={item.label}
-                    title={item.label}
-                    className={`workspace-nav-item cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 transition-colors ${
-                      showCompact
-                        ? `mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl ${
-                            isActive
-                              ? 'bg-blue-600 text-white shadow-sm font-bold ring-2 ring-blue-500/30'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
-                          }`
-                        : `w-full flex items-center gap-3 px-3 min-h-11 py-2.5 rounded-xl text-xs font-semibold ${
-                            isActive
-                              ? 'bg-blue-600 text-white shadow-sm font-bold'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
-                          }`
-                    }`}
-                  >
-                    <Icon size={18} className="shrink-0" />
-                    {!showCompact && <span className="truncate">{item.label}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
-        )}
+
 
         {/* Sidebar Footer: Theme Gallery, Mode Switcher, IndexedDB, Legal & About */}
         <div className={`border-t border-slate-200 dark:border-white/5 space-y-1.5 bg-slate-100/60 dark:bg-slate-950/40 shrink-0 ${showCompact ? 'p-1.5 flex flex-col items-center' : 'p-3'}`}>
@@ -619,6 +587,34 @@ export const Sidebar: React.FC = () => {
               <div className="flex items-center justify-between w-full">
                 <span className="truncate">{language === 'fr' ? 'À Propos' : language === 'ar' ? 'حول النظام' : 'About'}</span>
                 <span className="text-[10px] text-cyan-800 dark:text-cyan-300 font-mono bg-cyan-200/70 dark:bg-cyan-900/60 px-1.5 py-0.5 rounded">FORSLOG</span>
+              </div>
+            )}
+          </button>
+
+          {/* Déconnexion / Logout */}
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentRole('client');
+              setIsSidebarMobileOpen(false);
+            }}
+            className={`cursor-pointer transition-colors ${
+              showCompact
+                ? 'mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40 hover:bg-rose-100 dark:hover:bg-rose-900/60'
+                : 'w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40 hover:bg-rose-100 dark:hover:bg-rose-900/60'
+            }`}
+            title={language === 'fr' ? 'Déconnexion de la session' : language === 'ar' ? 'تسجيل الخروج من الجلسة' : 'Log out from session'}
+            aria-label={language === 'fr' ? 'Déconnexion' : language === 'ar' ? 'تسجيل الخروج' : 'Log out'}
+          >
+            <LogOut size={16} className="shrink-0 text-rose-600 dark:text-rose-400" />
+            {!showCompact && (
+              <div className="flex items-center justify-between w-full">
+                <span className="truncate font-bold text-rose-700 dark:text-rose-300">
+                  {language === 'fr' ? 'Déconnexion' : language === 'ar' ? 'تسجيل الخروج' : 'Log out'}
+                </span>
+                <span className="text-[10px] text-rose-600 dark:text-rose-400 font-mono uppercase font-bold">
+                  {currentRole}
+                </span>
               </div>
             )}
           </button>
