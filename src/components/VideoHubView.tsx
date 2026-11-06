@@ -898,9 +898,10 @@ export const VideoHubView: React.FC = () => {
                   src={watchEmbedUrl(selected)}
                   title={selected.title}
                   className="w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
                   referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
+                  webkitallowfullscreen="true"
                 />
               </div>
               <h1 className="mt-4 text-xl font-bold text-slate-900 dark:text-white">{selected.title}</h1>
