@@ -198,12 +198,12 @@ export const TopBar: React.FC = () => {
       {/* ROW 1: Main Toolbar (Left tools, Tablet/Desktop search, Right actions) */}
       <div className="w-full flex items-center justify-between gap-1 sm:gap-2 min-w-0 overflow-visible">
         {/* LEFT SECTION: Hamburger (mobile), Secteur dropdown, Role dropdown */}
-        <div className="pms-app-topbar-left flex items-center gap-1 sm:gap-1.5 min-w-0 shrink-0 overflow-visible">
+        <div className="pms-app-topbar-left flex items-center gap-1.5 min-w-0 shrink-0 overflow-visible">
           {/* Mobile Sidebar Hamburger Toggle */}
           <button
             type="button"
             onClick={() => setIsSidebarMobileOpen(!isSidebarMobileOpen)}
-            className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors shrink-0"
+            className="md:hidden w-9 h-9 flex items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors shadow-2xs shrink-0"
             aria-label={language === 'fr' ? 'Menu' : language === 'ar' ? 'القائمة' : 'Menu'}
           >
             <Menu size={16} />
@@ -219,7 +219,7 @@ export const TopBar: React.FC = () => {
             <button
               type="button"
               onClick={toggleSectorMenu}
-              className="px-2 sm:px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] sm:text-xs font-semibold flex items-center gap-1 cursor-pointer shadow-sm transition-colors shrink-0"
+              className="h-9 px-2.5 sm:px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors shrink-0"
               title={language === 'fr' ? 'Secteur d’activité (Hôtel / Resort)' : language === 'ar' ? 'قطاع النشاط (فندق / منتجع)' : 'Business Sector'}
             >
               {currentDomain === 'hotel' ? (
@@ -289,7 +289,7 @@ export const TopBar: React.FC = () => {
             <button
               type="button"
               onClick={toggleRoleMenu}
-              className="px-2 sm:px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] sm:text-xs font-semibold flex items-center gap-1 cursor-pointer shadow-sm transition-colors shrink-0"
+              className="h-9 px-2.5 sm:px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors shrink-0"
               title={language === 'fr' ? 'Changer de rôle actif' : language === 'ar' ? 'تغيير الدور النشط' : 'Change active role'}
             >
               <CurrentRoleIcon size={14} className="text-amber-300 shrink-0" />
@@ -337,42 +337,41 @@ export const TopBar: React.FC = () => {
 
         {/* CENTER SECTION: Tablet & Desktop Global Search */}
         {/* On tablet (md:), search bar is 50% of its previous 180px width: exactly md:w-[90px] md:max-w-[90px]. On desktop (lg+), it expands. */}
-        <div className="pms-app-topbar-search hidden md:flex relative items-center md:w-[90px] md:max-w-[90px] lg:w-48 lg:max-w-[220px] xl:w-64 xl:max-w-[280px] shrink-0">
-          <div className="relative flex min-w-0 flex-1 items-center">
-            <Search size={13} className="absolute left-2 rtl:left-auto rtl:right-2 text-slate-400 pointer-events-none" />
+        <div className="pms-app-topbar-search hidden md:flex relative items-center h-9 md:w-[90px] md:max-w-[90px] lg:w-48 lg:max-w-[220px] xl:w-64 xl:max-w-[280px] shrink-0">
+          <div className="relative flex min-w-0 flex-1 items-center h-9">
+            <Search size={14} className="absolute left-2.5 rtl:left-auto rtl:right-2.5 text-slate-400 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={language === 'fr' ? 'Rechercher...' : language === 'ar' ? 'بحث...' : 'Search...'}
-              className="w-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs pl-7 pr-6 rtl:pl-6 rtl:pr-7 py-1 rounded-lg border border-slate-300 dark:border-slate-700 shadow-inner focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium transition-colors"
+              className="w-full h-9 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs pl-8 pr-6 rtl:pl-6 rtl:pr-8 rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium transition-colors"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-1.5 rtl:right-auto rtl:left-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                className="absolute right-2 rtl:right-auto rtl:left-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                 title={language === 'fr' ? 'Effacer la recherche' : language === 'ar' ? 'مسح البحث' : 'Clear search'}
               >
-                <X size={12} />
+                <X size={13} />
               </button>
             )}
           </div>
         </div>
 
         {/* RIGHT SECTION: Local Storage, USB, Currency, + Nouveau, Options [⋮] */}
-        {/* Note: Déconnexion is in the drawer (Sidebar), removed from the header per user specification */}
-        <div className="pms-app-topbar-actions flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-visible">
+        <div className="pms-app-topbar-actions flex items-center gap-1.5 shrink-0 overflow-visible">
           {/* Local database sync indicator */}
           <button
             type="button"
             onClick={() => setIsIndexedDBOpen(true)}
-            className={`h-8 px-2 sm:px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+            className={`h-9 px-2.5 sm:px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 ${
               indexedDbSync === 'synced'
-                ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
+                ? 'bg-white dark:bg-slate-900 border-emerald-400/80 dark:border-emerald-500/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
                 : indexedDbSync === 'syncing'
-                ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-500/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60'
-                : 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-500/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60'
+                ? 'bg-white dark:bg-slate-900 border-blue-400/80 dark:border-blue-500/50 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40'
+                : 'bg-white dark:bg-slate-900 border-rose-400/80 dark:border-rose-500/50 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40'
             }`}
             title={`${
               language === 'fr' ? 'Stockage local' : language === 'ar' ? 'التخزين المحلي' : 'Local storage'
@@ -384,7 +383,7 @@ export const TopBar: React.FC = () => {
                 : (language === 'fr' ? 'Mode hors ligne' : language === 'ar' ? 'وضع غير متصل' : 'Offline mode')
             } — ${language === 'fr' ? 'Cliquer pour consulter' : language === 'ar' ? 'اضغط للمعاينة' : 'Click to inspect'}`}
           >
-            <Database size={13} className={indexedDbSync === 'synced' ? 'text-emerald-600 dark:text-emerald-300' : indexedDbSync === 'syncing' ? 'text-blue-600 dark:text-blue-300' : 'text-rose-600 dark:text-rose-300'} />
+            <Database size={14} className={indexedDbSync === 'synced' ? 'text-emerald-600 dark:text-emerald-300' : indexedDbSync === 'syncing' ? 'text-blue-600 dark:text-blue-300' : 'text-rose-600 dark:text-rose-300'} />
             <span className={`w-2 h-2 rounded-full ${indexedDbSync === 'synced' ? 'bg-emerald-500 animate-pulse' : indexedDbSync === 'syncing' ? 'bg-blue-500 animate-spin' : 'bg-rose-500'}`} />
             <span className="hidden lg:inline">{language === 'fr' ? 'Local' : language === 'ar' ? 'محلي' : 'Local'}</span>
           </button>
@@ -393,10 +392,10 @@ export const TopBar: React.FC = () => {
           <button
             type="button"
             onClick={handlePhysicalUsbClick}
-            className={`h-8 px-2 sm:px-2.5 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-xs shrink-0 ${
+            className={`h-9 px-2.5 sm:px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs shrink-0 ${
               usbStatus === 'connected'
                 ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                : 'bg-rose-50 dark:bg-rose-950/80 hover:bg-rose-100 dark:hover:bg-rose-900/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700/60'
+                : 'bg-white dark:bg-slate-900 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700/80'
             }`}
             title={
               usbStatus === 'connected'
@@ -429,7 +428,7 @@ export const TopBar: React.FC = () => {
           </button>
 
           {/* Global Currency Switcher */}
-          <div className="pms-app-topbar-currency h-8 flex items-center bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/80 rounded-lg px-1.5 sm:px-2 text-[11px] sm:text-xs font-mono font-bold text-amber-600 dark:text-amber-400 shadow-2xs shrink-0">
+          <div className="pms-app-topbar-currency h-9 flex items-center bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-2 sm:px-2.5 text-xs font-mono font-bold text-amber-600 dark:text-amber-400 shadow-2xs shrink-0">
             <span className="text-[10px] text-slate-500 dark:text-slate-400 mr-1 rtl:mr-0 rtl:ml-1 font-sans hidden xl:inline">
               {language === 'fr' ? 'Devise:' : language === 'ar' ? 'العملة:' : 'Currency:'}
             </span>
@@ -457,7 +456,7 @@ export const TopBar: React.FC = () => {
               setNewBookingInitialSlot(null);
               setIsNewBookingModalOpen(true);
             }}
-            className="h-8 px-2 sm:px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] sm:text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+            className="h-9 px-2.5 sm:px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap shrink-0"
             title={language === 'fr' ? 'Créer une nouvelle réservation' : language === 'ar' ? 'إنشاء حجز جديد' : 'Create new booking'}
           >
             <Plus size={15} strokeWidth={2.5} />
@@ -469,7 +468,7 @@ export const TopBar: React.FC = () => {
             <button
               type="button"
               onClick={toggleMoreMenu}
-              className="w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
+              className="w-9 h-9 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition-colors shadow-2xs shrink-0"
               title={language === 'fr' ? 'Options supplémentaires' : language === 'ar' ? 'خيارات إضافية' : 'More options'}
               aria-label={language === 'fr' ? 'Options' : language === 'ar' ? 'خيارات' : 'Options'}
             >

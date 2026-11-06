@@ -30,6 +30,7 @@ import {
   User,
   Palette,
   LogOut,
+  GraduationCap,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -105,14 +106,6 @@ export const Sidebar: React.FC = () => {
 
   // Strictly filter navigation items by Role AND Domain for Hotel & Resort
   const allNavItems = [
-    {
-      id: 'help',
-      label: language === 'fr' ? 'Centre d’aide & Tutoriels' : language === 'ar' ? 'مركز المساعدة والدروس' : 'Help Center & Tutorials',
-      icon: BookOpen,
-      view: 'help' as const,
-      roles: ['admin', 'manager', 'receptionist', 'staff', 'client'],
-      domains: ['hotel', 'resort'] as DomainType[],
-    },
     {
       id: 'planning',
       label: language === 'fr' ? 'Planning Gantt' : language === 'ar' ? 'مخطط الحجوزات' : 'Gantt Planning',
@@ -565,6 +558,38 @@ export const Sidebar: React.FC = () => {
               <span className="truncate">
                 {language === 'fr' ? 'Légal & Confidentialité' : language === 'ar' ? 'الخصوصية والحساب' : 'Legal & Privacy'}
               </span>
+            )}
+          </button>
+
+          {/* Appointment Académie & Tutoriels (Directly above À Propos) */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveView('help');
+              setIsSidebarMobileOpen(false);
+            }}
+            className={`cursor-pointer transition-colors shadow-2xs ${
+              activeView === 'help'
+                ? 'bg-blue-600 text-white font-bold shadow-sm'
+                : showCompact
+                ? 'mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60'
+                : 'w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-blue-50/80 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60'
+            }`}
+            title={language === 'fr' ? 'Appointment Académie & Tutoriels' : language === 'ar' ? 'أكاديمية ودروس Appointment' : 'Appointment Academy & Tutorials'}
+            aria-label={language === 'fr' ? 'Appointment Académie' : language === 'ar' ? 'أكاديمية Appointment' : 'Appointment Academy'}
+          >
+            <GraduationCap size={16} className={`shrink-0 ${activeView === 'help' ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} />
+            {!showCompact && (
+              <div className="flex items-center justify-between w-full">
+                <span className="truncate font-bold">
+                  {language === 'fr' ? 'Appointment Académie' : language === 'ar' ? 'أكاديمية Appointment' : 'Appointment Academy'}
+                </span>
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold ${
+                  activeView === 'help' ? 'bg-white/20 text-white' : 'bg-blue-200/70 dark:bg-blue-900/70 text-blue-800 dark:text-blue-200'
+                }`}>
+                  PRO
+                </span>
+              </div>
             )}
           </button>
 

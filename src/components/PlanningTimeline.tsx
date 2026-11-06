@@ -557,12 +557,12 @@ export const PlanningTimeline: React.FC = () => {
     const isOutOfOrder = status === 'out_of_order';
     const colorClass =
       status === 'clean'
-        ? 'bg-emerald-500 hover:bg-emerald-400 ring-emerald-300'
+        ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.45)]'
         : status === 'cleaning'
-        ? 'bg-amber-500 hover:bg-amber-400 ring-amber-300'
+        ? 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.45)]'
         : status === 'dirty'
-        ? 'bg-rose-500 hover:bg-rose-400 ring-rose-300'
-        : 'bg-rose-600 hover:bg-rose-500 ring-rose-400';
+        ? 'bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.45)]'
+        : 'bg-rose-600 shadow-[0_0_6px_rgba(225,29,72,0.45)]';
 
     const label =
       status === 'clean'
@@ -582,10 +582,12 @@ export const PlanningTimeline: React.FC = () => {
             setSelectedHousekeepingRoom({ id: resourceId, name: resourceName || '', status: status || 'clean' });
           }
         }}
-        className={`relative z-20 w-3.5 h-3.5 rounded-full ${colorClass} shrink-0 cursor-pointer hover:scale-125 transition focus:outline-none focus:ring-2 focus:ring-blue-500 ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 shadow-2xs pointer-events-auto`}
-        title={`${language === 'fr' ? 'État :' : language === 'ar' ? 'الحالة :' : 'Status:'} ${label} — ${language === 'fr' ? 'Cliquez pour modifier le statut' : language === 'ar' ? 'اضغط لتعديل الحالة' : 'Click to change status'}`}
+        className="relative z-20 w-3.5 h-3.5 flex items-center justify-center shrink-0 cursor-pointer rounded-full hover:bg-slate-200/80 dark:hover:bg-slate-700/80 transition focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 pointer-events-auto"
+        title={`${language === 'fr' ? 'État :' : language === 'ar' ? 'الحالة :' : 'Status:'} ${label} — ${language === 'fr' ? 'Cliquer pour modifier' : language === 'ar' ? 'اضغط للتعديل' : 'Click to change'}`}
         aria-label={`${language === 'fr' ? 'État de la chambre :' : language === 'ar' ? 'حالة الغرفة :' : 'Room status:'} ${label}`}
-      />
+      >
+        <span className={`w-2 h-2 rounded-full ${colorClass} ring-1 ring-black/15 dark:ring-white/25 transition-transform hover:scale-125`} />
+      </button>
     );
   };
 
