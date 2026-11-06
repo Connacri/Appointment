@@ -1283,3 +1283,28 @@ body {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+
+/* Landscape phones and compact tablets still need safe modal boundaries. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  [class*="fixed"][class*="inset-0"] {
+    box-sizing: border-box;
+    padding-top: max(0.75rem, var(--pms-safe-area-top));
+    padding-right: max(0.75rem, var(--pms-safe-area-right));
+    padding-bottom: max(0.75rem, var(--pms-safe-area-bottom));
+    padding-left: max(0.75rem, var(--pms-safe-area-left));
+  }
+
+  [class*="fixed"][class*="inset-0"] > [role="dialog"],
+  [class*="fixed"][class*="inset-0"] > .pms-dialog-panel,
+  .pms-dialog-panel,
+  [role="dialog"].pms-sheet {
+    min-height: 0;
+    max-height: calc(100dvh - var(--pms-safe-area-top) - var(--pms-safe-area-bottom) - 1.5rem);
+    overscroll-behavior: contain;
+  }
+
+  [class*="fixed"][class*="bottom-0"] {
+    padding-bottom: max(0.75rem, var(--pms-safe-area-bottom));
+  }
+}
