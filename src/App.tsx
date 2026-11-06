@@ -15,6 +15,7 @@ import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { SupabaseAuthGate } from './services/supabase/SupabaseAuthGate';
 import { WorkspaceProvider } from './services/supabase/WorkspaceContext';
 import { VideoBubble } from './services/VideoBubbleBridge';
+import { PullToRefresh } from './components/PullToRefresh';
 
 /**
  * Secondary views are code-split: Vite emits one chunk per module and the chunk
@@ -141,6 +142,7 @@ const MainLayout: React.FC = () => {
     isCockpitOpen,
     isLegalModalOpen,
     hasOnboarded,
+    refreshWorkspaces,
   } = useApp();
 
   const [hasOpenedVideoHub, setHasOpenedVideoHub] = React.useState(activeView === 'videos');
@@ -184,49 +186,12 @@ const MainLayout: React.FC = () => {
   }, [setActiveView]);
 
 
-  // Mobile pull-to-refresh: only trigger when the gesture starts at the top
-  // of the active scroll container, and ignore controls, dialogs and embeds.
-  const pullStartRef = React.useRef<{ x: number; y: number; enabled: boolean } | null>(null);
-  const handlePullStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (event.touches.length !== 1) {
-      pullStartRef.current = null;
-      return;
-    }
-
-    const target = event.target as HTMLElement;
-    if (target.closest('input, textarea, select, button, a, iframe, video, [role="dialog"], [contenteditable="true"]')) {
-      pullStartRef.current = null;
-      return;
-    }
-
-    let node: HTMLElement | null = target;
-    let atTop = true;
-    while (node && node !== event.currentTarget) {
-      const overflowY = window.getComputedStyle(node).overflowY;
-      if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
-        atTop = node.scrollTop <= 0;
-        break;
-      }
-      node = node.parentElement;
-    }
-
-    pullStartRef.current = atTop
-      ? { x: event.touches[0].clientX, y: event.touches[0].clientY, enabled: true }
-      : null;
-  };
-
-  const handlePullEnd = (event: React.TouchEvent<HTMLDivElement>) => {
-    const start = pullStartRef.current;
-    pullStartRef.current = null;
-    if (!start?.enabled || event.changedTouches.length !== 1) return;
-
-    const touch = event.changedTouches[0];
-    const deltaY = touch.clientY - start.y;
-    const deltaX = Math.abs(touch.clientX - start.x);
-    if (deltaY >= 100 && deltaY > deltaX * 1.4) {
-      window.location.reload();
-    }
-  };
+  // Pull-to-refresh reloads remote data only. It must never reload the page:
+  // that would destroy the HackTube player, open forms and local state.
+  const handlePullRefresh = React.useCallback(async () => {
+    await refreshWorkspaces();
+    window.dispatchEvent(new CustomEvent('appointment-refresh'));
+  }, [refreshWorkspaces]);
 
   React.useEffect(() => {
     if (activeView === 'videos') setHasOpenedVideoHub(true);
@@ -235,11 +200,9 @@ const MainLayout: React.FC = () => {
   const isSetupModalVisible = isEstablishmentModalOpen || !hasOnboarded;
 
   return (
-    <div
+    <PullToRefresh
       className="flex flex-col h-[100dvh] min-h-0 w-full max-w-full overflow-hidden pms-canvas font-sans"
-      onTouchStartCapture={handlePullStart}
-      onTouchEndCapture={handlePullEnd}
-      onTouchCancelCapture={() => { pullStartRef.current = null; }}
+      onRefresh={handlePullRefresh}
     >
       {/* Top Full-Width Unified Header matching szsz.png */}
       <TopBar />
@@ -344,7 +307,7 @@ const MainLayout: React.FC = () => {
         )}
         <ThemeSelectorModal />
       </Suspense>
-    </div>
+    </PullToRefresh>
   );
 };
 

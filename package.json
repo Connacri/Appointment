@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "node --import tsx --test tests/bookingValidation.test.ts tests/readerInfo.test.ts tests/cardLockScope.test.ts tests/cardLockMigration.test.ts tests/cardSpecialDecode.test.ts tests/roomReadiness.test.ts tests/mdbImport.test.ts tests/mdbBackups.test.ts tests/themeSync.test.ts tests/timelineDragPan.test.ts",
+    "test": "node --import tsx --test tests/bookingValidation.test.ts tests/readerInfo.test.ts tests/cardLockScope.test.ts tests/cardLockMigration.test.ts tests/cardSpecialDecode.test.ts tests/roomReadiness.test.ts tests/mdbImport.test.ts tests/mdbBackups.test.ts tests/themeSync.test.ts tests/timelineDragPan.test.ts tests/pullToRefresh.test.ts",
     "assets:generate": "npx @capacitor/assets generate",
     "i18n:check": "node --import tsx scripts/check-i18n.ts",
     "typecheck": "tsc --noEmit"
