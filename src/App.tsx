@@ -56,6 +56,9 @@ const SpaManagementView = React.lazy(() =>
 const HelpCenterView = React.lazy(() =>
   import('./components/HelpCenterView').then((m) => ({ default: m.HelpCenterView })),
 );
+const VideoHubView = React.lazy(() =>
+  import('./components/VideoHubView').then((m) => ({ default: m.VideoHubView })),
+);
 
 /**
  * Modals are code-split and only mounted while open, so their dependencies
@@ -155,6 +158,7 @@ const MainLayout: React.FC = () => {
               {activeView === 'spa' && <SpaManagementView />}
 
               {activeView === 'help' && <HelpCenterView />}
+               {activeView === 'videos' && <VideoHubView />}
             </Suspense>
           </main>
         </div>

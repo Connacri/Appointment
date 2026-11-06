@@ -53,7 +53,8 @@ export type ActiveAppView =
   | 'channels'
   | 'prousb'
   | 'spa'
-  | 'help';
+  | 'help'
+  | 'videos';
 
 interface AppContextType {
   activeWorkspaceId: string;

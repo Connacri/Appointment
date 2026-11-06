@@ -31,6 +31,7 @@ import {
   Palette,
   LogOut,
   GraduationCap,
+  Film,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -206,6 +207,14 @@ export const Sidebar: React.FC = () => {
       icon: FileText,
       view: 'reports' as const,
       roles: ['manager'],
+      domains: ['hotel', 'resort'] as DomainType[],
+    },
+    {
+      id: 'videos',
+      label: language === 'fr' ? 'Vidéos (HackTube)' : language === 'ar' ? 'فيديوهات (HackTube)' : 'Videos (HackTube)',
+      icon: Film,
+      view: 'videos' as const,
+      roles: ['manager', 'receptionist', 'staff', 'client'],
       domains: ['hotel', 'resort'] as DomainType[],
     },
   ];
