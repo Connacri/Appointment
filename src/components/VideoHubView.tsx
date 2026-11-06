@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Film, Home, Heart, Clock, History, Grid3x3, ListVideo, Settings, Plus, Search,
-  Play, ThumbsUp, ThumbsDown, X, Tag, Filter, ChevronRight,
+  Play, ThumbsUp, ThumbsDown, X, Tag, Filter, ChevronRight, ClipboardPaste,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -169,6 +169,10 @@ export const VideoHubView: React.FC = () => {
   const [addCategory, setAddCategory] = useState('tech');
   const [addPlatform, setAddPlatform] = useState<Platform>('youtube');
   const [addTags, setAddTags] = useState('');
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickPlaylistId, setQuickPlaylistId] = useState('');
+  const [quickAddError, setQuickAddError] = useState('');
+  const [quickAddSuccess, setQuickAddSuccess] = useState('');
 
   useEffect(() => saveJSON(LS.lib, library), [library]);
   useEffect(() => saveJSON(LS.likes, likes), [likes]);
@@ -299,6 +303,50 @@ export const VideoHubView: React.FC = () => {
     setLibrary((prev) => [v, ...prev]);
     setAddUrl(''); setAddTitle(''); setAddChannel(''); setAddTags('');
     setPage('home');
+  };
+
+  const handleQuickAdd = (e: React.FormEvent) => {
+    e.preventDefault();
+    setQuickAddError('');
+    setQuickAddSuccess('');
+    const parsed = extractVideo(addUrl);
+    if (!parsed) {
+      setQuickAddError(t('Lien non reconnu. Utilisez une URL de vidéo YouTube ou TikTok.', 'Unsupported link. Paste a YouTube or TikTok video URL.', 'الرابط غير معروف. استخدم رابط فيديو YouTube أو TikTok.'));
+      return;
+    }
+    const existing = library.find((v) => v.id === parsed.id && (v.platform || 'youtube') === parsed.platform);
+    const videoId = parsed.id;
+    if (!existing) {
+      const video: Video = {
+        id: parsed.id, platform: parsed.platform,
+        title: addTitle.trim() || `${parsed.platform === 'youtube' ? 'YouTube' : 'TikTok'} · ${parsed.id}`,
+        channel: addChannel.trim() || (parsed.platform === 'youtube' ? 'YouTube' : 'TikTok'),
+        summary: '', categories: [addCategory],
+        tags: addTags.split(',').map((tag) => tag.trim()).filter(Boolean), contentType: 'video',
+      };
+      setLibrary((prev) => [video, ...prev]);
+    }
+    if (quickPlaylistId) setPlaylists((prev) => prev.map((playlist) =>
+      playlist.id === quickPlaylistId && !playlist.videoIds.includes(videoId)
+        ? { ...playlist, videoIds: [...playlist.videoIds, videoId] } : playlist,
+    ));
+    setQuickAddSuccess(existing
+      ? t('Vidéo déjà présente : playlist mise à jour.', 'Video already in your library: playlist updated.', 'الفيديو موجود مسبقاً: تم تحديث القائمة.')
+      : t('Vidéo ajoutée à votre bibliothèque.', 'Video added to your library.', 'تمت إضافة الفيديو إلى مكتبتك.'));
+    setAddUrl(''); setAddTitle(''); setAddChannel(''); setAddTags('');
+    if (quickPlaylistId) window.setTimeout(() => { setIsQuickAddOpen(false); setQuickAddSuccess(''); }, 900);
+  };
+
+  const pasteVideoLink = async () => {
+    setQuickAddError('');
+    try {
+      if (!navigator.clipboard?.readText) throw new Error('clipboard-unavailable');
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) { setQuickAddError(t('Le presse-papiers est vide.', 'Clipboard is empty.', 'الحافظة فارغة.')); return; }
+      setAddUrl(text.trim());
+    } catch {
+      setQuickAddError(t('Accès au presse-papiers refusé. Collez le lien dans le champ.', 'Clipboard access denied. Paste the link into the field.', 'تم رفض الوصول إلى الحافظة. الصق الرابط في الحقل.'));
+    }
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -1006,6 +1054,64 @@ export const VideoHubView: React.FC = () => {
           )}
         </main>
       </div>
+
+      {/* Floating quick-add bubble for YouTube and TikTok links. */}
+      <button type="button" onClick={() => { setIsQuickAddOpen(true); setQuickAddError(''); setQuickAddSuccess(''); }}
+        aria-label={t('Ajouter une vidéo', 'Add a video', 'إضافة فيديو')} title={t('Ajouter une vidéo', 'Add a video', 'إضافة فيديو')}
+        className="fixed z-30 bottom-5 right-5 sm:bottom-7 sm:right-7 flex items-center gap-2 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-xl px-4 py-3 font-bold text-sm">
+        <Plus size={19} /><span>{t('Ajouter une vidéo', 'Add video', 'إضافة فيديو')}</span>
+      </button>
+
+      {isQuickAddOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="quick-add-title">
+          <div className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-5 max-h-[90dvh] overflow-y-auto">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h2 id="quick-add-title" className="text-base font-bold text-slate-900 dark:text-white">{t('Ajouter depuis YouTube ou TikTok', 'Add from YouTube or TikTok', 'أضف من YouTube أو TikTok')}</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('Collez un lien : la plateforme est détectée automatiquement.', 'Paste a link: the platform is detected automatically.', 'الصق الرابط وسيتم التعرف على المنصة تلقائياً.')}</p>
+              </div>
+              <button type="button" onClick={() => setIsQuickAddOpen(false)} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label={t('Fermer', 'Close', 'إغلاق')}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleQuickAdd} className="space-y-3">
+              <div>
+                <label htmlFor="quick-video-url" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('Lien de la vidéo', 'Video link', 'رابط الفيديو')}</label>
+                <div className="flex gap-2">
+                  <input id="quick-video-url" value={addUrl} onChange={(event) => { setAddUrl(event.target.value); setQuickAddError(''); setQuickAddSuccess(''); }}
+                    required inputMode="url" autoComplete="url" placeholder="https://youtu.be/... ou https://www.tiktok.com/@.../video/..."
+                    className="min-w-0 flex-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm text-slate-900 dark:text-white" />
+                  <button type="button" onClick={pasteVideoLink} className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200"><ClipboardPaste size={15} /> {t('Coller', 'Paste', 'لصق')}</button>
+                </div>
+                {addUrl.trim() && <div className="mt-2 text-xs font-semibold">
+                  {extractVideo(addUrl)
+                    ? <span className="text-emerald-600 dark:text-emerald-400">{extractVideo(addUrl)?.platform === 'youtube' ? 'YouTube' : 'TikTok'} · {t('Lien reconnu', 'Link detected', 'تم التعرف على الرابط')}</span>
+                    : <span className="text-amber-600 dark:text-amber-400">{t('Lien non reconnu pour le moment', 'Link not recognized yet', 'لم يتم التعرف على الرابط بعد')}</span>}
+                </div>}
+              </div>
+              <div>
+                <label htmlFor="quick-playlist" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('Ajouter à une playlist (facultatif)', 'Add to playlist (optional)', 'أضف إلى قائمة تشغيل (اختياري)')}</label>
+                <select id="quick-playlist" value={quickPlaylistId} onChange={(event) => setQuickPlaylistId(event.target.value)} className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm text-slate-900 dark:text-white">
+                  <option value="">{t('Bibliothèque uniquement', 'Library only', 'المكتبة فقط')}</option>
+                  {playlists.map((playlist) => <option key={playlist.id} value={playlist.id}>{playlist.name}</option>)}
+                </select>
+              </div>
+              <details className="text-xs">
+                <summary className="cursor-pointer font-semibold text-slate-600 dark:text-slate-300">{t('Options complémentaires', 'Additional details', 'تفاصيل إضافية')}</summary>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+                  <input value={addTitle} onChange={(event) => setAddTitle(event.target.value)} placeholder={t('Titre (facultatif)', 'Title (optional)', 'العنوان (اختياري)')} className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-white" />
+                  <input value={addChannel} onChange={(event) => setAddChannel(event.target.value)} placeholder={t('Chaîne / créateur', 'Channel / creator', 'القناة / المنشئ')} className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-white" />
+                </div>
+              </details>
+              {quickAddError && <p role="alert" className="rounded-lg bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">{quickAddError}</p>}
+              {quickAddSuccess && <p role="status" className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">{quickAddSuccess}</p>}
+              <div className="flex gap-2 pt-1">
+                <button type="submit" className="flex-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white">{t('Ajouter à HackTube', 'Add to HackTube', 'أضف إلى HackTube')}</button>
+                <button type="button" onClick={() => setIsQuickAddOpen(false)} className="rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('Fermer', 'Close', 'إغلاق')}</button>
+              </div>
+              <p className="text-[10px] leading-relaxed text-slate-500 dark:text-slate-400">{t('Les liens TikTok courts (vm.tiktok.com) doivent être ouverts dans TikTok puis partagés ou copiés en lien vidéo complet.', 'Short TikTok links (vm.tiktok.com) should be opened in TikTok, then copied as a full video URL.', 'يجب فتح روابط TikTok المختصرة في التطبيق ثم نسخ رابط الفيديو الكامل.')}</p>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
