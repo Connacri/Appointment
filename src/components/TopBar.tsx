@@ -3,8 +3,6 @@ import {
   Menu,
   Search,
   Plus,
-  Moon,
-  Sun,
   Usb,
   MoreVertical,
   X,
@@ -26,7 +24,6 @@ import {
   FileText,
   Info,
   ChevronDown,
-  Palette,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { lockManager, UsbConnectionStatus, UsbDeviceInfo } from '../locks/lockManager';
@@ -36,10 +33,6 @@ import { UserRole } from '../types/booking';
 export const TopBar: React.FC = () => {
   const {
     language,
-    setLanguage,
-    theme,
-    setTheme,
-    setIsThemeModalOpen,
     searchQuery,
     setSearchQuery,
     currentDomain,
@@ -416,62 +409,6 @@ export const TopBar: React.FC = () => {
           </select>
         </div>
 
-        {/* DIRECT THEME TOGGLE: 1-Click Dark/Light switch */}
-        <button
-          type="button"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="h-8 w-8 rounded-lg border border-slate-300 dark:border-slate-700/80 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
-          title={
-            theme === 'dark'
-              ? (language === 'fr' ? 'Passer au mode clair' : language === 'ar' ? 'التحويل إلى الوضع النهاري' : 'Switch to light mode')
-              : (language === 'fr' ? 'Passer au mode sombre' : language === 'ar' ? 'التحويل إلى الوضع الليلي' : 'Switch to dark mode')
-          }
-          aria-label={
-            theme === 'dark'
-              ? (language === 'fr' ? 'Mode clair' : language === 'ar' ? 'الوضع النهاري' : 'Light mode')
-              : (language === 'fr' ? 'Mode sombre' : language === 'ar' ? 'الوضع الليلي' : 'Dark mode')
-          }
-        >
-          {theme === 'dark' ? (
-            <Sun size={15} className="text-amber-400 hover:rotate-45 transition-transform" />
-          ) : (
-            <Moon size={15} className="text-blue-600 hover:-rotate-12 transition-transform" />
-          )}
-        </button>
-
-        {/* THEMES & PALETTES BUTTON (8 User Photo Themes + Default) */}
-        <button
-          type="button"
-          onClick={() => setIsThemeModalOpen(true)}
-          className="h-8 w-8 rounded-lg border border-slate-300 dark:border-slate-700/80 bg-white dark:bg-slate-900 text-amber-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
-          title={language === 'fr' ? 'Palettes & Thèmes visuels (8 thèmes)' : language === 'ar' ? 'معرض السمات البصرية (8 سمات)' : 'Visual Palettes & Themes (8 themes)'}
-          aria-label={language === 'fr' ? 'Thèmes' : language === 'ar' ? 'السمات' : 'Themes'}
-        >
-          <Palette size={15} />
-        </button>
-
-        {/* DIRECT LANGUAGE SWITCHER: 1-Click FR / EN / AR Switch */}
-        <div className="h-8 flex items-center bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/80 rounded-lg p-0.5 text-xs font-bold shadow-2xs">
-          {(['fr', 'en', 'ar'] as const).map((loc) => {
-            const isSelected = language === loc;
-            return (
-              <button
-                key={loc}
-                type="button"
-                onClick={() => setLanguage(loc)}
-                className={`h-7 px-2 rounded-md transition-all text-[11px] font-bold cursor-pointer ${
-                  isSelected
-                    ? 'bg-blue-600 text-white shadow-2xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800'
-                }`}
-                title={loc === 'fr' ? 'Français' : loc === 'en' ? 'English' : 'العربية (RTL)'}
-              >
-                {loc === 'ar' ? 'عربي' : loc.toUpperCase()}
-              </button>
-            );
-          })}
-        </div>
-
         {/* Primary Action Button: + Nouveau */}
         <button
           type="button"
@@ -503,54 +440,7 @@ export const TopBar: React.FC = () => {
               dir={isRtl ? 'rtl' : 'ltr'}
               className="absolute top-full mt-1.5 right-0 rtl:right-auto rtl:left-0 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-2 z-50 text-xs space-y-1 pms-dropdown pms-dropdown-end text-slate-700 dark:text-slate-200"
             >
-              {/* Language switcher */}
-              <div className="px-2 py-1 text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">
-                {language === 'fr' ? 'Langue' : language === 'ar' ? 'اللغة' : 'Language'}
-              </div>
-              <div className="grid grid-cols-3 gap-1 px-1 pb-2 border-b border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setLanguage('fr')}
-                  className={`py-1 rounded text-center text-xs font-bold transition-colors cursor-pointer ${
-                    language === 'fr' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  Français
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLanguage('en')}
-                  className={`py-1 rounded text-center text-xs font-bold transition-colors cursor-pointer ${
-                    language === 'en' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  English
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLanguage('ar')}
-                  className={`py-1 rounded text-center text-xs font-bold transition-colors cursor-pointer ${
-                    language === 'ar' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  العربية
-                </button>
-              </div>
-
-              {/* Theme & Sound toggle */}
-              <button
-                type="button"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer text-left rtl:text-right"
-              >
-                {theme === 'dark' ? <Sun size={14} className="text-amber-400 shrink-0" /> : <Moon size={14} className="text-blue-500 shrink-0" />}
-                <span>
-                  {theme === 'dark'
-                    ? (language === 'fr' ? 'Mode clair' : language === 'ar' ? 'الوضع النهاري' : 'Light mode')
-                    : (language === 'fr' ? 'Mode sombre' : language === 'ar' ? 'الوضع الليلي' : 'Dark mode')}
-                </span>
-              </button>
-
+              {/* Audio feedback toggle */}
               <button
                 type="button"
                 onClick={toggleSound}

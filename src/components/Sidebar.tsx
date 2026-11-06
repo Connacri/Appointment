@@ -76,7 +76,7 @@ export const Sidebar: React.FC = () => {
 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileProfileExpanded, setIsMobileProfileExpanded] = useState(false);
-  const [isMobilePreferencesExpanded, setIsMobilePreferencesExpanded] = useState(false);
+  const [isMobilePreferencesExpanded, setIsMobilePreferencesExpanded] = useState(true);
   const [workspaceFormOpen, setWorkspaceFormOpen] = useState(false);
   const [workspaceDraft, setWorkspaceDraft] = useState("");
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
@@ -380,20 +380,23 @@ export const Sidebar: React.FC = () => {
         </section>
       )}
 
-      {/* Mobile preferences */}
-      {isMobileView && (
+      {/* Drawer preferences: Language & Theme */}
+      {(!isCollapsed || isMobileView) && (
         <section className="px-3 py-2 border-b border-slate-200 dark:border-slate-800/80 bg-slate-100/60 dark:bg-slate-900/70 space-y-2 shrink-0">
           <button
             type="button"
             aria-expanded={isMobilePreferencesExpanded}
             onClick={() => setIsMobilePreferencesExpanded((expanded) => !expanded)}
-            className="flex w-full min-h-9 items-center justify-between gap-2"
+            className="flex w-full min-h-9 items-center justify-between gap-2 cursor-pointer"
           >
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">
-              {language === "fr" ? "Préférences" : language === "ar" ? "التفضيلات" : "Preferences"}
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+              <Palette size={13} className="text-amber-500" />
+              {language === "fr" ? "Thème & Langue" : language === "ar" ? "السمة واللغة" : "Theme & Language"}
             </span>
-            <span className="flex items-center gap-2">
-              <span className="text-[10px] text-slate-500">{language.toUpperCase()}</span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                {language === "ar" ? "عربي" : language.toUpperCase()} · {theme === 'dark' ? (language === 'ar' ? 'ليلي' : 'Dark') : (language === 'ar' ? 'نهاري' : 'Light')}
+              </span>
               <ChevronDown size={15} className={`text-slate-400 transition-transform ${isMobilePreferencesExpanded ? 'rotate-180' : ''}`} />
             </span>
           </button>
@@ -524,6 +527,21 @@ export const Sidebar: React.FC = () => {
             <div className="flex items-center justify-between w-full">
               <span className="truncate">{language === 'fr' ? 'Thèmes Visuels' : language === 'ar' ? 'السمات والألوان' : 'Visual Themes'}</span>
               <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded">8+</span>
+            </div>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          className="w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-850 transition-colors cursor-pointer shadow-2xs"
+          title={theme === 'dark' ? (language === 'fr' ? 'Passer au mode clair' : language === 'ar' ? 'التحويل إلى الوضع النهاري' : 'Switch to light mode') : (language === 'fr' ? 'Passer au mode sombre' : language === 'ar' ? 'التحويل إلى الوضع الليلي' : 'Switch to dark mode')}
+        >
+          {theme === 'dark' ? <Sun size={16} className="text-amber-400 shrink-0" /> : <Moon size={16} className="text-blue-500 shrink-0" />}
+          {(!isCollapsed || isMobileView) && (
+            <div className="flex items-center justify-between w-full">
+              <span className="truncate">{theme === 'dark' ? (language === 'fr' ? 'Mode clair' : language === 'ar' ? 'الوضع النهاري' : 'Light mode') : (language === 'fr' ? 'Mode sombre' : language === 'ar' ? 'الوضع الليلي' : 'Dark mode')}</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono">{theme}</span>
             </div>
           )}
         </button>
