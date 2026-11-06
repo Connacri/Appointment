@@ -86,6 +86,20 @@ public class VideoBubblePlugin extends Plugin {
                 openQuickAdd = openQuickAdd || launchIntent.getBooleanExtra(VideoBubbleIntents.EXTRA_OPEN_QUICK_ADD, false);
             }
         }
+        // Clipboard access is attempted only after the user explicitly taps the
+        // floating bubble and Appointment is brought to the foreground.
+        if ((url == null || url.trim().isEmpty()) && openQuickAdd) {
+            android.content.ClipboardManager clipboard =
+                (android.content.ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard != null && clipboard.hasPrimaryClip() && clipboard.getPrimaryClip().getItemCount() > 0) {
+                CharSequence clipText = clipboard.getPrimaryClip().getItemAt(0).coerceToText(getContext());
+                if (clipText != null) {
+                    Intent clipboardIntent = new Intent(Intent.ACTION_SEND);
+                    clipboardIntent.putExtra(Intent.EXTRA_TEXT, clipText.toString());
+                    url = VideoBubbleIntents.extractSharedUrl(clipboardIntent);
+                }
+            }
+        }
         prefs.edit().remove(KEY_URL).remove(KEY_OPEN).apply();
         getActivity().setIntent(new Intent(getActivity(), MainActivity.class));
         JSObject result = new JSObject();
