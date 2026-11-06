@@ -186,7 +186,7 @@ export const VideoHubView: React.FC = () => {
   // Load the HackerTube dataset (offline-first: bundled asset, then cached in library)
   useEffect(() => {
     let cancelled = false;
-    fetch('/data/hackertube.json')
+    fetch(`${import.meta.env.BASE_URL}data/hackertube.json`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
