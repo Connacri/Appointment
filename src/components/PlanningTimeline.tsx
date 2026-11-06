@@ -22,6 +22,13 @@ import {
   SlidersHorizontal,
   CalendarDays,
   Info,
+  CheckSquare,
+  Square,
+  Trash2,
+  ArrowRightLeft,
+  ListChecks,
+  Check,
+  Undo2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ResourceGroup, ResourceItem, TimelineBooking, BookingStatus } from '../types/booking';
@@ -42,6 +49,7 @@ export const PlanningTimeline: React.FC = () => {
     setCurrentBaseDate,
     dateRangeMode,
     bookings,
+    setBookings,
     searchQuery,
     currentDomain,
     currentRole,
@@ -49,7 +57,10 @@ export const PlanningTimeline: React.FC = () => {
     setSelectedBooking,
     setIsNewBookingModalOpen,
     setNewBookingInitialSlot,
+    updateBooking,
     updateBookingStatus,
+    deleteBooking,
+    checkConflict,
     updateHousekeepingStatus,
     selectedEstablishmentId,
     setSelectedEstablishmentId,
@@ -599,6 +610,255 @@ export const PlanningTimeline: React.FC = () => {
     return timelineDays.findIndex((d) => d.dateStr === dateStr);
   };
 
+  // Batch selection mode state
+  const [isBatchSelectionMode, setIsBatchSelectionMode] = useState<boolean>(false);
+  const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(() => new Set());
+  const [isBatchShiftModalOpen, setIsBatchShiftModalOpen] = useState<boolean>(false);
+  const [isBatchDeleteConfirmOpen, setIsBatchDeleteConfirmOpen] = useState<boolean>(false);
+  const [isBatchStatusMenuOpen, setIsBatchStatusMenuOpen] = useState<boolean>(false);
+  const [isBatchStatusModalOpen, setIsBatchStatusModalOpen] = useState<boolean>(false);
+  const [batchShiftDays, setBatchShiftDays] = useState<number>(1);
+  const [batchFeedback, setBatchFeedback] = useState<{ message: string; type: 'success' | 'warning' | 'error' } | null>(null);
+
+  // Undo history for batch move, deletion, or status change
+  type BatchActionRecord =
+    | {
+        type: 'shift';
+        description: string;
+        items: Array<{ id: string; startDate: string; endDate: string }>;
+      }
+    | {
+        type: 'delete';
+        description: string;
+        deletedBookings: TimelineBooking[];
+      }
+    | {
+        type: 'status';
+        description: string;
+        items: Array<{ id: string; status: BookingStatus }>;
+      };
+
+  const [lastBatchAction, setLastBatchAction] = useState<BatchActionRecord | null>(null);
+
+  // Toggle batch selection mode
+  const toggleBatchMode = () => {
+    setIsBatchSelectionMode((prev) => {
+      const next = !prev;
+      if (!next) {
+        setSelectedBookingIds(new Set());
+        setIsBatchShiftModalOpen(false);
+        setIsBatchDeleteConfirmOpen(false);
+        setIsBatchStatusMenuOpen(false);
+      }
+      return next;
+    });
+  };
+
+  const toggleBookingSelection = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedBookingIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Visible bookings in the current timeline view
+  const visibleBookingsInTimeline = useMemo(() => {
+    const visibleResourceIds = new Set(
+      filteredGroups.flatMap((g) => g.resources).map((r) => r.id)
+    );
+    const firstDate = timelineDays[0]?.dateStr || '';
+    const lastDate = timelineDays[timelineDays.length - 1]?.dateStr || '';
+    return bookings.filter(
+      (b) =>
+        visibleResourceIds.has(b.resourceId) &&
+        b.status !== 'cancelled' &&
+        b.endDate > firstDate &&
+        b.startDate <= lastDate
+    );
+  }, [bookings, filteredGroups, timelineDays]);
+
+  const areAllVisibleSelected = useMemo(() => {
+    if (visibleBookingsInTimeline.length === 0) return false;
+    return visibleBookingsInTimeline.every((b) => selectedBookingIds.has(b.id));
+  }, [visibleBookingsInTimeline, selectedBookingIds]);
+
+  const selectAllVisibleBookings = () => {
+    const next = new Set(selectedBookingIds);
+    visibleBookingsInTimeline.forEach((b) => next.add(b.id));
+    setSelectedBookingIds(next);
+  };
+
+  const deselectAllBookings = () => {
+    setSelectedBookingIds(new Set());
+  };
+
+  const selectedBookingsList = useMemo(() => {
+    return bookings.filter((b) => selectedBookingIds.has(b.id));
+  }, [bookings, selectedBookingIds]);
+
+  const shiftIsoDate = (dateStr: string, days: number): string => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d + days);
+    const newY = dt.getFullYear();
+    const newM = String(dt.getMonth() + 1).padStart(2, '0');
+    const newD = String(dt.getDate()).padStart(2, '0');
+    return `${newY}-${newM}-${newD}`;
+  };
+
+  // Batch shift execution with conflict checking and undo recording
+  const handleBatchShift = (days: number) => {
+    if (selectedBookingIds.size === 0 || days === 0) return;
+    let conflictCount = 0;
+    const updatesToApply: Array<{ id: string; startDate: string; endDate: string }> = [];
+
+    // Capture previous state for Undo
+    const previousSlots = selectedBookingsList.map((b) => ({
+      id: b.id,
+      startDate: b.startDate,
+      endDate: b.endDate,
+    }));
+
+    for (const bkg of selectedBookingsList) {
+      const newStart = shiftIsoDate(bkg.startDate, days);
+      const newEnd = shiftIsoDate(bkg.endDate, days);
+      const hasConflict = checkConflict(bkg.resourceId, newStart, newEnd, bkg.id);
+      if (hasConflict) {
+        conflictCount++;
+      }
+      updatesToApply.push({ id: bkg.id, startDate: newStart, endDate: newEnd });
+    }
+
+    if (conflictCount > 0) {
+      setBatchFeedback({
+        message: getTranslation('ganttBatchConflictDetected', language).replace('{count}', String(conflictCount)),
+        type: 'warning',
+      });
+    } else {
+      setBatchFeedback({
+        message: getTranslation('ganttBatchMoveSuccess', language)
+          .replace('{count}', String(updatesToApply.length))
+          .replace('{days}', String(days > 0 ? `+${days}` : days)),
+        type: 'success',
+      });
+    }
+
+    updatesToApply.forEach((u) => {
+      updateBooking(u.id, { startDate: u.startDate, endDate: u.endDate });
+    });
+
+    setLastBatchAction({
+      type: 'shift',
+      description: `${updatesToApply.length} ${language === 'fr' ? 'réservations déplacées' : language === 'ar' ? 'حجوزات تم نقلها' : 'bookings shifted'} (${days > 0 ? `+${days}` : days}j)`,
+      items: previousSlots,
+    });
+
+    setIsBatchShiftModalOpen(false);
+    setTimeout(() => setBatchFeedback(null), 4000);
+  };
+
+  // Batch delete execution with undo recording
+  const handleBatchDelete = () => {
+    const count = selectedBookingIds.size;
+    if (count === 0) return;
+
+    // Capture snapshot for Undo
+    const deletedSnapshot = [...selectedBookingsList];
+
+    selectedBookingIds.forEach((id) => {
+      deleteBooking(id);
+    });
+
+    setLastBatchAction({
+      type: 'delete',
+      description: `${deletedSnapshot.length} ${language === 'fr' ? 'réservations supprimées' : language === 'ar' ? 'حجوزات محذوفة' : 'deleted bookings'}`,
+      deletedBookings: deletedSnapshot,
+    });
+
+    setSelectedBookingIds(new Set());
+    setIsBatchDeleteConfirmOpen(false);
+    setBatchFeedback({
+      message: getTranslation('ganttBatchDeleteSuccess', language).replace('{count}', String(count)),
+      type: 'success',
+    });
+    setTimeout(() => setBatchFeedback(null), 4000);
+  };
+
+  // Batch status change execution with undo recording
+  const handleBatchStatusChange = (newStatus: BookingStatus) => {
+    const count = selectedBookingIds.size;
+    if (count === 0) return;
+
+    // Capture previous status for Undo
+    const previousStatuses = selectedBookingsList.map((b) => ({
+      id: b.id,
+      status: b.status,
+    }));
+
+    selectedBookingIds.forEach((id) => {
+      updateBookingStatus(id, newStatus);
+    });
+
+    setLastBatchAction({
+      type: 'status',
+      description: `${count} ${language === 'fr' ? 'statuts modifiés' : language === 'ar' ? 'حالات تم تعديلها' : 'statuses updated'}`,
+      items: previousStatuses,
+    });
+
+    setIsBatchStatusMenuOpen(false);
+    setIsBatchStatusModalOpen(false);
+    setBatchFeedback({
+      message: getTranslation('ganttBatchStatusSuccess', language).replace('{count}', String(count)),
+      type: 'success',
+    });
+    setTimeout(() => setBatchFeedback(null), 4000);
+  };
+
+  // Undo the last batch action (move, deletion, or status update)
+  const handleUndoBatchAction = () => {
+    if (!lastBatchAction) return;
+
+    if (lastBatchAction.type === 'shift') {
+      lastBatchAction.items.forEach((item) => {
+        updateBooking(item.id, { startDate: item.startDate, endDate: item.endDate });
+      });
+      setSelectedBookingIds(new Set(lastBatchAction.items.map((i) => i.id)));
+      setBatchFeedback({
+        message: getTranslation('ganttBatchUndoSuccess', language),
+        type: 'success',
+      });
+    } else if (lastBatchAction.type === 'delete') {
+      const toRestore = lastBatchAction.deletedBookings;
+      setBookings((prev) => {
+        const existingIds = new Set(prev.map((b) => b.id));
+        const filtered = toRestore.filter((b) => !existingIds.has(b.id));
+        return [...filtered, ...prev];
+      });
+      setSelectedBookingIds(new Set(toRestore.map((b) => b.id)));
+      setBatchFeedback({
+        message: getTranslation('ganttBatchUndoSuccess', language),
+        type: 'success',
+      });
+    } else if (lastBatchAction.type === 'status') {
+      lastBatchAction.items.forEach((item) => {
+        updateBookingStatus(item.id, item.status);
+      });
+      setSelectedBookingIds(new Set(lastBatchAction.items.map((i) => i.id)));
+      setBatchFeedback({
+        message: getTranslation('ganttBatchUndoSuccess', language),
+        type: 'success',
+      });
+    }
+
+    setLastBatchAction(null);
+    setTimeout(() => setBatchFeedback(null), 4000);
+  };
+
   // Open an explicit status selector instead of silently cycling through statuses.
   const renderHousekeepingTag = (status?: string, resourceId?: string, resourceName?: string) => {
     const isOutOfOrder = status === 'out_of_order';
@@ -811,6 +1071,52 @@ export const PlanningTimeline: React.FC = () => {
               </span>
             </button>
           )}
+
+          {/* Batch Selection Mode Checkbox / Button */}
+          <button
+            type="button"
+            onClick={toggleBatchMode}
+            className={`flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[10px] font-semibold transition-all cursor-pointer shadow-2xs ${
+              isBatchSelectionMode
+                ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-950/70 dark:text-blue-300 ring-1 ring-blue-500/40 font-bold'
+                : 'border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] text-slate-700 dark:text-slate-300 hover:bg-[rgb(var(--pms-accent)/0.08)]'
+            }`}
+            title={getTranslation('ganttBatchMode', language)}
+            aria-pressed={isBatchSelectionMode}
+          >
+            {isBatchSelectionMode ? (
+              <CheckSquare size={13} className="text-blue-600 dark:text-blue-400 shrink-0" />
+            ) : (
+              <Square size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />
+            )}
+            <span className="whitespace-nowrap">{getTranslation('ganttBatchMode', language)}</span>
+            {isBatchSelectionMode && selectedBookingIds.size > 0 && (
+              <span className="flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold bg-blue-600 text-white">
+                {selectedBookingIds.size}
+              </span>
+            )}
+          </button>
+
+          {/* Undo Last Batch Action Button in Header Toolbar */}
+          <button
+            type="button"
+            disabled={!lastBatchAction}
+            onClick={handleUndoBatchAction}
+            className={`flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[10px] font-semibold transition-all cursor-pointer shadow-2xs ${
+              lastBatchAction
+                ? 'border-amber-500 bg-amber-50 text-amber-800 dark:border-amber-500/80 dark:bg-amber-950/70 dark:text-amber-200 ring-1 ring-amber-500/40 font-bold hover:bg-amber-100 dark:hover:bg-amber-900/80 active:scale-95'
+                : 'border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-60'
+            }`}
+            title={
+              lastBatchAction
+                ? `${getTranslation('ganttBatchUndoAction', language)}: ${lastBatchAction.description}`
+                : getTranslation('ganttBatchUndoAction', language)
+            }
+            aria-label={getTranslation('ganttBatchUndoAction', language)}
+          >
+            <Undo2 size={13} className={lastBatchAction ? 'text-amber-600 dark:text-amber-400 shrink-0' : 'text-slate-400 dark:text-slate-600 shrink-0'} />
+            <span className="whitespace-nowrap">{getTranslation('ganttBatchUndoAction', language)}</span>
+          </button>
         </div>
       </div>
 
@@ -930,15 +1236,28 @@ export const PlanningTimeline: React.FC = () => {
         >
           {/* Header of Resources Column with STICKY TOP-0 */}
           <div className={`${dayHeaderHeightClass} shrink-0 border-b border-[rgb(var(--pms-border))] px-2 sm:px-3 flex flex-col justify-center pms-gantt-surface sticky top-0 z-[80] isolate transition-[height,min-height,max-height] duration-200`}>
-            <span className="text-[11px] md:text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider truncate">
-              {leftBarMode === 'mini'
-                ? (language === 'fr' ? 'Ress.' : language === 'ar' ? 'الموارد' : 'Res.')
-                : currentDomain === 'hotel'
-                ? getTranslation('ganttResourceColTitle', language)
-                : currentDomain === 'resort'
-                ? getTranslation('ganttResortResourceColTitle', language)
-                : getTranslation('ganttAccommodations', language)}
-            </span>
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[11px] md:text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider truncate">
+                {leftBarMode === 'mini'
+                  ? (language === 'fr' ? 'Ress.' : language === 'ar' ? 'الموارد' : 'Res.')
+                  : currentDomain === 'hotel'
+                  ? getTranslation('ganttResourceColTitle', language)
+                  : currentDomain === 'resort'
+                  ? getTranslation('ganttResortResourceColTitle', language)
+                  : getTranslation('ganttAccommodations', language)}
+              </span>
+              {isBatchSelectionMode && (
+                <button
+                  type="button"
+                  onClick={areAllVisibleSelected ? deselectAllBookings : selectAllVisibleBookings}
+                  className="flex items-center gap-1 text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 cursor-pointer p-0.5 rounded transition-transform active:scale-95"
+                  title={areAllVisibleSelected ? getTranslation('ganttBatchDeselectAll', language) : getTranslation('ganttBatchSelectAll', language)}
+                  aria-label={areAllVisibleSelected ? getTranslation('ganttBatchDeselectAll', language) : getTranslation('ganttBatchSelectAll', language)}
+                >
+                  {areAllVisibleSelected ? <CheckSquare size={13} className="text-blue-600 dark:text-blue-400" /> : <Square size={13} className="text-slate-400" />}
+                </button>
+              )}
+            </div>
             <span className={`${isDayHeaderCollapsed ? "hidden" : "block"} text-[9px] md:text-[10px] text-[var(--theme-primary)] font-bold truncate mt-0.5`}>
               {currentDomain.toUpperCase()}
             </span>
@@ -1317,18 +1636,23 @@ export const PlanningTimeline: React.FC = () => {
                               : { left: `${leftOffset + 3}px`, width: `${barWidth}px` };
 
                             const isConfirmed = bkg.status === 'confirmed';
+                            const isSelected = selectedBookingIds.has(bkg.id);
 
                             return (
                               <div
                                 key={bkg.id}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setSelectedBooking(bkg);
-                                  setIsNewBookingModalOpen(true);
-                                  setActivePreviewBooking(null);
+                                  if (isBatchSelectionMode) {
+                                    toggleBookingSelection(bkg.id, e);
+                                  } else {
+                                    setSelectedBooking(bkg);
+                                    setIsNewBookingModalOpen(true);
+                                    setActivePreviewBooking(null);
+                                  }
                                 }}
                                 onMouseEnter={(e) => {
-                                  if (!isMobileScreen) {
+                                  if (!isMobileScreen && !isBatchSelectionMode) {
                                     cancelPreviewClose();
                                     const rect = e.currentTarget.getBoundingClientRect();
                                     setActivePreviewBooking({
@@ -1340,12 +1664,35 @@ export const PlanningTimeline: React.FC = () => {
                                   }
                                 }}
                                 onMouseLeave={() => {
-                                  if (!isMobileScreen) schedulePreviewClose();
+                                  if (!isMobileScreen && !isBatchSelectionMode) schedulePreviewClose();
                                 }}
                                 style={posStyle}
-                                className={`pms-booking-bar ${isConfirmed ? 'pms-booking-bar-confirmed ' : ''}absolute top-1 sm:top-1.5 h-8 sm:h-9 rounded-md px-1 sm:px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-xs hover:brightness-105 active:scale-[0.98] transition z-10 border ${statusStyle.bg} ${statusStyle.border}`}
+                                className={`pms-booking-bar ${isConfirmed ? 'pms-booking-bar-confirmed ' : ''}absolute top-1 sm:top-1.5 h-8 sm:h-9 rounded-md px-1 sm:px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-xs hover:brightness-105 active:scale-[0.98] transition z-10 border ${statusStyle.bg} ${statusStyle.border} ${
+                                  isSelected
+                                    ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-900 shadow-md brightness-110 z-20 scale-[1.01]'
+                                    : ''
+                                }`}
                               >
                                     <div className="flex items-center gap-1.5 truncate min-w-0">
+                                      {/* Batch selection checkbox indicator on booking bar */}
+                                      {isBatchSelectionMode && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleBookingSelection(bkg.id, e);
+                                          }}
+                                          className="shrink-0 flex items-center justify-center -ml-0.5 mr-0.5 rtl:-mr-0.5 rtl:ml-0.5 z-20 cursor-pointer focus:outline-none"
+                                          title={isSelected ? getTranslation('ganttBatchDeselectAll', language) : getTranslation('ganttBatchSelectAll', language)}
+                                          aria-label={isSelected ? getTranslation('ganttBatchDeselectAll', language) : getTranslation('ganttBatchSelectAll', language)}
+                                        >
+                                          {isSelected ? (
+                                            <CheckSquare size={13} className="text-white drop-shadow-sm fill-blue-600" />
+                                          ) : (
+                                            <Square size={13} className="text-white/80 drop-shadow-xs" />
+                                          )}
+                                        </button>
+                                      )}
                                       {/* Person icons: if multiple occupants occupy the room, render stacked group of person icons */}
                                       {hasMultipleOccupants ? (
                                         <div
@@ -1680,7 +2027,7 @@ export const PlanningTimeline: React.FC = () => {
                   setSelectedBooking(activePreviewBooking.booking);
                   setActivePreviewBooking(null);
                 }}
-                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-semibold text-center transition-colors shadow-xs"
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-semibold text-center transition-colors shadow-xs cursor-pointer"
               >
                 {getTranslation('ganttOpenFullBooking', language)}
               </button>
@@ -1688,7 +2035,7 @@ export const PlanningTimeline: React.FC = () => {
                 onClick={() => {
                   downloadICS(activePreviewBooking.booking);
                 }}
-                className="px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
+                className="px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 title={getTranslation('ganttExportIcs', language)}
               >
                 <Download size={14} />
@@ -1696,6 +2043,587 @@ export const PlanningTimeline: React.FC = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Batch Operation Feedback Toast */}
+      {batchFeedback && (
+        <div
+          role="alert"
+          className={`fixed top-16 right-4 rtl:right-auto rtl:left-4 z-[140] max-w-sm rounded-xl px-4 py-3 shadow-xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200 ${
+            batchFeedback.type === 'success'
+              ? 'bg-emerald-950/95 text-emerald-200 border-emerald-700/60 backdrop-blur-md'
+              : batchFeedback.type === 'warning'
+              ? 'bg-amber-950/95 text-amber-200 border-amber-700/60 backdrop-blur-md'
+              : 'bg-rose-950/95 text-rose-200 border-rose-700/60 backdrop-blur-md'
+          }`}
+        >
+          {batchFeedback.type === 'success' ? (
+            <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+          ) : (
+            <AlertCircle size={18} className="text-amber-400 shrink-0" />
+          )}
+          <span className="text-xs font-semibold flex-1 leading-snug">{batchFeedback.message}</span>
+          <button
+            type="button"
+            onClick={() => setBatchFeedback(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+            aria-label="Fermer"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Floating Batch Actions Bar */}
+      {isBatchSelectionMode && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[110] w-[95vw] max-w-3xl bg-slate-900/95 text-white backdrop-blur-md border border-slate-700/80 shadow-2xl rounded-xl p-3 flex flex-wrap items-center justify-between gap-2.5 animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center min-w-[28px] h-7 px-1.5 rounded-lg bg-blue-600 text-white font-bold text-xs font-mono shadow-xs">
+              {selectedBookingIds.size}
+            </div>
+            <div>
+              <div className="text-xs font-bold leading-tight">
+                {getTranslation('ganttBatchSelectedCount', language).replace('{count}', String(selectedBookingIds.size))}
+              </div>
+              <div className="text-[10px] text-slate-400">
+                {selectedBookingIds.size === 0
+                  ? (language === 'fr' ? 'Cliquez sur les réservations à sélectionner' : language === 'ar' ? 'انقر على الحجوزات لتحديدها' : 'Click bookings on the timeline to select')
+                  : (language === 'fr' ? 'Déplacez, modifiez ou supprimez en 1 clic' : language === 'ar' ? 'انقل أو عدل أو احذف بنقرة واحدة' : 'Move, modify or delete in 1 click')}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center flex-wrap gap-1.5 relative">
+            {/* Select all / Deselect all */}
+            <button
+              type="button"
+              onClick={selectedBookingIds.size > 0 ? deselectAllBookings : selectAllVisibleBookings}
+              className="h-8 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+              title={selectedBookingIds.size > 0 ? getTranslation('ganttBatchDeselectAll', language) : getTranslation('ganttBatchSelectAll', language)}
+            >
+              {selectedBookingIds.size > 0 ? <Square size={13} /> : <CheckSquare size={13} />}
+              <span className="hidden sm:inline">
+                {selectedBookingIds.size > 0 ? getTranslation('ganttBatchDeselectAll', language) : getTranslation('ganttBatchSelectAll', language)}
+              </span>
+            </button>
+
+            {/* Quick Shift buttons: -1j and +1j directly on bar */}
+            <div className="flex items-center rounded-lg bg-slate-800 border border-slate-700 p-0.5">
+              <button
+                type="button"
+                disabled={selectedBookingIds.size === 0}
+                onClick={() => handleBatchShift(-1)}
+                className={`h-7 px-2 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                  selectedBookingIds.size === 0
+                    ? 'text-slate-600 cursor-not-allowed'
+                    : 'text-slate-200 hover:bg-slate-700 hover:text-white'
+                }`}
+                title={language === 'fr' ? 'Reculer de 1 jour' : language === 'ar' ? 'تأخير يوم واحد' : 'Shift back 1 day'}
+              >
+                -1j
+              </button>
+              <button
+                type="button"
+                disabled={selectedBookingIds.size === 0}
+                onClick={() => handleBatchShift(1)}
+                className={`h-7 px-2 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                  selectedBookingIds.size === 0
+                    ? 'text-slate-600 cursor-not-allowed'
+                    : 'text-slate-200 hover:bg-slate-700 hover:text-white'
+                }`}
+                title={language === 'fr' ? 'Avancer de 1 jour' : language === 'ar' ? 'تقديم يوم واحد' : 'Shift forward 1 day'}
+              >
+                +1j
+              </button>
+            </div>
+
+            {/* Move Batch Dialog button */}
+            <button
+              type="button"
+              disabled={selectedBookingIds.size === 0}
+              onClick={() => setIsBatchShiftModalOpen(true)}
+              className={`h-8 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                selectedBookingIds.size === 0
+                  ? 'bg-slate-800/50 text-slate-600 border border-slate-800 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs'
+              }`}
+              title={getTranslation('ganttBatchMoveAction', language)}
+            >
+              <ArrowRightLeft size={13} />
+              <span>{getTranslation('ganttBatchMoveAction', language)}</span>
+            </button>
+
+            {/* Batch Status dropdown button */}
+            <div className="relative">
+              <button
+                type="button"
+                disabled={selectedBookingIds.size === 0}
+                onClick={() => setIsBatchStatusMenuOpen((prev) => !prev)}
+                className={`h-8 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  selectedBookingIds.size === 0
+                    ? 'bg-slate-800/50 text-slate-600 border border-slate-800 cursor-not-allowed'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-xs'
+                }`}
+                title={getTranslation('ganttBatchStatusAction', language)}
+                aria-expanded={isBatchStatusMenuOpen}
+              >
+                <ListChecks size={13} />
+                <span className="hidden sm:inline">{getTranslation('ganttBatchStatusAction', language)}</span>
+                <ChevronDown size={11} className={`transition-transform ${isBatchStatusMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isBatchStatusMenuOpen && (
+                <div className="absolute bottom-full mb-1.5 right-0 w-52 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl p-1.5 z-[130] flex flex-col gap-1 max-h-72 overflow-y-auto">
+                  <span className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    {language === 'fr' ? 'Changer statut simultanément' : language === 'ar' ? 'تعديل الحالة بالتزامن' : 'Update status simultaneously'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleBatchStatusChange('confirmed')}
+                    className="flex items-center gap-2 px-2 py-1.5 text-xs font-semibold rounded-lg text-blue-400 hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                    <span>{getTranslation('ganttBatchStatusConfirmed', language)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBatchStatusChange('new')}
+                    className="flex items-center gap-2 px-2 py-1.5 text-xs font-semibold rounded-lg text-amber-300 hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                    <span>{getTranslation('ganttBatchStatusPending', language)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBatchStatusChange('checked_in')}
+                    className="flex items-center gap-2 px-2 py-1.5 text-xs font-semibold rounded-lg text-emerald-400 hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                    <span>{getTranslation('ganttBatchStatusCheckedIn', language)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBatchStatusChange('checked_out')}
+                    className="flex items-center gap-2 px-2 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-slate-500 shrink-0" />
+                    <span>{getTranslation('ganttBatchStatusCheckedOut', language)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBatchStatusChange('due_in')}
+                    className="flex items-center gap-2 px-2 py-1.5 text-xs font-semibold rounded-lg text-teal-300 hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-teal-400 shrink-0" />
+                    <span>{getTranslation('ganttBatchStatusDueIn', language)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBatchStatusChange('due_out')}
+                    className="flex items-center gap-2 px-2 py-1.5 text-xs font-semibold rounded-lg text-orange-300 hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />
+                    <span>{getTranslation('ganttBatchStatusDueOut', language)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBatchStatusChange('cancelled')}
+                    className="flex items-center gap-2 px-2 py-1.5 text-xs font-semibold rounded-lg text-rose-400 hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                    <span>{getTranslation('ganttBatchStatusCancelled', language)}</span>
+                  </button>
+                  <div className="border-t border-slate-700/80 my-0.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsBatchStatusMenuOpen(false);
+                        setIsBatchStatusModalOpen(true);
+                      }}
+                      className="w-full text-center py-1 text-[11px] font-semibold text-blue-400 hover:underline cursor-pointer"
+                    >
+                      {language === 'fr' ? 'Vue détaillée des statuts...' : language === 'ar' ? 'عرض تفصيلي للحالات...' : 'Detailed status view...'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Undo Last Batch Action button in floating bar */}
+            <button
+              type="button"
+              disabled={!lastBatchAction}
+              onClick={handleUndoBatchAction}
+              className={`h-8 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                !lastBatchAction
+                  ? 'bg-slate-800/40 text-slate-600 border border-slate-800 cursor-not-allowed opacity-60'
+                  : 'bg-amber-600 hover:bg-amber-500 text-white shadow-xs active:scale-95 border border-amber-500/80 ring-1 ring-amber-400/40'
+              }`}
+              title={
+                lastBatchAction
+                  ? `${getTranslation('ganttBatchUndoAction', language)}: ${lastBatchAction.description}`
+                  : getTranslation('ganttBatchUndoAction', language)
+              }
+              aria-label={getTranslation('ganttBatchUndoAction', language)}
+            >
+              <Undo2 size={13} className={lastBatchAction ? 'text-white' : 'text-slate-600'} />
+              <span>{getTranslation('ganttBatchUndoAction', language)}</span>
+            </button>
+
+            {/* Delete Batch button */}
+            <button
+              type="button"
+              disabled={selectedBookingIds.size === 0}
+              onClick={() => setIsBatchDeleteConfirmOpen(true)}
+              className={`h-8 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                selectedBookingIds.size === 0
+                  ? 'bg-slate-800/50 text-slate-600 border border-slate-800 cursor-not-allowed'
+                  : 'bg-rose-600 hover:bg-rose-500 text-white shadow-xs'
+              }`}
+              title={getTranslation('ganttBatchDeleteAction', language)}
+            >
+              <Trash2 size={13} />
+              <span>{getTranslation('ganttBatchDeleteAction', language)}</span>
+            </button>
+
+            {/* Exit Batch Mode button */}
+            <button
+              type="button"
+              onClick={toggleBatchMode}
+              className="h-8 w-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center border border-slate-700 transition-colors cursor-pointer"
+              title={getTranslation('ganttBatchExitAction', language)}
+              aria-label={getTranslation('ganttBatchExitAction', language)}
+            >
+              <X size={15} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Status Selection Modal */}
+      {isBatchStatusModalOpen && (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setIsBatchStatusModalOpen(false);
+          }}
+          role="presentation"
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="batch-status-modal-title"
+            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl text-slate-900 dark:text-white"
+          >
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <span className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/80 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <ListChecks size={20} />
+                </span>
+                <div>
+                  <h2 id="batch-status-modal-title" className="text-base font-bold text-slate-900 dark:text-white">
+                    {getTranslation('ganttBatchStatusModalTitle', language)}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {getTranslation('ganttBatchStatusModalSubtitle', language).replace('{count}', String(selectedBookingIds.size))}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBatchStatusModalOpen(false)}
+                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center cursor-pointer"
+                aria-label="Fermer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-2">
+              {[
+                { status: 'confirmed' as BookingStatus, label: getTranslation('ganttBatchStatusConfirmed', language), color: 'bg-blue-600 text-white', dot: 'bg-blue-500' },
+                { status: 'new' as BookingStatus, label: getTranslation('ganttBatchStatusPending', language), color: 'bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200', dot: 'bg-amber-500' },
+                { status: 'checked_in' as BookingStatus, label: getTranslation('ganttBatchStatusCheckedIn', language), color: 'bg-emerald-500 text-white', dot: 'bg-emerald-500' },
+                { status: 'checked_out' as BookingStatus, label: getTranslation('ganttBatchStatusCheckedOut', language), color: 'bg-rose-200 text-rose-950 dark:bg-rose-950 dark:text-rose-200', dot: 'bg-rose-500' },
+                { status: 'due_in' as BookingStatus, label: getTranslation('ganttBatchStatusDueIn', language), color: 'bg-teal-100 text-teal-900 dark:bg-teal-950 dark:text-teal-200', dot: 'bg-teal-500' },
+                { status: 'due_out' as BookingStatus, label: getTranslation('ganttBatchStatusDueOut', language), color: 'bg-orange-100 text-orange-950 dark:bg-orange-950 dark:text-orange-200', dot: 'bg-orange-500' },
+                { status: 'cancelled' as BookingStatus, label: getTranslation('ganttBatchStatusCancelled', language), color: 'bg-rose-100 text-rose-900 dark:bg-rose-950/90 dark:text-rose-200', dot: 'bg-rose-600' },
+              ].map((item) => (
+                <button
+                  key={item.status}
+                  type="button"
+                  onClick={() => handleBatchStatusChange(item.status)}
+                  className="w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/30 transition-all text-left cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className={`w-3 h-3 rounded-full ${item.dot} ring-2 ring-white/50 shrink-0`} />
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                      {item.label}
+                    </span>
+                  </div>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${item.color}`}>
+                    {selectedBookingIds.size}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsBatchStatusModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                {language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* Batch Shift Modal */}
+      {isBatchShiftModalOpen && (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setIsBatchShiftModalOpen(false);
+          }}
+          role="presentation"
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="batch-shift-title"
+            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl text-slate-900 dark:text-white"
+          >
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <span className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/80 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                  <ArrowRightLeft size={20} />
+                </span>
+                <div>
+                  <h2 id="batch-shift-title" className="text-base font-bold text-slate-900 dark:text-white">
+                    {getTranslation('ganttBatchShiftTitle', language)}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {getTranslation('ganttBatchShiftDescription', language)}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBatchShiftModalOpen(false)}
+                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center cursor-pointer"
+                aria-label="Fermer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-4">
+              {/* Quick shift presets */}
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
+                  {language === 'fr' ? 'Décalage rapide :' : language === 'ar' ? 'إزاحة سريعة :' : 'Quick shift presets:'}
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[-7, -1, 1, 7].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setBatchShiftDays(preset)}
+                      className={`py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                        batchShiftDays === preset
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                          : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                      }`}
+                    >
+                      {preset > 0 ? `+${preset}j` : `${preset}j`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom day stepper */}
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
+                  {language === 'fr' ? 'Nombre de jours personnalisé :' : language === 'ar' ? 'عدد الأيام المخصص :' : 'Custom day amount:'}
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBatchShiftDays((d) => d - 1)}
+                    className="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                    aria-label="Diminuer d'un jour"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    value={batchShiftDays}
+                    onChange={(e) => setBatchShiftDays(Number(e.target.value) || 0)}
+                    className="flex-1 h-9 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850 px-3 text-center text-sm font-bold font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setBatchShiftDays((d) => d + 1)}
+                    className="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                    aria-label="Augmenter d'un jour"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Selected bookings preview */}
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-850 p-3 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  <span>{selectedBookingIds.size} {language === 'fr' ? 'réservations concernées' : language === 'ar' ? 'حجوزات معنية' : 'affected bookings'}</span>
+                  <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">
+                    {batchShiftDays > 0 ? `+${batchShiftDays}` : batchShiftDays} {language === 'fr' ? 'jour(s)' : language === 'ar' ? 'يوم' : 'day(s)'}
+                  </span>
+                </div>
+                <div className="max-h-36 overflow-y-auto space-y-1.5 text-xs text-slate-600 dark:text-slate-400 pr-1">
+                  {selectedBookingsList.map((b) => {
+                    const newStart = shiftIsoDate(b.startDate, batchShiftDays);
+                    const newEnd = shiftIsoDate(b.endDate, batchShiftDays);
+                    const conflict = checkConflict(b.resourceId, newStart, newEnd, b.id);
+                    return (
+                      <div key={b.id} className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                        <div className="truncate font-medium text-slate-800 dark:text-slate-200">
+                          {b.guestName} <span className="text-[10px] text-slate-400">({b.resourceName})</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0 text-[11px] font-mono">
+                          <span className="text-slate-500 line-through">{b.startDate}</span>
+                          <span>→</span>
+                          <span className={`font-bold ${conflict ? 'text-rose-500' : 'text-emerald-500'}`}>{newStart}</span>
+                          {conflict && (
+                            <span className="px-1 py-0.2 rounded text-[9px] bg-rose-500 text-white font-bold" title="Conflit de chambre">!</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsBatchShiftModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                {language === 'fr' ? 'Annuler' : language === 'ar' ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                disabled={batchShiftDays === 0}
+                onClick={() => handleBatchShift(batchShiftDays)}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  batchShiftDays === 0
+                    ? 'bg-indigo-400 text-white cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white shadow-xs'
+                }`}
+              >
+                <ArrowRightLeft size={13} />
+                <span>
+                  {language === 'fr'
+                    ? `Appliquer le déplacement (${batchShiftDays > 0 ? `+${batchShiftDays}` : batchShiftDays}j)`
+                    : language === 'ar'
+                    ? `تطبيق الإزاحة (${batchShiftDays > 0 ? `+${batchShiftDays}` : batchShiftDays} يوم)`
+                    : `Apply Shift (${batchShiftDays > 0 ? `+${batchShiftDays}` : batchShiftDays}d)`}
+                </span>
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* Batch Delete Confirmation Modal */}
+      {isBatchDeleteConfirmOpen && (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setIsBatchDeleteConfirmOpen(false);
+          }}
+          role="presentation"
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="batch-delete-title"
+            className="w-full max-w-md rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-slate-900 p-5 shadow-2xl text-slate-900 dark:text-white"
+          >
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <span className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/80 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                  <Trash2 size={20} />
+                </span>
+                <div>
+                  <h2 id="batch-delete-title" className="text-base font-bold text-slate-900 dark:text-white">
+                    {getTranslation('ganttBatchConfirmDeleteTitle', language).replace('{count}', String(selectedBookingIds.size))}
+                  </h2>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold">
+                    {language === 'fr' ? 'Action irréversible' : language === 'ar' ? 'إجراء لا يمكن التراجع عنه' : 'Irreversible action'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBatchDeleteConfirmOpen(false)}
+                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center cursor-pointer"
+                aria-label="Fermer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-3">
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 text-xs text-rose-700 dark:text-rose-300">
+                {getTranslation('ganttBatchConfirmDeleteMsg', language)}
+              </div>
+
+              {/* List of bookings to be deleted */}
+              <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                {selectedBookingsList.map((b) => (
+                  <div key={b.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
+                    <div className="truncate font-medium text-slate-800 dark:text-slate-200">
+                      {b.guestName} <span className="text-[10px] text-slate-400">({b.resourceName})</span>
+                    </div>
+                    <span className="font-mono text-[11px] text-slate-500 shrink-0">
+                      {b.startDate} → {b.endDate}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsBatchDeleteConfirmOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                {language === 'fr' ? 'Annuler' : language === 'ar' ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleBatchDelete}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              >
+                <Trash2 size={13} />
+                <span>
+                  {language === 'fr'
+                    ? `Supprimer définitivement (${selectedBookingIds.size})`
+                    : language === 'ar'
+                    ? `حذف نهائي (${selectedBookingIds.size})`
+                    : `Delete Permanently (${selectedBookingIds.size})`}
+                </span>
+              </button>
+            </div>
+          </section>
         </div>
       )}
     </div>

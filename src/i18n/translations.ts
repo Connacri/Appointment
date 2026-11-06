@@ -858,6 +858,151 @@ export const translations = {
     en: 'Shared room / Multiple guests',
     ar: 'غرفة مشتركة / نزلاء متعددون',
   },
+  ganttBatchMode: {
+    fr: 'Sélection multiple',
+    en: 'Batch Selection',
+    ar: 'التحديد المتعدد',
+  },
+  ganttBatchModeActive: {
+    fr: 'Mode lot activé',
+    en: 'Batch mode active',
+    ar: 'وضع التحديد مفعّل',
+  },
+  ganttBatchSelectAll: {
+    fr: 'Tout sélectionner',
+    en: 'Select all',
+    ar: 'تحديد الكل',
+  },
+  ganttBatchDeselectAll: {
+    fr: 'Tout désélectionner',
+    en: 'Deselect all',
+    ar: 'إلغاء تحديد الكل',
+  },
+  ganttBatchSelectedCount: {
+    fr: '{count} sélectionnée(s)',
+    en: '{count} selected',
+    ar: '{count} محددة',
+  },
+  ganttBatchMovePrompt: {
+    fr: 'Déplacer de {days} jour(s)',
+    en: 'Shift by {days} day(s)',
+    ar: 'إزاحة بمقدار {days} يوم',
+  },
+  ganttBatchMoveAction: {
+    fr: 'Déplacer le lot',
+    en: 'Move batch',
+    ar: 'نقل المجموعة',
+  },
+  ganttBatchDeleteAction: {
+    fr: 'Supprimer le lot',
+    en: 'Delete batch',
+    ar: 'حذف المجموعة',
+  },
+  ganttBatchStatusAction: {
+    fr: 'Changer le statut',
+    en: 'Change status',
+    ar: 'تعديل الحالة',
+  },
+  ganttBatchExitAction: {
+    fr: 'Quitter',
+    en: 'Exit',
+    ar: 'خروج',
+  },
+  ganttBatchShiftTitle: {
+    fr: 'Déplacer les réservations sélectionnées',
+    en: 'Shift selected bookings',
+    ar: 'نقل الحجوزات المحددة',
+  },
+  ganttBatchShiftDescription: {
+    fr: 'Choisissez le nombre de jours de décalage vers le passé ou le futur.',
+    en: 'Choose the number of days to shift into the past or future.',
+    ar: 'اختر عدد أيام الإزاحة نحو الماضي أو المستقبل.',
+  },
+  ganttBatchConflictDetected: {
+    fr: 'Conflits détectés sur {count} réservation(s). Vérifiez la disponibilité des chambres.',
+    en: 'Conflicts detected on {count} booking(s). Check room availability.',
+    ar: 'تم اكتشاف تعارض في {count} حجز. يرجى التحقق من توفر الغرف.',
+  },
+  ganttBatchConfirmDeleteTitle: {
+    fr: 'Supprimer {count} réservation(s) ?',
+    en: 'Delete {count} booking(s)?',
+    ar: 'حذف {count} حجز؟',
+  },
+  ganttBatchConfirmDeleteMsg: {
+    fr: 'Attention : cette action supprimera définitivement les réservations sélectionnées. Cette action est irréversible.',
+    en: 'Warning: this will permanently delete the selected bookings. This action cannot be undone.',
+    ar: 'تحذير: سيؤدي هذا الإجراء إلى حذف الحجوزات المحددة نهائياً ولا يمكن التراجع عنه.',
+  },
+  ganttBatchMoveSuccess: {
+    fr: '{count} réservation(s) déplacée(s) avec succès ({days}j).',
+    en: '{count} booking(s) shifted successfully ({days}d).',
+    ar: 'تم نقل {count} حجز بنجاح ({days} يوم).',
+  },
+  ganttBatchDeleteSuccess: {
+    fr: '{count} réservation(s) supprimée(s) avec succès.',
+    en: '{count} booking(s) deleted successfully.',
+    ar: 'تم حذف {count} حجز بنجاح.',
+  },
+  ganttBatchStatusSuccess: {
+    fr: 'Statut mis à jour pour {count} réservation(s).',
+    en: 'Status updated for {count} booking(s).',
+    ar: 'تم تحديث حالة {count} حجز بنجاح.',
+  },
+  ganttBatchUndoAction: {
+    fr: 'Annuler',
+    en: 'Undo',
+    ar: 'تراجع',
+  },
+  ganttBatchUndoSuccess: {
+    fr: 'Dernière action par lot annulée avec succès.',
+    en: 'Last batch action reverted successfully.',
+    ar: 'تم التراجع عن الإجراء الجماعي الأخير بنجاح.',
+  },
+  ganttBatchStatusModalTitle: {
+    fr: 'Modifier le statut des réservations',
+    en: 'Update Booking Status',
+    ar: 'تعديل حالة الحجوزات',
+  },
+  ganttBatchStatusModalSubtitle: {
+    fr: 'Sélectionnez le nouveau statut à appliquer simultanément aux {count} réservations sélectionnées.',
+    en: 'Select the new status to apply simultaneously to the {count} selected bookings.',
+    ar: 'اختر الحالة الجديدة لتطبيقها في نفس الوقت على {count} حجز محدد.',
+  },
+  ganttBatchStatusPending: {
+    fr: 'En attente / Nouveau',
+    en: 'Pending / New',
+    ar: 'قيد الانتظار / جديد',
+  },
+  ganttBatchStatusConfirmed: {
+    fr: 'Confirmé',
+    en: 'Confirmed',
+    ar: 'مؤكد',
+  },
+  ganttBatchStatusCheckedIn: {
+    fr: 'Arrivé / En séjour (Checked In)',
+    en: 'In-House (Checked In)',
+    ar: 'مقيم / تم التسجيل (Checked In)',
+  },
+  ganttBatchStatusCheckedOut: {
+    fr: 'Départ effectué (Checked Out)',
+    en: 'Checked Out',
+    ar: 'تمت المغادرة (Checked Out)',
+  },
+  ganttBatchStatusDueIn: {
+    fr: 'Arrivée prévue (Due In)',
+    en: 'Due In',
+    ar: 'وصول متوقع (Due In)',
+  },
+  ganttBatchStatusDueOut: {
+    fr: 'Départ prévu (Due Out)',
+    en: 'Due Out',
+    ar: 'مغادرة متوقعة (Due Out)',
+  },
+  ganttBatchStatusCancelled: {
+    fr: 'Annulé',
+    en: 'Cancelled',
+    ar: 'ملغى',
+  },
 };
 
 export function getTranslation(key: keyof typeof translations, lang: Language): string {
