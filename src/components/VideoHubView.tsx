@@ -171,6 +171,7 @@ export const VideoHubView: React.FC = () => {
   const [addTags, setAddTags] = useState('');
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickPlaylistId, setQuickPlaylistId] = useState('');
+  const [quickNewPlaylistName, setQuickNewPlaylistName] = useState('');
   const [quickAddError, setQuickAddError] = useState('');
   const [quickAddSuccess, setQuickAddSuccess] = useState('');
 
@@ -326,15 +327,24 @@ export const VideoHubView: React.FC = () => {
       };
       setLibrary((prev) => [video, ...prev]);
     }
-    if (quickPlaylistId) setPlaylists((prev) => prev.map((playlist) =>
-      playlist.id === quickPlaylistId && !playlist.videoIds.includes(videoId)
-        ? { ...playlist, videoIds: [...playlist.videoIds, videoId] } : playlist,
-    ));
+    if (quickPlaylistId === '__new__') {
+      const name = quickNewPlaylistName.trim();
+      if (!name) {
+        setQuickAddError(t('Saisissez le nom de la nouvelle playlist.', 'Enter a name for the new playlist.', 'أدخل اسم قائمة التشغيل الجديدة.'));
+        return;
+      }
+      setPlaylists((prev) => [...prev, { id: String(Date.now()), name, videoIds: [videoId] }]);
+    } else if (quickPlaylistId) {
+      setPlaylists((prev) => prev.map((playlist) =>
+        playlist.id === quickPlaylistId && !playlist.videoIds.includes(videoId)
+          ? { ...playlist, videoIds: [...playlist.videoIds, videoId] } : playlist,
+      ));
+    }
     setQuickAddSuccess(existing
       ? t('Vidéo déjà présente : playlist mise à jour.', 'Video already in your library: playlist updated.', 'الفيديو موجود مسبقاً: تم تحديث القائمة.')
       : t('Vidéo ajoutée à votre bibliothèque.', 'Video added to your library.', 'تمت إضافة الفيديو إلى مكتبتك.'));
     setAddUrl(''); setAddTitle(''); setAddChannel(''); setAddTags('');
-    if (quickPlaylistId) window.setTimeout(() => { setIsQuickAddOpen(false); setQuickAddSuccess(''); }, 900);
+    if (quickPlaylistId) window.setTimeout(() => { setIsQuickAddOpen(false); setQuickAddSuccess(''); setQuickPlaylistId(''); setQuickNewPlaylistName(''); }, 900);
   };
 
   const pasteVideoLink = async () => {
@@ -1092,7 +1102,13 @@ export const VideoHubView: React.FC = () => {
                 <select id="quick-playlist" value={quickPlaylistId} onChange={(event) => setQuickPlaylistId(event.target.value)} className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm text-slate-900 dark:text-white">
                   <option value="">{t('Bibliothèque uniquement', 'Library only', 'المكتبة فقط')}</option>
                   {playlists.map((playlist) => <option key={playlist.id} value={playlist.id}>{playlist.name}</option>)}
+                  <option value="__new__">{t('+ Créer une nouvelle playlist', '+ Create a playlist', '+ إنشاء قائمة تشغيل')}</option>
                 </select>
+                {quickPlaylistId === '__new__' && (
+                  <input value={quickNewPlaylistName} onChange={(event) => setQuickNewPlaylistName(event.target.value)}
+                    placeholder={t('Nom de la playlist', 'Playlist name', 'اسم قائمة التشغيل')} required
+                    className="mt-2 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm text-slate-900 dark:text-white" />
+                )}
               </div>
               <details className="text-xs">
                 <summary className="cursor-pointer font-semibold text-slate-600 dark:text-slate-300">{t('Options complémentaires', 'Additional details', 'تفاصيل إضافية')}</summary>
