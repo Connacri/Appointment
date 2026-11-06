@@ -45,6 +45,7 @@ export const MyBookingsView: React.FC = () => {
     setActiveQrPassBooking,
     setIsQrScannerOpen,
     currentDomain,
+    currency,
   } = useApp();
 
   const isClientRole = currentRole === 'client';
@@ -238,14 +239,14 @@ export const MyBookingsView: React.FC = () => {
           <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <span>
               {isClientRole
-                ? 'Mes Réservations & Pass QR Code d\'Arrivée'
+                ? (language === 'fr' ? "Mes Réservations & Pass QR Code d'Arrivée" : language === 'ar' ? 'حجوزاتي ورمز QR للوصول' : 'My Bookings & QR Arrival Pass')
                 : getTranslation('myBookingsTitle', language)}
             </span>
           </h1>
           <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {isClientRole
-              ? 'Consultez vos réservations, téléchargez votre QR Code et présentez-le à votre arrivée'
-              : 'Gestion centralisée des arrivées, scans QR code et encaissements'}
+              ? (language === 'fr' ? 'Consultez vos réservations, téléchargez votre QR Code et présentez-le à votre arrivée' : language === 'ar' ? 'اطلع على حجوزاتك، حمّل رمز QR وقدّمه فور وصولك للمنشأة' : 'Check your bookings, download your QR pass and present it upon arrival')
+              : (language === 'fr' ? 'Gestion centralisée des arrivées, scans QR code et encaissements' : language === 'ar' ? 'إدارة مركزية للوصول، مسح رموز QR والتحصيلات النقدية' : 'Centralized arrivals, QR code check-ins and payments')}
           </p>
         </div>
 
@@ -267,8 +268,8 @@ export const MyBookingsView: React.FC = () => {
             <Plus size={15} />
             <span>
               {isClientRole
-                ? (language === 'fr' ? 'Réserver en ligne' : 'Book Online')
-                : (language === 'fr' ? 'Ajouter Réservation' : 'Add Booking')}
+                ? (language === 'fr' ? 'Réserver en ligne' : language === 'ar' ? 'حجز عبر الإنترنت' : 'Book Online')
+                : (language === 'fr' ? 'Ajouter Réservation' : language === 'ar' ? 'إضافة حجز' : 'Add Booking')}
             </span>
           </button>
         </div>
@@ -284,7 +285,7 @@ export const MyBookingsView: React.FC = () => {
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
           }`}
         >
-          Tous ({bookings.length})
+          {language === 'fr' ? 'Tous' : language === 'ar' ? 'الكل' : 'All'} ({bookings.length})
         </button>
         <button
           onClick={() => setFilterTab('confirmed')}
@@ -294,7 +295,7 @@ export const MyBookingsView: React.FC = () => {
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
           }`}
         >
-          Confirmés
+          {language === 'fr' ? 'Confirmés' : language === 'ar' ? 'مؤكدة' : 'Confirmed'}
         </button>
         <button
           onClick={() => setFilterTab('checked_in')}
@@ -304,7 +305,7 @@ export const MyBookingsView: React.FC = () => {
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
           }`}
         >
-          Présents (Checked-in)
+          {language === 'fr' ? 'Présents' : language === 'ar' ? 'حاضرون' : 'Checked-in'}
         </button>
         <button
           onClick={() => setFilterTab('cash_pending')}
@@ -314,7 +315,7 @@ export const MyBookingsView: React.FC = () => {
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
           }`}
         >
-          Espèces au comptoir
+          {language === 'fr' ? 'Espèces au comptoir' : language === 'ar' ? 'نقد عند الاستقبال' : 'Cash on arrival'}
         </button>
       </div>
 
@@ -323,18 +324,30 @@ export const MyBookingsView: React.FC = () => {
         <div className="p-8 sm:p-12 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl bg-white dark:bg-slate-900">
           <Calendar size={32} className="mx-auto text-slate-300 dark:text-slate-600 mb-2 sm:mb-3" />
           <h3 className="font-bold text-slate-700 dark:text-slate-200 text-sm">
-            Aucun dossier trouvé dans cette vue
+            {language === 'fr'
+              ? 'Aucun dossier trouvé dans cette vue'
+              : language === 'ar'
+              ? 'لم يتم العثور على أي حجز في هذا العرض'
+              : 'No bookings found in this view'}
           </h3>
           <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
             {isClientRole
-              ? 'Vous n\'avez pas encore de réservation active. Effectuez votre réservation en ligne en un clic !'
-              : 'Aucune réservation ne correspond à ce filtre.'}
+              ? (language === 'fr'
+                  ? "Vous n'avez pas encore de réservation active. Effectuez votre réservation en ligne en un clic !"
+                  : language === 'ar'
+                  ? 'لا توجد لديك حجوزات نشطة حالياً. احجز إقامتك أونلاين بنقرة واحدة!'
+                  : 'You have no active bookings yet. Book online in a single click!')
+              : (language === 'fr'
+                  ? 'Aucune réservation ne correspond à ce filtre.'
+                  : language === 'ar'
+                  ? 'لا توجد حجوزات مطابقة لهذا الفلتر.'
+                  : 'No bookings match this filter.')}
           </p>
           <button
             onClick={() => setIsNewBookingModalOpen(true)}
             className="mt-3 sm:mt-4 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-xs cursor-pointer"
           >
-            Réserver maintenant
+            {language === 'fr' ? 'Réserver maintenant' : language === 'ar' ? 'احجز الآن' : 'Book now'}
           </button>
         </div>
       ) : (
@@ -361,7 +374,7 @@ export const MyBookingsView: React.FC = () => {
                       }`}
                     >
                       <span className={`w-2 h-2 rounded-full ${isCheckedIn ? 'bg-emerald-500' : 'bg-blue-500'}`} />
-                      {isCheckedIn ? 'Présent' : st.label[language] || bkg.status}
+                      {isCheckedIn ? (language === 'fr' ? 'Présent' : language === 'ar' ? 'حاضر' : 'Checked-in') : st.label[language] || bkg.status}
                     </span>
                   </div>
 
@@ -377,25 +390,25 @@ export const MyBookingsView: React.FC = () => {
                   {/* Dates & Details */}
                   <div className="space-y-1.5 sm:space-y-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-850 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium">Dates :</span>
+                      <span className="font-medium">{language === 'fr' ? 'Dates :' : language === 'ar' ? 'التواريخ :' : 'Dates:'}</span>
                       <span className="font-mono text-slate-900 dark:text-white font-bold">
                         {bkg.startDate} {bkg.startDate !== bkg.endDate ? `→ ${bkg.endDate}` : ''}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="font-medium">Paiement :</span>
+                      <span className="font-medium">{language === 'fr' ? 'Paiement :' : language === 'ar' ? 'الدفع :' : 'Payment:'}</span>
                       {bkg.totalPrice === 0 ? (
-                        <span className="text-emerald-600 font-bold">Gratuit</span>
+                        <span className="text-emerald-600 font-bold">{language === 'fr' ? 'Gratuit' : language === 'ar' ? 'مجاني' : 'Free'}</span>
                       ) : isCashPending ? (
                         <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1">
                           <Banknote size={13} />
-                          <span>Espèces ({bkg.totalPrice} €)</span>
+                          <span>{language === 'fr' ? 'Espèces' : language === 'ar' ? 'نقداً' : 'Cash'} ({bkg.totalPrice} {currency})</span>
                         </span>
                       ) : (
                         <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
                           <ShieldCheck size={13} />
-                          <span>Payé ({bkg.totalPrice} €)</span>
+                          <span>{language === 'fr' ? 'Payé' : language === 'ar' ? 'مدفوع' : 'Paid'} ({bkg.totalPrice} {currency})</span>
                         </span>
                       )}
                     </div>
@@ -410,7 +423,7 @@ export const MyBookingsView: React.FC = () => {
                     className="w-full h-9 sm:h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl sm:rounded-2xl text-xs shadow-xs transition flex items-center justify-center gap-2 group cursor-pointer"
                   >
                     <QrCode size={15} className="group-hover:scale-110 transition-transform" />
-                    <span>Pass QR Code d'Arrivée</span>
+                    <span>{language === 'fr' ? "Pass QR Code d'Arrivée" : language === 'ar' ? 'رمز QR السريع للوصول' : 'Arrival QR Code Pass'}</span>
                   </button>
 
                   <div className="flex items-center justify-between text-xs pt-0.5">
@@ -418,10 +431,10 @@ export const MyBookingsView: React.FC = () => {
                       type="button"
                       onClick={() => downloadICS(bkg)}
                       className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition-colors font-medium text-[11px] cursor-pointer"
-                      title="Ajouter au calendrier .ICS"
+                      title={language === 'fr' ? 'Ajouter au calendrier .ICS' : language === 'ar' ? 'إضافة إلى تقويم .ICS' : 'Add to .ICS calendar'}
                     >
                       <Download size={12} />
-                      <span>Calendrier .ICS</span>
+                      <span>{language === 'fr' ? 'Calendrier .ICS' : language === 'ar' ? 'التقويم .ICS' : 'Calendar .ICS'}</span>
                     </button>
 
                     <button
@@ -429,7 +442,7 @@ export const MyBookingsView: React.FC = () => {
                       onClick={() => setSelectedBooking(bkg)}
                       className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-semibold text-[11px] cursor-pointer"
                     >
-                      Détails / Modifier
+                      {language === 'fr' ? 'Détails / Modifier' : language === 'ar' ? 'التفاصيل / التعديل' : 'Details / Edit'}
                     </button>
                   </div>
                 </div>

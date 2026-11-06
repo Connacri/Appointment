@@ -202,14 +202,18 @@ export const DynamicPricingView: React.FC = () => {
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1 sm:line-clamp-none">
             {language === 'fr'
               ? 'Week-ends (Vendredi & Samedi), jours fériés nationaux/religieux et événements par géolocalisation'
-              : 'Algerian weekend surge (Friday & Saturday), holidays, and localized event yield optimization'}
+              : language === 'ar'
+              ? 'عطلات نهاية الأسبوع (الجمعة والسبت)، والأعياد الوطنية والدينية وتعديل الأسعار حسب الفعاليات'
+              : 'Weekend surge (Friday & Saturday), holidays, and localized event yield optimization'}
           </p>
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <span className="text-[11px] text-slate-400">Tarif de base :</span>
+          <span className="text-[11px] text-slate-400">
+            {language === 'fr' ? 'Tarif de base :' : language === 'ar' ? 'السعر الأساسي:' : 'Base rate:'}
+          </span>
           <span className="text-xs sm:text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">
-            {baseRate.toLocaleString()} {currency} / nuit
+            {baseRate.toLocaleString()} {currency} {language === 'fr' ? '/ nuit' : language === 'ar' ? '/ ليلة' : '/ night'}
           </span>
         </div>
       </div>
@@ -219,7 +223,9 @@ export const DynamicPricingView: React.FC = () => {
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
             <MapPin size={14} className="text-rose-500 shrink-0" />
-            <span className="font-semibold text-slate-700 dark:text-slate-300">Géolocalisation :</span>
+            <span className="font-semibold text-slate-700 dark:text-slate-300">
+              {language === 'fr' ? 'Géolocalisation :' : language === 'ar' ? 'الموقع الجغرافي:' : 'Geolocation:'}
+            </span>
             <select
               value={selectedWilaya}
               onChange={(e) => setSelectedWilaya(e.target.value)}
@@ -238,13 +244,13 @@ export const DynamicPricingView: React.FC = () => {
             onClick={handleManualScrapeHolidays}
             disabled={isScrapingHolidays}
             className="px-3 py-1 bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-            title="Scraper et synchroniser les jours fériés et événements officiels"
+            title={language === 'fr' ? 'Synchroniser les jours fériés et événements officiels' : language === 'ar' ? 'مزامنة العطل الرسمية والفعاليات' : 'Sync official holidays and events'}
           >
             <RefreshCw size={13} className={isScrapingHolidays ? 'animate-spin text-blue-500' : 'text-slate-400'} />
             <span>
               {isScrapingHolidays
-                ? 'Scraping en cours...'
-                : 'Scraper Fériés & Événements'}
+                ? (language === 'fr' ? 'Scraping en cours...' : language === 'ar' ? 'جارٍ جلب البيانات...' : 'Syncing...')
+                : (language === 'fr' ? 'Scraper Fériés & Événements' : language === 'ar' ? 'جلب العطل والفعاليات' : 'Fetch Holidays & Events')}
             </span>
           </button>
         </div>
@@ -254,10 +260,12 @@ export const DynamicPricingView: React.FC = () => {
             type="button"
             onClick={handleApplyHolidaySurge}
             className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-            title="Appliquer automatiquement les tarifs majorés sur les jours fériés et festivals détectés"
+            title={language === 'fr' ? 'Appliquer automatiquement les tarifs majorés sur les jours fériés et festivals détectés' : language === 'ar' ? 'تطبيق الأسعار الخاصة بالعطل والمهرجانات تلقائياً' : 'Automatically apply surge rates to detected holidays and festivals'}
           >
             <PartyPopper size={14} />
-            <span>Appliquer Majorations Fériés (+30%)</span>
+            <span>
+              {language === 'fr' ? 'Appliquer Majorations Fériés (+30%)' : language === 'ar' ? 'تطبيق زيادة العطل (+30%)' : 'Apply Holiday Surge (+30%)'}
+            </span>
           </button>
         </div>
       </div>
@@ -266,7 +274,9 @@ export const DynamicPricingView: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 sm:p-3 rounded-2xl shadow-2xs">
         {/* Room Type Selector */}
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold text-slate-500">Catégorie :</span>
+          <span className="text-xs font-semibold text-slate-500">
+            {language === 'fr' ? 'Catégorie :' : language === 'ar' ? 'الفئة:' : 'Category:'}
+          </span>
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
@@ -285,12 +295,12 @@ export const DynamicPricingView: React.FC = () => {
           <button
             onClick={handlePrevMonth}
             className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 cursor-pointer"
-            title="Mois précédent"
+            title={language === 'fr' ? 'Mois précédent' : language === 'ar' ? 'الشهر السابق' : 'Previous month'}
           >
             <ChevronLeft size={16} />
           </button>
           <span className="text-sm font-bold font-mono text-slate-900 dark:text-white px-2">
-            {new Date(year, month - 1).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', {
+            {new Date(year, month - 1).toLocaleDateString(language === 'ar' ? 'ar-DZ' : language === 'fr' ? 'fr-FR' : 'en-US', {
               month: 'long',
               year: 'numeric',
             })}
@@ -298,7 +308,7 @@ export const DynamicPricingView: React.FC = () => {
           <button
             onClick={handleNextMonth}
             className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 cursor-pointer"
-            title="Mois suivant"
+            title={language === 'fr' ? 'Mois suivant' : language === 'ar' ? 'الشهر التالي' : 'Next month'}
           >
             <ChevronRight size={16} />
           </button>
@@ -312,7 +322,7 @@ export const DynamicPricingView: React.FC = () => {
               step="100"
               value={bulkPriceInput}
               onChange={(e) => setBulkPriceInput(Number(e.target.value))}
-              placeholder={`Prix ${currency}`}
+              placeholder={`${language === 'fr' ? 'Prix' : language === 'ar' ? 'السعر' : 'Price'} ${currency}`}
               className="w-32 px-2.5 py-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono text-slate-900 dark:text-white pr-7"
             />
             <span className="absolute right-2 text-[10px] text-slate-400 font-mono pointer-events-none">
@@ -324,21 +334,21 @@ export const DynamicPricingView: React.FC = () => {
             onClick={handleApplyAllMonth}
             className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
           >
-            Tout le mois
+            {language === 'fr' ? 'Tout le mois' : language === 'ar' ? 'كامل الشهر' : 'Full Month'}
           </button>
           <button
             type="button"
             onClick={handleApplyWeekendsOnly}
             className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
-            title="Appliquer sur les Vendredis et Samedis"
+            title={language === 'fr' ? 'Appliquer sur les Vendredis et Samedis' : language === 'ar' ? 'تطبيق على الجمعة والسبت' : 'Apply on Fridays and Saturdays'}
           >
-            Week-ends (Ven & Sam)
+            {language === 'fr' ? 'Week-ends (Ven & Sam)' : language === 'ar' ? 'نهاية الأسبوع (جمعة وسبت)' : 'Weekends (Fri & Sat)'}
           </button>
           <button
             type="button"
             onClick={handleClearMonth}
             className="px-2.5 py-1 text-xs text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl cursor-pointer"
-            title="Réinitialiser tous les tarifs personnalisés du mois"
+            title={language === 'fr' ? 'Réinitialiser tous les tarifs personnalisés du mois' : language === 'ar' ? 'إعادة ضبط كل الأسعار المخصصة للشهر' : 'Reset all custom rates for the month'}
           >
             <RotateCcw size={14} />
           </button>
@@ -350,24 +360,24 @@ export const DynamicPricingView: React.FC = () => {
         {/* Weekday Headers: Dim, Lun, Mar, Mer, Jeu, Ven (Weekend), Sam (Weekend) */}
         <div className="grid grid-cols-7 gap-1 sm:gap-2">
           {[
-            { name: 'Dim', isWk: false },
-            { name: 'Lun', isWk: false },
-            { name: 'Mar', isWk: false },
-            { name: 'Mer', isWk: false },
-            { name: 'Jeu', isWk: false },
-            { name: 'Ven', isWk: true }, // Friday: Weekend
-            { name: 'Sam', isWk: true }, // Saturday: Weekend
+            { fr: 'Dim', en: 'Sun', ar: 'الأحد', isWk: false },
+            { fr: 'Lun', en: 'Mon', ar: 'الإثنين', isWk: false },
+            { fr: 'Mar', en: 'Tue', ar: 'الثلاثاء', isWk: false },
+            { fr: 'Mer', en: 'Wed', ar: 'الأربعاء', isWk: false },
+            { fr: 'Jeu', en: 'Thu', ar: 'الخميس', isWk: false },
+            { fr: 'Ven', en: 'Fri', ar: 'الجمعة', isWk: true }, // Friday: Weekend
+            { fr: 'Sam', en: 'Sat', ar: 'السبت', isWk: true }, // Saturday: Weekend
           ].map((col) => (
             <div
-              key={col.name}
+              key={col.fr}
               className={`text-center font-bold text-xs py-1.5 rounded-lg ${
                 col.isWk
                   ? 'text-amber-600 dark:text-amber-400 bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/50 dark:border-amber-900/50'
                   : 'text-slate-400'
               }`}
             >
-              <span>{col.name}</span>
-              {col.isWk && <span className="text-[9px] block font-normal opacity-80">(Week-end)</span>}
+              <span>{col[language] || col.fr}</span>
+              {col.isWk && <span className="text-[9px] block font-normal opacity-80">{language === 'fr' ? '(Week-end)' : language === 'ar' ? '(عطلة)' : '(Weekend)'}</span>}
             </div>
           ))}
 

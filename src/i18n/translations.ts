@@ -581,6 +581,86 @@ export const translations = {
     en: 'Appointments, wellness cabins, hammam rituals and direct room folio billing',
     ar: 'إدارة الجلسات العلاجية، كبائن التدليك، الحمام التقليدي والفوترة المباشرة على الغرف',
   },
+  chooseTheme: {
+    fr: 'Thèmes & Palettes Visuelles',
+    en: 'Themes & Visual Palettes',
+    ar: 'السمات ولوحات الألوان',
+  },
+  themeSubtitle: {
+    fr: "Personnalisez l'ambiance et les couleurs de votre établissement",
+    en: 'Customize the visual atmosphere and colors of your property',
+    ar: 'قم بتخصيص الطابع البصري وألوان منشأتك',
+  },
+  themeClassic: {
+    fr: 'Ardoise Moderne (Défaut)',
+    en: 'Modern Slate (Default)',
+    ar: 'أردواز عصري (افتراضي)',
+  },
+  themeRoseGold: {
+    fr: 'Luxe Rose & Sable Pêche',
+    en: 'Rose Gold & Blush Luxury',
+    ar: 'فخامة الورد والخوخ الرملي',
+  },
+  themeForestEmerald: {
+    fr: 'Émeraude des Forêts & Menthe',
+    en: 'Alpine Emerald & Mint',
+    ar: 'زمرد الغابة ورغوة النعناع',
+  },
+  themeOliveCoral: {
+    fr: 'Olive & Corail Couchant',
+    en: 'Olive Moss & Sunset Coral',
+    ar: 'زيتوني طبيعي ومرجان الغروب',
+  },
+  themeMidnightSand: {
+    fr: 'Marine Profonde & Sable Chaud',
+    en: 'Midnight Navy & Warm Sand',
+    ar: 'أزرق كحلي ورمل الصحراء الدافئ',
+  },
+  themeCrimsonEclipse: {
+    fr: 'Éclipse Cramoisie & Anthracite',
+    en: 'Crimson Eclipse & Charcoal',
+    ar: 'كسوف قرمزي وفحم ليلي',
+  },
+  themeAmberCharcoal: {
+    fr: 'Ambre & Anthracite Chaud',
+    en: 'Marigold Amber & Charcoal',
+    ar: 'عنبر دافئ وفحم أنيق',
+  },
+  themeOasisNoor: {
+    fr: 'Oasis Noor (Émeraude & Or)',
+    en: 'Oasis Noor (Emerald & Gold)',
+    ar: 'واحة نور (زمرد ملكي وذهب)',
+  },
+  themeTwinkleIndigo: {
+    fr: 'Nuit Indigo & Caramel',
+    en: 'Twinkle Indigo & Warm Caramel',
+    ar: 'ليل نيلي وكراميل دافئ',
+  },
+  themeModeLabel: {
+    fr: "Mode d'affichage",
+    en: 'Display mode',
+    ar: 'وضع العرض',
+  },
+  themeModeLight: {
+    fr: 'Mode Clair',
+    en: 'Light Mode',
+    ar: 'الوضع النهاري',
+  },
+  themeModeDark: {
+    fr: 'Mode Sombre',
+    en: 'Dark Mode',
+    ar: 'الوضع الليلي',
+  },
+  activeThemeBadge: {
+    fr: 'Actif',
+    en: 'Active',
+    ar: 'مفعل',
+  },
+  applyThemeButton: {
+    fr: 'Appliquer ce thème',
+    en: 'Apply this theme',
+    ar: 'تطبيق هذا المظهر',
+  },
 };
 
 export function getTranslation(key: keyof typeof translations, lang: Language): string {

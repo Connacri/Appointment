@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   Language,
   Theme,
+  AppThemeId,
   SectorType,
   TimelineBooking,
   BookingStatus,
@@ -65,6 +66,10 @@ interface AppContextType {
   setLanguage: (lang: Language) => void;
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  appTheme: AppThemeId;
+  setAppTheme: (theme: AppThemeId) => void;
+  isThemeModalOpen: boolean;
+  setIsThemeModalOpen: (open: boolean) => void;
   currentDomain: DomainType;
   setCurrentDomain: (domain: DomainType) => void;
   currentRole: UserRole;
@@ -169,6 +174,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [theme, setThemeState] = useState<Theme>(() => {
     return (localStorage.getItem('omnibook_theme') as Theme) || 'light';
   });
+
+  const [appTheme, setAppThemeState] = useState<AppThemeId>(() => {
+    return (localStorage.getItem('omnibook_app_theme') as AppThemeId) || 'classic-slate';
+  });
+
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState<boolean>(false);
+
+  const setAppTheme = (t: AppThemeId) => {
+    setAppThemeState(t);
+    localStorage.setItem('omnibook_app_theme', t);
+    document.documentElement.setAttribute('data-app-theme', t);
+  };
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-app-theme', appTheme);
+  }, [appTheme]);
 
   const [currentDomain, setCurrentDomainState] = useState<DomainType>(() => {
     const saved = localStorage.getItem('omnibook_domain') as DomainType;
@@ -1050,6 +1071,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setLanguage,
         theme,
         setTheme,
+        appTheme,
+        setAppTheme,
+        isThemeModalOpen,
+        setIsThemeModalOpen,
         currentDomain,
         setCurrentDomain,
         currentRole,

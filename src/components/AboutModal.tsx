@@ -67,7 +67,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             type="button"
             onClick={onClose}
             className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-slate-900/80 border border-slate-700/80 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-            aria-label="Fermer"
+            aria-label={language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}
           >
             <X size={18} />
           </button>
@@ -303,7 +303,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
         {/* Modal Footer */}
         <div className="p-4 sm:p-5 border-t border-slate-800/80 bg-slate-950/90 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
           <p>
-            &copy; {new Date().getFullYear()} <strong className="text-white">FORSLOG LTD</strong>. Tous droits réservés.
+            &copy; {new Date().getFullYear()} <strong className="text-white">FORSLOG LTD</strong>. {language === 'fr' ? 'Tous droits réservés.' : language === 'ar' ? 'جميع الحقوق محفوظة.' : 'All rights reserved.'}
           </p>
           <button
             type="button"

@@ -758,7 +758,7 @@ export const PlanningTimeline: React.FC = () => {
                 ? (language === 'fr' ? 'Chambres & Suites' : language === 'ar' ? 'الغرف والأجنحة' : 'Rooms & Suites')
                 : currentDomain === 'resort'
                 ? (language === 'fr' ? 'Villas, Bungalows & Suites' : language === 'ar' ? 'فلل وشاليهات المنتجع' : 'Resort Villas & Bungalows')
-                : (language === 'fr' ? 'Hébergements' : 'Accommodations')}
+                : (language === 'fr' ? 'Hébergements' : language === 'ar' ? 'أماكن الإقامة' : 'Accommodations')}
             </span>
             <span className={`${isDayHeaderCollapsed ? "hidden" : "block"} text-[9px] md:text-[10px] text-blue-600 dark:text-blue-400 font-bold truncate mt-0.5`}>
               {currentDomain.toUpperCase()}
@@ -829,7 +829,7 @@ export const PlanningTimeline: React.FC = () => {
                                     {res.name}
                                   </span>
                                   <span className="text-[9px] sm:text-[10px] text-slate-400 dark:text-slate-500 truncate">
-                                    {res.type || (language === 'fr' ? 'Chambre' : 'Room')}
+                                    {res.type || (language === 'fr' ? 'Chambre' : language === 'ar' ? 'غرفة' : 'Room')}
                                   </span>
                                 </span>
                               ) : (

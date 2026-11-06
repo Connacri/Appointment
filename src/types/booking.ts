@@ -29,6 +29,16 @@ export type SectorType = DomainType;
 
 export type Language = 'fr' | 'en' | 'ar';
 export type Theme = 'light' | 'dark';
+export type AppThemeId =
+  | 'classic-slate'
+  | 'rose-gold'
+  | 'forest-emerald'
+  | 'olive-coral'
+  | 'midnight-sand'
+  | 'crimson-eclipse'
+  | 'amber-charcoal'
+  | 'oasis-noor'
+  | 'twinkle-indigo';
 
 export type BookingStatus =
   | 'new'

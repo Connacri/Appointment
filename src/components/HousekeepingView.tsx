@@ -75,9 +75,13 @@ export const HousekeepingView: React.FC = () => {
           {isResort
             ? (language === 'fr'
                 ? 'Gestion des rotations de villas, contrôle et certification propreté'
+                : language === 'ar'
+                ? 'إدارة دوران الفلل، ومراقبة النظافة واعتماد الجاهزية'
                 : 'Villa turnaround control and cleanliness certification')
             : (language === 'fr'
                 ? 'Gestion des rotations de chambres et contrôle qualité'
+                : language === 'ar'
+                ? 'إدارة دوران الغرف ومراقبة جودة النظافة'
                 : 'Room turnover control and quality assurance')}
         </p>
       </div>
@@ -146,7 +150,7 @@ export const HousekeepingView: React.FC = () => {
                 <span>{grp.name[language] || grp.name.en}</span>
               </span>
               <span className="text-[11px] text-slate-400 font-mono">
-                {grp.resources.length} {isResort ? 'unités' : 'chambres'}
+                {grp.resources.length} {isResort ? (language === 'fr' ? 'unités' : language === 'ar' ? 'وحدة' : 'units') : (language === 'fr' ? 'chambres' : language === 'ar' ? 'غرفة' : 'rooms')}
               </span>
             </div>
 
@@ -179,7 +183,7 @@ export const HousekeepingView: React.FC = () => {
                             ? 'bg-emerald-600 text-white shadow-2xs'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-emerald-100 dark:hover:bg-emerald-950'
                         }`}
-                        title="Marquer comme Propre"
+                        title={language === 'fr' ? 'Marquer comme Propre' : language === 'ar' ? 'تحديد كجاهزة' : 'Mark as Clean'}
                       >
                         {language === 'fr' ? 'Propre' : language === 'ar' ? 'جاهز' : 'Clean'}
                       </button>
@@ -191,7 +195,7 @@ export const HousekeepingView: React.FC = () => {
                             ? 'bg-amber-500 text-white shadow-2xs'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-amber-100 dark:hover:bg-amber-950'
                         }`}
-                        title="Marquer comme En nettoyage"
+                        title={language === 'fr' ? 'Marquer comme En nettoyage' : language === 'ar' ? 'تحديد كقيد التنظيف' : 'Mark as Cleaning'}
                       >
                         {language === 'fr' ? 'Lavage' : language === 'ar' ? 'غسيل' : 'Wash'}
                       </button>
@@ -203,7 +207,7 @@ export const HousekeepingView: React.FC = () => {
                             ? 'bg-rose-600 text-white shadow-2xs'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-rose-100 dark:hover:bg-rose-950'
                         }`}
-                        title="Marquer comme Sale"
+                        title={language === 'fr' ? 'Marquer comme Sale' : language === 'ar' ? 'تحديد كغير جاهزة' : 'Mark as Dirty'}
                       >
                         {language === 'fr' ? 'Sale' : language === 'ar' ? 'غير جاهز' : 'Dirty'}
                       </button>
@@ -215,7 +219,7 @@ export const HousekeepingView: React.FC = () => {
                             ? 'bg-slate-700 text-white shadow-2xs'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                         }`}
-                        title="Marquer comme Hors Service / Maintenance"
+                        title={language === 'fr' ? 'Marquer comme Hors Service / Maintenance' : language === 'ar' ? 'تحديد كصيانة / خارج الخدمة' : 'Mark as Out of Order'}
                       >
                         {language === 'fr' ? 'HS' : language === 'ar' ? 'صيانة' : 'OOO'}
                       </button>

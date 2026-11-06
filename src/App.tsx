@@ -11,6 +11,7 @@ import { PlanningTimeline } from './components/PlanningTimeline';
 import { LegendBar } from './components/LegendBar';
 import { BookingModal } from './components/BookingModal';
 import { OfflineBanner } from './components/OfflineBanner';
+import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { SupabaseAuthGate } from './services/supabase/SupabaseAuthGate';
 import { WorkspaceProvider } from './services/supabase/WorkspaceContext';
 
@@ -197,6 +198,7 @@ const MainLayout: React.FC = () => {
             onClose={() => setIsAboutModalOpen(false)}
           />
         )}
+        <ThemeSelectorModal />
       </Suspense>
     </div>
   );
