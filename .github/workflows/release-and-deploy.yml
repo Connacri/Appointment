@@ -29,6 +29,10 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  # Required to delete the previous `github-pages` artifact before uploading a
+  # new one on a re-run; without it the delete fails and deploy-pages aborts
+  # with "Multiple artifacts named github-pages".
+  actions: write
 
 concurrency:
   group: 'release-and-deploy'
@@ -41,7 +45,7 @@ jobs:
   build-and-update-website:
     name: Build & Update Production Website
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -167,17 +171,40 @@ jobs:
 
       - name: Deploy to GitHub Pages Website
         id: deployment
-        continue-on-error: true
         uses: actions/deploy-pages@v4
+        with:
+          # The Pages backend occasionally stays queued for several minutes;
+          # the 10-minute default aborted a valid deployment once. Never mask
+          # a failure with continue-on-error: a stale site must fail the run.
+          timeout: 900000
 
-      - name: Verify live website
-        if: steps.deployment.outcome == 'success'
+      - name: Verify deployed website matches this build
         run: |
-          BASE="https://connacri.github.io/Appointment/"
+          set -euo pipefail
+          EXPECTED="$(grep -o 'assets/index-[^"]*\.js' dist/index.html | head -n 1)"
+          test -n "$EXPECTED" || { echo "::error::No entry asset found in dist/index.html"; exit 1; }
+          BASE="https://connacri.github.io/Appointment"
+          LIVE=""
+          for attempt in $(seq 1 20); do
+            LIVE="$(curl -fsS -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+              "${BASE}/index.html?cachebust=$(date +%s%N)" \
+              | grep -o 'assets/index-[^"]*\.js' | head -n 1 || true)"
+            if [ "$LIVE" = "$EXPECTED" ]; then
+              echo "Live entry asset matches this build: $LIVE"
+              break
+            fi
+            echo "Attempt ${attempt}/20: live=${LIVE:-<none>} expected=${EXPECTED}"
+            if [ "$attempt" -eq 20 ]; then
+              echo "::error::GitHub Pages still serves a stale build (expected ${EXPECTED}, got ${LIVE:-<none>})"
+              exit 1
+            fi
+            sleep 30
+          done
           for path in "" privacy/ privacy/fr/ privacy/en/ privacy/ar/ delete-account/ delete-account/fr/ delete-account/en/ delete-account/ar/; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "${BASE}${path}")
-            echo "${BASE}${path} -> ${code}"
-            [[ "$code" == "200" ]] || { echo "::warning::${BASE}${path} did not return HTTP 200"; }
+            url="${BASE}/${path}"
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$url")
+            echo "$url -> $code"
+            [[ "$code" == "200" ]] || { echo "::error::$url did not return HTTP 200"; exit 1; }
           done
 
   # ============================================================
