@@ -236,11 +236,24 @@ export async function parseCardLockMdb(
       nextTick: (cb: () => void) => setTimeout(cb, 0),
     };
   }
-  const { Buffer } = await import('buffer');
-  const globalRef = globalThis as unknown as { Buffer?: typeof Buffer };
-  if (!globalRef.Buffer) globalRef.Buffer = Buffer;
 
-  const buffer = data instanceof Uint8Array ? Buffer.from(data) : Buffer.from(new Uint8Array(data));
+  // `mdb-reader`'s browser build consumes the global `Buffer` (page copies,
+  // inflate, RC4). Without the polyfill every import failed with the opaque
+  // "Cannot read properties of undefined (reading 'from')"; expose the
+  // constructor on globalThis before importing the reader.
+  const bufferModule = await import('buffer');
+  const BufferCtor = (bufferModule as { Buffer?: typeof Buffer }).Buffer
+    ?? (bufferModule as { default?: { Buffer?: typeof Buffer } }).default?.Buffer;
+  if (!BufferCtor || typeof BufferCtor.from !== 'function') {
+    throw new Error(
+      'Le support de lecture des fichiers CardLock.mdb n’a pas pu être chargé. ' +
+        'Rechargez l’application puis réessayez ; si le problème persiste, signalez-le avec la version affichée dans Réglages → À propos.',
+    );
+  }
+  const globalRef = globalThis as unknown as { Buffer?: typeof Buffer };
+  if (!globalRef.Buffer) globalRef.Buffer = BufferCtor;
+
+  const buffer = data instanceof Uint8Array ? BufferCtor.from(data) : BufferCtor.from(new Uint8Array(data));
 
   const module_ = (await import('mdb-reader')) as unknown as {
     default: new (buf: Buffer, options?: { password?: string }) => {

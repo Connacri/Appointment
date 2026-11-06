@@ -182,7 +182,16 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
       const buildingSummary = planning.buildingStats.map((building) => `Bâtiment ${building.no} : ${building.rooms} chambre(s)`).join(' · ');
       const tableSummary = (snapshot.tables ?? []).map((table) => `${table.name}: ${table.rowCount} ligne(s)${table.readable ? '' : ' (illisible)'}`).join(', ');
       const allWarnings = [...snapshot.warnings, ...planning.warnings.filter((warning) => !snapshot.warnings.includes(warning))];
-      setStructureMessage(`Import réussi : ${snapshot.counts.rooms} chambre(s) RoomInfo, ${snapshot.buildings.length} bâtiment(s), ${planning.bookings.length} séjour(s) liés, ${snapshot.counts.cards} carte(s). ${buildingSummary}. Tables : ${tableSummary}${planning.skippedGuests ? ` · ${planning.skippedGuests} séjour(s) non importé(s)` : ''}${allWarnings.length ? ' · Avertissements : ' + allWarnings.join(' ') : ''}`);
+      // Windows virtualise les écritures de CardLock.exe : la copie de
+      // Program Files reste figée alors que celle du VirtualStore est vivante.
+      // Afficher la date du fichier évite d'importer une base obsolète.
+      const sourceDate = snapshot.fileLastModified ? new Date(snapshot.fileLastModified) : null;
+      const sourceDateValid = sourceDate !== null && !Number.isNaN(sourceDate.getTime());
+      const sourceDateLabel = sourceDateValid
+        ? ` · Fichier modifié le ${sourceDate.toLocaleDateString('fr-FR')}`
+        : '';
+      const sourceIsOld = sourceDateValid && Date.now() - sourceDate.getTime() > 90 * 86_400_000;
+      setStructureMessage(`Import réussi : ${snapshot.counts.rooms} chambre(s) RoomInfo, ${snapshot.buildings.length} bâtiment(s), ${planning.bookings.length} séjour(s) liés, ${snapshot.counts.cards} carte(s). ${buildingSummary}. Tables : ${tableSummary}${sourceDateLabel}${sourceIsOld ? ' (copie ancienne : vérifiez la base vivante du VirtualStore)' : ''}${planning.skippedGuests ? ` · ${planning.skippedGuests} séjour(s) non importé(s)` : ''}${allWarnings.length ? ' · Avertissements : ' + allWarnings.join(' ') : ''}`);
       playSuccessFeedback();
     } catch (error) {
       setStructureMessage(`Échec de l’import : ${error instanceof Error ? error.message : 'fichier illisible'}`);

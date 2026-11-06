@@ -7,7 +7,8 @@
    `C:\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb`
 3. Si Windows virtualise les écritures de proUSB, vérifier la copie active :
    `%LOCALAPPDATA%\VirtualStore\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb`
-4. Comparer la date de modification et choisir le fichier réellement utilisé. Conserver une copie de sauvegarde ; Appointment PMS lit le MDB sans modifier la base source.
+4. Comparer la date de modification et choisir le fichier réellement utilisé. La copie de `Program Files` reste figée depuis l'installation : `CardLock.exe` (32 bits) écrit dans le VirtualStore. Un fichier modifié il y a plusieurs mois est presque toujours la mauvaise copie. Le résumé d'import affiche désormais « Fichier modifié le … » et signale une copie ancienne (> 90 jours).
+5. Si les bâtiments, chambres ou cartes affichés après import ne correspondent pas à ce que montre `CardLock.exe`, fermer proUSB, puis réimporter la copie du VirtualStore. Conserver une copie de sauvegarde ; Appointment PMS lit le MDB sans modifier la base source.
 
 ## 2. Ouvrir l'import
 
