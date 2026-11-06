@@ -201,8 +201,12 @@ export const VideoHubView: React.FC = () => {
       openFromShare(detail?.url);
     };
     window.addEventListener('appointment-video-share', handleSharedVideo);
+    window.addEventListener('focus', refreshBubbleStatus);
     refreshBubbleStatus();
-    return () => window.removeEventListener('appointment-video-share', handleSharedVideo);
+    return () => {
+      window.removeEventListener('appointment-video-share', handleSharedVideo);
+      window.removeEventListener('focus', refreshBubbleStatus);
+    };
   }, []);
 
 
@@ -978,7 +982,7 @@ export const VideoHubView: React.FC = () => {
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                     {t('Accès rapide à l’ajout HackTube au-dessus des autres applications. Android exige une autorisation spéciale et affiche une notification permanente pendant son activation.', 'Quick access to HackTube adding over other apps. Android requires a special permission and shows an ongoing notification while it is active.', 'وصول سريع لإضافة الفيديو فوق التطبيقات الأخرى. يتطلب Android إذناً خاصاً ويعرض إشعاراً دائماً أثناء التشغيل.')}
                   </p>
-                  <p className="mt-2 text-xs font-semibold ${bubbleStatus.overlayPermission ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
+                  <p className={`mt-2 text-xs font-semibold ${bubbleStatus.overlayPermission ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
                     {bubbleStatus.overlayPermission ? t('Autorisation de superposition accordée', 'Overlay permission granted', 'تم منح إذن العرض فوق التطبيقات') : t('Autorisation de superposition requise', 'Overlay permission required', 'إذن العرض فوق التطبيقات مطلوب')}
                     {' · '}
                     {bubbleStatus.bubbleEnabled ? t('Bulle active', 'Bubble active', 'الفقاعة نشطة') : t('Bulle arrêtée', 'Bubble stopped', 'الفقاعة متوقفة')}
