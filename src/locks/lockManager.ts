@@ -50,6 +50,7 @@ import {
   type SystemCardProfile,
 } from './database/mdbImport';
 import { encoderAudio } from './sound/encoderAudio';
+import { resolveCardLockImport } from './cardLockMigration';
 
 // Types expected by TopBar (remote API compatibility)
 export type UsbConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'unsupported';
@@ -243,18 +244,30 @@ class LockManager {
       : null;
     const previousSiteRaw = localStorage.getItem('appointment_prousb_previous_site');
     const currentSiteCode = this.getSiteCode();
-    if (previousSiteRaw !== null && nextSiteCode !== null && Number(previousSiteRaw) === nextSiteCode && localStorage.getItem('appointment_prousb_recommissioning_required') === 'true') {
+    const decision = resolveCardLockImport({
+      nextSiteCode,
+      currentSiteCode,
+      // A loaded database means the user is still attached to a hotel: going
+      // back to the previous site must stay refused until every lock has been
+      // physically reprogrammed. Without a loaded database the markers can
+      // only come from a purge/disconnect, where the same site is the same
+      // hotel and the import must be allowed (otherwise both import and card
+      // issuance deadlock).
+      hasLoadedDatabase: !!this.mdbSnapshot?.systemProfile,
+      previousSite: previousSiteRaw,
+      recommissioningRequired:
+        localStorage.getItem('appointment_prousb_recommissioning_required') === 'true',
+    });
+    if (decision.blocked) {
       throw new Error('Sécurité hôtel : la nouvelle base CardLock utilise le même code système que l’ancien hôtel. Créez une identité système CardLock différente avant de programmer les serrures.');
     }
-    const siteChanged = previousSiteRaw !== null
-      ? nextSiteCode !== null && Number(previousSiteRaw) !== nextSiteCode
-      : currentSiteCode !== undefined && nextSiteCode !== null && currentSiteCode !== nextSiteCode;
-    if (previousSiteRaw !== null && nextSiteCode !== null && Number(previousSiteRaw) === nextSiteCode
-      && localStorage.getItem('appointment_prousb_recommissioning_required') !== 'true') {
-      // A plain MDB disconnect/re-import of the same hotel is not a migration.
+    if (decision.clearGuard) {
+      // Same hotel identity: a plain disconnect/re-import or a re-import after
+      // a data purge. Never a migration, so drop the stale markers.
       localStorage.removeItem('appointment_prousb_previous_site');
+      localStorage.removeItem('appointment_prousb_recommissioning_required');
     }
-    if (siteChanged) {
+    if (decision.siteChanged) {
       if (previousSiteRaw === null && currentSiteCode !== undefined) {
         localStorage.setItem('appointment_prousb_previous_site', String(currentSiteCode));
       }

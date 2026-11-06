@@ -758,6 +758,9 @@ export const ProUsbLockSystemView: React.FC = () => {
     try {
       const snapshot = await lockManager.importMdb(file);
       setMdbStatus(lockManager.getMdbStatus());
+      // A same-hotel re-import clears a stale purge marker, so the migration
+      // banner must disappear and card issuance resume without a reload.
+      setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
       if (snapshot.counts.rooms === 0) {
         showToast('error', 'Aucune chambre exploitable dans RoomInfo. Le planning existant est conservé.');
         return;
@@ -1934,7 +1937,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                       lockManager.clearMdb();
                       setMdbStatus(lockManager.getMdbStatus());
                       setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
-                      showToast('info', 'Identité CardLock déconnectée. Les cartes d’accès sont suspendues jusqu’à la reprogrammation du nouvel hôtel.');
+                      showToast('info', 'Identité CardLock déconnectée. Réimportez une base CardLock pour reprendre l’émission des cartes.');
                     }}
                     className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
@@ -1946,7 +1949,7 @@ export const ProUsbLockSystemView: React.FC = () => {
               {hotelRecommissioningRequired && (
                 <div role="alert" className="mt-3 rounded-xl border border-amber-400 bg-amber-50 dark:bg-amber-950/40 p-3 space-y-2 text-xs">
                   <strong className="text-amber-900 dark:text-amber-200">Reprogrammation obligatoire après changement d’hôtel</strong>
-                  <p className="text-amber-800 dark:text-amber-300">Les cartes client, spéciales, étage et bâtiment sont suspendues. Importez une base CardLock avec un code système différent, puis présentez les cartes Reset, Room Set et Time Set à chaque serrure. Les anciennes cartes ne sont pas révoquées à distance : elles cessent d’être reconnues uniquement après reprogrammation physique de chaque serrure.</p>
+                  <p className="text-amber-800 dark:text-amber-300">Les cartes client, spéciales, étage et bâtiment sont suspendues. Réimportez la base CardLock de cet hôtel : si le code système n’a pas changé, l’import lève automatiquement ce blocage. En cas de véritable changement d’hôtel (code système différent), présentez les cartes Reset, Room Set et Time Set à chaque serrure puis confirmez ci-dessous. Les anciennes cartes ne sont pas révoquées à distance : elles cessent d’être reconnues uniquement après reprogrammation physique de chaque serrure.</p>
                   <button type="button" disabled={!lockManager.canConfirmHotelRecommissioning()} onClick={() => {
                     if (!window.confirm('Confirmez-vous avoir physiquement reprogrammé toutes les serrures de cet hôtel avec la nouvelle identité système ?')) return;
                     try {
@@ -2563,7 +2566,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                   if (window.confirm('Effacer toutes les donnees proUSB persistantes ?')) {
                     lockManager.clearPersistedData();
                     setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
-                    showToast('success', 'Données proUSB effacées. La migration des serrures reste protégée.');
+                    showToast('success', 'Données proUSB effacées. Réimportez la base CardLock de cet hôtel pour réactiver l’émission des cartes.');
                   }
                 }}
                 className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white font-bold rounded-lg text-xs transition-colors"
