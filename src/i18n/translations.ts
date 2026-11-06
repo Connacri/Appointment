@@ -661,6 +661,31 @@ export const translations = {
     en: 'Apply this theme',
     ar: 'تطبيق هذا المظهر',
   },
+  resetToDefault: {
+    fr: 'Rétablir par défaut',
+    en: 'Reset to Default',
+    ar: 'استعادة الإعدادات الافتراضية',
+  },
+  resetToDefaultSubtitle: {
+    fr: 'Revenir au thème du navigateur et aux couleurs standard',
+    en: "Revert to browser's color scheme and standard palette",
+    ar: 'الرجوع إلى سمة المتصفح ولوحة الألوان القياسية',
+  },
+  resetSuccess: {
+    fr: 'Réinitialisé aux réglages du navigateur',
+    en: 'Reset to browser settings',
+    ar: 'تمت الاستعادة لإعدادات المتصفح',
+  },
+  sidebarCollapse: {
+    fr: 'Réduire le menu',
+    en: 'Collapse sidebar',
+    ar: 'طي القائمة',
+  },
+  sidebarExpand: {
+    fr: 'Agrandir le menu',
+    en: 'Expand sidebar',
+    ar: 'توسيع القائمة',
+  },
 };
 
 export function getTranslation(key: keyof typeof translations, lang: Language): string {

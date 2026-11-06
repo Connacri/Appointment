@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { APP_THEMES } from '../data/themes';
 import { getTranslation } from '../i18n/translations';
-import { X, Check, Sun, Moon, Palette, Sparkles } from 'lucide-react';
+import { X, Check, Sun, Moon, Palette, Sparkles, RotateCcw } from 'lucide-react';
 import { AppThemeId } from '../types/booking';
 
 export const ThemeSelectorModal: React.FC = () => {
@@ -13,9 +13,13 @@ export const ThemeSelectorModal: React.FC = () => {
     setTheme,
     appTheme,
     setAppTheme,
+    resetThemeToDefault,
     language,
     playFeedback,
   } = useApp();
+
+  const [isResetting, setIsResetting] = useState(false);
+  const [showResetBadge, setShowResetBadge] = useState(false);
 
   if (!isThemeModalOpen) return null;
 
@@ -29,6 +33,15 @@ export const ThemeSelectorModal: React.FC = () => {
   const handleToggleMode = (mode: 'light' | 'dark') => {
     setTheme(mode);
     playFeedback('click');
+  };
+
+  const handleResetToDefault = () => {
+    setIsResetting(true);
+    resetThemeToDefault();
+    playFeedback('success');
+    setShowResetBadge(true);
+    setTimeout(() => setIsResetting(false), 500);
+    setTimeout(() => setShowResetBadge(false), 3500);
   };
 
   return (
@@ -62,12 +75,25 @@ export const ThemeSelectorModal: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Quick Reset to Browser Default Button in Header */}
+            <button
+              type="button"
+              onClick={handleResetToDefault}
+              disabled={isResetting}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 min-h-9 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-colors cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              title={getTranslation('resetToDefaultSubtitle', language)}
+              aria-label={getTranslation('resetToDefault', language)}
+            >
+              <RotateCcw size={13} className={isResetting ? 'animate-spin text-blue-500' : 'text-slate-500 dark:text-slate-400'} />
+              <span>{getTranslation('resetToDefault', language)}</span>
+            </button>
+
             {/* Light / Dark Mode Toggle inside Header */}
             <div className="flex items-center p-1 rounded-xl bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => handleToggleMode('light')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 min-h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   theme === 'light'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -80,7 +106,7 @@ export const ThemeSelectorModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleToggleMode('dark')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 min-h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   theme === 'dark'
                     ? 'bg-slate-900 text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -95,7 +121,7 @@ export const ThemeSelectorModal: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsThemeModalOpen(false)}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               aria-label={language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}
             >
               <X size={18} />
@@ -189,23 +215,45 @@ export const ThemeSelectorModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Modal Footer */}
-        <div className="shrink-0 flex items-center justify-between px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
-          <div className="text-xs text-slate-500 dark:text-slate-400">
-            {language === 'fr'
-              ? 'Le thème et le mode clair/sombre sont sauvegardés automatiquement.'
-              : language === 'ar'
-              ? 'يتم حفظ السمة المحددة والوضع النهاري/الليلي تلقائياً على جهازك.'
-              : 'Selected theme and light/dark mode are automatically saved.'}
+        {/* Modal Footer with Reset to Default button */}
+        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleResetToDefault}
+              disabled={isResetting}
+              className="inline-flex items-center gap-2 px-3.5 min-h-11 py-2 rounded-xl text-xs font-semibold border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 transition-colors cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              title={getTranslation('resetToDefaultSubtitle', language)}
+            >
+              <RotateCcw size={14} className={isResetting ? 'animate-spin text-blue-500' : 'text-slate-500 dark:text-slate-400'} />
+              <span>{getTranslation('resetToDefault', language)}</span>
+            </button>
+
+            {showResetBadge && (
+              <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1 animate-fade-in">
+                <Check size={14} className="text-emerald-500" />
+                {getTranslation('resetSuccess', language)}
+              </span>
+            )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsThemeModalOpen(false)}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-90 transition-opacity"
-          >
-            {language === 'fr' ? 'Terminé' : language === 'ar' ? 'تم' : 'Done'}
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="hidden md:block text-[11px] text-slate-500 dark:text-slate-400">
+              {language === 'fr'
+                ? 'Sauvegardé automatiquement.'
+                : language === 'ar'
+                ? 'يتم الحفظ تلقائياً على جهازك.'
+                : 'Automatically saved.'}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsThemeModalOpen(false)}
+              className="px-5 min-h-11 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-90 transition-opacity cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              {language === 'fr' ? 'Terminé' : language === 'ar' ? 'تم' : 'Done'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

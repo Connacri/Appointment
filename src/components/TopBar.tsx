@@ -166,6 +166,8 @@ export const TopBar: React.FC = () => {
 
   return (
     <header className="pms-app-topbar pms-material-bar pms-material-edge w-full border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 px-2 sm:px-4 py-2 flex flex-wrap md:flex-nowrap items-center justify-between gap-2 sm:gap-3 shrink-0 select-none z-40 relative transition-colors duration-200">
+      {/* Dynamic theme accent strip along top edge */}
+      <div className="pms-theme-strip absolute top-0 left-0 right-0 h-[2.5px] z-50 pointer-events-none" />
       {/* Toast notice for USB or status */}
       {usbNotice && (
         <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-cyan-500/50 text-cyan-200 text-xs shadow-xl z-50 pms-toast flex items-center gap-2">

@@ -28,6 +28,7 @@ import { useWorkspace } from '../services/supabase/WorkspaceContext';
 import { isValidCalendarDate, shouldMarkPaymentAsPaid } from '../utils/bookingValidation';
 import { isRoomReadyForBooking } from '../utils/roomReadiness';
 import { lockManager } from '../locks/lockManager';
+import { useThemeSync } from '../hooks/useThemeSync';
 import {
   audioFeedbackService,
   playAudioFeedback,
@@ -68,6 +69,7 @@ interface AppContextType {
   setTheme: (theme: Theme) => void;
   appTheme: AppThemeId;
   setAppTheme: (theme: AppThemeId) => void;
+  resetThemeToDefault: () => { mode: Theme; appTheme: AppThemeId };
   isThemeModalOpen: boolean;
   setIsThemeModalOpen: (open: boolean) => void;
   currentDomain: DomainType;
@@ -171,25 +173,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return (localStorage.getItem('omnibook_lang') as Language) || 'fr';
   });
 
-  const [theme, setThemeState] = useState<Theme>(() => {
-    return (localStorage.getItem('omnibook_theme') as Theme) || 'light';
-  });
-
-  const [appTheme, setAppThemeState] = useState<AppThemeId>(() => {
-    return (localStorage.getItem('omnibook_app_theme') as AppThemeId) || 'classic-slate';
-  });
+  const {
+    theme,
+    setTheme,
+    appTheme,
+    setAppTheme,
+    resetThemeToDefault,
+  } = useThemeSync();
 
   const [isThemeModalOpen, setIsThemeModalOpen] = useState<boolean>(false);
-
-  const setAppTheme = (t: AppThemeId) => {
-    setAppThemeState(t);
-    localStorage.setItem('omnibook_app_theme', t);
-    document.documentElement.setAttribute('data-app-theme', t);
-  };
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-app-theme', appTheme);
-  }, [appTheme]);
 
   const [currentDomain, setCurrentDomainState] = useState<DomainType>(() => {
     const saved = localStorage.getItem('omnibook_domain') as DomainType;
@@ -446,25 +438,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     document.documentElement.lang = language;
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
   }, [language]);
-
-  // Sync theme
-  const setTheme = (t: Theme) => {
-    setThemeState(t);
-    localStorage.setItem('omnibook_theme', t);
-    if (t === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  };
-
-  useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [theme]);
 
   // Save bookings & resources to localStorage & IndexedDB
   useEffect(() => {
@@ -1053,6 +1026,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Clear proUSB cards, MDB snapshot, settings and audit records in memory.
     lockManager.purgeAllData();
 
+    // Revert theme to system default
+    resetThemeToDefault();
+
     // Wait for IndexedDB completion. A failed transaction must not be reported as success.
     await indexedDb.clearAll();
   };
@@ -1073,6 +1049,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setTheme,
         appTheme,
         setAppTheme,
+        resetThemeToDefault,
         isThemeModalOpen,
         setIsThemeModalOpen,
         currentDomain,
