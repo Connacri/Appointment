@@ -14,6 +14,7 @@ import { OfflineBanner } from './components/OfflineBanner';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { SupabaseAuthGate } from './services/supabase/SupabaseAuthGate';
 import { WorkspaceProvider } from './services/supabase/WorkspaceContext';
+import { VideoBubble } from './services/VideoBubbleBridge';
 
 /**
  * Secondary views are code-split: Vite emits one chunk per module and the chunk
@@ -126,6 +127,7 @@ class VideoHubErrorBoundary extends React.Component<
 const MainLayout: React.FC = () => {
   const {
     activeView,
+    setActiveView,
     isIndexedDBOpen,
     setIsIndexedDBOpen,
     isAboutModalOpen,
@@ -142,6 +144,31 @@ const MainLayout: React.FC = () => {
   } = useApp();
 
   const [hasOpenedVideoHub, setHasOpenedVideoHub] = React.useState(activeView === 'videos');
+
+  React.useEffect(() => {
+    const receiveVideoShare = (event: Event) => {
+      const detail = (event as CustomEvent<{ url?: string; openQuickAdd?: boolean }>).detail;
+      if (detail?.url) {
+        try { localStorage.setItem('appointment_pending_video_share', detail.url); } catch { /* storage may be unavailable */ }
+      }
+      if (detail?.openQuickAdd || detail?.url) {
+        try { localStorage.setItem('appointment_open_hacktube_quick_add', '1'); } catch { /* storage may be unavailable */ }
+        setActiveView('videos');
+      }
+    };
+
+    window.addEventListener('appointment-video-share', receiveVideoShare);
+    VideoBubble.getPendingShare()
+      .then((pending) => {
+        if (pending?.url || pending?.openQuickAdd) {
+          receiveVideoShare(new CustomEvent('appointment-video-share', { detail: pending }));
+        }
+      })
+      .catch(() => { /* Native bridge is unavailable in the web build. */ });
+
+    return () => window.removeEventListener('appointment-video-share', receiveVideoShare);
+  }, [setActiveView]);
+
 
   // Mobile pull-to-refresh: only trigger when the gesture starts at the top
   // of the active scroll container, and ignore controls, dialogs and embeds.
