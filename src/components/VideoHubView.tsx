@@ -4,6 +4,7 @@ import {
   Play, ThumbsUp, ThumbsDown, X, Tag, Filter, ChevronRight, ClipboardPaste,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { VideoBubble, type VideoBubbleStatus } from '../services/VideoBubbleBridge';
 
 type Locale = 'fr' | 'en' | 'ar';
 
@@ -174,6 +175,36 @@ export const VideoHubView: React.FC = () => {
   const [quickNewPlaylistName, setQuickNewPlaylistName] = useState('');
   const [quickAddError, setQuickAddError] = useState('');
   const [quickAddSuccess, setQuickAddSuccess] = useState('');
+
+  const [bubbleStatus, setBubbleStatus] = useState<VideoBubbleStatus>({ overlayPermission: false, bubbleEnabled: false });
+
+  const refreshBubbleStatus = async () => {
+    try { setBubbleStatus(await VideoBubble.getStatus()); } catch { /* Browser build has no Android bridge. */ }
+  };
+
+  useEffect(() => {
+    const openFromShare = (url?: string | null) => {
+      if (url) setAddUrl(url);
+      setQuickAddError('');
+      setQuickAddSuccess('');
+      setIsQuickAddOpen(true);
+      try {
+        localStorage.removeItem('appointment_pending_video_share');
+        localStorage.removeItem('appointment_open_hacktube_quick_add');
+      } catch { /* storage may be unavailable */ }
+    };
+    const pendingUrl = (() => { try { return localStorage.getItem('appointment_pending_video_share'); } catch { return null; } })();
+    const shouldOpen = (() => { try { return localStorage.getItem('appointment_open_hacktube_quick_add') === '1'; } catch { return false; } })();
+    if (pendingUrl || shouldOpen) openFromShare(pendingUrl);
+    const handleSharedVideo = (event: Event) => {
+      const detail = (event as CustomEvent<{ url?: string }>).detail;
+      openFromShare(detail?.url);
+    };
+    window.addEventListener('appointment-video-share', handleSharedVideo);
+    refreshBubbleStatus();
+    return () => window.removeEventListener('appointment-video-share', handleSharedVideo);
+  }, []);
+
 
   useEffect(() => saveJSON(LS.lib, library), [library]);
   useEffect(() => saveJSON(LS.likes, likes), [likes]);
@@ -940,6 +971,25 @@ export const VideoHubView: React.FC = () => {
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   {t('Les vidéos sont lues via youtube-nocookie.com, sans cookies de pistage.', 'Videos play via youtube-nocookie.com without tracking cookies.', 'يتم تشغيل الفيديوهات عبر youtube-nocookie.com بدون ملفات تتبع.')}
                 </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+                <div>
+                  <div className="font-semibold text-sm text-slate-900 dark:text-white">{t('Bulle Android flottante', 'Android floating bubble', 'فقاعة Android العائمة')}</div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    {t('Accès rapide à l’ajout HackTube au-dessus des autres applications. Android exige une autorisation spéciale et affiche une notification permanente pendant son activation.', 'Quick access to HackTube adding over other apps. Android requires a special permission and shows an ongoing notification while it is active.', 'وصول سريع لإضافة الفيديو فوق التطبيقات الأخرى. يتطلب Android إذناً خاصاً ويعرض إشعاراً دائماً أثناء التشغيل.')}
+                  </p>
+                  <p className="mt-2 text-xs font-semibold ${bubbleStatus.overlayPermission ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
+                    {bubbleStatus.overlayPermission ? t('Autorisation de superposition accordée', 'Overlay permission granted', 'تم منح إذن العرض فوق التطبيقات') : t('Autorisation de superposition requise', 'Overlay permission required', 'إذن العرض فوق التطبيقات مطلوب')}
+                    {' · '}
+                    {bubbleStatus.bubbleEnabled ? t('Bulle active', 'Bubble active', 'الفقاعة نشطة') : t('Bulle arrêtée', 'Bubble stopped', 'الفقاعة متوقفة')}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {!bubbleStatus.overlayPermission && <button type="button" onClick={async () => { try { await VideoBubble.requestOverlayPermission(); } catch { /* Android settings may be unavailable */ } window.setTimeout(refreshBubbleStatus, 700); }} className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200">{t('Autoriser la bulle', 'Allow bubble', 'السماح بالفقاعة')}</button>}
+                  {bubbleStatus.overlayPermission && !bubbleStatus.bubbleEnabled && <button type="button" onClick={async () => { try { await VideoBubble.startBubble(); await refreshBubbleStatus(); } catch (error) { alert(error instanceof Error ? error.message : String(error)); await refreshBubbleStatus(); } }} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white">{t('Activer la bulle', 'Enable bubble', 'تفعيل الفقاعة')}</button>}
+                  {bubbleStatus.bubbleEnabled && <button type="button" onClick={async () => { try { await VideoBubble.stopBubble(); } finally { await refreshBubbleStatus(); } }} className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white">{t('Désactiver la bulle', 'Disable bubble', 'إيقاف الفقاعة')}</button>}
+                  <button type="button" onClick={refreshBubbleStatus} className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200">{t('Actualiser l’état', 'Refresh status', 'تحديث الحالة')}</button>
+                </div>
               </div>
               <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
                 <div className="font-semibold text-sm text-slate-900 dark:text-white">{t('Bibliothèque locale', 'Local library', 'مكتبة محلية')}</div>
