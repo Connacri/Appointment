@@ -129,6 +129,10 @@ export const ProUsbLockSystemView: React.FC = () => {
   const [staffBuildingNo, setStaffBuildingNo] = useState(0);
   const [staffValidityDays, setStaffValidityDays] = useState(365);
 
+  // Revoke cards by type confirmation
+  const [revokePendingType, setRevokePendingType] = useState<ProUsbCardType | null>(null);
+  const [revokePendingAll, setRevokePendingAll] = useState(false);
+
   // Commissioning Form State
   const [commissionRoom, setCommissionRoom] = useState('101');
   const [commissionFloor, setCommissionFloor] = useState(0);
@@ -701,6 +705,41 @@ export const ProUsbLockSystemView: React.FC = () => {
         details: [{ label: 'Type', value: selectedStaffType.toUpperCase() }],
       });
     }
+  };
+
+  const handleRevokeByType = (type: ProUsbCardType) => {
+    setRevokePendingType(type);
+    setRevokePendingAll(false);
+  };
+
+  const handleRevokeAllService = () => {
+    setRevokePendingType(null);
+    setRevokePendingAll(true);
+  };
+
+  const confirmRevoke = () => {
+    let count = 0;
+    let typeLabel = '';
+    if (revokePendingAll) {
+      count = lockManager.revokeAllServiceCards();
+      typeLabel = 'toutes les cartes de service';
+    } else if (revokePendingType) {
+      count = lockManager.revokeCardsByType(revokePendingType);
+      const meta = PROUSB_CARD_TYPES[revokePendingType];
+      typeLabel = meta.label.fr;
+    }
+    setRevokePendingType(null);
+    setRevokePendingAll(false);
+    if (count > 0) {
+      showToast('success', `${count} carte(s) ${typeLabel} révoquée(s) avec succès.`);
+    } else {
+      showToast('info', 'Aucune carte active de ce type à révoquer.');
+    }
+  };
+
+  const cancelRevoke = () => {
+    setRevokePendingType(null);
+    setRevokePendingAll(false);
   };
 
   const handleIssueSpecialCard = async () => {
@@ -1365,10 +1404,17 @@ export const ProUsbLockSystemView: React.FC = () => {
                               {card.rawHex.substring(0, 16)}...
                             </td>
                             <td className="py-2.5 px-3 font-sans">
-                              <span className="text-emerald-600 font-medium flex items-center gap-1">
-                                <CheckCircle2 size={12} />
-                                Active
-                              </span>
+                              {card.status === 'revoked' ? (
+                                <span className="text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1">
+                                  <AlertTriangle size={12} />
+                                  Révoquée
+                                </span>
+                              ) : (
+                                <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                                  <CheckCircle2 size={12} />
+                                  Active
+                                </span>
+                              )}
                             </td>
                           </tr>
                         );
@@ -1817,6 +1863,121 @@ export const ProUsbLockSystemView: React.FC = () => {
                       ? `Encodage… ${Math.round(writeProgress)}%`
                       : `Encoder Carte de Fonction (${selectedStaffType.toUpperCase()})`}
                   </span>
+                </button>
+              </div>
+            </div>
+
+            {/* REVOKE CARDS BY TYPE */}
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-amber-600" />
+                    Annuler / Révoquer les Cartes par Type
+                  </h3>
+                  <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+                    Rend inutilisables dans les serrures toutes les cartes actives d’un type donné. L’historique local est conservé.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRevokeAllService}
+                  disabled={isWriting}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
+                    isWriting
+                      ? 'bg-slate-300 text-slate-600 cursor-not-allowed'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
+                  }`}
+                >
+                  {isWriting ? 'Encodage…' : 'Annuler Toutes les Cartes de Service'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                {[
+                  { type: 'master' as const, label: 'Maître (Master)' },
+                  { type: 'building' as const, label: 'Bâtiment (Building)' },
+                  { type: 'floor' as const, label: 'Étage (Floor)' },
+                  { type: 'guest' as const, label: 'Client (Guest)' },
+                  { type: 'emergency' as const, label: 'Urgence' },
+                  { type: 'group' as const, label: 'Groupe' },
+                  { type: 'special' as const, label: 'Spéciale 0x90' },
+                  { type: 'limit' as const, label: 'Limite' },
+                  { type: 'checkout' as const, label: 'Check-Out' },
+                ].map((btn) => {
+                  const count = issuedCards.filter(
+                    (c) => c.type === btn.type && c.status === 'active'
+                  ).length;
+                  return (
+                    <button
+                      key={btn.type}
+                      type="button"
+                      onClick={() => handleRevokeByType(btn.type)}
+                      disabled={isWriting || count === 0}
+                      className={`px-3 py-2.5 rounded-lg text-xs font-bold border transition flex flex-col gap-1 items-start ${
+                        count === 0
+                          ? 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 text-slate-400 cursor-not-allowed'
+                          : isWriting
+                            ? 'border-slate-300 text-slate-500 cursor-not-allowed bg-slate-200 dark:bg-slate-800'
+                            : 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900'
+                      }`}
+                    >
+                      <span className="font-bold">{btn.label}</span>
+                      <span className="text-[9px]">{count} active{count > 1 ? 's' : ''}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="text-[9px] text-amber-500 dark:text-amber-400 italic">
+                Les cartes système (Reset, Mise en Service, Room Set, Time Set) sont préservées.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* REVOKE CONFIRMATION DIALOG */}
+        {(revokePendingType || revokePendingAll) && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) cancelRevoke();
+            }}
+          >
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl border border-amber-300 dark:border-amber-600">
+              <div className="flex items-center gap-3 mb-4">
+                <AlertTriangle size={24} className="text-amber-600" />
+                <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                  Confirmer la Révocation
+                </h3>
+              </div>
+              <p className="text-sm text-amber-800 dark:text-amber-300 mb-6">
+                {revokePendingAll
+                  ? 'Confirmez-vous la révocation de toutes les cartes de service actives ? Les cartes système (mise en service) sont conservées.'
+                  : `Confirmez-vous la révocation de toutes les cartes actives de type « ${PROUSB_CARD_TYPES[revokePendingType!].label.fr} » ? Elles ne pourront plus ouvrir les serrures.`}
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={cancelRevoke}
+                  className="px-4 py-2 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmRevoke}
+                  disabled={isWriting}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
+                    isWriting
+                      ? 'bg-slate-300 text-slate-600 cursor-not-allowed'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
+                  }`}
+                >
+                  {isWriting ? 'Traitement…' : 'Confirmer la Révocation'}
                 </button>
               </div>
             </div>

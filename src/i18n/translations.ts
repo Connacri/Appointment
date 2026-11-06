@@ -858,6 +858,103 @@ export const translations = {
     en: 'Shared room / Multiple guests',
     ar: 'غرفة مشتركة / نزلاء متعددون',
   },
+
+  // Annulation / révocation de cartes proUSB par type
+  revokeCardsTitle: {
+    fr: 'Annuler / Révoquer les Cartes par Type',
+    en: 'Cancel / Revoke Cards by Type',
+    ar: 'إلغاء / إلغاء تنشيط البطاقات حسب النوع',
+  },
+  revokeCardsDesc: {
+    fr: 'Rend inutilisables dans les serrures toutes les cartes actives d’un type donné. L’historique local est conservé.',
+    en: 'Makes all active cards of a given type unusable in locks. Local history is preserved.',
+    ar: 'يجعل جميع البطاقات النشطة من نوع معين غير صالحة للاستخدام في الأقفال. يتم الاحتفاظ بالسجل المحلي.',
+  },
+  revokeTypeMaster: {
+    fr: 'Cartes Maître (Master)',
+    en: 'Master Cards',
+    ar: 'بطاقات الماستر',
+  },
+  revokeTypeBuilding: {
+    fr: 'Cartes Bâtiment (Building)',
+    en: 'Building Cards',
+    ar: 'بطاقات المباني',
+  },
+  revokeTypeFloor: {
+    fr: 'Cartes Étage (Floor)',
+    en: 'Floor Cards',
+    ar: 'بطاقات الطوابق',
+  },
+  revokeTypeGuest: {
+    fr: 'Cartes Client (Guest)',
+    en: 'Guest Cards',
+    ar: 'بطاقات النزلاء',
+  },
+  revokeTypeEmergency: {
+    fr: 'Cartes Urgence (Emergency)',
+    en: 'Emergency Cards',
+    ar: 'بطاقات الطوارئ',
+  },
+  revokeTypeGroup: {
+    fr: 'Cartes Groupe (Group)',
+    en: 'Group Cards',
+    ar: 'بطاقات المجموعات',
+  },
+  revokeTypeSpecial: {
+    fr: 'Cartes Spéciales (Special)',
+    en: 'Special Cards',
+    ar: 'البطاقات الخاصة',
+  },
+  revokeTypeLimit: {
+    fr: 'Cartes Limite (Limit)',
+    en: 'Limit Cards',
+    ar: 'بطاقات التقييد',
+  },
+  revokeTypeCheckout: {
+    fr: 'Cartes Check-Out',
+    en: 'Check-Out Cards',
+    ar: 'بطاقات المغادرة',
+  },
+  revokeAllService: {
+    fr: 'Toutes les Cartes de Service',
+    en: 'All Service Cards',
+    ar: 'جميع بطاقات الخدمة',
+  },
+  revokeConfirmPrompt: {
+    fr: 'Confirmez-vous la révocation de toutes les cartes actives de type "{type}" ? Elles ne pourront plus ouvrir les serrures.',
+    en: 'Confirm revocation of all active cards of type "{type}"? They will no longer be able to open locks.',
+    ar: 'هل ترغب في إلغاء تنشيط جميع البطاقات النشطة من نوع "{type}"؟ لن تتمكن بعد الآن من فتح الأقفال.',
+  },
+  revokeAllConfirmPrompt: {
+    fr: 'Confirmez-vous la révocation de toutes les cartes de service actives ? Les cartes système (mise en service) sont conservées.',
+    en: 'Confirm revocation of all active service cards? System cards (commissioning) are preserved.',
+    ar: 'هل ترغب في إلغاء تنشيط جميع بطاقات الخدمة النشطة؟ بطاقات النظام (التشغيل) تُحفظ.',
+  },
+  revokeSuccess: {
+    fr: '{count} carte(s) de type "{type}" révoquée(s) avec succès.',
+    en: '{count} card(s) of type "{type}" revoked successfully.',
+    ar: 'تم إلغاء تنشيط {count} بطاقة(بطاقات) من نوع "{type}" بنجاح.',
+  },
+  revokeAllSuccess: {
+    fr: '{count} carte(s) de service révoquée(s) avec succès.',
+    en: '{count} service card(s) revoked successfully.',
+    ar: 'تم إلغاء تنشيط {count} بطاقة(بطاقات) خدمة بنجاح.',
+  },
+  revokeNoneActive: {
+    fr: 'Aucune carte active de ce type à révoquer.',
+    en: 'No active cards of this type to revoke.',
+    ar: 'لا توجد بطاقات نشطة من هذا النوع لإلغاء تنشيطها.',
+  },
+  cardStatusRevoked: {
+    fr: 'Révoquée',
+    en: 'Revoked',
+    ar: 'ملغاة',
+  },
+  cardStatusActive: {
+    fr: 'Active',
+    en: 'Active',
+    ar: 'نشطة',
+  },
 };
 
 export function getTranslation(key: keyof typeof translations, lang: Language): string {

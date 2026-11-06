@@ -599,6 +599,45 @@ class LockManager {
     return [...this.issuedCards];
   }
 
+  /**
+   * Révoque (annule) toutes les cartes actives d'un type donné.
+   * Les cartes deviennent inutilisables dans les serrures sans être effacées
+   * de l'historique local : l'audit conserve leur trace.
+   * Retourne le nombre de cartes révoquées.
+   */
+  public revokeCardsByType(type: ProUsbCardType): number {
+    const toRevoke = this.issuedCards.filter(
+      (card) => card.type === type && card.status === 'active'
+    );
+    for (const card of toRevoke) {
+      card.status = 'revoked';
+    }
+    if (toRevoke.length > 0) {
+      this.saveIssuedCards();
+      this.notifyStateListeners();
+    }
+    return toRevoke.length;
+  }
+
+  /**
+   * Révoque toutes les cartes de service actives (client, maître, bâtiment,
+   * étage, urgence, groupe, spéciale, limite, check-out).
+   * Les cartes système (reset, hard_reset, room_set, time_set, etc.) sont
+   * préservées car elles servent à la mise en service des serrures.
+   * Retourne le nombre total de cartes révoquées.
+   */
+  public revokeAllServiceCards(): number {
+    const serviceTypes: ProUsbCardType[] = [
+      'guest', 'master', 'building', 'floor', 'emergency', 'group',
+      'special', 'limit', 'checkout',
+    ];
+    let count = 0;
+    for (const type of serviceTypes) {
+      count += this.revokeCardsByType(type);
+    }
+    return count;
+  }
+
   public getAuditRecords(): LockAuditRecord[] {
     return [...this.auditRecords];
   }
