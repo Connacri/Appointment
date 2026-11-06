@@ -34,7 +34,8 @@ final class VideoBubbleIntents {
             String host = parsed.getHost();
             if (host == null) return null;
             host = host.toLowerCase();
-            if (host.equals("youtu.be") || host.endsWith("youtube.com") || host.endsWith("youtube-nocookie.com")
+            if (host.equals("youtu.be") || host.equals("youtube.com") || host.endsWith(".youtube.com")
+                || host.equals("youtube-nocookie.com") || host.endsWith(".youtube-nocookie.com")
                 || host.equals("tiktok.com") || host.endsWith(".tiktok.com")) return url;
         }
         return null;
