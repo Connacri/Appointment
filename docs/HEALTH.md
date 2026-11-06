@@ -168,3 +168,22 @@ inserted (`GongHao = Admin`), 1 already-present row skipped, second run
 idempotent (0 inserted / 3 present), backup created, Unicode preserved
 (`é` = U+00E9, `غرفة` = U+063A U+0631 U+0641 U+0629`), apostrophe stored
 verbatim. `scripts/verify-cardinfo.ts` → **31/31 green**.
+
+## 2026-11-06 — Agent context and MCP cleanup (no score change)
+
+- Reduced the always-loaded `AGENTS.md` from **41,096 bytes (~10.3 k tokens)**
+  to **5,677 bytes (~1.4 k tokens)**: approximately **86% less instruction text**
+  than the previous version. The long release, compliance, localization and
+  operational procedures remain in their dedicated documents and are loaded
+  only when relevant.
+- Simplified the project `opencode.json`: Supabase is the only configured active
+  MCP server. Removed disabled Firebase, Google Play, Render and REA entries.
+  The obsolete Google Play entry also contained a machine-specific Windows
+  credentials path and an unrelated package name.
+- Kept the project-scoped, read-only Supabase configuration in both
+  `.mcp.json` (for compatible clients) and `opencode.json` (OpenCode). These are
+  client-specific configurations, not two servers loaded by one agent.
+- Kept deny rules for unrelated global skills (Render, Swift, Expo and Sonner).
+- Verified both updated files by reading them back; `opencode.json` parses as
+  valid JSON. No application source, database, credentials or release workflow
+  was changed. CI status was not checked as part of this configuration-only cleanup.
