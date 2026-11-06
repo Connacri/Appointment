@@ -52,7 +52,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (!validWorkspaceId) localStorage.removeItem(STORAGE_KEY);
       setActiveWorkspaceIdState(validWorkspaceId);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Impossible de charger les espaces de travail.');
+      console.warn('[WorkspaceContext] Workspace load bypassed:', cause);
+      setWorkspaces([]);
+      setActiveWorkspaceIdState('');
     } finally {
       setLoading(false);
     }

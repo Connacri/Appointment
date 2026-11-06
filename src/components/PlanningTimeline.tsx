@@ -218,6 +218,7 @@ export const PlanningTimeline: React.FC = () => {
   });
   const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [isDayHeaderCollapsed, setIsDayHeaderCollapsed] = useState(false);
+  const [scrollVisibleDate, setScrollVisibleDate] = useState<string>(() => currentBaseDate);
   useEffect(() => { window.localStorage.setItem('appointment.gantt.columnZoom', columnZoomMode); }, [columnZoomMode]);
   useEffect(() => { window.localStorage.setItem('appointment.gantt.leftDensity', leftBarMode); }, [leftBarMode]);
   useEffect(() => {
@@ -235,11 +236,18 @@ export const PlanningTimeline: React.FC = () => {
     const isHorizontalScroll = Math.abs(currentScrollLeft - lastScrollLeftRef.current) > 3;
     lastScrollLeftRef.current = currentScrollLeft;
 
-    if (!isHorizontalScroll || edgeLoadLockRef.current) return;
-
     const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
     const raw = currentScrollLeft;
     const position = isRTL ? Math.max(0, Math.min(maxScroll, Math.abs(raw))) : Math.max(0, Math.min(maxScroll, raw));
+
+    // Update the scroll-driven visible date and month
+    const visibleDayIndex = Math.max(0, Math.min(timelineDays.length - 1, Math.floor((position + 20) / colWidth)));
+    const visibleDay = timelineDays[visibleDayIndex];
+    if (visibleDay && visibleDay.dateStr) {
+      setScrollVisibleDate(visibleDay.dateStr);
+    }
+
+    if (!isHorizontalScroll || edgeLoadLockRef.current) return;
     const distanceToStart = position;
     const distanceToEnd = maxScroll - position;
     const chunkDays = 31;
@@ -602,21 +610,22 @@ export const PlanningTimeline: React.FC = () => {
     return 'w-44 sm:w-56 md:w-64';
   }, [leftBarMode, isMobileScreen]);
 
-  const currentMonthYear = useMemo(() => {
-    const [y, m] = currentBaseDate.split('-').map(Number);
-    const d = new Date(y, m - 1, 1);
+  const scrollVisibleMonthYear = useMemo(() => {
+    const targetDate = scrollVisibleDate || currentBaseDate;
+    const [y, m] = targetDate.split('-').map(Number);
+    const d = new Date(y, (m || 1) - 1, 1);
     return new Intl.DateTimeFormat(
       language === 'fr' ? 'fr-FR' : language === 'ar' ? 'ar-EG' : 'en-US',
       { month: 'long', year: 'numeric' }
     ).format(d);
-  }, [currentBaseDate, language]);
+  }, [scrollVisibleDate, currentBaseDate, language]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden pms-gantt-root bg-[rgb(var(--pms-canvas))] relative select-none">
       {/* Responsive Toolbar: one compact, horizontally scrollable row on phones */}
       <div className="w-full min-w-0 shrink-0 border-b border-[rgb(var(--pms-border))] pms-gantt-surface select-none">
-        <div className="flex min-w-0 flex-row items-center gap-1 overflow-x-auto overflow-y-hidden whitespace-nowrap px-1.5 py-1 sm:overflow-visible md:px-3 md:py-1 scrollbar-thin">
-          {/* Quick Date Stepper Navigation & Today */}
+        <div className="flex min-w-0 flex-row items-center gap-1.5 overflow-x-auto overflow-y-hidden whitespace-nowrap px-1.5 py-1 sm:overflow-visible md:px-3 md:py-1 scrollbar-thin">
+          {/* Quick Date Stepper Navigation & Scroll-driven Visible Month */}
           <div className="flex h-7 shrink-0 items-center gap-0.5 rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] p-0.5 shadow-2xs">
             <button
               onClick={() => scrollTimeline(-colWidth * 2)}
@@ -626,9 +635,11 @@ export const PlanningTimeline: React.FC = () => {
             ><MoveLeft size={12} /></button>
             <button
               onClick={scrollToToday}
-              className="h-6 rounded px-1.5 text-[10px] font-bold text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/60 cursor-pointer"
-              title={getTranslation('ganttToday', language)}
-            >{getTranslation('ganttToday', language)}</button>
+              className="h-6 rounded px-2 text-[10px] sm:text-[11px] font-bold text-[var(--theme-primary)] transition-colors hover:bg-[rgb(var(--pms-accent)/0.1)] cursor-pointer capitalize flex items-center gap-1 select-none"
+              title={language === 'fr' ? `Mois visible : ${scrollVisibleMonthYear} • Cliquer pour aller à Aujourd’hui` : language === 'ar' ? `الشهر المعروض: ${scrollVisibleMonthYear} • اضغط للانتقال إلى اليوم` : `Visible: ${scrollVisibleMonthYear} • Click to center on Today`}
+            >
+              <span>{scrollVisibleMonthYear}</span>
+            </button>
             <button
               onClick={() => scrollTimeline(colWidth * 2)}
               className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-[rgb(var(--pms-accent)/0.1)] active:scale-95 dark:text-slate-300 cursor-pointer"
@@ -637,8 +648,8 @@ export const PlanningTimeline: React.FC = () => {
             ><MoveRight size={12} /></button>
           </div>
 
-          {/* Date Picker Input & Localized Month Badge */}
-          <div className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] px-1.5 shadow-2xs">
+          {/* Date Picker Input styled with same theme tokens */}
+          <div className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] px-1.5 shadow-2xs focus-within:ring-1 focus-within:ring-[var(--theme-primary)]">
             <CalendarDays size={12} className="shrink-0 text-[var(--theme-primary)]" />
             <input
               type="date"
@@ -648,27 +659,7 @@ export const PlanningTimeline: React.FC = () => {
               title={getTranslation('ganttDatePick', language)}
               aria-label={getTranslation('ganttDatePick', language)}
             />
-            <span className="hidden lg:inline text-[10px] font-bold uppercase tracking-wider text-[var(--theme-primary)] pl-1 border-l border-[rgb(var(--pms-border))]">
-              {currentMonthYear}
-            </span>
           </div>
-
-          {/* Establishment selector (Hotel sector) */}
-          {currentDomain === 'hotel' && (
-            <select
-              value={selectedEstablishmentId}
-              onChange={(e) => setSelectedEstablishmentId(e.target.value)}
-              className="h-7 w-[124px] sm:w-[170px] max-w-[38vw] shrink-0 rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] px-1 text-[10px] font-semibold text-slate-800 shadow-2xs dark:text-slate-200"
-              aria-label={language === 'fr' ? 'Établissement' : language === 'ar' ? 'المؤسسة' : 'Establishment'}
-            >
-              <option value="all">🏢 {language === 'fr' ? 'Tous les bâtiments' : language === 'ar' ? 'كل المباني' : 'All buildings'}</option>
-              {hotelBuildingOptions.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name[language] || group.name.fr}
-                </option>
-              ))}
-            </select>
-          )}
 
           {/* Resource label density */}
           <div className="flex shrink-0 items-center gap-1">
@@ -709,18 +700,6 @@ export const PlanningTimeline: React.FC = () => {
               aria-pressed={columnZoomMode === 'standard'}
             >{getTranslation('ganttZoomNormal', language)}</button>
           </div>
-
-          {/* Availability help */}
-          <button
-            type="button"
-            onClick={() => setShowAvailabilityHelp(true)}
-            className="flex h-7 w-7 sm:w-auto shrink-0 items-center justify-center rounded-md border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-900/40 sm:gap-1 sm:px-2 cursor-pointer shadow-2xs"
-            title={language === 'fr' ? 'Comprendre les disponibilités' : language === 'ar' ? 'فهم أرقام التوفر' : 'Understand availability'}
-            aria-label={getTranslation('ganttAvailHelp', language)}
-          >
-            <Info size={13} />
-            <span className="hidden text-[10px] font-semibold sm:inline">{getTranslation('ganttAvailHelp', language)}</span>
-          </button>
 
           {/* Toggle all floors button (Hotel sector) */}
           {currentDomain === 'hotel' && (
@@ -1049,14 +1028,17 @@ export const PlanningTimeline: React.FC = () => {
                           style={{ width: `${colWidth}px` }}
                           className="shrink-0 border-r border-[rgb(var(--pms-border)/0.6)] flex items-center justify-center p-0.5 h-full"
                         >
-                          <span
-                            className={`w-5 h-4.5 rounded text-[10px] font-bold font-mono flex items-center justify-center shadow-2xs tabular-nums ${
-                              isFree ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
+                          <button
+                            type="button"
+                            onClick={() => setShowAvailabilityHelp(true)}
+                            className={`w-5 h-4.5 rounded text-[10px] font-bold font-mono flex items-center justify-center shadow-2xs tabular-nums cursor-pointer hover:scale-110 active:scale-95 transition-transform focus:outline-none focus:ring-1 focus:ring-white ${
+                              isFree ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-rose-600 hover:bg-rose-500 text-white'
                             }`}
-                            title={`${avail} ${getTranslation('kpiAvailableRooms', language)} (${day.dateStr})`}
+                            title={`${avail} ${getTranslation('kpiAvailableRooms', language)} (${day.dateStr}) - ${language === 'fr' ? 'Cliquer pour comprendre le calcul' : language === 'ar' ? 'انقر لفهم الحساب' : 'Click to understand calculation'}`}
+                            aria-label={`${avail} ${getTranslation('kpiAvailableRooms', language)}`}
                           >
                             {avail}
-                          </span>
+                          </button>
                         </div>
                       );
                     })}
@@ -1078,21 +1060,21 @@ export const PlanningTimeline: React.FC = () => {
                             ).length;
                             const available = Math.max(0, floorGroup.resources.length - occupied);
                             return (
-                              <button
+                              <div
                                 key={day.dateStr}
-                                type="button"
-                                onClick={() => toggleFloor(grp.id, floorGroup.key)}
-                                aria-label={`${collapsedFloors[`${grp.id}:${floorGroup.key}`] ? getTranslation('ganttExpandFloors', language) : getTranslation('ganttCollapseFloors', language)} ${floorGroup.label}`}
                                 style={{ width: `${colWidth}px` }}
-                                className="shrink-0 border-r border-[rgb(var(--pms-border)/0.6)] flex items-center justify-center hover:bg-slate-200/80 dark:hover:bg-slate-700/70 cursor-pointer"
+                                className="shrink-0 border-r border-[rgb(var(--pms-border)/0.6)] flex items-center justify-center hover:bg-slate-200/80 dark:hover:bg-slate-700/70"
                               >
-                                <span
-                                  className={`text-[9px] font-mono font-semibold ${available > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
-                                  title={`${available} ${getTranslation('kpiAvailableRooms', language)}`}
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAvailabilityHelp(true)}
+                                  className={`text-[9px] font-mono font-semibold cursor-pointer hover:underline px-0.5 rounded transition-colors ${available > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
+                                  title={`${available} ${getTranslation('kpiAvailableRooms', language)} - ${language === 'fr' ? 'Cliquer pour comprendre le calcul' : language === 'ar' ? 'انقر لفهم الحساب' : 'Click to understand calculation'}`}
+                                  aria-label={`${available}/${floorGroup.resources.length} ${getTranslation('kpiAvailableRooms', language)}`}
                                 >
                                   {available}/{floorGroup.resources.length}
-                                </span>
-                              </button>
+                                </button>
+                              </div>
                             );
                           })}
                         </div>

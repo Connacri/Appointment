@@ -53,26 +53,20 @@ export const TopBar: React.FC = () => {
     setActiveView,
     currency,
     setCurrency,
-    workspaces,
-    setActiveWorkspaceId,
-    refreshWorkspaces,
-    createWorkspace,
-    isWorkspaceLoading: workspacesLoading,
-    workspaceError,
   } = useApp();
-  const [workspaceFormOpen, setWorkspaceFormOpen] = useState(false);
-  const [workspaceDraft, setWorkspaceDraft] = useState('');
-  const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
   const [usbStatus, setUsbStatus] = useState<UsbConnectionStatus>(lockManager.getStatus());
   const [usbDevice, setUsbDevice] = useState<UsbDeviceInfo | null>(() => lockManager.getDeviceInfo());
   const [indexedDbSync, setIndexedDBSync] = useState<IndexedDbSyncState>(indexedDb.getSyncStatus());
 
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
+  const [isSectorMenuOpen, setIsSectorMenuOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
 
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const roleMenuRef = useRef<HTMLDivElement>(null);
+  const sectorMenuRef = useRef<HTMLDivElement>(null);
 
   // Subscribe to USB connection status
   useEffect(() => {
@@ -91,7 +85,6 @@ export const TopBar: React.FC = () => {
     return unsub;
   }, []);
 
-
   // Click outside listener for dropdowns
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -100,6 +93,9 @@ export const TopBar: React.FC = () => {
       }
       if (roleMenuRef.current && !roleMenuRef.current.contains(e.target as Node)) {
         setIsRoleMenuOpen(false);
+      }
+      if (sectorMenuRef.current && !sectorMenuRef.current.contains(e.target as Node)) {
+        setIsSectorMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -165,7 +161,7 @@ export const TopBar: React.FC = () => {
   const isRtl = language === 'ar';
 
   return (
-    <header className="pms-app-topbar pms-material-bar pms-material-edge w-full border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 px-2 sm:px-4 py-2 flex flex-wrap md:flex-nowrap items-center justify-between gap-2 sm:gap-3 shrink-0 select-none z-40 relative transition-colors duration-200">
+    <header className="pms-app-topbar pms-material-bar pms-material-edge w-full border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 px-2 sm:px-3 py-1.5 flex flex-nowrap items-center justify-between gap-1 sm:gap-2 shrink-0 select-none z-40 relative transition-colors duration-200 overflow-x-auto [scrollbar-width:none]">
       {/* Dynamic theme accent strip along top edge */}
       <div className="pms-theme-strip absolute top-0 left-0 right-0 h-[2.5px] z-50 pointer-events-none" />
       {/* Toast notice for USB or status */}
@@ -176,72 +172,106 @@ export const TopBar: React.FC = () => {
         </div>
       )}
 
-      {/* LEFT SECTION: Mobile hamburger, Sector pills, Role selector */}
-      <div className="pms-app-topbar-left flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+      {/* LEFT SECTION: Mobile hamburger, Sector dropdown, Role selector */}
+      <div className="pms-app-topbar-left flex items-center gap-1 sm:gap-2 min-w-0 shrink-0">
         {/* Mobile Sidebar Hamburger Toggle */}
         <button
           type="button"
           onClick={() => setIsSidebarMobileOpen(!isSidebarMobileOpen)}
-          className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors"
+          className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors shrink-0"
           aria-label={language === 'fr' ? 'Menu' : language === 'ar' ? 'القائمة' : 'Menu'}
         >
           <Menu size={16} />
         </button>
 
         {/* SECTEUR label */}
-        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 shrink-0 hidden sm:inline">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 shrink-0 hidden xl:inline">
           {language === 'fr' ? 'SECTEUR :' : language === 'ar' ? 'القطاع :' : 'SECTOR :'}
         </span>
 
-        {/* Sector: Hôtel Pill */}
-        <button
-          type="button"
-          onClick={() => setCurrentDomain('hotel')}
-          className={`px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
-            currentDomain === 'hotel'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100/80 dark:bg-slate-900/60'
-          }`}
-          title={language === 'fr' ? 'Secteur Hôtel' : language === 'ar' ? 'قطاع الفنادق' : 'Hotel Sector'}
-        >
-          <Hotel size={14} className={currentDomain === 'hotel' ? 'text-white' : 'text-slate-500 dark:text-slate-400'} />
-          <span>{language === 'fr' ? 'Hôtel' : language === 'ar' ? 'فندق' : 'Hotel'}</span>
-        </button>
+        {/* Sector: Dropdown Menu (Hôtel / Resort) */}
+        <div className="relative shrink-0" ref={sectorMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsSectorMenuOpen(!isSectorMenuOpen)}
+            className="px-2 sm:px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] sm:text-xs font-semibold flex items-center gap-1 cursor-pointer shadow-sm transition-colors shrink-0"
+            title={language === 'fr' ? 'Secteur d’activité (Hôtel / Resort)' : language === 'ar' ? 'قطاع النشاط (فندق / منتجع)' : 'Business Sector'}
+          >
+            {currentDomain === 'hotel' ? (
+              <Hotel size={14} className="text-amber-300 shrink-0" />
+            ) : (
+              <Palmtree size={14} className="text-amber-300 shrink-0" />
+            )}
+            <span className="truncate max-w-[90px] sm:max-w-none hidden lg:inline">
+              {currentDomain === 'hotel'
+                ? (language === 'fr' ? 'Hôtel' : language === 'ar' ? 'فندق' : 'Hotel')
+                : (language === 'fr' ? 'Resort' : language === 'ar' ? 'منتجع' : 'Resort')}
+            </span>
+            <ChevronDown size={13} className="text-white/80 shrink-0" />
+          </button>
 
-        {/* Sector: Resort & Complexe Pill */}
-        <button
-          type="button"
-          onClick={() => setCurrentDomain('resort')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-            currentDomain === 'resort'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100/80 dark:bg-slate-900/60'
-          }`}
-          title={language === 'fr' ? 'Secteur Resort & Complexe' : language === 'ar' ? 'قطاع المنتجعات والمركبات' : 'Resort & Complex Sector'}
-        >
-          <Palmtree size={14} className={currentDomain === 'resort' ? 'text-white' : 'text-slate-500 dark:text-slate-400'} />
-          <span className="hidden sm:inline">{language === 'fr' ? 'Resort & Complexe' : language === 'ar' ? 'منتجع ومجمع' : 'Resort & Complex'}</span>
-          <span className="sm:hidden">{language === 'fr' ? 'Resort' : language === 'ar' ? 'منتجع' : 'Resort'}</span>
-        </button>
+          {isSectorMenuOpen && (
+            <div
+              dir={isRtl ? 'rtl' : 'ltr'}
+              className="absolute top-full mt-1.5 left-0 rtl:left-auto rtl:right-0 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-1.5 z-50 text-xs pms-dropdown"
+            >
+              <div className="px-2 py-1 text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 mb-1">
+                {language === 'fr' ? 'Sélectionnez un secteur' : language === 'ar' ? 'اختر القطاع' : 'Select sector'}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentDomain('hotel');
+                  setIsSectorMenuOpen(false);
+                }}
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left rtl:text-right transition-colors cursor-pointer ${
+                  currentDomain === 'hotel'
+                    ? 'bg-blue-600 text-white font-bold'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Hotel size={14} className={currentDomain === 'hotel' ? 'text-amber-300' : 'text-slate-500'} />
+                <span className="flex-1">{language === 'fr' ? 'Hôtel & Chambres' : language === 'ar' ? 'فندق وغرف' : 'Hotel & Rooms'}</span>
+                {currentDomain === 'hotel' && <CheckCircle2 size={13} className="text-white ml-auto rtl:ml-0 rtl:mr-auto" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentDomain('resort');
+                  setIsSectorMenuOpen(false);
+                }}
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left rtl:text-right transition-colors cursor-pointer ${
+                  currentDomain === 'resort'
+                    ? 'bg-blue-600 text-white font-bold'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Palmtree size={14} className={currentDomain === 'resort' ? 'text-amber-300' : 'text-slate-500'} />
+                <span className="flex-1">{language === 'fr' ? 'Resort & Complexe' : language === 'ar' ? 'منتجع ومجمع' : 'Resort & Complex'}</span>
+                {currentDomain === 'resort' && <CheckCircle2 size={13} className="text-white ml-auto rtl:ml-0 rtl:mr-auto" />}
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* RÔLE ACTIF label */}
-        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 shrink-0 ml-1 sm:ml-2 hidden lg:inline">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 shrink-0 ml-1 hidden xl:inline">
           {language === 'fr' ? 'RÔLE ACTIF :' : language === 'ar' ? 'الدور النشط :' : 'ACTIVE ROLE :'}
         </span>
 
         {/* Role dropdown button */}
-        <div className="relative" ref={roleMenuRef}>
+        <div className="relative shrink-0" ref={roleMenuRef}>
           <button
             type="button"
             onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}
-            className="px-2 sm:px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] sm:text-xs font-semibold flex items-center gap-1 cursor-pointer shadow-sm transition-colors"
+            className="px-2 sm:px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] sm:text-xs font-semibold flex items-center gap-1 cursor-pointer shadow-sm transition-colors shrink-0"
             title={language === 'fr' ? 'Changer de rôle actif' : language === 'ar' ? 'تغيير الدور النشط' : 'Change active role'}
           >
-            <CurrentRoleIcon size={14} className="text-amber-300" />
-            <span className="truncate max-w-[100px] sm:max-w-none">
+            <CurrentRoleIcon size={14} className="text-amber-300 shrink-0" />
+            <span className="truncate max-w-[90px] sm:max-w-none hidden lg:inline">
               {currentRoleObj.label[language] || currentRoleObj.label.fr}
             </span>
-            <ChevronDown size={13} className="text-white/80" />
+            <ChevronDown size={13} className="text-white/80 shrink-0" />
           </button>
 
           {isRoleMenuOpen && (
@@ -280,37 +310,49 @@ export const TopBar: React.FC = () => {
         </div>
       </div>
 
-      {/* CENTER SECTION: Global search */}
-      <div className="pms-app-topbar-search flex-1 min-w-[150px] max-w-[380px] relative flex items-center">
+      {/* CENTER SECTION: Global search (reduced width for tablet & mobile) */}
+      <div className="pms-app-topbar-search flex-1 min-w-[70px] max-w-[120px] sm:max-w-[150px] md:max-w-[180px] lg:max-w-[220px] xl:max-w-[280px] relative flex items-center">
         <div className="relative flex min-w-0 flex-1 items-center">
-          <Search size={14} className="absolute left-2.5 rtl:left-auto rtl:right-2.5 text-slate-400 pointer-events-none" />
+          <Search size={13} className="absolute left-2 rtl:left-auto rtl:right-2 text-slate-400 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={language === 'fr' ? 'Rechercher...' : language === 'ar' ? 'بحث...' : 'Search...'}
-            className="w-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs pl-8 pr-7 rtl:pl-7 rtl:pr-8 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium transition-colors"
+            className="w-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs pl-7 pr-6 rtl:pl-6 rtl:pr-7 py-1 rounded-lg border border-slate-300 dark:border-slate-700 shadow-inner focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium transition-colors"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-2 rtl:right-auto rtl:left-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              className="absolute right-1.5 rtl:right-auto rtl:left-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
               title={language === 'fr' ? 'Effacer la recherche' : language === 'ar' ? 'مسح البحث' : 'Clear search'}
             >
-              <X size={13} />
+              <X size={12} />
             </button>
           )}
         </div>
       </div>
 
-      {/* RIGHT SECTION: Local Storage, USB, Currency, Direct Theme, Direct Language, + Nouveau, More ⋮ */}
-      <div className="pms-app-topbar-actions flex items-center gap-1.5 sm:gap-2 shrink-0">
+      {/* RIGHT SECTION: Auth, Local Storage, USB, Currency, + Nouveau, More ⋮ all inline on one row */}
+      <div className="pms-app-topbar-actions flex flex-nowrap items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* Auth / Cloud Connection button */}
+        <button
+          type="button"
+          onClick={() => setIsAuthModalOpen(true)}
+          className="h-8 px-2 sm:px-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0"
+          title={language === 'fr' ? 'Connexion & Authentification Cloud / Supabase' : language === 'ar' ? 'تسجيل الدخول ومزامنة السحابة' : 'Auth & Cloud Login'}
+          aria-label={language === 'fr' ? 'Connexion' : language === 'ar' ? 'دخول' : 'Auth'}
+        >
+          <UserCheck size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+          <span className="hidden lg:inline">{language === 'fr' ? 'Connexion' : language === 'ar' ? 'دخول' : 'Auth'}</span>
+        </button>
+
         {/* Local database activity indicator */}
         <button
           type="button"
           onClick={() => setIsIndexedDBOpen(true)}
-          className={`h-8 px-2 sm:px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+          className={`h-8 px-2 sm:px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
             indexedDbSync === 'synced'
               ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
               : indexedDbSync === 'syncing'
@@ -327,34 +369,16 @@ export const TopBar: React.FC = () => {
               : (language === 'fr' ? 'Mode hors ligne' : language === 'ar' ? 'وضع غير متصل' : 'Offline mode')
           } — ${language === 'fr' ? 'Cliquer pour consulter' : language === 'ar' ? 'اضغط للمعاينة' : 'Click to inspect'}`}
         >
-          {indexedDbSync === 'synced' && (
-            <>
-              <Database size={13} className="text-emerald-600 dark:text-emerald-300" />
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="hidden sm:inline">{language === 'fr' ? 'Local' : language === 'ar' ? 'محلي' : 'Local'}</span>
-            </>
-          )}
-          {indexedDbSync === 'syncing' && (
-            <>
-              <Database size={13} className="text-blue-600 dark:text-blue-300" />
-              <RefreshCw size={12} className="animate-spin text-blue-500" />
-              <span className="hidden sm:inline">{language === 'fr' ? 'Écriture' : language === 'ar' ? 'حفظ' : 'Writing'}</span>
-            </>
-          )}
-          {indexedDbSync === 'offline' && (
-            <>
-              <Database size={13} className="text-rose-600 dark:text-rose-300" />
-              <AlertCircle size={12} className="text-rose-500" />
-              <span className="hidden sm:inline">Offline</span>
-            </>
-          )}
+          <Database size={13} className={indexedDbSync === 'synced' ? 'text-emerald-600 dark:text-emerald-300' : indexedDbSync === 'syncing' ? 'text-blue-600 dark:text-blue-300' : 'text-rose-600 dark:text-rose-300'} />
+          <span className={`w-2 h-2 rounded-full ${indexedDbSync === 'synced' ? 'bg-emerald-500 animate-pulse' : indexedDbSync === 'syncing' ? 'bg-blue-500 animate-spin' : 'bg-rose-500'}`} />
+          <span className="hidden lg:inline">{language === 'fr' ? 'Local' : language === 'ar' ? 'محلي' : 'Local'}</span>
         </button>
 
         {/* USB Hardware Button */}
         <button
           type="button"
           onClick={handlePhysicalUsbClick}
-          className={`h-8 px-1.5 sm:px-3 rounded-lg text-[11px] sm:text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-xs ${
+          className={`h-8 px-2 sm:px-2.5 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-xs shrink-0 ${
             usbStatus === 'connected'
               ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
               : 'bg-rose-50 dark:bg-rose-950/80 hover:bg-rose-100 dark:hover:bg-rose-900/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700/60'
@@ -384,14 +408,14 @@ export const TopBar: React.FC = () => {
             />
           </span>
           <Usb size={14} />
-          <span className="whitespace-nowrap hidden sm:inline">
+          <span className="whitespace-nowrap hidden lg:inline">
             USB • {usbStatus === 'connected' ? (usbDevice?.readerLabel ?? (language === 'fr' ? 'Prêt' : language === 'ar' ? 'جاهز' : 'Ready')) : (language === 'fr' ? 'Connecter' : language === 'ar' ? 'اتصال' : 'Connect')}
           </span>
         </button>
 
         {/* Global Currency Switcher */}
-        <div className="pms-app-topbar-currency h-8 flex items-center bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/80 rounded-lg px-1.5 sm:px-2 text-[11px] sm:text-xs font-mono font-bold text-amber-600 dark:text-amber-400 shadow-2xs">
-          <span className="text-[10px] text-slate-500 dark:text-slate-400 mr-1.5 rtl:mr-0 rtl:ml-1.5 font-sans hidden sm:inline">
+        <div className="pms-app-topbar-currency h-8 flex items-center bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/80 rounded-lg px-1.5 sm:px-2 text-[11px] sm:text-xs font-mono font-bold text-amber-600 dark:text-amber-400 shadow-2xs shrink-0">
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 mr-1 rtl:mr-0 rtl:ml-1 font-sans hidden xl:inline">
             {language === 'fr' ? 'Devise:' : language === 'ar' ? 'العملة:' : 'Currency:'}
           </span>
           <select
@@ -418,15 +442,15 @@ export const TopBar: React.FC = () => {
             setNewBookingInitialSlot(null);
             setIsNewBookingModalOpen(true);
           }}
-          className="h-8 px-2 sm:px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] sm:text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+          className="h-8 px-2 sm:px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] sm:text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-xs whitespace-nowrap shrink-0"
           title={language === 'fr' ? 'Créer une nouvelle réservation' : language === 'ar' ? 'إنشاء حجز جديد' : 'Create new booking'}
         >
           <Plus size={15} strokeWidth={2.5} />
-          <span className="hidden sm:inline">{language === 'fr' ? 'Nouveau' : language === 'ar' ? 'حجز جديد' : 'New'}</span>
+          <span className="hidden lg:inline">{language === 'fr' ? 'Nouveau' : language === 'ar' ? 'حجز جديد' : 'New'}</span>
         </button>
 
         {/* More Menu [⋮] */}
-        <div className="relative" ref={moreMenuRef}>
+        <div className="relative shrink-0" ref={moreMenuRef}>
           <button
             type="button"
             onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
@@ -542,6 +566,90 @@ export const TopBar: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Cloud Authentication Modal */}
+      {isAuthModalOpen && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setIsAuthModalOpen(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="auth-modal-title"
+            className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/70 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <UserCheck size={20} />
+                </div>
+                <div>
+                  <h2 id="auth-modal-title" className="text-base font-bold text-slate-900 dark:text-white">
+                    {language === 'fr' ? 'Connexion & Authentification Cloud' : language === 'ar' ? 'تسجيل الدخول ومزامنة السحابة' : 'Cloud Login & Auth'}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {language === 'fr' ? 'Accès direct multi-postes et synchronisation' : language === 'ar' ? 'الوصول المباشر والمزامنة السحابية' : 'Multi-station access & cloud sync'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                aria-label={language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 p-3.5 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  {language === 'fr' ? 'Mode de fonctionnement :' : language === 'ar' ? 'وضع التشغيل:' : 'Operating Mode:'}
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold text-[10px]">
+                  {language === 'fr' ? 'Local d’abord (IndexedDB)' : language === 'ar' ? 'محلي أولاً' : 'Local-First'}
+                </span>
+              </div>
+              <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-[11px]">
+                {language === 'fr'
+                  ? 'Vos données sont stockées de façon sécurisée et permanente dans votre navigateur. Vous pouvez également connecter un projet Supabase pour la synchronisation cloud.'
+                  : language === 'ar'
+                  ? 'يتم تخزين بياناتك محلياً بشكل دائم وآمن على متصفحك. يمكنك ربط مشروع Supabase للمزامنة السحابية.'
+                  : 'Your data is securely stored locally in your browser. You can also connect a Supabase project for multi-device sync.'}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAuthModalOpen(false);
+                  setIsIndexedDBOpen(true);
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+              >
+                <Database size={15} />
+                <span>
+                  {language === 'fr' ? 'Gérer les clés Supabase & Sauvegarde' : language === 'ar' ? 'إدارة مفاتيح Supabase والنسخ الاحتياطي' : 'Manage Supabase Keys & Backup'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(false)}
+                className="w-full py-2 px-4 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium text-xs transition-colors cursor-pointer"
+              >
+                {language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

@@ -59,13 +59,6 @@ export const Sidebar: React.FC = () => {
     toggleSound,
     isSidebarMobileOpen,
     setIsSidebarMobileOpen,
-    activeWorkspaceId,
-    workspaces,
-    setActiveWorkspaceId,
-    refreshWorkspaces,
-    createWorkspace,
-    isWorkspaceLoading,
-    workspaceError,
   } = useApp();
 
   // Collapsible state persisted to localStorage
@@ -88,9 +81,6 @@ export const Sidebar: React.FC = () => {
 
   const [isMobileProfileExpanded, setIsMobileProfileExpanded] = useState(false);
   const [isMobilePreferencesExpanded, setIsMobilePreferencesExpanded] = useState(false);
-  const [workspaceFormOpen, setWorkspaceFormOpen] = useState(false);
-  const [workspaceDraft, setWorkspaceDraft] = useState('');
-  const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
   const isRtl = language === 'ar';
 
   // Keep the page fixed while the mobile navigation drawer is open.
@@ -284,71 +274,6 @@ export const Sidebar: React.FC = () => {
             </button>
           )}
         </div>
-
-        {/* Workspace switcher */}
-        <section className={`shrink-0 border-b border-slate-200 dark:border-slate-800/80 bg-slate-100/60 dark:bg-slate-900/70 ${showCompact ? 'p-2 flex flex-col items-center' : 'px-3 py-3 space-y-2'}`}>
-          {!showCompact ? (
-            <>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  {language === 'fr' ? 'Espace de travail' : language === 'ar' ? 'مساحة العمل' : 'Workspace'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => { setWorkspaceFormOpen((open) => !open); setWorkspaceActionError(null); }}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-300 hover:border-blue-500 hover:text-blue-600 dark:hover:text-white transition-colors cursor-pointer"
-                  title={language === 'fr' ? 'Créer un espace' : language === 'ar' ? 'إنشاء مساحة عمل' : 'Create workspace'}
-                  aria-label="Create workspace"
-                >
-                  <Plus size={14} />
-                </button>
-              </div>
-              <select
-                value={activeWorkspaceId}
-                onChange={(event) => setActiveWorkspaceId(event.target.value)}
-                disabled={isWorkspaceLoading || workspaces.length === 0}
-                aria-label={language === 'fr' ? 'Espace de travail actif' : language === 'ar' ? 'مساحة العمل النشطة' : 'Active workspace'}
-                title={workspaceError || (language === 'fr' ? 'Espace de travail actif' : language === 'ar' ? 'مساحة العمل النشطة' : 'Active workspace')}
-                className="h-9 w-full min-w-0 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 disabled:opacity-60"
-              >
-                <option value="">
-                  {isWorkspaceLoading
-                    ? (language === 'fr' ? 'Chargement…' : language === 'ar' ? 'جارٍ التحميل…' : 'Loading…')
-                    : workspaces.length
-                    ? (language === 'fr' ? 'Choisir un espace' : language === 'ar' ? 'اختر مساحة' : 'Select workspace')
-                    : (language === 'fr' ? 'Aucun espace' : language === 'ar' ? 'لا توجد مساحات' : 'No workspace')}
-                </option>
-                {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
-              </select>
-              {(workspaceError || workspaceActionError) && <p role="alert" className="text-[10px] leading-relaxed text-rose-500 dark:text-rose-300">{workspaceActionError || workspaceError}</p>}
-              {workspaceError && (
-                <button type="button" onClick={() => void refreshWorkspaces()} className="text-[10px] font-semibold text-blue-600 dark:text-blue-300 hover:underline">
-                  {language === 'fr' ? 'Réessayer' : language === 'ar' ? 'إعادة المحاولة' : 'Retry'}
-                </button>
-              )}
-              {workspaceFormOpen && (
-                <form onSubmit={async (event) => { event.preventDefault(); setWorkspaceActionError(null); try { await createWorkspace(workspaceDraft); setWorkspaceDraft(''); setWorkspaceFormOpen(false); } catch (error) { setWorkspaceActionError(error instanceof Error ? error.message : 'Échec de création.'); } }} className="space-y-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 shadow-sm">
-                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200">{language === 'fr' ? 'Nom du nouvel espace' : language === 'ar' ? 'اسم مساحة العمل الجديدة' : 'New workspace name'}</label>
-                  <input autoFocus value={workspaceDraft} onChange={(event) => setWorkspaceDraft(event.target.value)} maxLength={80} minLength={2} required placeholder={language === 'fr' ? 'Ex. Mon établissement' : language === 'ar' ? 'مثال: فندقي' : 'e.g. My Hotel'} className="h-9 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500" />
-                  <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => setWorkspaceFormOpen(false)} className="rounded-md px-2 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">{language === 'fr' ? 'Annuler' : language === 'ar' ? 'إلغاء' : 'Cancel'}</button>
-                    <button type="submit" disabled={isWorkspaceLoading} className="rounded-md bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50">{language === 'fr' ? 'Créer' : language === 'ar' ? 'إنشاء' : 'Create'}</button>
-                  </div>
-                </form>
-              )}
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={toggleCollapse}
-              title={activeWorkspaceId ? `Workspace: ${activeWorkspaceId}` : 'Workspace'}
-              aria-label="Expand workspace options"
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-blue-600 dark:text-blue-300 hover:border-blue-500 cursor-pointer shadow-2xs transition-colors"
-            >
-              <Database size={16} />
-            </button>
-          )}
-        </section>
 
         {/* For mobile view: Render the navigation tabs right here at the top! */}
         {isMobileView && (
