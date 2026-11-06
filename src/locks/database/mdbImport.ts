@@ -247,7 +247,7 @@ export async function parseCardLockMdb(
   if (!BufferCtor || typeof BufferCtor.from !== 'function') {
     throw new Error(
       'Le support de lecture des fichiers CardLock.mdb n’a pas pu être chargé. ' +
-        'Rechargez l’application puis réessayez ; si le problème persiste, signalez-le avec la version affichée dans Réglages → À propos.',
+        'Rechargez l’application puis réessayez ; si le problème persiste, signalez-le en précisant le nom du fichier importé et ce message.',
     );
   }
   const globalRef = globalThis as unknown as { Buffer?: typeof Buffer };
