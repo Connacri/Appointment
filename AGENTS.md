@@ -58,6 +58,13 @@ in source code and `docs/ARCHITECTURE.md` before changing architecture.
 
 ## 5. UI, accessibility and responsive behavior
 
+**Mandatory UI/UX skill:** Before creating, reviewing, redesigning or modifying any user
+interface, read and apply the complete repository skill at
+`.agents/skills/ui-ux-design-master/SKILL.md`. This requirement applies to every
+coding agent and LLM, regardless of vendor or IDE. Do not rely on a short adapter
+file as a substitute for the complete skill. If the canonical skill is unavailable,
+state that limitation and follow the rules below.
+
 - Prioritize usability, clarity, accessibility, consistency, responsiveness,
   performance, then visual polish.
 - Reuse the existing semantic design tokens; do not create a parallel theme.
