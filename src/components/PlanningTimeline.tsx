@@ -600,14 +600,14 @@ export const PlanningTimeline: React.FC = () => {
     }
   };
 
-  // Left column width classes
+  // Left column width classes: carefully proportioned so room text never overflows in mini, compact or complet
   const leftColWidthClass = useMemo(() => {
     if (isMobileScreen) {
-      return leftBarMode === 'mini' ? 'w-18' : leftBarMode === 'compact' ? 'w-22' : 'w-26';
+      return leftBarMode === 'mini' ? 'w-24' : leftBarMode === 'compact' ? 'w-36' : 'w-48';
     }
-    if (leftBarMode === 'mini') return 'w-18 sm:w-20';
-    if (leftBarMode === 'compact') return 'w-28 sm:w-32';
-    return 'w-44 sm:w-56 md:w-64';
+    if (leftBarMode === 'mini') return 'w-24 sm:w-28';
+    if (leftBarMode === 'compact') return 'w-36 sm:w-44';
+    return 'w-52 sm:w-60 md:w-64';
   }, [leftBarMode, isMobileScreen]);
 
   const scrollVisibleMonthYear = useMemo(() => {
@@ -678,7 +678,7 @@ export const PlanningTimeline: React.FC = () => {
               >{getTranslation('ganttDensityCompact', language)}</button>
               <button
                 onClick={() => setLeftBarMode('normal')}
-                className={`hidden h-6 rounded px-1.5 text-[10px] font-semibold transition-colors sm:block cursor-pointer ${leftBarMode === 'normal' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
+                className={`h-6 rounded px-1.5 text-[9px] sm:text-[10px] font-semibold transition-colors cursor-pointer ${leftBarMode === 'normal' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
                 title={getTranslation('ganttDensityFull', language)}
                 aria-pressed={leftBarMode === 'normal'}
               >{getTranslation('ganttDensityFull', language)}</button>
@@ -865,13 +865,11 @@ export const PlanningTimeline: React.FC = () => {
                     aria-label={`${isCollapsed ? (language === 'fr' ? 'Développer' : language === 'ar' ? 'توسيع' : 'Expand') : (language === 'fr' ? 'Réduire' : language === 'ar' ? 'طي' : 'Collapse')} ${grp.name[language] || grp.name.en}`}
                     className="w-full h-7 sm:h-8 min-h-[28px] sm:min-h-[32px] max-h-[28px] sm:max-h-[32px] shrink-0 px-2 sm:px-2.5 pms-gantt-subsurface flex items-center justify-between cursor-pointer hover:bg-[rgb(var(--pms-accent)/0.08)] transition-colors border-b border-[rgb(var(--pms-border))] text-left"
                   >
-                    <div className="flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate">
+                    <div className="flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate min-w-0 flex-1 mr-1 overflow-hidden">
                       {isCollapsed ? <ChevronRight size={13} className="shrink-0 text-slate-500" /> : <ChevronDown size={13} className="shrink-0 text-slate-500" />}
-                      {leftBarMode !== 'mini' && (
-                        <span className="truncate text-[10px] sm:text-xs font-bold">
-                          {grp.name[language] || grp.name.en}
-                        </span>
-                      )}
+                      <span className="truncate text-xs font-bold text-slate-800 dark:text-slate-100 min-w-0">
+                        {grp.name[language] || grp.name.en}
+                      </span>
                     </div>
                     {getSectorIcon(grp.sector)}
                   </button>
@@ -885,13 +883,13 @@ export const PlanningTimeline: React.FC = () => {
                           onClick={() => toggleFloor(grp.id, floorGroup.key)}
                           aria-expanded={!collapsedFloors[`${grp.id}:${floorGroup.key}`]}
                           aria-label={`${collapsedFloors[`${grp.id}:${floorGroup.key}`] ? (language === 'fr' ? 'Développer' : language === 'ar' ? 'توسيع' : 'Expand') : (language === 'fr' ? 'Réduire' : language === 'ar' ? 'طي' : 'Collapse')} ${floorGroup.label}`}
-                          className="h-7 min-h-[28px] max-h-[28px] w-full shrink-0 px-2.5 flex items-center justify-between bg-[rgb(var(--pms-surface)/0.9)] border-b border-[rgb(var(--pms-border)/0.7)] hover:bg-[rgb(var(--pms-accent)/0.06)] text-left cursor-pointer"
+                          className="h-7 min-h-[28px] max-h-[28px] w-full shrink-0 px-2 flex items-center justify-between bg-[rgb(var(--pms-surface)/0.9)] border-b border-[rgb(var(--pms-border)/0.7)] hover:bg-[rgb(var(--pms-accent)/0.06)] text-left cursor-pointer overflow-hidden"
                         >
-                          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 truncate">
+                          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200 truncate min-w-0">
                             {collapsedFloors[`${grp.id}:${floorGroup.key}`] ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                            {floorGroup.label}
+                            <span className="truncate">{floorGroup.label}</span>
                           </span>
-                          <span className="text-[9px] font-mono text-slate-400 shrink-0">{floorGroup.resources.length}</span>
+                          <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 shrink-0 ml-1">{floorGroup.resources.length}</span>
                         </button>
                       )}
                       {!collapsedFloors[`${grp.id}:${floorGroup.key}`] && floorGroup.resources.map((res) => {
@@ -899,37 +897,43 @@ export const PlanningTimeline: React.FC = () => {
                         return (
                           <div
                             key={res.id}
-                            className={`h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 px-1.5 sm:px-2.5 flex items-center justify-between border-b transition-colors ${
+                            className={`h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 px-2 flex items-center justify-between border-b transition-colors overflow-hidden max-w-full ${
                               isOutOfOrder
                                 ? 'bg-slate-200/90 dark:bg-slate-800/90 border-[rgb(var(--pms-border))] text-slate-400 opacity-80'
                                 : 'pms-gantt-surface border-[rgb(var(--pms-border)/0.6)] hover:bg-[rgb(var(--pms-accent)/0.05)]'
                             }`}
                             title={`${res.name} · ${res.type || getTranslation('ganttRoom', language)} · ${floorGroup.label}${isOutOfOrder ? (language === 'fr' ? ' · HORS SERVICE (HS)' : language === 'ar' ? ' · خارج الخدمة' : ' · OUT OF ORDER') : ''}`}
                           >
-                            <div className={`flex items-center min-w-0 flex-1 ${leftBarMode === 'mini' ? 'gap-1' : 'gap-1.5 mr-1'}`}>
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
                               {renderHousekeepingTag(res.housekeepingStatus, res.id, res.name)}
-                              {leftBarMode !== 'mini' ? (
-                                <span className="min-w-0 flex flex-col leading-tight">
-                                  <span className={`font-semibold truncate text-xs sm:text-[13px] ${isOutOfOrder ? 'line-through text-slate-500 dark:text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
-                                    {res.name}
-                                  </span>
-                                  <span className="text-[9px] sm:text-[10px] text-slate-400 dark:text-slate-500 truncate">
-                                    {res.type || getTranslation('ganttRoom', language)}
-                                  </span>
-                                </span>
-                              ) : (
-                                <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-[10px] whitespace-nowrap shrink-0">
+                              <div className="flex flex-col min-w-0 flex-1 overflow-hidden leading-tight">
+                                <span
+                                  className={`text-xs font-bold truncate ${
+                                    isOutOfOrder
+                                      ? 'line-through text-slate-500 dark:text-slate-400'
+                                      : 'text-slate-800 dark:text-slate-100'
+                                  }`}
+                                  title={res.name}
+                                >
                                   {res.name}
                                 </span>
-                              )}
+                                {leftBarMode !== 'mini' && (
+                                  <span
+                                    className="text-[10px] text-slate-500 dark:text-slate-400 truncate"
+                                    title={res.type || getTranslation('ganttRoom', language)}
+                                  >
+                                    {res.type || getTranslation('ganttRoom', language)}
+                                  </span>
+                                )}
+                              </div>
                               {isOutOfOrder && (
-                                <span className="ml-1 px-1 py-0.5 rounded text-[8px] font-bold font-mono bg-rose-600/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 shrink-0">
+                                <span className="px-1 py-0.5 rounded text-[8px] font-bold font-mono bg-rose-600/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 shrink-0">
                                   HS
                                 </span>
                               )}
                             </div>
                             {leftBarMode === 'normal' && (
-                              <span className="text-[10px] text-slate-400 font-mono tabular-nums shrink-0 hidden sm:inline">
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono tabular-nums shrink-0 hidden sm:inline ml-1">
                                 {res.pricePerDay} {currency}
                               </span>
                             )}

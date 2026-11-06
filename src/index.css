@@ -928,6 +928,39 @@
   z-index: 100;
 }
 
+/* ==========================================================================
+   DARK MODE ENHANCEMENTS: Drawer, Menus, Dialogs & Native Controls Contrast
+   ========================================================================== */
+.dark input,
+.dark select,
+.dark textarea {
+  color-scheme: dark;
+}
+
+.dark select option {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
+.dark .pms-dropdown {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5) !important;
+}
+
+.dark .pms-drawer,
+.dark .workspace-sidebar {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+.dark .pms-modal,
+.dark [role="dialog"] {
+  color-scheme: dark;
+}
+
 /* Dragging the Gantt must not select text or trigger browser-native image dragging. */
 [data-gantt-pan="true"] {
   user-select: none;

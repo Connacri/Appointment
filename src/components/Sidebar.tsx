@@ -35,6 +35,7 @@ import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
 import { DomainType } from '../types/booking';
 import { APP_THEMES } from '../data/themes';
+import { supabase } from '../services/supabase/supabaseClient';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -594,14 +595,21 @@ export const Sidebar: React.FC = () => {
           {/* Déconnexion / Logout */}
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
+              if (supabase) {
+                try {
+                  await supabase.auth.signOut();
+                } catch (e) {
+                  console.warn('Sign out error:', e);
+                }
+              }
               setCurrentRole('client');
               setIsSidebarMobileOpen(false);
             }}
             className={`cursor-pointer transition-colors ${
               showCompact
-                ? 'mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40 hover:bg-rose-100 dark:hover:bg-rose-900/60'
-                : 'w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40 hover:bg-rose-100 dark:hover:bg-rose-900/60'
+                ? 'mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-100 dark:hover:bg-rose-900/80'
+                : 'w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-100 dark:hover:bg-rose-900/80'
             }`}
             title={language === 'fr' ? 'Déconnexion de la session' : language === 'ar' ? 'تسجيل الخروج من الجلسة' : 'Log out from session'}
             aria-label={language === 'fr' ? 'Déconnexion' : language === 'ar' ? 'تسجيل الخروج' : 'Log out'}

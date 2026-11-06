@@ -846,23 +846,29 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                   Créez un bâtiment, choisissez son étage et générez une plage de chambres. Les numéros déjà présents dans ce bâtiment sont ignorés.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label className="space-y-1"><span className="block font-semibold">Nom du bâtiment</span>
-                    <input value={buildingName} onChange={(e) => setBuildingName(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="Bâtiment principal" />
+                  <label className="space-y-1">
+                    <span className="block font-semibold text-slate-700 dark:text-slate-300">Nom du bâtiment</span>
+                    <input value={buildingName} onChange={(e) => setBuildingName(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Bâtiment principal" />
                   </label>
-                  <label className="space-y-1"><span className="block font-semibold">N° bâtiment</span>
-                    <input type="number" min="1" value={buildingNo} onChange={(e) => setBuildingNo(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                  <label className="space-y-1">
+                    <span className="block font-semibold text-slate-700 dark:text-slate-300">N° bâtiment</span>
+                    <input type="number" min="1" value={buildingNo} onChange={(e) => setBuildingNo(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
                   </label>
-                  <label className="space-y-1"><span className="block font-semibold">Étage (0 = rez-de-chaussée)</span>
-                    <input type="number" min="0" value={floorNo} onChange={(e) => setFloorNo(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                  <label className="space-y-1">
+                    <span className="block font-semibold text-slate-700 dark:text-slate-300">Étage (0 = rez-de-chaussée)</span>
+                    <input type="number" min="0" value={floorNo} onChange={(e) => setFloorNo(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
                   </label>
-                  <label className="space-y-1"><span className="block font-semibold">Préfixe facultatif</span>
-                    <input value={roomPrefix} onChange={(e) => setRoomPrefix(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="Ex. A-" />
+                  <label className="space-y-1">
+                    <span className="block font-semibold text-slate-700 dark:text-slate-300">Préfixe facultatif</span>
+                    <input value={roomPrefix} onChange={(e) => setRoomPrefix(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex. A-" />
                   </label>
-                  <label className="space-y-1"><span className="block font-semibold">Premier numéro de chambre</span>
-                    <input type="number" min="1" value={roomStart} onChange={(e) => setRoomStart(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                  <label className="space-y-1">
+                    <span className="block font-semibold text-slate-700 dark:text-slate-300">Premier numéro de chambre</span>
+                    <input type="number" min="1" value={roomStart} onChange={(e) => setRoomStart(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
                   </label>
-                  <label className="space-y-1"><span className="block font-semibold">Nombre de chambres à créer</span>
-                    <input type="number" min="1" max="300" value={roomCount} onChange={(e) => setRoomCount(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                  <label className="space-y-1">
+                    <span className="block font-semibold text-slate-700 dark:text-slate-300">Nombre de chambres à créer</span>
+                    <input type="number" min="1" max="300" value={roomCount} onChange={(e) => setRoomCount(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
                   </label>
                 </div>
                 <button type="button" onClick={handleCreateRooms} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-2">
