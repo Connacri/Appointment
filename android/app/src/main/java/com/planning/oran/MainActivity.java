@@ -47,6 +47,9 @@ public class MainActivity extends BridgeActivity {
         String url = VideoBubbleIntents.extractSharedUrl(intent);
         boolean openQuickAdd = intent.getBooleanExtra(VideoBubbleIntents.EXTRA_OPEN_QUICK_ADD, false);
         SharedPreferences.Editor editor = getSharedPreferences(PREFS, MODE_PRIVATE).edit();
+        if (Intent.ACTION_SEND.equals(intent.getAction()) || openQuickAdd) {
+            editor.remove("pending_share_url").remove("pending_open_quick_add");
+        }
         if (url != null) editor.putString("pending_share_url", url);
         if (openQuickAdd) editor.putBoolean("pending_open_quick_add", true);
         editor.apply();
