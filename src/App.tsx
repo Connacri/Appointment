@@ -112,6 +112,12 @@ const MainLayout: React.FC = () => {
     hasOnboarded,
   } = useApp();
 
+  const [hasOpenedVideoHub, setHasOpenedVideoHub] = React.useState(activeView === 'videos');
+
+  React.useEffect(() => {
+    if (activeView === 'videos') setHasOpenedVideoHub(true);
+  }, [activeView]);
+
   const isSetupModalVisible = isEstablishmentModalOpen || !hasOnboarded;
 
   return (
@@ -158,9 +164,26 @@ const MainLayout: React.FC = () => {
               {activeView === 'spa' && <SpaManagementView />}
 
               {activeView === 'help' && <HelpCenterView />}
-               {activeView === 'videos' && <VideoHubView />}
+
             </Suspense>
           </main>
+
+          {/* Keep HackTube mounted after first use: changing workspace views must not
+              destroy its cross-origin media iframe or reset the current playback. */}
+          <Suspense fallback={activeView === 'videos' ? <ViewFallback /> : null}>
+            {hasOpenedVideoHub && (
+              <div
+                className={`absolute inset-0 transition-opacity duration-150 ${
+                  activeView === 'videos'
+                    ? 'z-10 opacity-100'
+                    : '-z-10 opacity-0 pointer-events-none'
+                }`}
+                aria-hidden={activeView !== 'videos'}
+              >
+                <VideoHubView />
+              </div>
+            )}
+          </Suspense>
         </div>
       </div>
 
