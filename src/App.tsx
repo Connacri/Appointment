@@ -114,6 +114,50 @@ const MainLayout: React.FC = () => {
 
   const [hasOpenedVideoHub, setHasOpenedVideoHub] = React.useState(activeView === 'videos');
 
+  // Mobile pull-to-refresh: only trigger when the gesture starts at the top
+  // of the active scroll container, and ignore controls, dialogs and embeds.
+  const pullStartRef = React.useRef<{ x: number; y: number; enabled: boolean } | null>(null);
+  const handlePullStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length !== 1) {
+      pullStartRef.current = null;
+      return;
+    }
+
+    const target = event.target as HTMLElement;
+    if (target.closest('input, textarea, select, button, a, iframe, video, [role="dialog"], [contenteditable="true"]')) {
+      pullStartRef.current = null;
+      return;
+    }
+
+    let node: HTMLElement | null = target;
+    let atTop = true;
+    while (node && node !== event.currentTarget) {
+      const overflowY = window.getComputedStyle(node).overflowY;
+      if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
+        atTop = node.scrollTop <= 0;
+        break;
+      }
+      node = node.parentElement;
+    }
+
+    pullStartRef.current = atTop
+      ? { x: event.touches[0].clientX, y: event.touches[0].clientY, enabled: true }
+      : null;
+  };
+
+  const handlePullEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const start = pullStartRef.current;
+    pullStartRef.current = null;
+    if (!start?.enabled || event.changedTouches.length !== 1) return;
+
+    const touch = event.changedTouches[0];
+    const deltaY = touch.clientY - start.y;
+    const deltaX = Math.abs(touch.clientX - start.x);
+    if (deltaY >= 100 && deltaY > deltaX * 1.4) {
+      window.location.reload();
+    }
+  };
+
   React.useEffect(() => {
     if (activeView === 'videos') setHasOpenedVideoHub(true);
   }, [activeView]);
@@ -121,7 +165,12 @@ const MainLayout: React.FC = () => {
   const isSetupModalVisible = isEstablishmentModalOpen || !hasOnboarded;
 
   return (
-    <div className="flex flex-col h-[100dvh] min-h-0 w-full max-w-full overflow-hidden pms-canvas font-sans">
+    <div
+      className="flex flex-col h-[100dvh] min-h-0 w-full max-w-full overflow-hidden pms-canvas font-sans"
+      onTouchStartCapture={handlePullStart}
+      onTouchEndCapture={handlePullEnd}
+      onTouchCancelCapture={() => { pullStartRef.current = null; }}
+    >
       {/* Top Full-Width Unified Header matching szsz.png */}
       <TopBar />
 
