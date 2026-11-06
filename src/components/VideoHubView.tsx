@@ -315,6 +315,10 @@ export const VideoHubView: React.FC = () => {
       setQuickAddError(t('Lien non reconnu. Utilisez une URL de vidéo YouTube ou TikTok.', 'Unsupported link. Paste a YouTube or TikTok video URL.', 'الرابط غير معروف. استخدم رابط فيديو YouTube أو TikTok.'));
       return;
     }
+    if (quickPlaylistId === '__new__' && !quickNewPlaylistName.trim()) {
+      setQuickAddError(t('Saisissez le nom de la nouvelle playlist.', 'Enter a name for the new playlist.', 'أدخل اسم قائمة التشغيل الجديدة.'));
+      return;
+    }
     const existing = library.find((v) => v.id === parsed.id && (v.platform || 'youtube') === parsed.platform);
     const videoId = parsed.id;
     if (!existing) {
@@ -329,10 +333,6 @@ export const VideoHubView: React.FC = () => {
     }
     if (quickPlaylistId === '__new__') {
       const name = quickNewPlaylistName.trim();
-      if (!name) {
-        setQuickAddError(t('Saisissez le nom de la nouvelle playlist.', 'Enter a name for the new playlist.', 'أدخل اسم قائمة التشغيل الجديدة.'));
-        return;
-      }
       setPlaylists((prev) => [...prev, { id: String(Date.now()), name, videoIds: [videoId] }]);
     } else if (quickPlaylistId) {
       setPlaylists((prev) => prev.map((playlist) =>
