@@ -55,6 +55,7 @@ export interface EstablishmentProfile {
   defaultCurrency: string; // "DA", "€", "$", "SAR", "GBP"
   checkInTime: string; // Ex: "14:00"
   checkOutTime: string; // Ex: "12:00"
+  roomGroupingMode?: 'floor' | 'wing' | 'floor_wing'; // Regroupement des chambres dans le planning
   
   updatedAt: string;
 }
@@ -87,5 +88,6 @@ export const DEFAULT_ESTABLISHMENT_PROFILE: EstablishmentProfile = {
   defaultCurrency: "DA",
   checkInTime: "14:00",
   checkOutTime: "12:00",
+  roomGroupingMode: 'floor',
   updatedAt: new Date().toISOString(),
 };

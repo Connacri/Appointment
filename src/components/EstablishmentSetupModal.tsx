@@ -74,9 +74,15 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   const [buildingName, setBuildingName] = useState('Bâtiment principal');
   const [buildingNo, setBuildingNo] = useState('1');
   const [floorNo, setFloorNo] = useState('0');
+  const [roomWing, setRoomWing] = useState('Aile Nord');
   const [roomPrefix, setRoomPrefix] = useState('');
   const [roomStart, setRoomStart] = useState('101');
   const [roomCount, setRoomCount] = useState('10');
+  const [selectedGroupingMode, setSelectedGroupingMode] = useState<'floor' | 'wing' | 'floor_wing'>(
+    formData.roomGroupingMode || 'floor'
+  );
+  const [editingRoomWing, setEditingRoomWing] = useState<Record<string, string>>({});
+  const [editingRoomFloor, setEditingRoomFloor] = useState<Record<string, string>>({});
   const [structureMessage, setStructureMessage] = useState('');
   const [isImportingMdb, setIsImportingMdb] = useState(false);
   const [mdbBackups, setMdbBackups] = useState<MdbBackupFile[] | null>(null);
@@ -136,6 +142,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
         capacity: 1,
         building: String(bNo),
         floor: String(fNo),
+        wing: roomWing.trim() || undefined,
       };
     }).filter((room) => !existingNumbers.has(room.name));
     if (additions.length === 0) {
@@ -152,7 +159,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     setResourceGroups((prev) => existing
       ? prev.map((group) => group.id === groupId ? nextGroup : group)
       : [...prev, nextGroup]);
-    setStructureMessage(`${additions.length} chambre(s) ajoutée(s) à ${buildingName}, étage ${fNo}.`);
+    setStructureMessage(`${additions.length} chambre(s) ajoutée(s) à ${buildingName}, étage ${fNo}${roomWing.trim() ? `, ${roomWing.trim()}` : ''}.`);
     playSuccessFeedback();
   };
 
@@ -211,6 +218,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     e?.preventDefault();
     const updated: EstablishmentProfile = {
       ...formData,
+      roomGroupingMode: selectedGroupingMode,
       logoUrl: customLogoPreview,
       updatedAt: new Date().toISOString(),
     };
@@ -838,44 +846,191 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                 })()}
               </section>
 
+              {/* ROOM GROUPING MODE SELECTION */}
+              <section className="rounded-2xl border border-blue-200 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/20 p-4 space-y-3">
+                <div className="flex items-center gap-2 font-extrabold text-blue-900 dark:text-blue-200 text-sm">
+                  <Layers size={17} />
+                  <span>Mode de regroupement dans le planning Gantt (En-têtes repliables)</span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Choisissez comment organiser et regrouper visuellement les chambres dans le planning Gantt. Chaque groupe formera un en-tête repliable permettant d'afficher ou masquer les chambres en un clic.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGroupingMode('floor')}
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                      selectedGroupingMode === 'floor'
+                        ? 'border-blue-500 bg-blue-600 text-white shadow-xs font-bold'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">🏢 Par Étage</div>
+                    <div className={`text-[10px] mt-1 ${selectedGroupingMode === 'floor' ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                      Étage 1, Étage 2, Étage 3…
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGroupingMode('wing')}
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                      selectedGroupingMode === 'wing'
+                        ? 'border-blue-500 bg-blue-600 text-white shadow-xs font-bold'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">🏛️ Par Aile / Section</div>
+                    <div className={`text-[10px] mt-1 ${selectedGroupingMode === 'wing' ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                      Aile Nord, Aile Sud, Aile Mer, Villas…
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGroupingMode('floor_wing')}
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                      selectedGroupingMode === 'floor_wing'
+                        ? 'border-blue-500 bg-blue-600 text-white shadow-xs font-bold'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">📑 Par Étage & Aile</div>
+                    <div className={`text-[10px] mt-1 ${selectedGroupingMode === 'floor_wing' ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                      Étage 1 — Aile Nord, Étage 1 — Aile Sud…
+                    </div>
+                  </button>
+                </div>
+              </section>
+
               <section className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-4">
                 <div className="flex items-center gap-2 font-extrabold text-slate-900 dark:text-white text-sm">
                   <Building2 size={17} /> Créer la structure manuellement
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Créez un bâtiment, choisissez son étage et générez une plage de chambres. Les numéros déjà présents dans ce bâtiment sont ignorés.
+                  Créez un bâtiment, choisissez son étage, son aile et générez une plage de chambres. Les numéros déjà présents dans ce bâtiment sont ignorés.
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   <label className="space-y-1">
-                    <span className="block font-semibold text-slate-700 dark:text-slate-300">Nom du bâtiment</span>
-                    <input value={buildingName} onChange={(e) => setBuildingName(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Bâtiment principal" />
+                    <span className="block font-semibold text-slate-700 dark:text-slate-300 text-xs">Nom du bâtiment</span>
+                    <input value={buildingName} onChange={(e) => setBuildingName(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none text-xs" placeholder="Bâtiment principal" />
                   </label>
                   <label className="space-y-1">
-                    <span className="block font-semibold text-slate-700 dark:text-slate-300">N° bâtiment</span>
-                    <input type="number" min="1" value={buildingNo} onChange={(e) => setBuildingNo(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <span className="block font-semibold text-slate-700 dark:text-slate-300 text-xs">N° bâtiment</span>
+                    <input type="number" min="1" value={buildingNo} onChange={(e) => setBuildingNo(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none text-xs" />
                   </label>
                   <label className="space-y-1">
-                    <span className="block font-semibold text-slate-700 dark:text-slate-300">Étage (0 = rez-de-chaussée)</span>
-                    <input type="number" min="0" value={floorNo} onChange={(e) => setFloorNo(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <span className="block font-semibold text-slate-700 dark:text-slate-300 text-xs">Étage (0 = rez-de-chaussée)</span>
+                    <input type="number" min="0" value={floorNo} onChange={(e) => setFloorNo(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none text-xs" />
                   </label>
                   <label className="space-y-1">
-                    <span className="block font-semibold text-slate-700 dark:text-slate-300">Préfixe facultatif</span>
-                    <input value={roomPrefix} onChange={(e) => setRoomPrefix(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex. A-" />
+                    <span className="block font-semibold text-slate-700 dark:text-slate-300 text-xs">Aile / Section</span>
+                    <input value={roomWing} onChange={(e) => setRoomWing(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none text-xs" placeholder="Ex. Aile Nord, Aile Sud, Wing A" />
                   </label>
                   <label className="space-y-1">
-                    <span className="block font-semibold text-slate-700 dark:text-slate-300">Premier numéro de chambre</span>
-                    <input type="number" min="1" value={roomStart} onChange={(e) => setRoomStart(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <span className="block font-semibold text-slate-700 dark:text-slate-300 text-xs">Préfixe facultatif</span>
+                    <input value={roomPrefix} onChange={(e) => setRoomPrefix(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none text-xs" placeholder="Ex. A-" />
                   </label>
                   <label className="space-y-1">
-                    <span className="block font-semibold text-slate-700 dark:text-slate-300">Nombre de chambres à créer</span>
-                    <input type="number" min="1" max="300" value={roomCount} onChange={(e) => setRoomCount(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <span className="block font-semibold text-slate-700 dark:text-slate-300 text-xs">Premier numéro</span>
+                    <input type="number" min="1" value={roomStart} onChange={(e) => setRoomStart(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none text-xs" />
+                  </label>
+                  <label className="space-y-1 sm:col-span-2 md:col-span-3">
+                    <span className="block font-semibold text-slate-700 dark:text-slate-300 text-xs">Nombre de chambres à créer</span>
+                    <input type="number" min="1" max="300" value={roomCount} onChange={(e) => setRoomCount(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none text-xs" />
                   </label>
                 </div>
-                <button type="button" onClick={handleCreateRooms} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-2">
+                <button type="button" onClick={handleCreateRooms} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 cursor-pointer shadow-xs">
                   <Plus size={15} /> Créer les chambres
                 </button>
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  Structure actuelle : {resourceGroups.length} bâtiment(s) / groupe(s), {resourceGroups.reduce((total, group) => total + group.resources.length, 0)} chambre(s).
+              </section>
+
+              {/* ROOM INVENTORY & WING/FLOOR MANAGER */}
+              <section className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 font-extrabold text-slate-900 dark:text-white text-sm">
+                    <Building2 size={17} />
+                    <span>Affectation des Étages et Ailes des chambres existantes</span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    {resourceGroups.reduce((tot, g) => tot + g.resources.length, 0)} chambre(s)
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Modifiez directement l'étage ou l'aile de chaque chambre pour que le planning Gantt affiche vos en-têtes repliables personnalisés.
+                </p>
+
+                <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                  {resourceGroups.map((grp) => (
+                    <div key={grp.id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-2.5 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-800 pb-1.5">
+                        <span>{grp.name.fr || grp.name.en}</span>
+                        <span className="text-[10px] text-slate-500">{grp.resources.length} chambres</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                        {grp.resources.map((res) => (
+                          <div key={res.id} className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col gap-1.5 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-blue-600 dark:text-blue-400">{res.name}</span>
+                              <span className="text-[10px] text-slate-500 truncate max-w-[100px]">{res.type}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                              <div>
+                                <span className="text-slate-400 block">Étage</span>
+                                <input
+                                  type="text"
+                                  value={editingRoomFloor[res.id] !== undefined ? editingRoomFloor[res.id] : (res.floor || '1')}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditingRoomFloor((prev) => ({ ...prev, [res.id]: val }));
+                                    setResourceGroups((current) =>
+                                      current.map((g) =>
+                                        g.id === grp.id
+                                          ? {
+                                              ...g,
+                                              resources: g.resources.map((r) =>
+                                                r.id === res.id ? { ...r, floor: val } : r
+                                              ),
+                                            }
+                                          : g
+                                      )
+                                    );
+                                  }}
+                                  className="w-full px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                                  placeholder="1"
+                                />
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block">Aile</span>
+                                <input
+                                  type="text"
+                                  value={editingRoomWing[res.id] !== undefined ? editingRoomWing[res.id] : (res.wing || '')}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditingRoomWing((prev) => ({ ...prev, [res.id]: val }));
+                                    setResourceGroups((current) =>
+                                      current.map((g) =>
+                                        g.id === grp.id
+                                          ? {
+                                              ...g,
+                                              resources: g.resources.map((r) =>
+                                                r.id === res.id ? { ...r, wing: val } : r
+                                              ),
+                                            }
+                                          : g
+                                      )
+                                    );
+                                  }}
+                                  className="w-full px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[10px]"
+                                  placeholder="Aile Nord"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </section>
 

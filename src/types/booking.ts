@@ -121,6 +121,7 @@ export interface ResourceItem {
   capacity?: number;
   building?: string;
   floor?: string;
+  wing?: string;
   view?: 'Mer' | 'Jardin' | 'Ville' | 'Piscine' | 'Arrière';
   beds?: string;
   sizeM2?: number;

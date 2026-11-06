@@ -219,20 +219,20 @@ export const TopBar: React.FC = () => {
             <button
               type="button"
               onClick={toggleSectorMenu}
-              className="h-9 px-2.5 sm:px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors shrink-0"
+              className="h-9 px-2.5 sm:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors shrink-0"
               title={language === 'fr' ? 'Secteur d’activité (Hôtel / Resort)' : language === 'ar' ? 'قطاع النشاط (فندق / منتجع)' : 'Business Sector'}
             >
               {currentDomain === 'hotel' ? (
-                <Hotel size={14} className="text-amber-300 shrink-0" />
+                <Hotel size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
               ) : (
-                <Palmtree size={14} className="text-amber-300 shrink-0" />
+                <Palmtree size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
               )}
               <span className="truncate max-w-[85px] sm:max-w-none">
                 {currentDomain === 'hotel'
                   ? (language === 'fr' ? 'Hôtel' : language === 'ar' ? 'فندق' : 'Hotel')
                   : (language === 'fr' ? 'Resort' : language === 'ar' ? 'منتجع' : 'Resort')}
               </span>
-              <ChevronDown size={13} className={`text-white/80 shrink-0 transition-transform ${isSectorMenuOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown size={13} className={`text-slate-400 shrink-0 transition-transform ${isSectorMenuOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isSectorMenuOpen && (
@@ -255,7 +255,7 @@ export const TopBar: React.FC = () => {
                       : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
                 >
-                  <Hotel size={14} className={currentDomain === 'hotel' ? 'text-amber-300' : 'text-slate-500'} />
+                  <Hotel size={14} className={currentDomain === 'hotel' ? 'text-white' : 'text-blue-500'} />
                   <span className="flex-1">{language === 'fr' ? 'Hôtel & Chambres' : language === 'ar' ? 'فندق وغرف' : 'Hotel & Rooms'}</span>
                   {currentDomain === 'hotel' && <CheckCircle2 size={13} className="text-white ml-auto rtl:ml-0 rtl:mr-auto" />}
                 </button>
@@ -271,7 +271,7 @@ export const TopBar: React.FC = () => {
                       : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
                 >
-                  <Palmtree size={14} className={currentDomain === 'resort' ? 'text-amber-300' : 'text-slate-500'} />
+                  <Palmtree size={14} className={currentDomain === 'resort' ? 'text-white' : 'text-emerald-500'} />
                   <span className="flex-1">{language === 'fr' ? 'Resort & Complexe' : language === 'ar' ? 'منتجع ومجمع' : 'Resort & Complex'}</span>
                   {currentDomain === 'resort' && <CheckCircle2 size={13} className="text-white ml-auto rtl:ml-0 rtl:mr-auto" />}
                 </button>
@@ -289,14 +289,14 @@ export const TopBar: React.FC = () => {
             <button
               type="button"
               onClick={toggleRoleMenu}
-              className="h-9 px-2.5 sm:px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors shrink-0"
+              className="h-9 px-2.5 sm:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors shrink-0"
               title={language === 'fr' ? 'Changer de rôle actif' : language === 'ar' ? 'تغيير الدور النشط' : 'Change active role'}
             >
-              <CurrentRoleIcon size={14} className="text-amber-300 shrink-0" />
+              <CurrentRoleIcon size={14} className="text-amber-500 shrink-0" />
               <span className="truncate max-w-[85px] sm:max-w-none">
                 {currentRoleObj.label[language] || currentRoleObj.label.fr}
               </span>
-              <ChevronDown size={13} className={`text-white/80 shrink-0 transition-transform ${isRoleMenuOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown size={13} className={`text-slate-400 shrink-0 transition-transform ${isRoleMenuOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isRoleMenuOpen && (
@@ -324,7 +324,7 @@ export const TopBar: React.FC = () => {
                           : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
-                      <IconComponent size={14} className={isSelected ? 'text-amber-300' : 'text-slate-500 dark:text-slate-400'} />
+                      <IconComponent size={14} className={isSelected ? 'text-white' : 'text-slate-500 dark:text-slate-400'} />
                       <span className="flex-1">{role.label[language] || role.label.fr}</span>
                       {isSelected && <CheckCircle2 size={13} className="text-white ml-auto rtl:ml-0 rtl:mr-auto" />}
                     </button>
@@ -336,7 +336,6 @@ export const TopBar: React.FC = () => {
         </div>
 
         {/* CENTER SECTION: Tablet & Desktop Global Search */}
-        {/* On tablet (md:), search bar is 50% of its previous 180px width: exactly md:w-[90px] md:max-w-[90px]. On desktop (lg+), it expands. */}
         <div className="pms-app-topbar-search hidden md:flex relative items-center h-9 md:w-[90px] md:max-w-[90px] lg:w-48 lg:max-w-[220px] xl:w-64 xl:max-w-[280px] shrink-0">
           <div className="relative flex min-w-0 flex-1 items-center h-9">
             <Search size={14} className="absolute left-2.5 rtl:left-auto rtl:right-2.5 text-slate-400 pointer-events-none" />
@@ -366,13 +365,7 @@ export const TopBar: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsIndexedDBOpen(true)}
-            className={`h-9 px-2.5 sm:px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 ${
-              indexedDbSync === 'synced'
-                ? 'bg-white dark:bg-slate-900 border-emerald-400/80 dark:border-emerald-500/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
-                : indexedDbSync === 'syncing'
-                ? 'bg-white dark:bg-slate-900 border-blue-400/80 dark:border-blue-500/50 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40'
-                : 'bg-white dark:bg-slate-900 border-rose-400/80 dark:border-rose-500/50 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40'
-            }`}
+            className="h-9 px-2.5 sm:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0"
             title={`${
               language === 'fr' ? 'Stockage local' : language === 'ar' ? 'التخزين المحلي' : 'Local storage'
             }: ${
@@ -383,7 +376,7 @@ export const TopBar: React.FC = () => {
                 : (language === 'fr' ? 'Mode hors ligne' : language === 'ar' ? 'وضع غير متصل' : 'Offline mode')
             } — ${language === 'fr' ? 'Cliquer pour consulter' : language === 'ar' ? 'اضغط للمعاينة' : 'Click to inspect'}`}
           >
-            <Database size={14} className={indexedDbSync === 'synced' ? 'text-emerald-600 dark:text-emerald-300' : indexedDbSync === 'syncing' ? 'text-blue-600 dark:text-blue-300' : 'text-rose-600 dark:text-rose-300'} />
+            <Database size={14} className={indexedDbSync === 'synced' ? 'text-emerald-600 dark:text-emerald-400' : indexedDbSync === 'syncing' ? 'text-blue-600 dark:text-blue-400' : 'text-rose-600 dark:text-rose-400'} />
             <span className={`w-2 h-2 rounded-full ${indexedDbSync === 'synced' ? 'bg-emerald-500 animate-pulse' : indexedDbSync === 'syncing' ? 'bg-blue-500 animate-spin' : 'bg-rose-500'}`} />
             <span className="hidden lg:inline">{language === 'fr' ? 'Local' : language === 'ar' ? 'محلي' : 'Local'}</span>
           </button>
@@ -392,10 +385,10 @@ export const TopBar: React.FC = () => {
           <button
             type="button"
             onClick={handlePhysicalUsbClick}
-            className={`h-9 px-2.5 sm:px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs shrink-0 ${
+            className={`h-9 px-2.5 sm:px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 ${
               usbStatus === 'connected'
-                ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                : 'bg-white dark:bg-slate-900 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700/80'
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
+                : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
             }`}
             title={
               usbStatus === 'connected'
@@ -591,7 +584,7 @@ export const TopBar: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={language === 'fr' ? 'Rechercher un séjour, client, chambre...' : language === 'ar' ? 'بحث عن حجز أو نزيل أو غرفة...' : 'Search booking, guest, room...'}
-            className="w-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs pl-8 pr-7 rtl:pl-7 rtl:pr-8 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 shadow-inner focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium transition-colors"
+            className="w-full h-9 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs pl-8 pr-7 rtl:pl-7 rtl:pr-8 rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium transition-colors"
           />
           {searchQuery && (
             <button

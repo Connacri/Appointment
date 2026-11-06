@@ -54,9 +54,30 @@ export const PlanningTimeline: React.FC = () => {
     selectedEstablishmentId,
     setSelectedEstablishmentId,
     currency,
+    establishmentProfile,
+    setEstablishmentProfile,
   } = useApp();
 
   const isRTL = language === 'ar';
+  const [groupingMode, setGroupingMode] = useState<'floor' | 'wing' | 'floor_wing'>(
+    () => establishmentProfile?.roomGroupingMode || 'floor'
+  );
+
+  useEffect(() => {
+    if (establishmentProfile?.roomGroupingMode && establishmentProfile.roomGroupingMode !== groupingMode) {
+      setGroupingMode(establishmentProfile.roomGroupingMode);
+    }
+  }, [establishmentProfile?.roomGroupingMode]);
+
+  const changeGroupingMode = (mode: 'floor' | 'wing' | 'floor_wing') => {
+    setGroupingMode(mode);
+    if (establishmentProfile && setEstablishmentProfile) {
+      setEstablishmentProfile({
+        ...establishmentProfile,
+        roomGroupingMode: mode,
+      });
+    }
+  };
   const [showAvailabilityHelp, setShowAvailabilityHelp] = useState(false);
   const [selectedHousekeepingRoom, setSelectedHousekeepingRoom] = useState<{ id: string; name: string; status: string } | null>(null);
   const [timelineNotice, setTimelineNotice] = useState<{ title: string; message: string; tone: 'danger' | 'warning' | 'info'; roomName?: string; roomStatus?: string } | null>(null);
@@ -232,38 +253,20 @@ export const PlanningTimeline: React.FC = () => {
   const handleTimelineScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const el = event.currentTarget;
     const currentScrollLeft = el.scrollLeft;
-    // CRITICAL: only process horizontal expansion if scrollLeft actually changed (not vertical scroll)
-    const isHorizontalScroll = Math.abs(currentScrollLeft - lastScrollLeftRef.current) > 3;
     lastScrollLeftRef.current = currentScrollLeft;
 
     const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
     const raw = currentScrollLeft;
     const position = isRTL ? Math.max(0, Math.min(maxScroll, Math.abs(raw))) : Math.max(0, Math.min(maxScroll, raw));
 
-    // Update the scroll-driven visible date and month
-    const visibleDayIndex = Math.max(0, Math.min(timelineDays.length - 1, Math.floor((position + 20) / colWidth)));
+    // Update the scroll-driven visible date and month smoothly
+    const visibleDayIndex = Math.max(
+      0,
+      Math.min(timelineDays.length - 1, Math.floor((position + Math.min(el.clientWidth / 2, 200)) / colWidth))
+    );
     const visibleDay = timelineDays[visibleDayIndex];
     if (visibleDay && visibleDay.dateStr) {
       setScrollVisibleDate(visibleDay.dateStr);
-    }
-
-    if (!isHorizontalScroll || edgeLoadLockRef.current) return;
-    const distanceToStart = position;
-    const distanceToEnd = maxScroll - position;
-    const chunkDays = 31;
-
-    // Only prepend if user has scrolled very close to the left start (< 150px)
-    if (distanceToStart < 150) {
-      edgeLoadLockRef.current = true;
-      pendingPrependWidthRef.current = chunkDays * colWidth;
-      const [year, month, day] = timelineWindowStart.split('-').map(Number);
-      const earlier = new Date(year, month - 1, day - chunkDays);
-      setTimelineWindowStart([earlier.getFullYear(), String(earlier.getMonth() + 1).padStart(2, '0'), String(earlier.getDate()).padStart(2, '0')].join('-'));
-      setTimelineWindowDays((count) => count + chunkDays);
-    } else if (distanceToEnd < 150) {
-      edgeLoadLockRef.current = true;
-      setTimelineWindowDays((count) => count + chunkDays);
-      window.requestAnimationFrame(() => { edgeLoadLockRef.current = false; });
     }
   };
 
@@ -340,34 +343,39 @@ export const PlanningTimeline: React.FC = () => {
     setCurrentBaseDate(todayIso);
   };
 
-  // In narrow mode, show the complete calendar month instead of the 14-day range.
-  const [baseYear, baseMonth] = currentBaseDate.split('-').map(Number);
-  const timelineBaseDate = columnZoomMode === 'compact'
-    ? `${baseYear}-${String(baseMonth).padStart(2, '0')}-01`
-    : currentBaseDate;
-  const initialWindowDays = columnZoomMode === 'compact'
-    ? new Date(baseYear, baseMonth, 0).getDate()
-    : dateRangeMode === 'two_weeks' ? 14 : 28;
-  const [timelineWindowStart, setTimelineWindowStart] = useState(timelineBaseDate);
-  const [timelineWindowDays, setTimelineWindowDays] = useState(initialWindowDays);
-  const pendingPrependWidthRef = useRef(0);
-  const edgeLoadLockRef = useRef(false);
+  // Continuous stable 3-month window centered on the active month (prev month, active month, next month).
+  // This completely eliminates runaway prepending and date skipping!
+  const { timelineWindowStart, timelineWindowDays } = useMemo(() => {
+    const [y, m] = currentBaseDate.split('-').map(Number);
+    const safeYear = y || new Date().getFullYear();
+    const safeMonth = m || new Date().getMonth() + 1;
+    // Start of previous month
+    const prevMonthDate = new Date(safeYear, safeMonth - 2, 1);
+    const startStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+    // End of next month
+    const nextMonthEndDate = new Date(safeYear, safeMonth + 1, 0);
+    const diffTime = nextMonthEndDate.getTime() - prevMonthDate.getTime();
+    const total = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return { timelineWindowStart: startStr, timelineWindowDays: Math.max(60, total) };
+  }, [currentBaseDate]);
 
-  useEffect(() => {
-    setTimelineWindowStart(timelineBaseDate);
-    setTimelineWindowDays(initialWindowDays);
-    pendingPrependWidthRef.current = 0;
-    edgeLoadLockRef.current = false;
-  }, [timelineBaseDate, initialWindowDays]);
+  const goToPreviousMonth = () => {
+    const [y, m] = currentBaseDate.split('-').map(Number);
+    const safeYear = y || new Date().getFullYear();
+    const safeMonth = m || new Date().getMonth() + 1;
+    const prev = new Date(safeYear, safeMonth - 2, 1);
+    const iso = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-01`;
+    setCurrentBaseDate(iso);
+  };
 
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    const adjustment = pendingPrependWidthRef.current;
-    if (!el || !adjustment) return;
-    el.scrollLeft += isRTL ? -adjustment : adjustment;
-    pendingPrependWidthRef.current = 0;
-    edgeLoadLockRef.current = false;
-  }, [timelineWindowStart, timelineWindowDays, isRTL]);
+  const goToNextMonth = () => {
+    const [y, m] = currentBaseDate.split('-').map(Number);
+    const safeYear = y || new Date().getFullYear();
+    const safeMonth = m || new Date().getMonth() + 1;
+    const next = new Date(safeYear, safeMonth, 1);
+    const iso = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-01`;
+    setCurrentBaseDate(iso);
+  };
 
   // Global Timeline Sync Hook: observes the expanding date window.
   const timelineSync = useTimelineSync({
@@ -414,6 +422,21 @@ export const PlanningTimeline: React.FC = () => {
     return dates;
   }, [timelineWindowStart, timelineWindowDays, language, timelineSync.todayDateStr]);
 
+  // Center timeline on currentBaseDate when it changes (or on mount)
+  const hasCenteredInitialDateRef = useRef(false);
+  useEffect(() => {
+    const idx = timelineDays.findIndex((day) => day.dateStr === currentBaseDate);
+    if (idx >= 0 && scrollContainerRef.current) {
+      const el = scrollContainerRef.current;
+      const target = Math.max(0, idx * colWidth - (isMobileScreen ? 20 : 60));
+      el.scrollTo({
+        left: target * (isRTL ? -1 : 1),
+        behavior: hasCenteredInitialDateRef.current ? 'smooth' : 'auto',
+      });
+      hasCenteredInitialDateRef.current = true;
+    }
+  }, [currentBaseDate, timelineDays, colWidth, isRTL, isMobileScreen]);
+
   // Derive the marker index from the exact date rendered in the day columns.
   // This keeps the red marker aligned even when the timeline window is extended/prepended.
   const currentTimeStr = timelineSync.currentTimeStr;
@@ -452,16 +475,16 @@ export const PlanningTimeline: React.FC = () => {
       .filter((grp) => grp.resources.length > 0 || (currentDomain === 'hotel' && !searchQuery.trim()));
   }, [currentDomain, resourceGroups, searchQuery, bookings, selectedEstablishmentId]);
 
-  // Gantt hierarchy: building (resource group) > floor > room.
+  // Gantt hierarchy: building (resource group) > floor / wing / floor_wing > room.
   // The room type remains visible on each room row.
   const floorGroupsByGroup = useMemo(() => {
-    const result = new Map<string, Array<{ key: string; label: string; resources: ResourceItem[] }>>();
+    const result = new Map<string, Array<{ key: string; label: string; shortLabel: string; resources: ResourceItem[] }>>();
     for (const group of filteredGroups) {
       if (group.sector !== 'hotel') {
-        result.set(group.id, [{ key: 'all', label: '', resources: group.resources }]);
+        result.set(group.id, [{ key: 'all', label: '', shortLabel: '', resources: group.resources }]);
         continue;
       }
-      const floors = new Map<string, ResourceItem[]>();
+      const subgroups = new Map<string, { label: string; shortLabel: string; sortKey: string; resources: ResourceItem[] }>();
       for (const resource of group.resources) {
         let floor = resource.floor?.trim() || '';
         if (!floor) {
@@ -474,22 +497,46 @@ export const PlanningTimeline: React.FC = () => {
             floor = '1';
           }
         }
-        const items = floors.get(floor) ?? [];
-        items.push(resource);
-        floors.set(floor, items);
+
+        const rawWing = resource.wing?.trim();
+        const wing = rawWing || (language === 'fr' ? 'Aile Principale' : language === 'ar' ? 'الجناح الرئيسي' : 'Main Wing');
+
+        let subKey = floor;
+        let subLabel = language === 'fr' ? `Étage ${floor}` : language === 'ar' ? `الطابق ${floor}` : `Floor ${floor}`;
+        let shortLabel = language === 'ar' ? `ط${floor}` : `É${floor}`;
+        let sortKey = floor.padStart(4, '0');
+
+        if (groupingMode === 'wing') {
+          subKey = wing;
+          subLabel = wing;
+          shortLabel = wing.substring(0, 4);
+          sortKey = wing;
+        } else if (groupingMode === 'floor_wing') {
+          subKey = `${floor}_${wing}`;
+          subLabel = `${language === 'fr' ? 'Étage' : language === 'ar' ? 'الطابق' : 'Floor'} ${floor} • ${wing}`;
+          shortLabel = `${language === 'ar' ? 'ط' : 'É'}${floor} • ${wing.substring(0, 4)}`;
+          sortKey = `${floor.padStart(4, '0')}_${wing}`;
+        }
+
+        const existing = subgroups.get(subKey) ?? { label: subLabel, shortLabel, sortKey, resources: [] };
+        existing.resources.push(resource);
+        subgroups.set(subKey, existing);
       }
-      result.set(group.id, [...floors.entries()]
-        .sort(([a], [b]) => a.localeCompare(b, language, { numeric: true, sensitivity: 'base' }))
-        .map(([floor, resources]) => ({
-          key: floor,
-          floorNumber: floor,
-          label: language === 'fr' ? `Étage ${floor}` : language === 'ar' ? `الطابق ${floor}` : `Floor ${floor}`,
-          shortLabel: language === 'ar' ? `ط${floor}` : `É${floor}`,
-          resources,
-        })));
+
+      result.set(
+        group.id,
+        [...subgroups.entries()]
+          .sort(([, a], [, b]) => a.sortKey.localeCompare(b.sortKey, language, { numeric: true, sensitivity: 'base' }))
+          .map(([key, item]) => ({
+            key,
+            label: item.label,
+            shortLabel: item.shortLabel,
+            resources: item.resources,
+          }))
+      );
     }
     return result;
-  }, [filteredGroups, language]);
+  }, [filteredGroups, language, groupingMode]);
 
   const allFloorsCollapsed = useMemo(() => {
     let totalFloors = 0;
@@ -627,8 +674,14 @@ export const PlanningTimeline: React.FC = () => {
       {/* Responsive Toolbar: one compact, horizontally scrollable row on phones */}
       <div className="w-full min-w-0 shrink-0 border-b border-[rgb(var(--pms-border))] pms-gantt-surface select-none">
         <div className="flex min-w-0 flex-row items-center gap-1.5 overflow-x-auto overflow-y-hidden whitespace-nowrap px-1.5 py-1 sm:overflow-visible md:px-3 md:py-1 scrollbar-thin">
-          {/* Quick Date Stepper Navigation & Scroll-driven Visible Month */}
+          {/* Quick Date Stepper Navigation with sequential Month & Day navigation */}
           <div className="flex h-7 shrink-0 items-center gap-0.5 rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] p-0.5 shadow-2xs">
+            <button
+              onClick={goToPreviousMonth}
+              className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-[rgb(var(--pms-accent)/0.1)] active:scale-95 dark:text-slate-300 cursor-pointer"
+              title={language === 'fr' ? 'Mois précédent (sans saut)' : language === 'ar' ? 'الشهر السابق' : 'Previous Month'}
+              aria-label={language === 'fr' ? 'Mois précédent' : language === 'ar' ? 'الشهر السابق' : 'Previous Month'}
+            ><ChevronsLeft size={13} /></button>
             <button
               onClick={() => scrollTimeline(-colWidth * 2)}
               className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-[rgb(var(--pms-accent)/0.1)] active:scale-95 dark:text-slate-300 cursor-pointer"
@@ -648,6 +701,12 @@ export const PlanningTimeline: React.FC = () => {
               title={getTranslation('ganttForwardTwoDays', language)}
               aria-label={getTranslation('ganttForwardTwoDays', language)}
             ><MoveRight size={12} /></button>
+            <button
+              onClick={goToNextMonth}
+              className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-[rgb(var(--pms-accent)/0.1)] active:scale-95 dark:text-slate-300 cursor-pointer"
+              title={language === 'fr' ? 'Mois suivant (sans saut)' : language === 'ar' ? 'الشهر التالي' : 'Next Month'}
+              aria-label={language === 'fr' ? 'Mois suivant' : language === 'ar' ? 'الشهر التالي' : 'Next Month'}
+            ><ChevronsRight size={13} /></button>
           </div>
 
           {/* Date Picker Input styled with same theme tokens */}
@@ -662,6 +721,39 @@ export const PlanningTimeline: React.FC = () => {
               aria-label={getTranslation('ganttDatePick', language)}
             />
           </div>
+
+          {/* Room Grouping Selector: Floor / Wing / Floor & Wing */}
+          {currentDomain === 'hotel' && (
+            <div className="flex h-7 shrink-0 items-center rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] p-0.5 shadow-2xs text-[10px] font-semibold">
+              <button
+                type="button"
+                onClick={() => changeGroupingMode('floor')}
+                className={`h-6 rounded px-1.5 transition-colors cursor-pointer ${groupingMode === 'floor' ? 'bg-blue-600 text-white shadow-xs font-bold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+                title={language === 'fr' ? 'Grouper par Étage' : language === 'ar' ? 'تجميع حسب الطابق' : 'Group by Floor'}
+                aria-pressed={groupingMode === 'floor'}
+              >
+                {language === 'fr' ? 'Étage' : language === 'ar' ? 'الطابق' : 'Floor'}
+              </button>
+              <button
+                type="button"
+                onClick={() => changeGroupingMode('wing')}
+                className={`h-6 rounded px-1.5 transition-colors cursor-pointer ${groupingMode === 'wing' ? 'bg-blue-600 text-white shadow-xs font-bold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+                title={language === 'fr' ? 'Grouper par Aile' : language === 'ar' ? 'تجميع حسب الجناح' : 'Group by Wing'}
+                aria-pressed={groupingMode === 'wing'}
+              >
+                {language === 'fr' ? 'Aile' : language === 'ar' ? 'الجناح' : 'Wing'}
+              </button>
+              <button
+                type="button"
+                onClick={() => changeGroupingMode('floor_wing')}
+                className={`h-6 rounded px-1.5 transition-colors cursor-pointer ${groupingMode === 'floor_wing' ? 'bg-blue-600 text-white shadow-xs font-bold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+                title={language === 'fr' ? 'Grouper par Étage & Aile' : language === 'ar' ? 'تجميع حسب الطابق والجناح' : 'Group by Floor & Wing'}
+                aria-pressed={groupingMode === 'floor_wing'}
+              >
+                {language === 'fr' ? 'Étage & Aile' : language === 'ar' ? 'طابق وجناح' : 'Floor & Wing'}
+              </button>
+            </div>
+          )}
 
           {/* Resource label density */}
           <div className="flex shrink-0 items-center gap-1">
@@ -703,7 +795,7 @@ export const PlanningTimeline: React.FC = () => {
             >{getTranslation('ganttZoomNormal', language)}</button>
           </div>
 
-          {/* Toggle all floors button (Hotel sector) */}
+          {/* Toggle all subgroups button (Hotel sector) */}
           {currentDomain === 'hotel' && (
             <button
               type="button"

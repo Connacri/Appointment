@@ -71,23 +71,26 @@ export const statusConfig: Record<
   },
 };
 
+import { ChevronUp, ChevronDown, X, Info } from 'lucide-react';
+
 export const LegendBar: React.FC = () => {
   const { language } = useApp();
   const [isMobileExpanded, setIsMobileExpanded] = React.useState(false);
 
   return (
     <>
-      {/* Mobile Floating Mini-Toggle Button */}
-      <div className="sm:hidden fixed bottom-2 right-2 rtl:right-auto rtl:left-2 z-40">
+      {/* Mobile Floating Mini-Toggle Button (accessible touch target >= 44x44px) */}
+      <div className="sm:hidden fixed bottom-3 right-3 rtl:right-auto rtl:left-3 z-40">
         <button
           type="button"
           onClick={() => setIsMobileExpanded(!isMobileExpanded)}
-          className="px-2.5 py-1 text-[10px] font-bold rounded-full bg-slate-900/90 text-white dark:bg-slate-100 dark:text-slate-900 shadow-md backdrop-blur border border-white/20 transition cursor-pointer flex items-center gap-1.5"
+          className="min-h-[44px] min-w-[44px] px-3 py-2 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 shadow-lg border border-slate-200 dark:border-slate-800 transition-all active:scale-95 cursor-pointer flex items-center gap-2"
           aria-expanded={isMobileExpanded}
+          aria-label={language === 'fr' ? 'Afficher la légende des statuts' : language === 'ar' ? 'عرض دليل الحالات' : 'Show status legend'}
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          <span>{language === 'fr' ? 'Légende' : language === 'ar' ? 'الدليل' : 'Legend'}</span>
-          <span className="text-[9px] opacity-75">{isMobileExpanded ? '✕' : '▲'}</span>
+          <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+          <span className="text-[11px] font-bold">{language === 'fr' ? 'Légende' : language === 'ar' ? 'الدليل' : 'Legend'}</span>
+          {isMobileExpanded ? <ChevronDown size={14} className="text-slate-500" /> : <ChevronUp size={14} className="text-slate-500" />}
         </button>
       </div>
 
@@ -95,35 +98,36 @@ export const LegendBar: React.FC = () => {
       <footer
         className={`${
           isMobileExpanded
-            ? 'fixed bottom-0 inset-x-0 z-50 p-2.5 shadow-2xl pms-slide-up flex flex-wrap max-h-48'
-            : 'hidden sm:flex h-8'
-        } pms-gantt-surface border-t border-[rgb(var(--pms-border))] px-3 items-center gap-1.5 overflow-x-auto shrink-0 select-none text-[11px] backdrop-blur`}
+            ? 'fixed bottom-0 inset-x-0 z-50 p-3.5 rounded-t-2xl shadow-2xl pms-slide-up flex flex-col gap-2 max-h-56 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800'
+            : 'hidden sm:flex h-9'
+        } bg-[rgb(var(--pms-surface))] border-t border-[rgb(var(--pms-border))] px-3 items-center gap-2 overflow-x-auto shrink-0 select-none text-[11px] transition-colors`}
       >
         <div className="flex items-center justify-between w-full sm:w-auto">
-          <span className="font-semibold text-slate-500 uppercase tracking-wider text-[10px] mr-2 shrink-0">
-            {language === 'fr' ? 'Légende :' : language === 'ar' ? 'دليل الحالات:' : 'Status:'}
-          </span>
+          <div className="flex items-center gap-1.5 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[10px] mr-2 shrink-0">
+            <Info size={12} className="text-blue-500" />
+            <span>{language === 'fr' ? 'Légende :' : language === 'ar' ? 'دليل الحالات:' : 'Status:'}</span>
+          </div>
           {isMobileExpanded && (
             <button
               type="button"
               onClick={() => setIsMobileExpanded(false)}
-              className="sm:hidden p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              aria-label="Fermer la légende"
+              className="sm:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              aria-label={language === 'fr' ? 'Fermer la légende' : language === 'ar' ? 'إغلاق الدليل' : 'Close legend'}
             >
-              ✕
+              <X size={15} />
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap overflow-x-auto">
+        <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap overflow-x-auto scrollbar-none pb-0.5">
           {(Object.keys(statusConfig) as BookingStatus[]).map((st) => {
             const item = statusConfig[st];
             return (
               <div
                 key={st}
-                className={`px-2 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1.5 border border-black/5 dark:border-white/5 ${item.pillBg}`}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold shrink-0 flex items-center gap-1.5 border ${item.pillBg}`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
+                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-90" />
                 <span>{item.label[language] || item.label.en}</span>
               </div>
             );
