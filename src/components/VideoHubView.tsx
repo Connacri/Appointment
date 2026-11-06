@@ -24,9 +24,11 @@ type Video = {
   contentType?: string;
 };
 
-type ExtraCategory = { id: string; name: string };
+type ExtraCategory = { id: string; name: string; area?: string; areaName?: string };
 
-type Page = 'home' | 'feed' | 'liked' | 'history' | 'later' | 'categories' | 'category' | 'search' | 'settings' | 'add' | 'watch';
+type Playlist = { id: string; name: string; videoIds: string[] };
+
+type Page = 'home' | 'feed' | 'liked' | 'history' | 'later' | 'categories' | 'category' | 'areas' | 'area' | 'channels' | 'channel' | 'playlists' | 'playlist' | 'search' | 'settings' | 'add' | 'watch';
 
 const CATEGORIES: { id: string; name: Record<Locale, string> }[] = [
   { id: 'tech', name: { fr: 'Technologie', en: 'Technology', ar: 'تقنية' } },
@@ -145,6 +147,7 @@ export const VideoHubView: React.FC = () => {
     return stored.length ? stored : SEED_VIDEOS;
   });
   const [extraCategories, setExtraCategories] = useState<ExtraCategory[]>(() => loadJSON<ExtraCategory[]>('videohub_extra_cats', []));
+  const [playlists, setPlaylists] = useState<Playlist[]>(() => loadJSON<Playlist[]>('videohub_playlists', []));
   const [likes, setLikes] = useState<string[]>(() => loadJSON<string[]>(LS.likes, []));
   const [dislikes, setDislikes] = useState<string[]>(() => loadJSON<string[]>(LS.dislikes, []));
   const [seen, setSeen] = useState<string[]>(() => loadJSON<string[]>(LS.seen, []));
@@ -153,6 +156,9 @@ export const VideoHubView: React.FC = () => {
   const [page, setPage] = useState<Page>('home');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [areaId, setAreaId] = useState<string | null>(null);
+  const [channelName, setChannelName] = useState<string | null>(null);
+  const [playlistId, setPlaylistId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<'grid' | 'feed'>('grid');
 
@@ -170,6 +176,7 @@ export const VideoHubView: React.FC = () => {
   useEffect(() => saveJSON(LS.seen, seen), [seen]);
   useEffect(() => saveJSON(LS.later, later), [later]);
   useEffect(() => saveJSON('videohub_extra_cats', extraCategories), [extraCategories]);
+  useEffect(() => saveJSON('videohub_playlists', playlists), [playlists]);
 
   // Load the HackerTube dataset (offline-first: bundled asset, then cached in library)
   useEffect(() => {
@@ -178,7 +185,7 @@ export const VideoHubView: React.FC = () => {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
-        const cats: ExtraCategory[] = (data.categories || []).map((c: any) => ({ id: c.id, name: c.name }));
+        const cats: ExtraCategory[] = (data.categories || []).map((c: any) => ({ id: c.id, name: c.name, area: c.area, areaName: c.area_name }));
         const vids: Video[] = (data.videos || []).map((v: any) => ({
           id: v.id,
           platform: 'youtube' as Platform,
@@ -426,6 +433,9 @@ export const VideoHubView: React.FC = () => {
           {renderNavButton('later', <Clock size={16} />, t('À voir plus tard', 'Watch later', 'المشاهدة لاحقاً'))}
           {renderNavButton('history', <History size={16} />, t('Historique', 'History', 'السجل'))}
           {renderNavButton('categories', <Tag size={16} />, t('Catégories', 'Categories', 'الفئات'))}
+          {renderNavButton('areas', <Grid3x3 size={16} />, t('Domaines', 'Areas', 'المجالات'))}
+          {renderNavButton('channels', <Film size={16} />, t('Chaînes', 'Channels', 'القنوات'))}
+          {renderNavButton('playlists', <ListVideo size={16} />, t('Playlists', 'Playlists', 'قوائم التشغيل'))}
           {renderNavButton('settings', <Settings size={16} />, t('Paramètres', 'Settings', 'الإعدادات'))}
           <div className="mt-3 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
             {library.length} {t('vidéos', 'videos', 'فيديو')}
@@ -578,6 +588,187 @@ export const VideoHubView: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {filtered({ cat: categoryId }).map(renderCard)}
               </div>
+            </>
+          )}
+
+          {page === 'areas' && (
+            <>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">{t('Domaines', 'Areas', 'المجالات')}</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {Array.from(new Set(extraCategories.map((c) => c.area).filter(Boolean))).map((area) => {
+                  const cats = extraCategories.filter((c) => c.area === area);
+                  const count = library.filter((v) => v.categories.some((cid) => cats.some((c) => c.id === cid))).length;
+                  const name = cats[0]?.areaName || area;
+                  return (
+                    <button
+                      key={area}
+                      type="button"
+                      onClick={() => { setAreaId(area || null); setPage('area'); }}
+                      className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+                    >
+                      <span className="font-semibold text-slate-900 dark:text-white text-sm">{name}</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">{cats.length} · {count}</span>
+                    </button>
+                  );
+                })}
+                {extraCategories.length === 0 && (
+                  <div className="text-slate-500 dark:text-slate-400">{t('Chargement...', 'Loading...', 'جارٍ التحميل...')}</div>
+                )}
+              </div>
+            </>
+          )}
+
+          {page === 'area' && areaId && (
+            <>
+              <div className="flex items-center gap-2 mb-4">
+                <button type="button" onClick={() => setPage('areas')} className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                  {t('Domaines', 'Areas', 'المجالات')}
+                </button>
+                <ChevronRight size={14} className="text-slate-400" />
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                  {extraCategories.find((c) => c.area === areaId)?.areaName || areaId}
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+                {extraCategories.filter((c) => c.area === areaId).map((c) => {
+                  const count = library.filter((v) => v.categories.includes(c.id)).length;
+                  if (count === 0) return null;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => goCategory(c.id)}
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+                    >
+                      <span className="font-semibold text-slate-900 dark:text-white text-xs">{c.name}</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {page === 'channels' && (
+            <>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">{t('Chaînes', 'Channels', 'القنوات')}</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {Array.from(
+                  library.reduce((map, v) => {
+                    const prev = map.get(v.channel) || { count: 0, sample: v.id };
+                    map.set(v.channel, { count: prev.count + 1, sample: prev.sample });
+                    return map;
+                  }, new Map<string, { count: number; sample: string }>()),
+                ).map(([name, info]) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => { setChannelName(name); setPage('channel'); }}
+                    className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors text-left"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden shrink-0">
+                      {(library.find((v) => v.channel === name && (v.platform || 'youtube') === 'youtube')?.id) && (
+                        <img src={`https://i.ytimg.com/vi/${library.find((v) => v.channel === name && (v.platform || 'youtube') === 'youtube')!.id}/mqdefault.jpg`} alt="" className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm text-slate-900 dark:text-white truncate">{name}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">{info.count} {t('vidéos', 'videos', 'فيديو')}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {page === 'channel' && channelName && (
+            <>
+              <div className="flex items-center gap-2 mb-4">
+                <button type="button" onClick={() => setPage('channels')} className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                  {t('Chaînes', 'Channels', 'القنوات')}
+                </button>
+                <ChevronRight size={14} className="text-slate-400" />
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">{channelName}</h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {library.filter((v) => v.channel === channelName).map(renderCard)}
+              </div>
+            </>
+          )}
+
+          {page === 'playlists' && (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">{t('Playlists', 'Playlists', 'قوائم التشغيل')}</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = prompt(t('Nom de la playlist', 'Playlist name', 'اسم قائمة التشغيل'));
+                    if (name && name.trim()) setPlaylists((prev) => [...prev, { id: String(Date.now()), name: name.trim(), videoIds: [] }]);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold flex items-center gap-1"
+                >
+                  <Plus size={14} /> {t('Nouvelle', 'New', 'جديدة')}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {playlists.map((pl) => (
+                  <button
+                    key={pl.id}
+                    type="button"
+                    onClick={() => { setPlaylistId(pl.id); setPage('playlist'); }}
+                    className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors text-left"
+                  >
+                    <div>
+                      <div className="font-semibold text-sm text-slate-900 dark:text-white">{pl.name}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">{pl.videoIds.length} {t('vidéos', 'videos', 'فيديو')}</div>
+                    </div>
+                  </button>
+                ))}
+                {playlists.length === 0 && (
+                  <div className="text-slate-500 dark:text-slate-400">{t('Aucune playlist.', 'No playlists.', 'لا توجد قوائم تشغيل.')}</div>
+                )}
+              </div>
+            </>
+          )}
+
+          {page === 'playlist' && playlistId && (
+            <>
+              {(() => {
+                const pl = playlists.find((p) => p.id === playlistId);
+                if (!pl) return null;
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => setPage('playlists')} className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                          {t('Playlists', 'Playlists', 'قوائم التشغيل')}
+                        </button>
+                        <ChevronRight size={14} className="text-slate-400" />
+                        <h2 className="text-lg font-bold text-slate-900 dark:text-white">{pl.name}</h2>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(t('Supprimer cette playlist ?', 'Delete this playlist?', 'حذف قائمة التشغيل؟'))) {
+                            setPlaylists((prev) => prev.filter((p) => p.id !== pl.id));
+                            setPage('playlists');
+                          }
+                        }}
+                        className="text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline"
+                      >
+                        {t('Supprimer', 'Delete', 'حذف')}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {pl.videoIds.map((id) => videoById.get(id)).filter(Boolean).map((v) => renderCard(v as Video))}
+                    </div>
+                    {pl.videoIds.length === 0 && (
+                      <div className="text-slate-500 dark:text-slate-400 py-12 text-center">{t('Playlist vide. Ajoutez des vidéos depuis leur page.', 'Empty playlist. Add videos from their page.', 'قائمة فارغة. أضف فيديوهات من صفحاتها.')}</div>
+                    )}
+                  </>
+                );
+              })()}
             </>
           )}
 
@@ -748,6 +939,31 @@ export const VideoHubView: React.FC = () => {
                     }`}
                   >
                     <Clock size={14} /> {later.includes(selected.id) ? t('Enregistré', 'Saved', 'محفوظ') : t('Plus tard', 'Later', 'لاحقاً')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (playlists.length === 0) {
+                        const name = prompt(t('Nom de la playlist', 'Playlist name', 'اسم قائمة التشغيل'));
+                        if (name && name.trim()) {
+                          const pl = { id: String(Date.now()), name: name.trim(), videoIds: [selected.id] };
+                          setPlaylists((prev) => [...prev, pl]);
+                        }
+                      } else {
+                        const choice = prompt(t('Nom de la playlist (existante ou nouvelle)', 'Playlist name (existing or new)', 'اسم قائمة التشغيل (موجودة أو جديدة)') + '\n' + playlists.map((p) => p.name).join(', '));
+                        if (choice && choice.trim()) {
+                          const existing = playlists.find((p) => p.name.toLowerCase() === choice.trim().toLowerCase());
+                          if (existing) {
+                            setPlaylists((prev) => prev.map((p) => p.id === existing.id && !p.videoIds.includes(selected.id) ? { ...p, videoIds: [...p.videoIds, selected.id] } : p));
+                          } else {
+                            setPlaylists((prev) => [...prev, { id: String(Date.now()), name: choice.trim(), videoIds: [selected.id] }]);
+                          }
+                        }
+                      }
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <ListVideo size={14} /> {t('Playlist', 'Playlist', 'قائمة')}
                   </button>
                   <a
                     href={(selected.platform || 'youtube') === 'tiktok' ? `https://www.tiktok.com/@/video/${selected.id}` : `https://www.youtube.com/watch?v=${selected.id}`}
