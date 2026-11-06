@@ -94,6 +94,35 @@ const ViewFallback: React.FC = () => (
   </div>
 );
 
+class VideoHubErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[HackTube] View rendering failed:', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-3 bg-slate-50 p-6 text-center dark:bg-slate-950">
+          <div className="text-base font-semibold text-slate-900 dark:text-white">HackTube n’a pas pu être affiché</div>
+          <p className="max-w-xl text-sm text-slate-600 dark:text-slate-400">Une erreur JavaScript a interrompu le chargement de cet onglet. Rechargez l’application pour relancer son module.</p>
+          <pre className="max-w-full overflow-auto rounded-lg bg-slate-200/70 p-3 text-left text-xs text-rose-700 dark:bg-slate-900 dark:text-rose-300">{this.state.error.message}</pre>
+          <button type="button" onClick={() => window.location.reload()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500">Recharger l’application</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const MainLayout: React.FC = () => {
   const {
     activeView,
@@ -229,7 +258,7 @@ const MainLayout: React.FC = () => {
                 }`}
                 aria-hidden={activeView !== 'videos'}
               >
-                <VideoHubView />
+                <VideoHubErrorBoundary><VideoHubView /></VideoHubErrorBoundary>
               </div>
             )}
           </Suspense>
