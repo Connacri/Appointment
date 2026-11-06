@@ -197,8 +197,8 @@ export const VideoHubView: React.FC = () => {
     const shouldOpen = (() => { try { return localStorage.getItem('appointment_open_hacktube_quick_add') === '1'; } catch { return false; } })();
     if (pendingUrl || shouldOpen) openFromShare(pendingUrl);
     const handleSharedVideo = (event: Event) => {
-      const detail = (event as CustomEvent<{ url?: string }>).detail;
-      openFromShare(detail?.url);
+      const detail = (event as CustomEvent<{ url?: string; openQuickAdd?: boolean }>).detail;
+      if (detail?.url || detail?.openQuickAdd) openFromShare(detail.url);
     };
     window.addEventListener('appointment-video-share', handleSharedVideo);
     window.addEventListener('focus', refreshBubbleStatus);
