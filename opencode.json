@@ -2,35 +2,6 @@
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "servers": {
-      "firebase": {
-        "type": "local",
-        "command": ["npx", "-y", "firebase-tools@latest", "mcp"],
-        "cwd": ".",
-        "disabled": true
-      },
-      "google-play": {
-        "type": "local",
-        "command": ["uvx", "--with", "mcp<2", "google-play-mcp"],
-        "environment": {
-          "GOOGLE_APPLICATION_CREDENTIALS": "C:\\Users\\gzers\\.config\\opencode\\cargolink-23dd3-ea96950a94f5.json",
-          "GOOGLE_PLAY_PACKAGE_NAME": "com.rnd.dz"
-        },
-        "disabled": true
-      },
-      "render": {
-        "type": "remote",
-        "url": "https://mcp.render.com/mcp",
-        "oauth": false,
-        "headers": {
-          "Authorization": "Bearer {env:RENDER_API_KEY}"
-        },
-        "disabled": true
-      },
-      "rea": {
-        "type": "local",
-        "command": ["cmd.exe", "/d", "/c", "npx", "-y", "rea-agents@6.7.0", "mcp"],
-        "disabled": true
-      },
       "supabase": {
         "type": "remote",
         "url": "https://mcp.supabase.com/mcp?project_ref=vkmgakmujipnpjlawjqm&read_only=true&features=database%2Cdebugging%2Cdevelopment%2Cdocs%2Cfunctions"
@@ -38,30 +9,9 @@
     }
   },
   "permissions": [
-    {
-      "action": "skill",
-      "resource": "render-*",
-      "effect": "deny"
-    },
-    {
-      "action": "skill",
-      "resource": "write-swift",
-      "effect": "deny"
-    },
-    {
-      "action": "skill",
-      "resource": "animate-expo",
-      "effect": "deny"
-    },
-    {
-      "action": "skill",
-      "resource": "ask-sonner",
-      "effect": "deny"
-    },
-    {
-      "action": "render_validate_blueprint",
-      "resource": "*",
-      "effect": "deny"
-    }
+    { "action": "skill", "resource": "render-*", "effect": "deny" },
+    { "action": "skill", "resource": "write-swift", "effect": "deny" },
+    { "action": "skill", "resource": "animate-expo", "effect": "deny" },
+    { "action": "skill", "resource": "ask-sonner", "effect": "deny" }
   ]
 }
