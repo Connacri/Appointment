@@ -87,6 +87,7 @@ public class VideoBubblePlugin extends Plugin {
             }
         }
         prefs.edit().remove(KEY_URL).remove(KEY_OPEN).apply();
+        getActivity().setIntent(new Intent(getActivity(), MainActivity.class));
         JSObject result = new JSObject();
         result.put("url", url);
         result.put("openQuickAdd", openQuickAdd);
