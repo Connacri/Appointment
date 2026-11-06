@@ -686,6 +686,178 @@ export const translations = {
     en: 'Expand sidebar',
     ar: 'توسيع القائمة',
   },
+
+  // Gantt Timeline & Room Controls
+  ganttBackTwoDays: {
+    fr: 'Reculer de 2 jours',
+    en: 'Go back 2 days',
+    ar: 'الرجوع يومين للخلف',
+  },
+  ganttForwardTwoDays: {
+    fr: 'Avancer de 2 jours',
+    en: 'Go forward 2 days',
+    ar: 'التقدم يومين للأمام',
+  },
+  ganttToday: {
+    fr: "Aujourd'hui",
+    en: 'Today',
+    ar: 'اليوم',
+  },
+  ganttDatePick: {
+    fr: 'Aller directement à une date',
+    en: 'Jump directly to date',
+    ar: 'الانتقال المباشر إلى تاريخ',
+  },
+  ganttDensityMini: {
+    fr: 'Mini',
+    en: 'Mini',
+    ar: 'مصغر',
+  },
+  ganttDensityCompact: {
+    fr: 'Compact',
+    en: 'Compact',
+    ar: 'مدمج',
+  },
+  ganttDensityFull: {
+    fr: 'Complet',
+    en: 'Full',
+    ar: 'كامل',
+  },
+  ganttZoomNarrow: {
+    fr: 'Étroit',
+    en: 'Narrow',
+    ar: 'ضيق',
+  },
+  ganttZoomNormal: {
+    fr: 'Normal',
+    en: 'Normal',
+    ar: 'عادي',
+  },
+  ganttAvailHelp: {
+    fr: 'Dispo',
+    en: 'Avail.',
+    ar: 'التوفر',
+  },
+  ganttExpandFloors: {
+    fr: 'Déplier étages',
+    en: 'Expand floors',
+    ar: 'توسيع الطوابق',
+  },
+  ganttCollapseFloors: {
+    fr: 'Replier étages',
+    en: 'Collapse floors',
+    ar: 'طي الطوابق',
+  },
+  ganttResourceColTitle: {
+    fr: 'Chambres & Suites',
+    en: 'Rooms & Suites',
+    ar: 'الغرف والأجنحة',
+  },
+  ganttResortResourceColTitle: {
+    fr: 'Villas, Bungalows & Suites',
+    en: 'Villas, Bungalows & Suites',
+    ar: 'فلل وشاليهات المنتجع',
+  },
+  ganttAccommodations: {
+    fr: 'Hébergements',
+    en: 'Accommodations',
+    ar: 'أماكن الإقامة',
+  },
+  ganttFloor: {
+    fr: 'Étage {floor}',
+    en: 'Floor {floor}',
+    ar: 'الطابق {floor}',
+  },
+  ganttRoom: {
+    fr: 'Chambre',
+    en: 'Room',
+    ar: 'غرفة',
+  },
+  ganttStatusClean: {
+    fr: 'Propre',
+    en: 'Clean',
+    ar: 'جاهزة ونظيفة',
+  },
+  ganttStatusCleaning: {
+    fr: 'En cours de nettoyage',
+    en: 'Cleaning in progress',
+    ar: 'قيد التنظيف',
+  },
+  ganttStatusDirty: {
+    fr: 'À nettoyer',
+    en: 'Needs cleaning',
+    ar: 'تحتاج تنظيف',
+  },
+  ganttStatusOutOfOrder: {
+    fr: 'HORS SERVICE (HS)',
+    en: 'OUT OF ORDER',
+    ar: 'خارج الخدمة',
+  },
+  ganttTenant: {
+    fr: 'Locataire :',
+    en: 'Guest:',
+    ar: 'النزيل:',
+  },
+  ganttOccupants: {
+    fr: 'Occupants :',
+    en: 'Occupants:',
+    ar: 'عدد النزلاء:',
+  },
+  ganttDates: {
+    fr: 'Dates :',
+    en: 'Dates:',
+    ar: 'التواريخ:',
+  },
+  ganttPayment: {
+    fr: 'Règlement :',
+    en: 'Payment:',
+    ar: 'المبلغ:',
+  },
+  ganttOpenBooking: {
+    fr: 'Fiche & Police',
+    en: 'Guest Folio',
+    ar: 'بطاقة الحجز والشرطة',
+  },
+  ganttExportIcs: {
+    fr: 'Exporter .ICS',
+    en: 'Export .ICS',
+    ar: 'تصدير إلى التقويم (.ICS)',
+  },
+  ganttCheckInLabel: {
+    fr: 'Arrivée :',
+    en: 'Check-in:',
+    ar: 'الوصول:',
+  },
+  ganttCheckOutLabel: {
+    fr: 'Départ :',
+    en: 'Check-out:',
+    ar: 'المغادرة:',
+  },
+  ganttRoomOccupants: {
+    fr: 'Occupants chambre :',
+    en: 'Room occupants:',
+    ar: 'نزلاء الغرفة:',
+  },
+  ganttOpenFullBooking: {
+    fr: 'Ouvrir la Fiche Réservation',
+    en: 'Open Booking Folio',
+    ar: 'فتح بطاقة الحجز',
+  },
+  ganttScrollDragTip: {
+    fr: 'Maintenir le clic et glisser pour faire défiler le calendrier',
+    en: 'Click and drag to scroll timeline',
+    ar: 'اضغط مع الاستمرار واسحب لتمرير التقويم',
+  },
+  ganttCenterToday: {
+    fr: 'Centrer la vue sur Aujourd’hui',
+    en: 'Center view on Today',
+    ar: 'الانتقال إلى اليوم',
+  },
+  ganttSharedRoomBadge: {
+    fr: 'Chambre partagée / Multiple occupants',
+    en: 'Shared room / Multiple guests',
+    ar: 'غرفة مشتركة / نزلاء متعددون',
+  },
 };
 
 export function getTranslation(key: keyof typeof translations, lang: Language): string {

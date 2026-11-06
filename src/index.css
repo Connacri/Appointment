@@ -1201,6 +1201,70 @@
     background: var(--theme-primary, rgb(var(--pms-accent))) !important;
     box-shadow: 0 4px 14px rgb(var(--pms-accent) / 0.3) !important;
   }
+
+  /* Gantt Table & Room Bars Theming */
+  .pms-gantt-root {
+    background-color: rgb(var(--pms-canvas));
+    border-color: rgb(var(--pms-border));
+  }
+  .pms-gantt-surface {
+    background-color: rgb(var(--pms-surface));
+    border-color: rgb(var(--pms-border));
+  }
+  .pms-gantt-subsurface {
+    background-color: rgb(var(--pms-canvas) / 0.85);
+    border-color: rgb(var(--pms-border));
+  }
+  .pms-gantt-border {
+    border-color: rgb(var(--pms-border));
+  }
+  .pms-gantt-border-subtle {
+    border-color: rgb(var(--pms-border) / 0.65);
+  }
+  .pms-gantt-row-hover:hover {
+    background-color: rgb(var(--pms-accent) / 0.06);
+  }
+  .pms-gantt-cell-hover:hover {
+    background-color: rgb(var(--pms-accent) / 0.12);
+  }
+  .pms-gantt-cell-active:active {
+    background-color: rgb(var(--pms-accent) / 0.2);
+  }
+  .pms-gantt-today-col {
+    background-color: rgb(var(--pms-accent) / 0.09) !important;
+  }
+  .pms-gantt-today-badge {
+    color: var(--theme-primary, rgb(var(--pms-accent))) !important;
+  }
+
+  /* Room Booking Bars Theming */
+  .pms-booking-bar {
+    position: relative;
+    border-radius: var(--pms-radius-sm);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.08);
+    transition: transform 120ms var(--ease-out), filter 120ms var(--ease-out), box-shadow 120ms var(--ease-out);
+    overflow: hidden;
+  }
+  .pms-booking-bar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--theme-accent-strip, var(--theme-primary, #2563eb));
+    z-index: 2;
+  }
+  .pms-booking-bar-confirmed {
+    background-color: var(--theme-primary, #2563eb) !important;
+    color: #ffffff !important;
+    border-color: var(--theme-primary-hover, #1d4ed8) !important;
+    box-shadow: 0 2px 8px rgb(var(--pms-accent) / 0.28) !important;
+  }
+  .pms-booking-bar-confirmed span,
+  .pms-booking-bar-confirmed div {
+    color: #ffffff !important;
+  }
 }
 
 /* App canvas: a single, very quiet light source instead of a flat fill. */

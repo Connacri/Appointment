@@ -26,6 +26,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { ResourceGroup, ResourceItem, TimelineBooking, BookingStatus } from '../types/booking';
 import { statusConfig } from './LegendBar';
+import { getTranslation } from '../i18n/translations';
 import { downloadICS } from '../utils/icsExport';
 import { useTimelineSync } from '../hooks/useTimelineSync';
 import {
@@ -557,12 +558,12 @@ export const PlanningTimeline: React.FC = () => {
 
     const label =
       status === 'clean'
-        ? 'Propre (Clean)'
+        ? (language === 'fr' ? 'Propre' : language === 'ar' ? 'جاهزة ونظيفة' : 'Clean')
         : status === 'cleaning'
-        ? 'En cours de nettoyage (Cleaning)'
+        ? (language === 'fr' ? 'En cours de nettoyage' : language === 'ar' ? 'قيد التنظيف' : 'Cleaning')
         : status === 'dirty'
-        ? 'À nettoyer (Dirty)'
-        : 'HORS SERVICE (HS)';
+        ? (language === 'fr' ? 'À nettoyer' : language === 'ar' ? 'تحتاج تنظيف' : 'Needs cleaning')
+        : (language === 'fr' ? 'HORS SERVICE (HS)' : language === 'ar' ? 'خارج الخدمة' : 'OUT OF ORDER');
 
     return (
       <button
@@ -574,8 +575,8 @@ export const PlanningTimeline: React.FC = () => {
           }
         }}
         className={`relative z-20 w-3.5 h-3.5 rounded-full ${colorClass} shrink-0 cursor-pointer hover:scale-125 transition focus:outline-none focus:ring-2 focus:ring-blue-500 ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 shadow-2xs pointer-events-auto`}
-        title={`État : ${label} — Cliquez pour consulter ou modifier le statut`}
-        aria-label={`État de la chambre : ${label}. Cliquez pour consulter ou modifier le statut`}
+        title={`${language === 'fr' ? 'État :' : language === 'ar' ? 'الحالة :' : 'Status:'} ${label} — ${language === 'fr' ? 'Cliquez pour modifier le statut' : language === 'ar' ? 'اضغط لتعديل الحالة' : 'Click to change status'}`}
+        aria-label={`${language === 'fr' ? 'État de la chambre :' : language === 'ar' ? 'حالة الغرفة :' : 'Room status:'} ${label}`}
       />
     );
   };
@@ -601,43 +602,55 @@ export const PlanningTimeline: React.FC = () => {
     return 'w-44 sm:w-56 md:w-64';
   }, [leftBarMode, isMobileScreen]);
 
+  const currentMonthYear = useMemo(() => {
+    const [y, m] = currentBaseDate.split('-').map(Number);
+    const d = new Date(y, m - 1, 1);
+    return new Intl.DateTimeFormat(
+      language === 'fr' ? 'fr-FR' : language === 'ar' ? 'ar-EG' : 'en-US',
+      { month: 'long', year: 'numeric' }
+    ).format(d);
+  }, [currentBaseDate, language]);
+
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-950 relative select-none">
+    <div className="flex-1 flex flex-col h-full overflow-hidden pms-gantt-root bg-[rgb(var(--pms-canvas))] relative select-none">
       {/* Responsive Toolbar: one compact, horizontally scrollable row on phones */}
-      <div className="w-full min-w-0 shrink-0 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 select-none">
+      <div className="w-full min-w-0 shrink-0 border-b border-[rgb(var(--pms-border))] pms-gantt-surface select-none">
         <div className="flex min-w-0 flex-row items-center gap-1 overflow-x-auto overflow-y-hidden whitespace-nowrap px-1.5 py-1 sm:overflow-visible md:px-3 md:py-1 scrollbar-thin">
           {/* Quick Date Stepper Navigation & Today */}
-          <div className="flex h-7 shrink-0 items-center gap-0.5 rounded-md border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-800">
+          <div className="flex h-7 shrink-0 items-center gap-0.5 rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] p-0.5 shadow-2xs">
             <button
               onClick={() => scrollTimeline(-colWidth * 2)}
-              className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-slate-100 active:scale-95 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer"
-              title="Reculer de 2 jours"
-              aria-label="Reculer de deux jours"
+              className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-[rgb(var(--pms-accent)/0.1)] active:scale-95 dark:text-slate-300 cursor-pointer"
+              title={getTranslation('ganttBackTwoDays', language)}
+              aria-label={getTranslation('ganttBackTwoDays', language)}
             ><MoveLeft size={12} /></button>
             <button
               onClick={scrollToToday}
-              className="h-6 rounded px-1.5 text-[10px] font-bold text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950 cursor-pointer"
-              title="Aller à aujourd'hui"
-            >{language === 'fr' ? "Aujourd'hui" : language === 'ar' ? 'اليوم' : 'Today'}</button>
+              className="h-6 rounded px-1.5 text-[10px] font-bold text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/60 cursor-pointer"
+              title={getTranslation('ganttToday', language)}
+            >{getTranslation('ganttToday', language)}</button>
             <button
               onClick={() => scrollTimeline(colWidth * 2)}
-              className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-slate-100 active:scale-95 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer"
-              title="Avancer de 2 jours"
-              aria-label="Avancer de deux jours"
+              className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-[rgb(var(--pms-accent)/0.1)] active:scale-95 dark:text-slate-300 cursor-pointer"
+              title={getTranslation('ganttForwardTwoDays', language)}
+              aria-label={getTranslation('ganttForwardTwoDays', language)}
             ><MoveRight size={12} /></button>
           </div>
 
-          {/* Date Picker Input */}
-          <div className="flex h-7 w-[116px] sm:w-[136px] shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-850">
-            <CalendarDays size={12} className="shrink-0 text-slate-400" />
+          {/* Date Picker Input & Localized Month Badge */}
+          <div className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] px-1.5 shadow-2xs">
+            <CalendarDays size={12} className="shrink-0 text-[var(--theme-primary)]" />
             <input
               type="date"
               value={currentBaseDate}
               onChange={(e) => { if (e.target.value) setCurrentBaseDate(e.target.value); }}
-              className="w-full min-w-0 bg-transparent text-[10px] font-mono text-slate-800 focus:outline-none dark:text-slate-200"
-              title="Aller directement à une date"
-              aria-label="Date du planning"
+              className="w-[110px] sm:w-[124px] min-w-0 bg-transparent text-[10px] font-mono text-slate-800 focus:outline-none dark:text-slate-200"
+              title={getTranslation('ganttDatePick', language)}
+              aria-label={getTranslation('ganttDatePick', language)}
             />
+            <span className="hidden lg:inline text-[10px] font-bold uppercase tracking-wider text-[var(--theme-primary)] pl-1 border-l border-[rgb(var(--pms-border))]">
+              {currentMonthYear}
+            </span>
           </div>
 
           {/* Establishment selector (Hotel sector) */}
@@ -645,8 +658,8 @@ export const PlanningTimeline: React.FC = () => {
             <select
               value={selectedEstablishmentId}
               onChange={(e) => setSelectedEstablishmentId(e.target.value)}
-              className="h-7 w-[124px] sm:w-[170px] max-w-[38vw] shrink-0 rounded-md border border-slate-200 bg-white px-1 text-[10px] font-semibold text-slate-800 shadow-2xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-              aria-label={language === 'fr' ? 'Établissement' : 'Establishment'}
+              className="h-7 w-[124px] sm:w-[170px] max-w-[38vw] shrink-0 rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] px-1 text-[10px] font-semibold text-slate-800 shadow-2xs dark:text-slate-200"
+              aria-label={language === 'fr' ? 'Établissement' : language === 'ar' ? 'المؤسسة' : 'Establishment'}
             >
               <option value="all">🏢 {language === 'fr' ? 'Tous les bâtiments' : language === 'ar' ? 'كل المباني' : 'All buildings'}</option>
               {hotelBuildingOptions.map((group) => (
@@ -659,54 +672,54 @@ export const PlanningTimeline: React.FC = () => {
 
           {/* Resource label density */}
           <div className="flex shrink-0 items-center gap-1">
-            <div className="flex items-center rounded-md border border-slate-200 bg-white p-0.5 shadow-2xs dark:border-slate-700 dark:bg-slate-850">
+            <div className="flex items-center rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] p-0.5 shadow-2xs">
               <button
                 onClick={() => setLeftBarMode('mini')}
                 className={`h-6 rounded px-1.5 text-[9px] sm:text-[10px] font-semibold transition-colors cursor-pointer ${leftBarMode === 'mini' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
-                title="Mini — largeur minimale"
+                title={getTranslation('ganttDensityMini', language)}
                 aria-pressed={leftBarMode === 'mini'}
-              >Mini</button>
+              >{getTranslation('ganttDensityMini', language)}</button>
               <button
                 onClick={() => setLeftBarMode('compact')}
                 className={`h-6 rounded px-1.5 text-[9px] sm:text-[10px] font-semibold transition-colors cursor-pointer ${leftBarMode === 'compact' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
-                title="Compact"
+                title={getTranslation('ganttDensityCompact', language)}
                 aria-pressed={leftBarMode === 'compact'}
-              >Compact</button>
+              >{getTranslation('ganttDensityCompact', language)}</button>
               <button
                 onClick={() => setLeftBarMode('normal')}
                 className={`hidden h-6 rounded px-1.5 text-[10px] font-semibold transition-colors sm:block cursor-pointer ${leftBarMode === 'normal' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'}`}
-                title="Complet — largeur maximale"
+                title={getTranslation('ganttDensityFull', language)}
                 aria-pressed={leftBarMode === 'normal'}
-              >Complet</button>
+              >{getTranslation('ganttDensityFull', language)}</button>
             </div>
           </div>
 
           {/* Day column zoom */}
-          <div className="hidden sm:flex h-7 shrink-0 items-center rounded-md bg-slate-200 p-0.5 text-[10px] font-semibold dark:bg-slate-800">
+          <div className="hidden sm:flex h-7 shrink-0 items-center rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-canvas))] p-0.5 text-[10px] font-semibold">
             <button
               onClick={() => setColumnZoomMode('compact')}
-              className={`h-6 rounded px-2 transition-colors cursor-pointer ${columnZoomMode === 'compact' ? 'bg-white text-blue-600 shadow-xs dark:bg-slate-700 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}
-              title="Zoom étroit"
+              className={`h-6 rounded px-2 transition-colors cursor-pointer ${columnZoomMode === 'compact' ? 'bg-[rgb(var(--pms-surface))] text-[var(--theme-primary)] shadow-xs font-bold' : 'text-slate-600 dark:text-slate-400'}`}
+              title={getTranslation('ganttZoomNarrow', language)}
               aria-pressed={columnZoomMode === 'compact'}
-            >Étroit</button>
+            >{getTranslation('ganttZoomNarrow', language)}</button>
             <button
               onClick={() => setColumnZoomMode('standard')}
-              className={`h-6 rounded px-2 transition-colors cursor-pointer ${columnZoomMode === 'standard' ? 'bg-white text-blue-600 shadow-xs dark:bg-slate-700 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}
-              title="Zoom normal"
+              className={`h-6 rounded px-2 transition-colors cursor-pointer ${columnZoomMode === 'standard' ? 'bg-[rgb(var(--pms-surface))] text-[var(--theme-primary)] shadow-xs font-bold' : 'text-slate-600 dark:text-slate-400'}`}
+              title={getTranslation('ganttZoomNormal', language)}
               aria-pressed={columnZoomMode === 'standard'}
-            >Normal</button>
+            >{getTranslation('ganttZoomNormal', language)}</button>
           </div>
 
           {/* Availability help */}
           <button
             type="button"
             onClick={() => setShowAvailabilityHelp(true)}
-            className="flex h-7 w-7 sm:w-auto shrink-0 items-center justify-center rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 sm:gap-1 sm:px-2 cursor-pointer"
+            className="flex h-7 w-7 sm:w-auto shrink-0 items-center justify-center rounded-md border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-900/40 sm:gap-1 sm:px-2 cursor-pointer shadow-2xs"
             title={language === 'fr' ? 'Comprendre les disponibilités' : language === 'ar' ? 'فهم أرقام التوفر' : 'Understand availability'}
-            aria-label="Aide disponibilités"
+            aria-label={getTranslation('ganttAvailHelp', language)}
           >
             <Info size={13} />
-            <span className="hidden text-[10px] font-semibold sm:inline">{language === 'fr' ? 'Dispo' : 'Help'}</span>
+            <span className="hidden text-[10px] font-semibold sm:inline">{getTranslation('ganttAvailHelp', language)}</span>
           </button>
 
           {/* Toggle all floors button (Hotel sector) */}
@@ -714,14 +727,14 @@ export const PlanningTimeline: React.FC = () => {
             <button
               type="button"
               onClick={toggleAllFloors}
-              className="flex h-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-[10px] font-semibold text-slate-700 shadow-2xs hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-850 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer gap-1"
-              title={allFloorsCollapsed ? "Déplier tous les étages" : "Replier tous les étages"}
+              className="flex h-7 shrink-0 items-center justify-center rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] px-2 text-[10px] font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-[rgb(var(--pms-accent)/0.08)] transition-colors cursor-pointer gap-1"
+              title={allFloorsCollapsed ? getTranslation('ganttExpandFloors', language) : getTranslation('ganttCollapseFloors', language)}
             >
-              <SlidersHorizontal size={12} className="text-blue-500 shrink-0" />
+              <SlidersHorizontal size={12} className="text-[var(--theme-primary)] shrink-0" />
               <span className="hidden sm:inline">
                 {allFloorsCollapsed
-                  ? (language === 'fr' ? 'Déplier étages' : language === 'ar' ? 'توسيع الطوابق' : 'Expand floors')
-                  : (language === 'fr' ? 'Replier étages' : language === 'ar' ? 'طي الطوابق' : 'Collapse floors')}
+                  ? getTranslation('ganttExpandFloors', language)
+                  : getTranslation('ganttCollapseFloors', language)}
               </span>
             </button>
           )}
@@ -840,20 +853,20 @@ export const PlanningTimeline: React.FC = () => {
           data-gantt-resource-column="true"
           className={`${leftColWidthClass} shrink-0 ${
             isRTL ? 'border-l sticky right-0' : 'border-r sticky left-0'
-          } border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 z-[90] select-none shadow-xs transition-all duration-200 flex flex-col`}
+          } border-[rgb(var(--pms-border))] pms-gantt-surface z-[90] select-none shadow-xs transition-all duration-200 flex flex-col`}
         >
           {/* Header of Resources Column with STICKY TOP-0 */}
-          <div className={`${dayHeaderHeightClass} shrink-0 border-b border-slate-200 dark:border-slate-800 px-2 sm:px-3 flex flex-col justify-center bg-slate-100 dark:bg-slate-850 sticky top-0 z-[80] isolate transition-[height,min-height,max-height] duration-200`}>
+          <div className={`${dayHeaderHeightClass} shrink-0 border-b border-[rgb(var(--pms-border))] px-2 sm:px-3 flex flex-col justify-center pms-gantt-surface sticky top-0 z-[80] isolate transition-[height,min-height,max-height] duration-200`}>
             <span className="text-[11px] md:text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider truncate">
               {leftBarMode === 'mini'
-                ? 'Ress.'
+                ? (language === 'fr' ? 'Ress.' : language === 'ar' ? 'الموارد' : 'Res.')
                 : currentDomain === 'hotel'
-                ? (language === 'fr' ? 'Chambres & Suites' : language === 'ar' ? 'الغرف والأجنحة' : 'Rooms & Suites')
+                ? getTranslation('ganttResourceColTitle', language)
                 : currentDomain === 'resort'
-                ? (language === 'fr' ? 'Villas, Bungalows & Suites' : language === 'ar' ? 'فلل وشاليهات المنتجع' : 'Resort Villas & Bungalows')
-                : (language === 'fr' ? 'Hébergements' : language === 'ar' ? 'أماكن الإقامة' : 'Accommodations')}
+                ? getTranslation('ganttResortResourceColTitle', language)
+                : getTranslation('ganttAccommodations', language)}
             </span>
-            <span className={`${isDayHeaderCollapsed ? "hidden" : "block"} text-[9px] md:text-[10px] text-blue-600 dark:text-blue-400 font-bold truncate mt-0.5`}>
+            <span className={`${isDayHeaderCollapsed ? "hidden" : "block"} text-[9px] md:text-[10px] text-[var(--theme-primary)] font-bold truncate mt-0.5`}>
               {currentDomain.toUpperCase()}
             </span>
           </div>
@@ -870,8 +883,8 @@ export const PlanningTimeline: React.FC = () => {
                     onClick={() => toggleGroup(grp.id)}
                     data-gantt-group-toggle="true"
                     aria-expanded={!isCollapsed}
-                    aria-label={`${isCollapsed ? 'Développer' : 'Réduire'} ${grp.name[language] || grp.name.en}`}
-                    className="w-full h-7 sm:h-8 min-h-[28px] sm:min-h-[32px] max-h-[28px] sm:max-h-[32px] shrink-0 px-2 sm:px-2.5 bg-slate-200/80 dark:bg-slate-800/80 flex items-center justify-between cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-800 text-left"
+                    aria-label={`${isCollapsed ? (language === 'fr' ? 'Développer' : language === 'ar' ? 'توسيع' : 'Expand') : (language === 'fr' ? 'Réduire' : language === 'ar' ? 'طي' : 'Collapse')} ${grp.name[language] || grp.name.en}`}
+                    className="w-full h-7 sm:h-8 min-h-[28px] sm:min-h-[32px] max-h-[28px] sm:max-h-[32px] shrink-0 px-2 sm:px-2.5 pms-gantt-subsurface flex items-center justify-between cursor-pointer hover:bg-[rgb(var(--pms-accent)/0.08)] transition-colors border-b border-[rgb(var(--pms-border))] text-left"
                   >
                     <div className="flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate">
                       {isCollapsed ? <ChevronRight size={13} className="shrink-0 text-slate-500" /> : <ChevronDown size={13} className="shrink-0 text-slate-500" />}
@@ -892,8 +905,8 @@ export const PlanningTimeline: React.FC = () => {
                           type="button"
                           onClick={() => toggleFloor(grp.id, floorGroup.key)}
                           aria-expanded={!collapsedFloors[`${grp.id}:${floorGroup.key}`]}
-                          aria-label={`${collapsedFloors[`${grp.id}:${floorGroup.key}`] ? 'Développer' : 'Réduire'} ${floorGroup.label}`}
-                          className="h-7 min-h-[28px] max-h-[28px] w-full shrink-0 px-2.5 flex items-center justify-between bg-slate-100 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 hover:bg-slate-200 dark:hover:bg-slate-800 text-left cursor-pointer"
+                          aria-label={`${collapsedFloors[`${grp.id}:${floorGroup.key}`] ? (language === 'fr' ? 'Développer' : language === 'ar' ? 'توسيع' : 'Expand') : (language === 'fr' ? 'Réduire' : language === 'ar' ? 'طي' : 'Collapse')} ${floorGroup.label}`}
+                          className="h-7 min-h-[28px] max-h-[28px] w-full shrink-0 px-2.5 flex items-center justify-between bg-[rgb(var(--pms-surface)/0.9)] border-b border-[rgb(var(--pms-border)/0.7)] hover:bg-[rgb(var(--pms-accent)/0.06)] text-left cursor-pointer"
                         >
                           <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300 truncate">
                             {collapsedFloors[`${grp.id}:${floorGroup.key}`] ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
@@ -909,10 +922,10 @@ export const PlanningTimeline: React.FC = () => {
                             key={res.id}
                             className={`h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 px-1.5 sm:px-2.5 flex items-center justify-between border-b transition-colors ${
                               isOutOfOrder
-                                ? 'bg-slate-200/90 dark:bg-slate-800/90 border-slate-300 dark:border-slate-700 text-slate-400 opacity-80'
-                                : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800/80 hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
+                                ? 'bg-slate-200/90 dark:bg-slate-800/90 border-[rgb(var(--pms-border))] text-slate-400 opacity-80'
+                                : 'pms-gantt-surface border-[rgb(var(--pms-border)/0.6)] hover:bg-[rgb(var(--pms-accent)/0.05)]'
                             }`}
-                            title={`${res.name} · ${res.type || 'Chambre'} · ${floorGroup.label}${isOutOfOrder ? ' · HORS SERVICE (HS)' : ''}`}
+                            title={`${res.name} · ${res.type || getTranslation('ganttRoom', language)} · ${floorGroup.label}${isOutOfOrder ? (language === 'fr' ? ' · HORS SERVICE (HS)' : language === 'ar' ? ' · خارج الخدمة' : ' · OUT OF ORDER') : ''}`}
                           >
                             <div className={`flex items-center min-w-0 flex-1 ${leftBarMode === 'mini' ? 'gap-1' : 'gap-1.5 mr-1'}`}>
                               {renderHousekeepingTag(res.housekeepingStatus, res.id, res.name)}
@@ -922,7 +935,7 @@ export const PlanningTimeline: React.FC = () => {
                                     {res.name}
                                   </span>
                                   <span className="text-[9px] sm:text-[10px] text-slate-400 dark:text-slate-500 truncate">
-                                    {res.type || (language === 'fr' ? 'Chambre' : language === 'ar' ? 'غرفة' : 'Room')}
+                                    {res.type || getTranslation('ganttRoom', language)}
                                   </span>
                                 </span>
                               ) : (
@@ -986,22 +999,32 @@ export const PlanningTimeline: React.FC = () => {
             className={`${dayHeaderHeightClass} shrink-0 border-b border-slate-200 dark:border-slate-800 flex bg-white dark:bg-slate-900 sticky top-0 z-[70] isolate select-none transition-[height,min-height,max-height] duration-200 ${
               isHeaderDragging ? 'cursor-grabbing' : 'cursor-grab'
             }`}
-            title={
-              language === 'fr'
-                ? 'Maintenir le clic et glisser pour faire défiler le calendrier'
-                : language === 'ar'
-                ? 'اضغط مع الاستمرار واسحب لتمرير التقويم'
-                : 'Click and drag to scroll timeline'
-            }
+            title={getTranslation('ganttScrollDragTip', language)}
           >
             {timelineDays.map((day) => (
-              <div key={day.dateStr} style={{ width: `${colWidth}px` }} className={`shrink-0 border-r border-slate-200/70 dark:border-slate-800/70 flex flex-col items-center justify-center gap-0.5 px-1 transition-colors relative h-full overflow-hidden ${day.isToday ? "bg-rose-50/40 dark:bg-rose-950/25 ring-1 ring-inset ring-rose-400/40" : day.isWeekend ? "bg-slate-50/50 dark:bg-slate-900/40" : ""}`}>
+              <div
+                key={day.dateStr}
+                style={{ width: `${colWidth}px` }}
+                className={`shrink-0 border-r border-[rgb(var(--pms-border)/0.7)] flex flex-col items-center justify-center gap-0.5 px-1 transition-colors relative h-full overflow-hidden ${
+                  day.isToday
+                    ? "pms-gantt-today-col ring-1 ring-inset ring-[var(--theme-primary)]"
+                    : day.isWeekend
+                    ? "bg-slate-50/50 dark:bg-slate-900/40"
+                    : ""
+                }`}
+              >
                 {isDayHeaderCollapsed ? (
-                  <span className={`text-[11px] font-bold tabular-nums ${day.isToday ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-slate-200"}`}>{day.dayNum}</span>
+                  <span className={`text-[11px] font-bold tabular-nums ${day.isToday ? "text-[var(--theme-primary)] font-extrabold" : "text-slate-700 dark:text-slate-200"}`}>
+                    {day.dayNum}
+                  </span>
                 ) : (
                   <>
-                    <span className={`text-[10px] md:text-[11px] font-semibold uppercase tracking-wide ${day.isToday ? "text-rose-600 dark:text-rose-400" : "text-slate-400"}`}>{day.dayName}</span>
-                    <span className={`text-sm md:text-base font-bold tabular-nums ${day.isToday ? "text-rose-600 dark:text-rose-400" : "text-slate-800 dark:text-slate-100"}`}>{day.dayNum}</span>
+                    <span className={`text-[10px] md:text-[11px] font-semibold uppercase tracking-wide ${day.isToday ? "text-[var(--theme-primary)] font-bold" : "text-slate-400"}`}>
+                      {day.dayName}
+                    </span>
+                    <span className={`text-sm md:text-base font-bold tabular-nums ${day.isToday ? "text-[var(--theme-primary)] font-extrabold" : "text-slate-800 dark:text-slate-100"}`}>
+                      {day.dayNum}
+                    </span>
                   </>
                 )}
               </div>
@@ -1016,7 +1039,7 @@ export const PlanningTimeline: React.FC = () => {
               return (
                 <div key={grp.id} className="flex flex-col">
                   {/* Group Availability Row */}
-                  <div className="h-7 sm:h-8 min-h-[28px] sm:min-h-[32px] max-h-[28px] sm:max-h-[32px] shrink-0 flex bg-slate-200/60 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 select-none">
+                  <div className="h-7 sm:h-8 min-h-[28px] sm:min-h-[32px] max-h-[28px] sm:max-h-[32px] shrink-0 flex pms-gantt-subsurface border-b border-[rgb(var(--pms-border))] select-none">
                     {timelineDays.map((day) => {
                       const avail = groupAvailability[grp.id]?.[day.dateStr] ?? 0;
                       const isFree = avail > 0;
@@ -1024,13 +1047,13 @@ export const PlanningTimeline: React.FC = () => {
                         <div
                           key={day.dateStr}
                           style={{ width: `${colWidth}px` }}
-                          className="shrink-0 border-r border-slate-200/60 dark:border-slate-800/60 flex items-center justify-center p-0.5 h-full"
+                          className="shrink-0 border-r border-[rgb(var(--pms-border)/0.6)] flex items-center justify-center p-0.5 h-full"
                         >
                           <span
                             className={`w-5 h-4.5 rounded text-[10px] font-bold font-mono flex items-center justify-center shadow-2xs tabular-nums ${
                               isFree ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
                             }`}
-                            title={`${avail} disponibilité(s) le ${day.dateStr}`}
+                            title={`${avail} ${getTranslation('kpiAvailableRooms', language)} (${day.dateStr})`}
                           >
                             {avail}
                           </span>
@@ -1043,7 +1066,7 @@ export const PlanningTimeline: React.FC = () => {
                   {!isCollapsed && (floorGroupsByGroup.get(grp.id) ?? []).map((floorGroup) => (
                     <React.Fragment key={floorGroup.key}>
                       {floorGroup.label && (
-                        <div className="h-7 min-h-[28px] max-h-[28px] shrink-0 flex bg-slate-100/80 dark:bg-slate-850/80 border-b border-slate-200 dark:border-slate-800">
+                        <div className="h-7 min-h-[28px] max-h-[28px] shrink-0 flex pms-gantt-subsurface border-b border-[rgb(var(--pms-border))]">
                           {timelineDays.map((day) => {
                             const occupied = floorGroup.resources.filter((resource) =>
                               bookings.some((booking) =>
@@ -1055,8 +1078,18 @@ export const PlanningTimeline: React.FC = () => {
                             ).length;
                             const available = Math.max(0, floorGroup.resources.length - occupied);
                             return (
-                              <button key={day.dateStr} type="button" onClick={() => toggleFloor(grp.id, floorGroup.key)} aria-label={`${collapsedFloors[`${grp.id}:${floorGroup.key}`] ? 'Développer' : 'Réduire'} ${floorGroup.label}`} style={{ width: `${colWidth}px` }} className="shrink-0 border-r border-slate-200/60 dark:border-slate-800/60 flex items-center justify-center hover:bg-slate-200/80 dark:hover:bg-slate-700/70 cursor-pointer">
-                                <span className={`text-[9px] font-mono font-semibold ${available > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`} title={`${available} chambre(s) disponible(s)`}>
+                              <button
+                                key={day.dateStr}
+                                type="button"
+                                onClick={() => toggleFloor(grp.id, floorGroup.key)}
+                                aria-label={`${collapsedFloors[`${grp.id}:${floorGroup.key}`] ? getTranslation('ganttExpandFloors', language) : getTranslation('ganttCollapseFloors', language)} ${floorGroup.label}`}
+                                style={{ width: `${colWidth}px` }}
+                                className="shrink-0 border-r border-[rgb(var(--pms-border)/0.6)] flex items-center justify-center hover:bg-slate-200/80 dark:hover:bg-slate-700/70 cursor-pointer"
+                              >
+                                <span
+                                  className={`text-[9px] font-mono font-semibold ${available > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
+                                  title={`${available} ${getTranslation('kpiAvailableRooms', language)}`}
+                                >
                                   {available}/{floorGroup.resources.length}
                                 </span>
                               </button>
@@ -1072,10 +1105,10 @@ export const PlanningTimeline: React.FC = () => {
                         return (
                           <div
                             key={res.id}
-                            className={`h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 flex relative border-b border-slate-200/80 dark:border-slate-800/80 transition-colors ${
+                            className={`h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 flex relative border-b border-[rgb(var(--pms-border)/0.8)] transition-colors ${
                               isOutOfOrder
                                 ? 'bg-slate-200 dark:bg-slate-800/90 select-none cursor-not-allowed opacity-90'
-                                : 'bg-white dark:bg-slate-900 hover:bg-blue-50/20 dark:hover:bg-blue-950/20'
+                                : 'pms-gantt-surface pms-gantt-row-hover'
                             }`}
                           >
                             {/* Background Grid Cells for clicking to add booking */}
@@ -1124,24 +1157,24 @@ export const PlanningTimeline: React.FC = () => {
                                   }}
                                   aria-label={
                                     isOutOfOrder
-                                      ? `Chambre ${res.name} hors service (non réservable)`
+                                      ? `${res.name} ${getTranslation('ganttStatusOutOfOrder', language)}`
                                       : isPast
-                                      ? `Date passée (${day.dateStr}) non réservable`
-                                      : `Créer une réservation pour ${res.name} le ${day.dateStr}`
+                                      ? `${day.dateStr}`
+                                      : `${getTranslation('bookRoom', language)} • ${res.name} • ${day.dateStr}`
                                   }
                                   title={
                                     isOutOfOrder
-                                      ? `Chambre ${res.name} hors service (HS) — ligne désactivée`
+                                      ? `${res.name} ${getTranslation('ganttStatusOutOfOrder', language)}`
                                       : isPast
-                                      ? `Date passée (${day.dateStr}) — réservations antérieures désactivées`
-                                      : `Créer une réservation • ${res.name} • ${day.dateStr}`
+                                      ? `${day.dateStr}`
+                                      : `${getTranslation('bookRoom', language)} • ${res.name} • ${day.dateStr}`
                                   }
-                                  className={`relative shrink-0 border-r border-slate-100 dark:border-slate-800/40 h-full p-0 transition-colors ${
+                                  className={`relative shrink-0 border-r border-[rgb(var(--pms-border)/0.45)] h-full p-0 transition-colors ${
                                     isOutOfOrder
                                       ? 'bg-slate-200/95 dark:bg-slate-800/90 cursor-not-allowed select-none opacity-80'
                                       : isPast
                                       ? 'bg-slate-100/90 dark:bg-slate-900/60 cursor-not-allowed opacity-40 select-none'
-                                      : `cursor-pointer hover:bg-blue-50/70 dark:hover:bg-blue-950/35 active:bg-blue-100 dark:active:bg-blue-900/40 ${
+                                      : `cursor-pointer pms-gantt-cell-hover pms-gantt-cell-active ${
                                           day.isWeekend ? 'bg-slate-50/30 dark:bg-slate-900/20' : ''
                                         }`
                                   }`}
@@ -1203,6 +1236,8 @@ export const PlanningTimeline: React.FC = () => {
                               ? { right: `${leftOffset + 3}px`, width: `${barWidth}px` }
                               : { left: `${leftOffset + 3}px`, width: `${barWidth}px` };
 
+                            const isConfirmed = bkg.status === 'confirmed';
+
                             return (
                               <div
                                 key={bkg.id}
@@ -1228,16 +1263,16 @@ export const PlanningTimeline: React.FC = () => {
                                   if (!isMobileScreen) schedulePreviewClose();
                                 }}
                                 style={posStyle}
-                                className={`absolute top-1 sm:top-1.5 h-8 sm:h-9 rounded-md px-1 sm:px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-xs hover:brightness-105 active:scale-[0.98] transition z-10 border ${statusStyle.bg} ${statusStyle.border}`}
+                                className={`pms-booking-bar ${isConfirmed ? 'pms-booking-bar-confirmed ' : ''}absolute top-1 sm:top-1.5 h-8 sm:h-9 rounded-md px-1 sm:px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-xs hover:brightness-105 active:scale-[0.98] transition z-10 border ${statusStyle.bg} ${statusStyle.border}`}
                               >
                                     <div className="flex items-center gap-1.5 truncate min-w-0">
                                       {/* Person icons: if multiple occupants occupy the room, render stacked group of person icons */}
                                       {hasMultipleOccupants ? (
                                         <div
                                           className="flex items-center -space-x-1.5 rtl:space-x-reverse shrink-0 select-none py-0.5"
-                                          title={`${occupantsCount} occupant(s) pour cette réservation (${adults} adulte(s)${children > 0 ? `, ${children} enfant(s)` : ''})${
+                                          title={`${occupantsCount} ${getTranslation('ganttOccupants', language)} (${adults} ${language === 'fr' ? 'adulte(s)' : language === 'ar' ? 'بالغ' : 'adult(s)'}${children > 0 ? `, ${children} ${language === 'fr' ? 'enfant(s)' : language === 'ar' ? 'طفل' : 'child(ren)'}` : ''})${
                                             overlappingBookings.length > 0
-                                              ? ` • ${overlappingBookings.length} autre(s) réservation(s) active(s) dans cette même chambre (${totalRoomGuests} personnes au total)`
+                                              ? ` • ${overlappingBookings.length} ${getTranslation('ganttSharedRoomBadge', language)}`
                                               : ''
                                           }`}
                                         >
@@ -1255,7 +1290,7 @@ export const PlanningTimeline: React.FC = () => {
                                               +{occupantsCount - 2}
                                             </span>
                                           ) : overlappingBookings.length > 0 ? (
-                                            <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[8px] font-bold font-mono ring-1 ring-white/50 shadow-2xs tabular-nums shrink-0" title="Chambre partagée / Multiple occupants">
+                                            <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[8px] font-bold font-mono ring-1 ring-white/50 shadow-2xs tabular-nums shrink-0" title={getTranslation('ganttSharedRoomBadge', language)}>
                                               +{overlappingBookings.length}
                                             </span>
                                           ) : null}
@@ -1263,7 +1298,7 @@ export const PlanningTimeline: React.FC = () => {
                                       ) : (
                                         <div
                                           className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-black/25 text-white ring-1 ring-white/30 shrink-0 select-none"
-                                          title="1 occupant (adulte)"
+                                          title={`1 ${language === 'fr' ? 'occupant (adulte)' : language === 'ar' ? 'نزيل بالغ' : 'occupant (adult)'}`}
                                         >
                                           <User size={10} className="drop-shadow-2xs" />
                                         </div>
@@ -1271,7 +1306,7 @@ export const PlanningTimeline: React.FC = () => {
 
                                       {/* Nationality indicator */}
                                       {nationalityBadge && (
-                                        <span className="text-[10px] shrink-0" title={isAlgerian ? 'Locataire Algérien (CNI)' : 'Locataire Étranger (Devises / Passeport)'}>
+                                        <span className="text-[10px] shrink-0" title={isAlgerian ? 'Algérien (DZ)' : 'International'}>
                                           {nationalityBadge}
                                         </span>
                                       )}
@@ -1432,7 +1467,7 @@ export const PlanningTimeline: React.FC = () => {
 
               <div className="space-y-1.5 text-slate-600 dark:text-slate-300">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Locataire :</span>
+                  <span className="text-slate-400">{getTranslation('ganttTenant', language)}</span>
                   <div className="flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 truncate">
                     <span>{activePreviewBooking.booking.guestType === 'algerian' ? '🇩🇿' : '🌐'}</span>
                     <span className="truncate">{activePreviewBooking.booking.guestName}</span>
@@ -1441,7 +1476,7 @@ export const PlanningTimeline: React.FC = () => {
 
                 {/* Occupants count with icons */}
                 <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-slate-400">Occupants :</span>
+                  <span className="text-slate-400">{getTranslation('ganttOccupants', language)}</span>
                   <div className="flex items-center gap-1 font-medium text-slate-800 dark:text-slate-200">
                     <div className="flex items-center -space-x-1">
                       {Array.from({
@@ -1460,14 +1495,14 @@ export const PlanningTimeline: React.FC = () => {
                 </div>
 
                 <div className="flex items-center justify-between font-mono text-[11px]">
-                  <span className="text-slate-400 font-sans">Dates :</span>
+                  <span className="text-slate-400 font-sans">{getTranslation('ganttDates', language)}</span>
                   <span>
                     {activePreviewBooking.booking.startDate} → {activePreviewBooking.booking.endDate}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
-                  <span className="font-bold text-slate-800 dark:text-slate-200">Règlement :</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{getTranslation('ganttPayment', language)}</span>
                   <span className="font-bold text-slate-900 dark:text-white font-mono text-xs tabular-nums">
                     {activePreviewBooking.booking.originalCurrencyAmount || activePreviewBooking.booking.totalPrice}{' '}
                     {activePreviewBooking.booking.paymentCurrency || currency}
@@ -1483,14 +1518,14 @@ export const PlanningTimeline: React.FC = () => {
                   }}
                   className="flex-1 py-1 bg-blue-600 text-white rounded text-center font-medium hover:bg-blue-700 transition-colors"
                 >
-                  Fiche & Police
+                  {getTranslation('ganttOpenBooking', language)}
                 </button>
                 <button
                   onClick={() => {
                     downloadICS(activePreviewBooking.booking);
                   }}
                   className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-white border border-slate-200 dark:border-slate-700 rounded transition-colors"
-                  title="Exporter .ICS"
+                  title={getTranslation('ganttExportIcs', language)}
                 >
                   <Download size={13} />
                 </button>
@@ -1526,35 +1561,35 @@ export const PlanningTimeline: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl">
                   <div>
-                    <span className="text-[10px] text-slate-400 block">Locataire :</span>
+                    <span className="text-[10px] text-slate-400 block">{getTranslation('ganttTenant', language)}</span>
                     <span className="font-bold text-slate-900 dark:text-white truncate block">
                       {activePreviewBooking.booking.guestType === 'algerian' ? '🇩🇿 ' : '🌐 '}
                       {activePreviewBooking.booking.guestName}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block">Règlement :</span>
+                    <span className="text-[10px] text-slate-400 block">{getTranslation('ganttPayment', language)}</span>
                     <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400 block tabular-nums">
                       {activePreviewBooking.booking.originalCurrencyAmount || activePreviewBooking.booking.totalPrice}{' '}
                       {activePreviewBooking.booking.paymentCurrency || currency}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block">Arrivée :</span>
+                    <span className="text-[10px] text-slate-400 block">{getTranslation('ganttCheckInLabel', language)}</span>
                     <span className="font-mono text-slate-700 dark:text-slate-300 block">
                       {activePreviewBooking.booking.startDate}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block">Départ :</span>
+                    <span className="text-[10px] text-slate-400 block">{getTranslation('ganttCheckOutLabel', language)}</span>
                     <span className="font-mono text-slate-700 dark:text-slate-300 block">
                       {activePreviewBooking.booking.endDate}
                     </span>
                   </div>
                   <div className="col-span-2 pt-1 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">Occupants chambre :</span>
+                    <span className="text-slate-400">{getTranslation('ganttRoomOccupants', language)}</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {(activePreviewBooking.booking.adults || 1) + (activePreviewBooking.booking.children || 0)} pers. ({activePreviewBooking.booking.adults || 1} adultes)
+                      {(activePreviewBooking.booking.adults || 1) + (activePreviewBooking.booking.children || 0)} pers. ({activePreviewBooking.booking.adults || 1} {language === 'fr' ? 'adultes' : language === 'ar' ? 'بالغين' : 'adults'})
                     </span>
                   </div>
                 </div>
@@ -1567,14 +1602,14 @@ export const PlanningTimeline: React.FC = () => {
                 }}
                 className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-semibold text-center transition-colors shadow-xs"
               >
-                Ouvrir la Fiche Réservation
+                {getTranslation('ganttOpenFullBooking', language)}
               </button>
               <button
                 onClick={() => {
                   downloadICS(activePreviewBooking.booking);
                 }}
                 className="px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
-                title="Exporter .ICS"
+                title={getTranslation('ganttExportIcs', language)}
               >
                 <Download size={14} />
                 <span>.ICS</span>

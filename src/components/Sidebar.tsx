@@ -87,7 +87,7 @@ export const Sidebar: React.FC = () => {
   };
 
   const [isMobileProfileExpanded, setIsMobileProfileExpanded] = useState(false);
-  const [isMobilePreferencesExpanded, setIsMobilePreferencesExpanded] = useState(true);
+  const [isMobilePreferencesExpanded, setIsMobilePreferencesExpanded] = useState(false);
   const [workspaceFormOpen, setWorkspaceFormOpen] = useState(false);
   const [workspaceDraft, setWorkspaceDraft] = useState('');
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
@@ -238,7 +238,7 @@ export const Sidebar: React.FC = () => {
     const showCompact = isCollapsed && !isMobileView;
 
     return (
-      <div className={`flex flex-col min-h-full select-none ${isMobileView ? 'workspace-sidebar-scroll overflow-y-auto overscroll-y-contain' : 'h-full min-h-0 overflow-hidden'}`}>
+      <div className={`flex flex-col select-none ${isMobileView ? 'flex-1 min-h-0 w-full workspace-sidebar-scroll overflow-y-auto overscroll-y-contain pb-10' : 'h-full min-h-0 overflow-hidden'}`}>
         {/* Brand Header */}
         <div className={`min-h-[64px] border-b border-slate-200 dark:border-white/5 flex items-center shrink-0 ${showCompact ? 'flex-col justify-center px-1 py-2 gap-1.5' : 'justify-between px-4'}`}>
           {!showCompact ? (
@@ -350,7 +350,40 @@ export const Sidebar: React.FC = () => {
           )}
         </section>
 
-        {/* Mobile profile switcher: collapsed by default on mobile */}
+        {/* For mobile view: Render the navigation tabs right here at the top! */}
+        {isMobileView && (
+          <nav
+            aria-label={language === 'fr' ? 'Navigation principale' : language === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'}
+            className="py-2.5 px-3 flex-none overflow-visible border-b border-slate-200/80 dark:border-slate-800/80"
+          >
+            <div className="flex flex-col gap-1.5">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeView === item.view;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleNavClick(item.view)}
+                    aria-current={isActive ? 'page' : undefined}
+                    aria-label={item.label}
+                    title={item.label}
+                    className={`workspace-nav-item cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 transition-colors w-full flex items-center gap-3 px-3 min-h-11 py-2.5 rounded-xl text-xs font-semibold ${
+                      isActive
+                        ? 'bg-blue-600 text-white shadow-sm font-bold'
+                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
+                    }`}
+                  >
+                    <Icon size={18} className="shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        )}
+
+        {/* Mobile profile switcher: collapsible */}
         {isMobileView && (
           <section className="px-3 py-2.5 border-b border-slate-200 dark:border-slate-800/80 bg-slate-100/50 dark:bg-slate-950/60 shrink-0">
             <button
@@ -403,7 +436,7 @@ export const Sidebar: React.FC = () => {
           </section>
         )}
 
-        {/* Drawer preferences: Language, Theme & Sound (Visible when expanded) */}
+        {/* Drawer preferences: Language, Theme & Sound */}
         {!showCompact && (
           <section className="px-3 py-2 border-b border-slate-200 dark:border-slate-800/80 bg-slate-100/60 dark:bg-slate-900/70 space-y-2 shrink-0">
             <button
@@ -458,7 +491,7 @@ export const Sidebar: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Multi-Theme Selector (All 8 User Photo Themes + Default) */}
+                {/* Multi-Theme Selector */}
                 <div className="space-y-1.5 pt-2 border-t border-slate-200 dark:border-slate-800/80">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
@@ -473,7 +506,6 @@ export const Sidebar: React.FC = () => {
                       {language === 'fr' ? 'Galerie (8 thèmes)' : language === 'ar' ? 'معرض السمات (8)' : 'Gallery (8 themes)'}
                     </button>
                   </div>
-                  {/* 1-tap theme switcher chips inside drawer */}
                   <div className="grid grid-cols-3 gap-1.5">
                     {APP_THEMES.map((t) => {
                       const isSelected = appTheme === t.id;
@@ -507,44 +539,46 @@ export const Sidebar: React.FC = () => {
           </section>
         )}
 
-        {/* Navigation List - Adapts seamlessly to collapsed icon rail or expanded menu */}
-        <nav
-          aria-label={language === 'fr' ? 'Navigation principale' : language === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'}
-          className={`py-3 ${showCompact ? 'px-1.5' : 'px-2.5'} ${isMobileView ? 'flex-none overflow-visible' : 'flex-1 min-h-0 overflow-y-auto overscroll-y-contain'}`}
-        >
-          <div className="pms-stagger flex flex-col gap-1.5">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeView === item.view;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleNavClick(item.view)}
-                  aria-current={isActive ? 'page' : undefined}
-                  aria-label={item.label}
-                  title={item.label}
-                  className={`workspace-nav-item cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 transition-colors ${
-                    showCompact
-                      ? `mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl ${
-                          isActive
-                            ? 'bg-blue-600 text-white shadow-sm font-bold ring-2 ring-blue-500/30'
-                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
-                        }`
-                      : `w-full flex items-center gap-3 px-3 min-h-11 py-2.5 rounded-xl text-xs font-semibold ${
-                          isActive
-                            ? 'bg-blue-600 text-white shadow-sm font-bold'
-                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
-                        }`
-                  }`}
-                >
-                  <Icon size={18} className="shrink-0" />
-                  {!showCompact && <span className="truncate">{item.label}</span>}
-                </button>
-              );
-            })}
-          </div>
-        </nav>
+        {/* Desktop Navigation List (rendered only in desktop view) */}
+        {!isMobileView && (
+          <nav
+            aria-label={language === 'fr' ? 'Navigation principale' : language === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'}
+            className={`py-3 ${showCompact ? 'px-1.5' : 'px-2.5'} flex-1 min-h-0 overflow-y-auto overscroll-y-contain`}
+          >
+            <div className="pms-stagger flex flex-col gap-1.5">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeView === item.view;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleNavClick(item.view)}
+                    aria-current={isActive ? 'page' : undefined}
+                    aria-label={item.label}
+                    title={item.label}
+                    className={`workspace-nav-item cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 transition-colors ${
+                      showCompact
+                        ? `mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl ${
+                            isActive
+                              ? 'bg-blue-600 text-white shadow-sm font-bold ring-2 ring-blue-500/30'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
+                          }`
+                        : `w-full flex items-center gap-3 px-3 min-h-11 py-2.5 rounded-xl text-xs font-semibold ${
+                            isActive
+                              ? 'bg-blue-600 text-white shadow-sm font-bold'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
+                          }`
+                    }`}
+                  >
+                    <Icon size={18} className="shrink-0" />
+                    {!showCompact && <span className="truncate">{item.label}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        )}
 
         {/* Sidebar Footer: Theme Gallery, Mode Switcher, IndexedDB, Legal & About */}
         <div className={`border-t border-slate-200 dark:border-white/5 space-y-1.5 bg-slate-100/60 dark:bg-slate-950/40 shrink-0 ${showCompact ? 'p-1.5 flex flex-col items-center' : 'p-3'}`}>
@@ -695,7 +729,7 @@ export const Sidebar: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-label={language === 'fr' ? 'Navigation principale' : language === 'ar' ? 'القائمة الرئيسية' : 'Main navigation'}
-            className={`relative z-10 flex h-[100dvh] min-h-0 w-[min(20rem,88vw)] max-w-[88vw] flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-300 shadow-2xl overscroll-contain pms-drawer ${isRtl ? 'mr-auto border-l border-r-0' : 'ml-0'}`}
+            className={`relative z-10 flex h-[100dvh] max-h-[100dvh] min-h-0 w-[min(20rem,88vw)] max-w-[88vw] flex-col overflow-hidden border-r border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] text-slate-800 dark:text-slate-300 shadow-2xl pms-drawer ${isRtl ? 'mr-auto border-l border-r-0' : 'ml-0'}`}
             style={{
               paddingTop: 'env(safe-area-inset-top)',
               paddingBottom: 'env(safe-area-inset-bottom)',

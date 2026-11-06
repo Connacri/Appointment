@@ -15,10 +15,10 @@ export const statusConfig: Record<
   },
   confirmed: {
     label: { fr: 'Confirmé', en: 'Confirmed', ar: 'مؤكد' },
-    bg: 'bg-sky-500 text-white',
+    bg: 'pms-booking-bar-confirmed bg-blue-600 text-white',
     text: 'text-white',
-    border: 'border-sky-600',
-    pillBg: 'bg-[#0284c7] text-white',
+    border: 'border-blue-700',
+    pillBg: 'pms-booking-bar-confirmed bg-blue-600 text-white shadow-2xs',
   },
   due_in: {
     label: { fr: 'Arrivée prévue (Due In)', en: 'Due In', ar: 'وصول متوقع' },
@@ -97,7 +97,7 @@ export const LegendBar: React.FC = () => {
           isMobileExpanded
             ? 'fixed bottom-0 inset-x-0 z-50 p-2.5 shadow-2xl pms-slide-up flex flex-wrap max-h-48'
             : 'hidden sm:flex h-8'
-        } bg-slate-50/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 px-3 items-center gap-1.5 overflow-x-auto shrink-0 select-none text-[11px] backdrop-blur`}
+        } pms-gantt-surface border-t border-[rgb(var(--pms-border))] px-3 items-center gap-1.5 overflow-x-auto shrink-0 select-none text-[11px] backdrop-blur`}
       >
         <div className="flex items-center justify-between w-full sm:w-auto">
           <span className="font-semibold text-slate-500 uppercase tracking-wider text-[10px] mr-2 shrink-0">
