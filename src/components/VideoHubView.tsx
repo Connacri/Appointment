@@ -7,8 +7,11 @@ import { useApp } from '../context/AppContext';
 
 type Locale = 'fr' | 'en' | 'ar';
 
+type Platform = 'youtube' | 'tiktok';
+
 type Video = {
   id: string;
+  platform?: Platform;
   title: string;
   channel: string;
   summary: string;
@@ -20,6 +23,8 @@ type Video = {
   published?: string;
   contentType?: string;
 };
+
+type ExtraCategory = { id: string; name: string };
 
 type Page = 'home' | 'feed' | 'liked' | 'history' | 'later' | 'categories' | 'category' | 'search' | 'settings' | 'add' | 'watch';
 
@@ -61,11 +66,40 @@ function saveJSON(key: string, value: unknown) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
 }
 
-function extractId(input: string): string | null {
+function extractVideo(input: string): { platform: Platform; id: string } | null {
   const s = input.trim();
-  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
-  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
-  return m ? m[1] : null;
+  // YouTube
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return { platform: 'youtube', id: s };
+  const yt = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+  if (yt) return { platform: 'youtube', id: yt[1] };
+  // TikTok: /video/1234567890
+  const tt = s.match(/\/video\/(\d{10,})/);
+  if (tt) return { platform: 'tiktok', id: tt[1] };
+  if (/^\d{10,}$/.test(s)) return { platform: 'tiktok', id: s };
+  return null;
+}
+
+function extractId(input: string): string | null {
+  return extractVideo(input)?.id ?? null;
+}
+
+function thumbUrl(v: Video): string {
+  if ((v.platform || 'youtube') === 'tiktok') return '';
+  return `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`;
+}
+
+function embedUrl(v: Video): string {
+  if ((v.platform || 'youtube') === 'tiktok') return `https://www.tiktok.com/embed/v2/${v.id}`;
+  return `https://www.youtube-nocookie.com/embed/${v.id}?rel=0&autoplay=1`;
+}
+
+function watchEmbedUrl(v: Video): string {
+  if ((v.platform || 'youtube') === 'tiktok') return `https://www.tiktok.com/embed/v2/${v.id}`;
+  return `https://www.youtube-nocookie.com/embed/${v.id}?rel=0&autoplay=1`;
+}
+function feedEmbedUrl(v: Video): string {
+  if ((v.platform || 'youtube') === 'tiktok') return `https://www.tiktok.com/embed/v2/${v.id}`;
+  return `https://www.youtube-nocookie.com/embed/${v.id}?rel=0&modestbranding=1`;
 }
 
 function fmtDur(s?: number) {
@@ -110,6 +144,7 @@ export const VideoHubView: React.FC = () => {
     const stored = loadJSON<Video[]>(LS.lib, []);
     return stored.length ? stored : SEED_VIDEOS;
   });
+  const [extraCategories, setExtraCategories] = useState<ExtraCategory[]>(() => loadJSON<ExtraCategory[]>('videohub_extra_cats', []));
   const [likes, setLikes] = useState<string[]>(() => loadJSON<string[]>(LS.likes, []));
   const [dislikes, setDislikes] = useState<string[]>(() => loadJSON<string[]>(LS.dislikes, []));
   const [seen, setSeen] = useState<string[]>(() => loadJSON<string[]>(LS.seen, []));
@@ -126,6 +161,7 @@ export const VideoHubView: React.FC = () => {
   const [addTitle, setAddTitle] = useState('');
   const [addChannel, setAddChannel] = useState('');
   const [addCategory, setAddCategory] = useState('tech');
+  const [addPlatform, setAddPlatform] = useState<Platform>('youtube');
   const [addTags, setAddTags] = useState('');
 
   useEffect(() => saveJSON(LS.lib, library), [library]);
@@ -133,8 +169,54 @@ export const VideoHubView: React.FC = () => {
   useEffect(() => saveJSON(LS.dislikes, dislikes), [dislikes]);
   useEffect(() => saveJSON(LS.seen, seen), [seen]);
   useEffect(() => saveJSON(LS.later, later), [later]);
+  useEffect(() => saveJSON('videohub_extra_cats', extraCategories), [extraCategories]);
+
+  // Load the HackerTube dataset (offline-first: bundled asset, then cached in library)
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/data/hackertube.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        const cats: ExtraCategory[] = (data.categories || []).map((c: any) => ({ id: c.id, name: c.name }));
+        const vids: Video[] = (data.videos || []).map((v: any) => ({
+          id: v.id,
+          platform: 'youtube' as Platform,
+          title: v.title,
+          channel: v.channel,
+          summary: v.summary || '',
+          why: v.why,
+          categories: v.categories || [],
+          tags: v.tags || [],
+          contentType: v.contentType,
+        }));
+        setExtraCategories((prev) => {
+          const ids = new Set(prev.map((c) => c.id));
+          const merged = [...prev];
+          for (const c of cats) if (!ids.has(c.id)) { merged.push(c); ids.add(c.id); }
+          return merged;
+        });
+        setLibrary((prev) => {
+          const ids = new Set(prev.map((v) => v.id));
+          const merged = [...prev];
+          for (const v of vids) if (!ids.has(v.id)) { merged.push(v); ids.add(v.id); }
+          return merged;
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const videoById = useMemo(() => new Map(library.map((v) => [v.id, v])), [library]);
+
+  const allCategories = useMemo(() => {
+    const fixed = CATEGORIES.map((c) => ({ id: c.id, name: c.name[lang], fixed: true }));
+    const extra = extraCategories.map((c) => ({ id: c.id, name: c.name, fixed: false }));
+    const seen = new Set(fixed.map((c) => c.id));
+    const merged = [...fixed];
+    for (const c of extra) if (!seen.has(c.id)) { merged.push(c); seen.add(c.id); }
+    return merged;
+  }, [lang, extraCategories]);
 
   const markSeen = (id: string) => {
     setSeen((prev) => [...prev.filter((x) => x !== id), id].slice(-200));
@@ -191,15 +273,16 @@ export const VideoHubView: React.FC = () => {
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
-    const id = extractId(addUrl);
-    if (!id) return;
-    if (library.some((v) => v.id === id)) {
+    const ev = extractVideo(addUrl);
+    if (!ev) return;
+    if (library.some((v) => v.id === ev.id && (v.platform || 'youtube') === ev.platform)) {
       setAddUrl('');
       return;
     }
     const v: Video = {
-      id,
-      title: addTitle.trim() || `Video ${id}`,
+      id: ev.id,
+      platform: ev.platform,
+      title: addTitle.trim() || `Video ${ev.id}`,
       channel: addChannel.trim() || 'Unknown',
       summary: '',
       categories: [addCategory],
@@ -244,14 +327,20 @@ export const VideoHubView: React.FC = () => {
       className="group block rounded-xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:shadow-lg transition-shadow"
       title={v.why}
     >
-      <div className="relative aspect-video bg-slate-200 dark:bg-slate-800 overflow-hidden">
-        <img
-          loading="lazy"
-          src={`https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`}
-          alt=""
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          onError={(e) => { (e.currentTarget as HTMLImageElement).src = `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`; }}
-        />
+      <div className="relative aspect-video bg-slate-200 dark:bg-slate-800 overflow-hidden flex items-center justify-center">
+        {(v.platform || 'youtube') === 'youtube' ? (
+          <img
+            loading="lazy"
+            src={`https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`}
+            alt=""
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`; }}
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-pink-500 to-cyan-500 flex items-center justify-center text-white font-bold text-lg">
+            TikTok
+          </div>
+        )}
         {v.duration ? (
           <span className="absolute bottom-2 right-2 bg-black/80 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
             {fmtDur(v.duration)}
@@ -357,7 +446,7 @@ export const VideoHubView: React.FC = () => {
                     <div key={v.id} className="w-full rounded-2xl overflow-hidden bg-black shadow-xl">
                       <div className="relative aspect-[9/16] bg-black">
                         <iframe
-                          src={`https://www.youtube-nocookie.com/embed/${v.id}?rel=0&modestbranding=1`}
+                          src={feedEmbedUrl(v)}
                           title={v.title}
                           className="absolute inset-0 w-full h-full"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -393,7 +482,7 @@ export const VideoHubView: React.FC = () => {
                   <div key={v.id} className="w-full rounded-2xl overflow-hidden bg-black shadow-xl">
                     <div className="relative aspect-[9/16] bg-black">
                       <iframe
-                        src={`https://www.youtube-nocookie.com/embed/${v.id}?rel=0&modestbranding=1`}
+                        src={feedEmbedUrl(v)}
                         title={v.title}
                         className="absolute inset-0 w-full h-full"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -456,8 +545,9 @@ export const VideoHubView: React.FC = () => {
             <>
               <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">{t('Catégories', 'Categories', 'الفئات')}</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {CATEGORIES.map((c) => {
+                {allCategories.map((c) => {
                   const count = library.filter((v) => v.categories.includes(c.id)).length;
+                  if (count === 0) return null;
                   return (
                     <button
                       key={c.id}
@@ -465,7 +555,7 @@ export const VideoHubView: React.FC = () => {
                       onClick={() => goCategory(c.id)}
                       className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
                     >
-                      <span className="font-semibold text-slate-900 dark:text-white text-sm">{c.name[lang]}</span>
+                      <span className="font-semibold text-slate-900 dark:text-white text-sm">{c.name}</span>
                       <span className="text-xs text-slate-500 dark:text-slate-400">{count}</span>
                     </button>
                   );
@@ -482,7 +572,7 @@ export const VideoHubView: React.FC = () => {
                 </button>
                 <ChevronRight size={14} className="text-slate-400" />
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                  {CATEGORIES.find((c) => c.id === categoryId)?.name[lang] || categoryId}
+                  {allCategories.find((c) => c.id === categoryId)?.name || categoryId}
                 </h2>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -542,9 +632,20 @@ export const VideoHubView: React.FC = () => {
                     onChange={(e) => setAddCategory(e.target.value)}
                     className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-white"
                   >
-                    {CATEGORIES.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name[lang]}</option>
+                    {allCategories.slice(0, 40).map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('Plateforme', 'Platform', 'المنصة')}</label>
+                  <select
+                    value={addPlatform}
+                    onChange={(e) => setAddPlatform(e.target.value as Platform)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  >
+                    <option value="youtube">YouTube</option>
+                    <option value="tiktok">TikTok</option>
                   </select>
                 </div>
                 <div>
@@ -583,7 +684,7 @@ export const VideoHubView: React.FC = () => {
                 </p>
                 <button
                   type="button"
-                  onClick={() => { if (confirm(t('Réinitialiser la bibliothèque ?', 'Reset library?', 'إعادة تعيين المكتبة؟'))) { setLibrary(SEED_VIDEOS); setLikes([]); setDislikes([]); setSeen([]); setLater([]); } }}
+                  onClick={() => { if (confirm(t('Réinitialiser la bibliothèque ?', 'Reset library?', 'إعادة تعيين المكتبة؟'))) { setLibrary(SEED_VIDEOS); setExtraCategories([]); setLikes([]); setDislikes([]); setSeen([]); setLater([]); } }}
                   className="mt-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline"
                 >
                   {t('Réinitialiser', 'Reset', 'إعادة تعيين')}
@@ -601,9 +702,9 @@ export const VideoHubView: React.FC = () => {
               >
                 ← {t('Retour', 'Back', 'رجوع')}
               </button>
-              <div className="aspect-video w-full rounded-xl overflow-hidden bg-black shadow-lg">
+              <div className={`w-full rounded-xl overflow-hidden bg-black shadow-lg ${(selected.platform || 'youtube') === 'tiktok' ? 'aspect-[9/16] max-w-sm mx-auto' : 'aspect-video'}`}>
                 <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${selected.id}?rel=0&autoplay=1`}
+                  src={watchEmbedUrl(selected)}
                   title={selected.title}
                   className="w-full h-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -649,12 +750,12 @@ export const VideoHubView: React.FC = () => {
                     <Clock size={14} /> {later.includes(selected.id) ? t('Enregistré', 'Saved', 'محفوظ') : t('Plus tard', 'Later', 'لاحقاً')}
                   </button>
                   <a
-                    href={`https://www.youtube.com/watch?v=${selected.id}`}
+                    href={(selected.platform || 'youtube') === 'tiktok' ? `https://www.tiktok.com/@/video/${selected.id}` : `https://www.youtube.com/watch?v=${selected.id}`}
                     target="_blank"
                     rel="noopener"
                     className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
-                    <Play size={14} /> YouTube
+                    <Play size={14} /> {(selected.platform || 'youtube') === 'tiktok' ? 'TikTok' : 'YouTube'}
                   </a>
                 </div>
               </div>
@@ -665,7 +766,9 @@ export const VideoHubView: React.FC = () => {
               {selected.why && <p className="mt-2 text-sm italic text-slate-500 dark:text-slate-400">{selected.why}</p>}
               <div className="mt-3 flex flex-wrap gap-2">
                 {selected.categories.map((c) => (
-                  <span key={c} className="text-[11px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">{c}</span>
+                  <span key={c} className="text-[11px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                    {allCategories.find((x) => x.id === c)?.name || c}
+                  </span>
                 ))}
                 {selected.tags.map((t) => (
                   <span key={t} className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">#{t}</span>
