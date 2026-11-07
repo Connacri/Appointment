@@ -1551,6 +1551,7 @@ export const PlanningTimeline: React.FC = () => {
                                     setNewBookingInitialSlot({
                                       resourceId: res.id,
                                       date: day.dateStr,
+                                      time: '14:00',
                                     });
                                     setIsNewBookingModalOpen(true);
                                   }}
@@ -1598,8 +1599,14 @@ export const PlanningTimeline: React.FC = () => {
                             if (visibleEnd <= visibleStart) return null;
 
                             const daysSpan = visibleEnd - visibleStart;
-                            const leftOffset = visibleStart * colWidth;
-                            const barWidth = Math.max(daysSpan * colWidth - 6, 28);
+                            const isTimedHotelStay = bkg.sector === 'hotel';
+                            const startTimeParts = (bkg.checkInTime || '14:00').split(':').map(Number);
+                            const endTimeParts = (bkg.checkOutTime || '12:00').split(':').map(Number);
+                            const startDayFraction = isTimedHotelStay && startIndex >= 0 ? ((startTimeParts[0] * 60 + startTimeParts[1]) / 1440) : 0;
+                            const endDayFraction = isTimedHotelStay && endIndex >= 0 ? ((endTimeParts[0] * 60 + endTimeParts[1]) / 1440) : 0;
+                            const leftOffset = visibleStart * colWidth + startDayFraction * colWidth;
+                            const rightOffset = visibleEnd * colWidth + endDayFraction * colWidth;
+                            const barWidth = Math.max(rightOffset - leftOffset - 6, 12);
 
                             const statusStyle = statusConfig[bkg.status] || statusConfig.confirmed;
 
