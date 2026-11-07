@@ -142,6 +142,9 @@ export interface TimelineBooking {
   checkInTime?: string; // HH:mm, defaults to 14:00 for hotel stays
   checkOutTime?: string; // HH:mm, defaults to 12:00 for hotel stays
   actualCheckOutAt?: string; // ISO timestamp recorded by reception when the guest actually leaves
+  valuablesAtReception?: { id: string; description: string; status: 'held' | 'returned' | 'forgotten'; recordedAt: string; returnedAt?: string }[];
+  forgottenItems?: { id: string; description: string; status: 'stored' | 'returned'; foundAt: string; foundBy: string; returnedAt?: string }[];
+  guestAlerts?: { id: string; text: string; source: 'housekeeping' | 'reception' | 'management'; createdAt: string; createdBy: string }[];
   status: BookingStatus;
   totalPrice: number;
   paymentStatus: 'paid' | 'pending' | 'partial';
