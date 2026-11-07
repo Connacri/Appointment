@@ -146,6 +146,9 @@ export const BookingModal: React.FC = () => {
   // proUSB Guest Card creation from the booking dialog
   const [isCreatingCard, setIsCreatingCard] = useState(false);
   const [cardProgress, setCardProgress] = useState(0);
+  const [requestedCardCount, setRequestedCardCount] = useState(2);
+  const [createdCardCount, setCreatedCardCount] = useState(0);
+  const [bookingStep, setBookingStep] = useState(0);
   const [cardResult, setCardResult] = useState<CardResult | null>(null);
   const [usbConnected, setUsbConnected] = useState<boolean>(lockManager.getStatus() === 'connected');
 
@@ -311,6 +314,12 @@ export const BookingModal: React.FC = () => {
     }
   }, [isOpen, selectedBooking, newBookingInitialSlot, currentBaseDate, activeDomain, domainResources, currentRole, clientProfile]);
 
+  // Card quantity defaults to all occupants; reception can override it.
+  const occupantCount = activeDomain === 'hotel' ? hotelAdults + hotelChildren : activeDomain === 'resort' ? resortOccupants : 1;
+  useEffect(() => {
+    if (!isEditing) setRequestedCardCount(Math.max(1, occupantCount));
+  }, [occupantCount, isEditing]);
+
   // Current selected resource
   const currentResource = useMemo(() => {
     return domainResources.find((r) => r.id === resourceId) || domainResources[0] || null;
@@ -347,31 +356,26 @@ export const BookingModal: React.FC = () => {
     }, 110);
 
     try {
-      const record = await lockManager.issueGuestCardFromBooking(
-        {
-          id: selectedBooking?.id || `draft-${Date.now()}`,
-          guestName: guestName || selectedBooking?.guestName || 'Client',
-          resourceName: currentResource?.name || resourceNameFallback,
-          buildingNo: currentResource?.building !== undefined ? Number.parseInt(currentResource.building, 10) : undefined,
-          floorNo: currentResource?.floor !== undefined ? Number.parseInt(currentResource.floor, 10) : undefined,
-          startDate,
-          endDate,
-        },
-        'Admin',
-      );
+      let record: Awaited<ReturnType<typeof lockManager.issueGuestCardFromBooking>> | null = null;
+      let successfulCards = 0;
+      for (let index = 0; index < Math.max(1, requestedCardCount); index += 1) {
+        record = await lockManager.issueGuestCardFromBooking(
+          { id: selectedBooking?.id || `draft-${Date.now()}`, guestName: guestName || selectedBooking?.guestName || 'Client', resourceName: currentResource?.name || resourceNameFallback, buildingNo: currentResource?.building !== undefined ? Number.parseInt(currentResource.building, 10) : undefined, floorNo: currentResource?.floor !== undefined ? Number.parseInt(currentResource.floor, 10) : undefined, startDate, endDate },
+          'Admin',
+        );
+        successfulCards += 1;
+        setCreatedCardCount(successfulCards);
+        setCardProgress(Math.round(((index + 1) / Math.max(1, requestedCardCount)) * 100));
+      }
+      if (!record) throw new Error('Aucune carte n’a été créée.');
       clearInterval(progressTimer);
       setCardProgress(100);
       await lockManager.notifySuccess();
       setCardResult({
         success: true,
-        title: 'Carte client encodée avec succès',
-        message: `La carte de la chambre ${record.roomNumber || currentResource?.name} pour ${record.holderName} est valide jusqu'au ${record.validUntil}. Présentez la carte au lecteur de la serrure pour l'activer.`,
-        details: [
-          { label: 'Chambre', value: record.roomNumber || '—' },
-          { label: 'Client', value: record.holderName },
-          { label: 'Expire le', value: record.validUntil },
-          { label: 'Trame (hex)', value: record.rawHex },
-        ],
+        title: `${successfulCards} carte(s) encodée(s) avec succès`,
+        message: `${successfulCards} carte(s) ont été encodées pour la chambre ${record.roomNumber || currentResource?.name}, au nom de ${record.holderName}. Validité jusqu'au ${record.validUntil}.`,
+        details: [ { label: 'Chambre', value: record.roomNumber || '—' }, { label: 'Client', value: record.holderName }, { label: 'Cartes créées', value: String(successfulCards) }, { label: 'Expire le', value: record.validUntil }, { label: 'Dernière trame (hex)', value: record.rawHex } ],
       });
     } catch (error) {
       clearInterval(progressTimer);
@@ -760,6 +764,11 @@ export const BookingModal: React.FC = () => {
 
         {/* Modal Body */}
         <form onSubmit={handleSubmit} className="flex-1 min-h-0 p-4 sm:p-5 overflow-y-auto overscroll-contain space-y-4 text-xs pb-5">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between gap-2"><div><p className="text-sm font-bold text-slate-900 dark:text-white">Parcours de réservation</p><p className="text-[11px] text-slate-500">Progression du dossier</p></div><span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">{bookingStep + 1}/3</span></div>
+            <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${((bookingStep + 1) / 3) * 100}%` }} /></div>
+            <div className="grid grid-cols-3 gap-2">{['Séjour', 'Client', 'Confirmation'].map((label, index) => <button key={label} type="button" onClick={() => { setBookingStep(index); document.getElementById(index === 0 ? 'booking-step-stay' : index === 1 ? 'booking-step-guest' : 'booking-step-confirm')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className={`rounded-xl px-2 py-2 text-[11px] font-bold transition ${bookingStep === index ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}><span className="block text-[10px] opacity-75">0{index + 1}</span>{label}</button>)}</div>
+          </div>
           {conflictError && (
             <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
               <AlertCircle size={16} className="shrink-0" />
@@ -870,7 +879,7 @@ export const BookingModal: React.FC = () => {
           </div>
 
           {/* 2. BENEFICIARY / CLIENT / PATIENT IDENTITY */}
-          <div className="space-y-2.5">
+          <div id="booking-step-guest" className="space-y-2.5 scroll-mt-4">
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 {language === 'fr'
@@ -1445,7 +1454,7 @@ export const BookingModal: React.FC = () => {
           )}
 
           {/* 4. DATES & SCHEDULE */}
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div id="booking-step-stay" className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 scroll-mt-4">
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
                 <span>{language === 'fr' ? "Date d'arrivée / Début *" : 'Start / Check-in Date *'}</span>
@@ -1665,7 +1674,7 @@ export const BookingModal: React.FC = () => {
           </div>
 
           {/* ACTION BUTTONS */}
-          <div className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-end gap-2 z-10">
+          <div id="booking-step-confirm" className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 scroll-mt-4 backdrop-blur-md px-3 sm:px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-end gap-2 z-10">
             {activeDomain === 'hotel' && (
               <div className="flex items-center gap-2 w-full sm:w-auto sm:mr-auto">
                 <button
@@ -1705,6 +1714,7 @@ export const BookingModal: React.FC = () => {
                           : 'Create Guest Card'}
                   </span>
                 </button>
+                <div className="flex items-center gap-1.5 rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/70 dark:bg-violet-950/30 px-2 py-1.5"><label htmlFor="room-card-count" className="text-[10px] font-semibold text-violet-800 dark:text-violet-200 whitespace-nowrap">Cartes</label><input id="room-card-count" type="number" min={1} max={20} value={requestedCardCount} onChange={(e) => setRequestedCardCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-14 h-8 rounded-md border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 px-1 text-center text-xs font-bold text-slate-900 dark:text-white" aria-label="Nombre de cartes à créer"/><span className="text-[10px] text-violet-700 dark:text-violet-300">{occupantCount} occupant(s)</span></div>
                 {!usbConnected && (
                   <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                     <AlertCircle size={12} />
