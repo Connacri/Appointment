@@ -366,7 +366,9 @@ export const BookingModal: React.FC = () => {
     try {
       let record: Awaited<ReturnType<typeof lockManager.issueGuestCardFromBooking>> | null = null;
       let successfulCards = 0;
-      for (let index = 0; index < Math.max(1, requestedCardCount); index += 1) {
+      const cardsRemaining = Math.max(0, requestedCardCount - cardsCreatedCount);
+      if (cardsRemaining === 0) throw new Error('Le nombre de cartes demandé a déjà été encodé.');
+      for (let index = 0; index < cardsRemaining; index += 1) {
         const bookingForCard = bookingConfirmation || selectedBooking;
         if (!bookingForCard?.id) {
           throw new Error('Enregistrez la réservation avant de créer les cartes de chambre.');
@@ -377,7 +379,7 @@ export const BookingModal: React.FC = () => {
         );
         successfulCards += 1;
         setCardsCreatedCount((previous) => previous + 1);
-        setCardProgress(Math.round(((index + 1) / Math.max(1, requestedCardCount)) * 100));
+        setCardProgress(Math.round(((index + 1) / Math.max(1, cardsRemaining)) * 100));
       }
       if (!record) throw new Error('Aucune carte n’a été créée.');
       clearInterval(progressTimer);
