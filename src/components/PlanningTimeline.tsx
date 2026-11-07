@@ -1547,11 +1547,26 @@ export const PlanningTimeline: React.FC = () => {
                                       });
                                       return;
                                     }
+                                    // If a previous guest checks out on this date, offer the
+                                    // first legal check-in slot after the 10-minute room turnover.
+                                    const sameDayCheckoutMinutes = resBookings
+                                      .filter((booking) =>
+                                        booking.status !== 'cancelled' &&
+                                        booking.endDate === day.dateStr
+                                      )
+                                      .map((booking) => {
+                                        const [hours, minutes] = (booking.checkOutTime || '12:00').split(':').map(Number);
+                                        return (hours * 60) + minutes + 10;
+                                      });
+                                    const earliestCheckIn = sameDayCheckoutMinutes.length > 0
+                                      ? Math.max(14 * 60, ...sameDayCheckoutMinutes)
+                                      : 14 * 60;
+                                    const suggestedCheckIn = `${String(Math.floor(earliestCheckIn / 60) % 24).padStart(2, '0')}:${String(earliestCheckIn % 60).padStart(2, '0')}`;
                                     setActivePreviewBooking(null);
                                     setNewBookingInitialSlot({
                                       resourceId: res.id,
                                       date: day.dateStr,
-                                      time: '14:00',
+                                      time: suggestedCheckIn,
                                     });
                                     setIsNewBookingModalOpen(true);
                                   }}
