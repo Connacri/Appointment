@@ -22,6 +22,7 @@ import {
   FileText,
   Info,
   ChevronDown,
+  RefreshCw,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { lockManager, UsbConnectionStatus, UsbDeviceInfo } from '../locks/lockManager';
@@ -61,6 +62,7 @@ export const TopBar: React.FC = () => {
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [isSectorMenuOpen, setIsSectorMenuOpen] = useState(false);
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const roleMenuRef = useRef<HTMLDivElement>(null);
@@ -361,6 +363,9 @@ export const TopBar: React.FC = () => {
 
         {/* RIGHT SECTION: Local Storage, USB, Currency, + Nouveau, Options [⋮] */}
         <div className="pms-app-topbar-actions flex items-center gap-1.5 shrink-0 overflow-visible">
+          <button type="button" disabled={isRefreshing} onClick={() => { setIsRefreshing(true); window.dispatchEvent(new CustomEvent('appointment-refresh-request', { detail: { onComplete: () => setIsRefreshing(false) } })); }} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0" title={language === 'fr' ? 'Actualiser toutes les pages' : language === 'ar' ? 'تحديث جميع الصفحات' : 'Refresh all pages'} aria-label={language === 'fr' ? 'Actualiser' : language === 'ar' ? 'تحديث' : 'Refresh'}>
+            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''}/><span className="hidden lg:inline">{language === 'fr' ? 'Actualiser' : language === 'ar' ? 'تحديث' : 'Refresh'}</span>
+          </button>
           {/* Local database sync indicator */}
           <button
             type="button"
