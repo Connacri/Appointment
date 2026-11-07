@@ -151,6 +151,7 @@ export const BookingModal: React.FC = () => {
   const [cardProgress, setCardProgress] = useState(0);
   const [requestedCardCount, setRequestedCardCount] = useState(2);
   const [bookingStep, setBookingStep] = useState(0);
+  const [bookingConfirmation, setBookingConfirmation] = useState<any | null>(null);
   const [cardResult, setCardResult] = useState<CardResult | null>(null);
   const [usbConnected, setUsbConnected] = useState<boolean>(lockManager.getStatus() === 'connected');
 
@@ -672,11 +673,15 @@ export const BookingModal: React.FC = () => {
         }
         return;
       }
-      setIsNewBookingModalOpen(false);
+      if (res.booking) {
+        setBookingConfirmation({ ...res.booking, cardCountRequested: requestedCardCount });
+        setBookingStep(2);
+      } else setIsNewBookingModalOpen(false);
     }
   };
 
   const closeModal = () => {
+    setBookingConfirmation(null);
     setIsNewBookingModalOpen(false);
     setSelectedBooking(null);
   };
@@ -784,6 +789,7 @@ export const BookingModal: React.FC = () => {
         </div>
 
         {/* Modal Body */}
+        {bookingConfirmation ? <section className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950"><div className="mx-auto max-w-xl rounded-3xl border border-emerald-200 dark:border-emerald-900 bg-white dark:bg-slate-900 p-6 space-y-4"><div className="text-center"><div className="mx-auto mb-3 h-14 w-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center"><CheckCircle2 size={30}/></div><p className="text-xs font-bold uppercase text-emerald-700">Réservation enregistrée</p><h4 className="text-2xl font-black">Confirmation du séjour</h4></div><div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3"><p className="text-[10px] text-slate-500">Référence de réservation</p><p className="font-mono text-lg font-bold">{bookingConfirmation.id}</p></div><div className="grid grid-cols-2 gap-3 text-left">{[['Client',bookingConfirmation.guestName],['Chambre',bookingConfirmation.resourceName],['Arrivée',bookingConfirmation.startDate + ' • ' + (bookingConfirmation.checkInTime || '14:00')],['Départ',bookingConfirmation.endDate + ' • ' + (bookingConfirmation.checkOutTime || '12:00')],['Occupants',(bookingConfirmation.adults || 1) + ' adulte(s) • ' + (bookingConfirmation.children || 0) + ' enfant(s)'],['Montant',String(bookingConfirmation.totalPrice ?? totalPrice) + ' ' + paymentCurrency]].map(([label,value])=><div key={label} className="rounded-xl border border-slate-100 dark:border-slate-800 p-3"><p className="text-[10px] text-slate-500">{label}</p><p className="text-xs font-bold break-words">{value}</p></div>)}</div><div className="rounded-xl border border-violet-200 bg-violet-50 dark:bg-violet-950/30 p-4"><p className="font-bold text-violet-900 dark:text-violet-200">Cartes RFID • À encoder</p><p className="text-xs mt-1">{bookingConfirmation.cardCountRequested} carte(s) demandée(s). Aucune carte n’est déclarée encodée avant confirmation réelle de l’encodeur proUSB.</p></div><button type="button" onClick={closeModal} className="w-full rounded-xl bg-emerald-600 text-white font-bold py-3">Terminer</button></div></section> : (
         <form onSubmit={handleSubmit} className="flex-1 min-h-0 p-4 sm:p-5 overflow-y-auto overscroll-contain space-y-4 text-xs pb-5">
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:p-4 shadow-sm space-y-3">
             <div className="flex items-center justify-between gap-2"><div><p className="text-sm font-bold text-slate-900 dark:text-white">Parcours de réservation</p><p className="text-[11px] text-slate-500">Progression du dossier</p></div><span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">{bookingStep + 1}/3</span></div>
@@ -1818,6 +1824,7 @@ export const BookingModal: React.FC = () => {
             </button>
           </div>
         </form>
+        )}
       </div>
 
       {/* ALGERIAN POLICE REGISTRATION SHEET MODAL (Fiche Individuelle de Police) */}
