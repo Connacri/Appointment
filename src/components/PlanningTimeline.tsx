@@ -70,6 +70,26 @@ export const PlanningTimeline: React.FC = () => {
   } = useApp();
 
   const isRTL = language === 'ar';
+
+  const handleGuestCheckout = (booking: TimelineBooking) => {
+    if (booking.status === 'checked_out' || booking.status === 'cancelled') return;
+    const now = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    updateBooking(booking.id, { endDate: date, checkOutTime: time, actualCheckOutAt: now.toISOString() });
+    updateBookingStatus(booking.id, 'checked_out');
+    setActivePreviewBooking(null);
+    setTimelineNotice({
+      title: language === 'fr' ? 'Départ enregistré' : language === 'ar' ? 'تم تسجيل المغادرة' : 'Guest checkout recorded',
+      message: language === 'fr'
+        ? `Le départ de ${booking.guestName} est enregistré à ${time}. La chambre ${booking.resourceName} sera proposée à nouveau à partir de ${(() => { const m = now.getHours() * 60 + now.getMinutes() + 10; return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; })()} après 10 minutes de remise en état.`
+        : language === 'ar'
+        ? `تم تسجيل مغادرة ${booking.guestName} في الساعة ${time}. ستصبح الغرفة متاحة بعد 10 دقائق.`
+        : `Checkout for ${booking.guestName} recorded at ${time}. Room available after the 10-minute turnover.`,
+      tone: 'success',
+      roomName: booking.resourceName,
+    });
+  };
   const [groupingMode, setGroupingMode] = useState<'floor' | 'wing' | 'floor_wing'>(
     () => establishmentProfile?.roomGroupingMode || 'floor'
   );
@@ -1978,6 +1998,15 @@ export const PlanningTimeline: React.FC = () => {
                 >
                   <Download size={13} />
                 </button>
+                {activePreviewBooking.booking.sector === 'hotel' && !['checked_out', 'cancelled'].includes(activePreviewBooking.booking.status) && (
+                  <button
+                    type="button"
+                    onClick={() => handleGuestCheckout(activePreviewBooking.booking)}
+                    className="px-2 py-1 rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700"
+                  >
+                    {language === 'fr' ? 'Locataire parti' : language === 'ar' ? 'غادر النزيل' : 'Guest left'}
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -2063,6 +2092,15 @@ export const PlanningTimeline: React.FC = () => {
                 <Download size={14} />
                 <span>.ICS</span>
               </button>
+              {activePreviewBooking.booking.sector === 'hotel' && !['checked_out', 'cancelled'].includes(activePreviewBooking.booking.status) && (
+                <button
+                  type="button"
+                  onClick={() => handleGuestCheckout(activePreviewBooking.booking)}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold"
+                >
+                  {language === 'fr' ? 'Locataire parti' : language === 'ar' ? 'غادر النزيل' : 'Guest left'}
+                </button>
+              )}
             </div>
           </div>
         </div>
