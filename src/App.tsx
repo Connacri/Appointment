@@ -34,6 +34,9 @@ const BookingAnalyticsView = React.lazy(() =>
 const HousekeepingView = React.lazy(() =>
   import('./components/HousekeepingView').then((m) => ({ default: m.HousekeepingView })),
 );
+const LostPropertyView = React.lazy(() =>
+  import('./components/LostPropertyView').then((m) => ({ default: m.LostPropertyView })),
+);
 const BillingInvoicingView = React.lazy(() =>
   import('./components/BillingInvoicingView').then((m) => ({ default: m.BillingInvoicingView })),
 );
@@ -245,6 +248,8 @@ const MainLayout: React.FC = () => {
               {activeView === 'my_bookings' && <MyBookingsView />}
 
               {activeView === 'housekeeping' && <HousekeepingView />}
+
+              {activeView === 'lost_property' && <LostPropertyView />}
 
               {activeView === 'channels' && <ChannelManagerView />}
 
