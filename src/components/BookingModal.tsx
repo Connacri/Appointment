@@ -627,6 +627,8 @@ export const BookingModal: React.FC = () => {
           guestPhone || (guestType === 'algerian' ? '+213 550 12 34 56' : '+33 6 00 00 00 00'),
         startDate,
         endDate: endDate || startDate,
+        checkInTime,
+        checkOutTime,
         status,
         totalPrice,
         paymentStatus,
