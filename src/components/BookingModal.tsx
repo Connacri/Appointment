@@ -58,6 +58,7 @@ export const BookingModal: React.FC = () => {
     currentRole,
     clientProfile,
     resourceGroups,
+    bookings,
     generateTurnoverTasksForCheckout,
     currency,
   } = useApp();
@@ -94,6 +95,10 @@ export const BookingModal: React.FC = () => {
   const [checkOutTime, setCheckOutTime] = useState('12:00');
   const [status, setStatus] = useState<BookingStatus>('confirmed');
   const [notes, setNotes] = useState('');
+  const [valuablesText, setValuablesText] = useState('');
+  const [forgottenText, setForgottenText] = useState('');
+  const [guestAlertsText, setGuestAlertsText] = useState('');
+  const [showCheckoutPropertyDialog, setShowCheckoutPropertyDialog] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending' | 'partial'>('paid');
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [roomStatusAlert, setRoomStatusAlert] = useState<{ roomName: string; status: ResourceItem['housekeepingStatus'] } | null>(null);
@@ -190,6 +195,9 @@ export const BookingModal: React.FC = () => {
       setCheckOutTime(selectedBooking.checkOutTime || '12:00');
       setStatus(selectedBooking.status || 'confirmed');
       setNotes(selectedBooking.notes || '');
+      setValuablesText((selectedBooking.valuablesAtReception || []).filter((item) => item.status === 'held').map((item) => item.description).join('\\n'));
+      setForgottenText((selectedBooking.forgottenItems || []).filter((item) => item.status === 'stored').map((item) => item.description).join('\\n'));
+      setGuestAlertsText((selectedBooking.guestAlerts || []).map((item) => item.text).join('\\n'));
       setPaymentStatus(selectedBooking.paymentStatus || 'paid');
       setConflictError(null);
 
@@ -302,6 +310,9 @@ export const BookingModal: React.FC = () => {
       }
       setStatus('confirmed');
       setNotes('');
+      setValuablesText('');
+      setForgottenText('');
+      setGuestAlertsText('');
       setPaymentStatus('paid');
       setConflictError(null);
       setGuestType('algerian');
@@ -595,6 +606,9 @@ export const BookingModal: React.FC = () => {
         totalPrice,
         paymentStatus,
         notes,
+        valuablesAtReception: (selectedBooking.valuablesAtReception || []).filter((item) => item.status !== 'returned').concat(valuablesText.split('\\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'held' as const, recordedAt: nowIso }))),
+        forgottenItems: (selectedBooking.forgottenItems || []).filter((item) => item.status !== 'returned').concat(forgottenText.split('\\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'stored' as const, foundAt: nowIso, foundBy: currentUserName }))),
+        guestAlerts: (selectedBooking.guestAlerts || []).concat(guestAlertsText.split('\\n').map((text) => text.trim()).filter(Boolean).map((text) => ({ id: crypto.randomUUID(), text, source: (currentRole === 'staff' ? 'housekeeping' : currentRole === 'manager' || currentRole === 'admin' ? 'management' : 'reception') as 'housekeeping' | 'reception' | 'management', createdAt: nowIso, createdBy: currentUserName }))),
         adults: totalAdults,
         children: totalChildren,
         guestType,
@@ -647,6 +661,9 @@ export const BookingModal: React.FC = () => {
         totalPrice,
         paymentStatus,
         notes,
+        valuablesAtReception: valuablesText.split('\\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'held' as const, recordedAt: nowIso })),
+        forgottenItems: forgottenText.split('\\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'stored' as const, foundAt: nowIso, foundBy: currentUserName })),
+        guestAlerts: guestAlertsText.split('\\n').map((text) => text.trim()).filter(Boolean).map((text) => ({ id: crypto.randomUUID(), text, source: (currentRole === 'staff' ? 'housekeeping' : currentRole === 'manager' || currentRole === 'admin' ? 'management' : 'reception') as 'housekeeping' | 'reception' | 'management', createdAt: nowIso, createdBy: currentUserName })),
         adults: totalAdults,
         children: totalChildren,
         guestType,
