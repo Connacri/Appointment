@@ -1522,6 +1522,20 @@ export const BookingModal: React.FC = () => {
                 <span>Paramètres Resort, Villas & Bungalows</span>
               </div>
 
+              <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-white/70 dark:bg-slate-900/60 p-3 space-y-3">
+                <p className="text-xs font-bold text-amber-900 dark:text-amber-200">Coordonnées et documents de chaque adulte</p>
+                {adultGuests.slice(0, resortOccupants).map((adult, index) => <div key={index} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Adulte {index + 1} {index === 0 ? '(client principal)' : ''}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input value={adult.fullName} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,fullName:e.target.value}:item))} placeholder="Nom et prénom" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <input value={adult.phone} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,phone:e.target.value}:item))} placeholder="Téléphone" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <input type="email" value={adult.email} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,email:e.target.value}:item))} placeholder="E-mail" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <select value={adult.documentType} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentType:e.target.value}:item))} className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"><option value="cni">Carte d'identité</option><option value="passport">Passeport</option><option value="driving_license">Permis de conduire</option><option value="other">Autre document</option></select>
+                    <input value={adult.documentNumber} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentNumber:e.target.value}:item))} placeholder="Numéro du document" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <input type="date" value={adult.documentExpiryDate || ''} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentExpiryDate:e.target.value}:item))} className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs" aria-label="Expiration du document"/>
+                  </div>
+                </div>)}
+              </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Capacité / Occupants</label>
