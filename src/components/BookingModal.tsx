@@ -89,6 +89,7 @@ export const BookingModal: React.FC = () => {
   const [guestName, setGuestName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
+  const [adultGuests, setAdultGuests] = useState<{ fullName: string; phone: string; email: string; documentType: string; documentNumber: string; documentExpiryDate?: string }[]>([]);
   const [startDate, setStartDate] = useState(currentBaseDate);
   const [endDate, setEndDate] = useState('');
   const [checkInTime, setCheckInTime] = useState('14:00');
@@ -231,6 +232,7 @@ export const BookingModal: React.FC = () => {
       setGuestName(selectedBooking.guestName || '');
       setGuestEmail(selectedBooking.guestEmail || '');
       setGuestPhone(selectedBooking.guestPhone || '');
+      setAdultGuests(selectedBooking.adultGuests || []);
       setStartDate(selectedBooking.startDate || currentBaseDate);
       setEndDate(selectedBooking.endDate || selectedBooking.startDate);
       setCheckInTime(selectedBooking.checkInTime || '14:00');
@@ -351,6 +353,7 @@ export const BookingModal: React.FC = () => {
         setGuestName('');
         setGuestEmail('');
         setGuestPhone('');
+      setAdultGuests([]);
       }
       setStatus('confirmed');
       setNotes('');
@@ -379,6 +382,11 @@ export const BookingModal: React.FC = () => {
       setPaymentMethodType('cash_dzd');
     }
   }, [isOpen, selectedBooking, newBookingInitialSlot, currentBaseDate, activeDomain, domainResources, currentRole, clientProfile]);
+
+  useEffect(() => {
+    const count = activeDomain === 'hotel' ? hotelAdults : activeDomain === 'resort' ? resortOccupants : 1;
+    setAdultGuests((current) => Array.from({ length: count }, (_, index) => current[index] || { fullName: index === 0 ? guestName : '', phone: index === 0 ? guestPhone : '', email: index === 0 ? guestEmail : '', documentType: index === 0 ? idPieceType : 'cni', documentNumber: index === 0 ? idPieceNumber : '', documentExpiryDate: index === 0 ? idDocumentExpiryDate : '' }));
+  }, [hotelAdults, resortOccupants, activeDomain]);
 
   // Card quantity defaults to all occupants; reception can override it.
   const occupantCount = activeDomain === 'hotel' ? hotelAdults + hotelChildren : activeDomain === 'resort' ? resortOccupants : 1;
@@ -657,6 +665,7 @@ export const BookingModal: React.FC = () => {
         forgottenItems: (selectedBooking.forgottenItems || []).filter((item) => item.status !== 'returned').concat(forgottenText.split('\\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'stored' as const, foundAt: nowIso, foundBy: currentUserName }))),
         guestAlerts: (selectedBooking.guestAlerts || []).concat(guestAlertsText.split('\\n').map((text) => text.trim()).filter(Boolean).map((text) => ({ id: crypto.randomUUID(), text, source: (currentRole === 'staff' ? 'housekeeping' : currentRole === 'manager' || currentRole === 'admin' ? 'management' : 'reception') as 'housekeeping' | 'reception' | 'management', createdAt: nowIso, createdBy: currentUserName }))),
         adults: totalAdults,
+        adultGuests: adultGuests.slice(0, totalAdults),
         children: totalChildren,
         guestType,
         nationality: guestType === 'algerian' ? 'Algérienne' : foreignNationality,
@@ -716,6 +725,7 @@ export const BookingModal: React.FC = () => {
         forgottenItems: forgottenText.split('\\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'stored' as const, foundAt: nowIso, foundBy: currentUserName })),
         guestAlerts: guestAlertsText.split('\\n').map((text) => text.trim()).filter(Boolean).map((text) => ({ id: crypto.randomUUID(), text, source: (currentRole === 'staff' ? 'housekeeping' : currentRole === 'manager' || currentRole === 'admin' ? 'management' : 'reception') as 'housekeeping' | 'reception' | 'management', createdAt: nowIso, createdBy: currentUserName })),
         adults: totalAdults,
+        adultGuests: adultGuests.slice(0, totalAdults),
         children: totalChildren,
         guestType,
         nationality: guestType === 'algerian' ? 'Algérienne' : foreignNationality,
@@ -1251,6 +1261,21 @@ export const BookingModal: React.FC = () => {
               <div className="flex items-center gap-1.5 text-blue-800 dark:text-blue-300 font-bold text-xs uppercase tracking-wider">
                 <Bed size={14} />
                 <span>Paramètres du Séjour Hôtelier</span>
+              </div>
+
+              <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-white/70 dark:bg-slate-900/60 p-3 space-y-3">
+                <div><p className="text-xs font-bold text-blue-900 dark:text-blue-200">Coordonnées de tous les adultes</p><p className="text-[11px] text-slate-500">Chaque adulte doit avoir sa propre identité et ses coordonnées.</p></div>
+                {adultGuests.slice(0, hotelAdults).map((adult, index) => <div key={index} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Adulte {index + 1} {index === 0 ? '(client principal)' : ''}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input value={adult.fullName} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,fullName:e.target.value}:item))} placeholder="Nom et prénom" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <input value={adult.phone} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,phone:e.target.value}:item))} placeholder="Téléphone" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <input type="email" value={adult.email} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,email:e.target.value}:item))} placeholder="E-mail" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <select value={adult.documentType} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentType:e.target.value}:item))} className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"><option value="cni">Carte d'identité</option><option value="passport">Passeport</option><option value="driving_license">Permis de conduire</option><option value="other">Autre document</option></select>
+                    <input value={adult.documentNumber} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentNumber:e.target.value}:item))} placeholder="Numéro du document" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <input type="date" value={adult.documentExpiryDate || ''} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentExpiryDate:e.target.value}:item))} className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs" aria-label="Expiration du document"/>
+                  </div>
+                </div>)}
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
