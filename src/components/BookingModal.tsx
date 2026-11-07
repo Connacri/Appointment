@@ -1833,6 +1833,14 @@ export const BookingModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    const now = new Date().toISOString();
+                    const pendingValuables = (selectedBooking.valuablesAtReception || []).filter((item) => item.status === 'held');
+                    const valuablesAtReception = (selectedBooking.valuablesAtReception || []).map((item) => {
+                      if (item.status !== 'held') return item;
+                      const returned = window.confirm(`Départ de ${selectedBooking.guestName} : l'objet « ${item.description} » a-t-il été restitué au client ? OK = restitué ; Annuler = non réclamé / à conserver.`);
+                      return returned ? { ...item, status: 'returned' as const, returnedAt: now } : { ...item, status: 'forgotten' as const };
+                    });
+                    if (pendingValuables.length > 0) updateBooking(selectedBooking.id, { valuablesAtReception });
                     updateBookingStatus(selectedBooking.id, 'checked_out');
                     generateTurnoverTasksForCheckout(selectedBooking.resourceName);
                     closeModal();
