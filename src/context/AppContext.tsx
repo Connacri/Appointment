@@ -43,6 +43,7 @@ import {
 export type ActiveAppView =
   | 'planning'
   | 'my_bookings'
+  | 'lost_property'
   | 'reports'
   | 'analytics'
   | 'housekeeping'
