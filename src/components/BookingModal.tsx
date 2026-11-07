@@ -376,13 +376,13 @@ export const BookingModal: React.FC = () => {
           'Admin',
         );
         successfulCards += 1;
+        setCardsCreatedCount((previous) => previous + 1);
         setCardProgress(Math.round(((index + 1) / Math.max(1, requestedCardCount)) * 100));
       }
       if (!record) throw new Error('Aucune carte n’a été créée.');
       clearInterval(progressTimer);
       setCardProgress(100);
       await lockManager.notifySuccess();
-      setCardsCreatedCount((previous) => previous + successfulCards);
       setCardResult({
         success: true,
         title: `${successfulCards} carte(s) encodée(s) avec succès`,
