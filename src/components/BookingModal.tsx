@@ -516,6 +516,14 @@ export const BookingModal: React.FC = () => {
       return;
     }
     if (!guestName.trim()) return;
+    if (activeDomain === 'hotel') {
+      const startAt = new Date(`${startDate}T${checkInTime}:00`).getTime();
+      const endAt = new Date(`${endDate || startDate}T${checkOutTime}:00`).getTime();
+      if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || endAt <= startAt) {
+        setConflictError('L’heure de départ doit être postérieure à l’heure d’arrivée.');
+        return;
+      }
+    }
     setConflictError(null);
 
     // Build custom domain metadata payload
