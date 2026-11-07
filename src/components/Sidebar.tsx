@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   BookOpen,
+  PackageSearch,
   CalendarDays,
   Receipt,
   BarChart3,
@@ -141,6 +142,14 @@ export const Sidebar: React.FC = () => {
       icon: LayoutDashboard,
       view: 'my_bookings' as const,
       roles: ['manager', 'receptionist', 'client'],
+      domains: ['hotel', 'resort'] as DomainType[],
+    },
+    {
+      id: 'lost_property',
+      label: language === 'fr' ? 'Objets oubliés & Réserves' : language === 'ar' ? 'المفقودات والملاحظات' : 'Lost Property & Guest Notes',
+      icon: PackageSearch,
+      view: 'lost_property' as const,
+      roles: ['manager', 'receptionist', 'staff'],
       domains: ['hotel', 'resort'] as DomainType[],
     },
     {
