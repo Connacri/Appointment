@@ -118,6 +118,9 @@ export const BookingModal: React.FC = () => {
     | 'official_document'
   >('cni');
   const [idPieceNumber, setIdPieceNumber] = useState('');
+  const [idDocumentExpiryDate, setIdDocumentExpiryDate] = useState('');
+  const [visaExpiryDate, setVisaExpiryDate] = useState('');
+  const [matchedGuestHistory, setMatchedGuestHistory] = useState<TimelineBooking | null>(null);
   const [specialAuthorizationDesc, setSpecialAuthorizationDesc] = useState('');
   const [algerianIdType, setAlgerianIdType] = useState<'cni' | 'nin'>('cni');
   const [algerianIdNumber, setAlgerianIdNumber] = useState('');
@@ -128,6 +131,45 @@ export const BookingModal: React.FC = () => {
   const [entryDateInCountry, setEntryDateInCountry] = useState('');
   const [showPoliceSheetModal, setShowPoliceSheetModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+
+  useEffect(() => {
+    if (selectedBooking || currentRole === 'client') return;
+    const name = guestName.trim().toLocaleLowerCase();
+    const email = guestEmail.trim().toLocaleLowerCase();
+    if (name.length < 4 && !email.includes('@')) { setMatchedGuestHistory(null); return; }
+    const previous = bookings
+      .filter((booking) => booking.sector === activeDomain)
+      .filter((booking) =>
+        (email && booking.guestEmail?.trim().toLocaleLowerCase() === email) ||
+        (name.length >= 4 && booking.guestName?.trim().toLocaleLowerCase() === name)
+      )
+      .sort((a, b) => (b.lastModifiedAt || b.startDate).localeCompare(a.lastModifiedAt || a.startDate))[0];
+    if (!previous) { setMatchedGuestHistory(null); return; }
+    setMatchedGuestHistory(previous);
+    setGuestName(previous.guestName || guestName);
+    setGuestEmail(previous.guestEmail || guestEmail);
+    setGuestPhone(previous.guestPhone || guestPhone);
+    setGuestType(previous.guestType || (previous.nationality === 'Algérienne' ? 'algerian' : 'foreigner'));
+    setForeignNationality(previous.nationality || 'Française');
+    setIdPieceType(previous.idPieceType || (previous.identityType === 'passport' ? 'passport' : 'cni'));
+    setIdPieceNumber(previous.idPieceNumber || previous.identityNumber || previous.passportNumber || '');
+    setAlgerianIdNumber(previous.identityNumber || previous.idPieceNumber || '');
+    setPassportNumber(previous.passportNumber || previous.idPieceNumber || '');
+    setVisaNumber(previous.visaNumber || '');
+    setEntryDateInCountry(previous.entryDateInCountry || '');
+    setWilayaOfOrigin(previous.wilayaOfOrigin || previous.wilaya || '31 - Oran');
+    setIdDocumentExpiryDate(previous.idDocumentExpiryDate || '');
+    setVisaExpiryDate(previous.visaExpiryDate || '');
+    setGuestAlertsText((previous.guestAlerts || []).map((alert) => alert.text).join('\\n'));
+  }, [guestName, guestEmail, bookings, activeDomain, currentRole, selectedBooking]);
+
+  const documentExpiryWarning = (date?: string) => {
+    if (!date) return null;
+    const days = Math.ceil((new Date(`${date}T23:59:59`).getTime() - Date.now()) / 86400000);
+    if (days < 0) return { label: `Expiré depuis ${Math.abs(days)} jour(s)`, tone: 'red' };
+    if (days <= 30) return { label: days === 0 ? 'Expire aujourd’hui' : `Expire dans ${days} jour(s)`, tone: 'amber' };
+    return { label: `Valide encore ${days} jour(s)`, tone: 'green' };
+  };
 
   // Formule de Pension & Restauration (inspiré Booking & Airbnb)
   const [selectedMealPlanId, setSelectedMealPlanId] = useState<string>('bb');
@@ -221,6 +263,8 @@ export const BookingModal: React.FC = () => {
         setIdPieceType('cni');
       }
       setIdPieceNumber(selectedBooking.idPieceNumber || selectedBooking.identityNumber || selectedBooking.passportNumber || '');
+      setIdDocumentExpiryDate(selectedBooking.idDocumentExpiryDate || '');
+      setVisaExpiryDate(selectedBooking.visaExpiryDate || '');
       setSpecialAuthorizationDesc(selectedBooking.specialAuthorizationDesc || '');
       setAlgerianIdNumber(selectedBooking.identityNumber || selectedBooking.idPieceNumber || '');
       setWilayaOfOrigin(selectedBooking.wilayaOfOrigin || selectedBooking.wilaya || '31 - Oran');
@@ -318,6 +362,9 @@ export const BookingModal: React.FC = () => {
       setGuestType('algerian');
       setIdPieceType('cni');
       setIdPieceNumber('');
+      setIdDocumentExpiryDate('');
+      setVisaExpiryDate('');
+      setMatchedGuestHistory(null);
       setSpecialAuthorizationDesc('');
       setAlgerianIdNumber('');
       setWilayaOfOrigin('31 - Oran');
@@ -619,6 +666,8 @@ export const BookingModal: React.FC = () => {
         idPieceNumber: idPieceNumber || (guestType === 'algerian' ? algerianIdNumber : passportNumber),
         specialAuthorizationDesc: idPieceType === 'special_authorization' ? specialAuthorizationDesc : undefined,
         passportNumber: guestType === 'foreigner' ? (passportNumber || idPieceNumber) : undefined,
+        idDocumentExpiryDate: idDocumentExpiryDate || undefined,
+        visaExpiryDate: guestType === 'foreigner' ? (visaExpiryDate || undefined) : undefined,
         visaNumber: guestType === 'foreigner' ? visaNumber : undefined,
         entryDateInCountry: guestType === 'foreigner' ? entryDateInCountry : undefined,
         wilayaOfOrigin: guestType === 'algerian' ? wilayaOfOrigin : undefined,
