@@ -561,8 +561,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 1. Strict date sanity checks before modifying state
     if (bookingData.sector === 'hotel' || bookingData.sector === 'resort') {
-      const s = new Date(bookingData.startDate + 'T14:00');
-      const e = new Date(bookingData.endDate + 'T12:00');
+      const s = new Date(`${bookingData.startDate}T${bookingData.checkInTime || '14:00'}:00`);
+      const e = new Date(`${bookingData.endDate}T${bookingData.checkOutTime || '12:00'}:00`);
       if (isNaN(s.getTime()) || isNaN(e.getTime())) {
         return {
           success: false,
