@@ -1061,16 +1061,18 @@ export const BookingModal: React.FC = () => {
           {(activeDomain === 'hotel' || activeDomain === 'resort') && (
             <div className="relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-white via-emerald-50/50 to-sky-50/60 dark:from-slate-900 dark:via-emerald-950/20 dark:to-slate-900 rounded-[1.5rem] border border-emerald-200/80 dark:border-emerald-900/70 shadow-sm space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200 text-xs">
-                  <ShieldCheck size={15} className="text-emerald-600 dark:text-emerald-400" />
-                  <span>
-                    {language === 'fr'
-                      ? 'Nationalité & Fiche de Police (Réglementation DGSN)'
-                      : language === 'ar'
-                      ? 'جنسية النزيل وبطاقة الشرطة التنظيمية'
-                      : 'Tenant Nationality & Police Declaration Form'}
-                  </span>
-                  <p className="mt-1 text-[11px] font-normal text-slate-500 dark:text-slate-400">Identification du voyageur et préparation de la déclaration individuelle.</p>
+                <div className="flex items-start gap-2">
+                  <ShieldCheck size={17} className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <div>
+                    <span className="block font-extrabold text-slate-900 dark:text-white text-sm">
+                      {language === 'fr'
+                        ? 'Nationalité & Fiche de Police (Réglementation DGSN)'
+                        : language === 'ar'
+                        ? 'جنسية النزيل وبطاقة الشرطة التنظيمية'
+                        : 'Tenant Nationality & Police Declaration Form'}
+                    </span>
+                    <p className="mt-1 text-[11px] font-normal text-slate-500 dark:text-slate-400">Identification du voyageur et préparation de la déclaration individuelle.</p>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -1679,13 +1681,6 @@ export const BookingModal: React.FC = () => {
               <div><h4 className="text-sm font-extrabold tracking-tight text-slate-900 dark:text-white">Devise & Conditions de Règlement</h4><p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">Devise de facturation, moyen de paiement et état d’encaissement.</p></div>
             </div>
             <div className="space-y-3 p-4 sm:p-5">
-            <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200 text-xs">
-              <Coins size={15} className="text-amber-500" />
-              <span className="sr-only">
-                {language === 'fr' ? 'Devise & Conditions de Règlement' : language === 'ar' ? 'العملة وطريقة الدفع' : 'Currency & Payment Terms'}
-              </span>
-            </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div>
                 <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
