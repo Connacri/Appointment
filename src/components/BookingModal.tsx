@@ -1687,6 +1687,30 @@ export const BookingModal: React.FC = () => {
             />
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/20 p-3">
+              <label className="block text-xs font-bold text-amber-900 dark:text-amber-200 mb-1">Objets confiés à la réception</label>
+              <textarea rows={3} value={valuablesText} onChange={(e) => setValuablesText(e.target.value)} placeholder="Un objet par ligne : bijoux, ordinateur, enveloppe..." className="w-full rounded-lg border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900 p-2 text-xs"/>
+              <p className="mt-1 text-[10px] text-amber-800 dark:text-amber-300">À vérifier et restituer au départ du client.</p>
+            </div>
+            <div className="rounded-xl border border-orange-200 dark:border-orange-900 bg-orange-50/60 dark:bg-orange-950/20 p-3">
+              <label className="block text-xs font-bold text-orange-900 dark:text-orange-200 mb-1">Objets trouvés / oubliés</label>
+              <textarea rows={3} value={forgottenText} onChange={(e) => setForgottenText(e.target.value)} placeholder="Un objet par ligne : chargeur, vêtement..." className="w-full rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-slate-900 p-2 text-xs"/>
+              <p className="mt-1 text-[10px] text-orange-800 dark:text-orange-300">Conservés dans le dossier jusqu'à restitution.</p>
+            </div>
+            <div className="md:col-span-2 rounded-xl border border-sky-200 dark:border-sky-900 bg-sky-50/60 dark:bg-sky-950/20 p-3">
+              <label className="block text-xs font-bold text-sky-900 dark:text-sky-200 mb-1">Réserves et observations pour les prochains séjours</label>
+              <textarea rows={2} value={guestAlertsText} onChange={(e) => setGuestAlertsText(e.target.value)} placeholder="Un point par ligne : préférence, anomalie constatée, demande particulière..." className="w-full rounded-lg border border-sky-200 dark:border-sky-800 bg-white dark:bg-slate-900 p-2 text-xs"/>
+              <p className="mt-1 text-[10px] text-sky-800 dark:text-sky-300">Ces observations restent dans l'historique et seront rappelées lors d'une prochaine réservation de ce client.</p>
+            </div>
+            {bookings.filter((booking) => booking.id !== selectedBooking?.id && guestName.trim() && (booking.guestName.toLowerCase() === guestName.trim().toLowerCase() || (guestEmail && booking.guestEmail.toLowerCase() === guestEmail.trim().toLowerCase())) && (booking.guestAlerts?.length || booking.forgottenItems?.some((item) => item.status === 'stored'))).length > 0 && (
+              <div className="md:col-span-2 rounded-xl border border-violet-200 dark:border-violet-900 bg-violet-50 dark:bg-violet-950/20 p-3">
+                <p className="text-xs font-bold text-violet-900 dark:text-violet-200 mb-2">Historique à signaler pour ce client</p>
+                {bookings.filter((booking) => booking.id !== selectedBooking?.id && guestName.trim() && (booking.guestName.toLowerCase() === guestName.trim().toLowerCase() || (guestEmail && booking.guestEmail.toLowerCase() === guestEmail.trim().toLowerCase()))).flatMap((booking) => [...(booking.guestAlerts || []).map((alert) => alert.text), ...(booking.forgottenItems || []).filter((item) => item.status === 'stored').map((item) => `Objet oublié : ${item.description}`)]).map((item, index) => <p key={index} className="text-xs text-violet-800 dark:text-violet-300">• {item}</p>)}
+              </div>
+            )}
+          </div>
+
           {/* 7. DEDICATED DOMAIN PRICING BOX */}
           <div className="p-3 bg-slate-100 dark:bg-slate-800/80 rounded-xl flex items-center justify-between border border-slate-200 dark:border-slate-700">
             <div>
