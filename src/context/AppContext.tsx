@@ -111,7 +111,7 @@ interface AppContextType {
   isNewBookingModalOpen: boolean;
   setIsNewBookingModalOpen: (open: boolean) => void;
   newBookingInitialSlot: { resourceId?: string; date?: string; time?: string } | null;
-  setNewBookingInitialSlot: (slot: { resourceId?: string; date?: string } | null) => void;
+  setNewBookingInitialSlot: (slot: { resourceId?: string; date?: string; time?: string } | null) => void;
   isCockpitOpen: boolean;
   setIsCockpitOpen: (open: boolean) => void;
   isLegalModalOpen: boolean;
