@@ -966,7 +966,7 @@ export const BookingModal: React.FC = () => {
           )}
 
           {/* 1. SECTOR RESOURCE ASSIGNMENT (Strictly scoped to activeDomain) */}
-          <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800">
+          <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-1">
             <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
               <span>
                 {language === 'fr'
@@ -994,7 +994,7 @@ export const BookingModal: React.FC = () => {
           </div>
 
           {/* 2. BENEFICIARY / CLIENT / PATIENT IDENTITY */}
-          <div id="booking-step-guest" className="space-y-2.5 scroll-mt-4">
+          <div id="booking-step-guest" className="space-y-4 scroll-mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm">
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 {language === 'fr'
@@ -1057,7 +1057,7 @@ export const BookingModal: React.FC = () => {
 
           {/* 2.b TENANT NATIONALITY & POLICE REGULATION (Algérien vs Étranger) */}
           {(activeDomain === 'hotel' || activeDomain === 'resort') && (
-            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-3">
+            <div className="p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200 text-xs">
                   <ShieldCheck size={15} className="text-emerald-600 dark:text-emerald-400" />
@@ -1516,7 +1516,7 @@ export const BookingModal: React.FC = () => {
 
           {/* === B. RESORT & COMPLEXE PREDEFINED SHEET === */}
           {activeDomain === 'resort' && (
-            <div className="p-3 bg-amber-50/60 dark:bg-amber-950/20 rounded-xl border border-amber-200/70 dark:border-amber-900/40 space-y-3">
+            <div className="p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl border border-amber-200 dark:border-amber-900/60 shadow-sm space-y-4">
               <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-bold text-xs uppercase tracking-wider">
                 <Palmtree size={14} />
                 <span>Paramètres Resort, Villas & Bungalows</span>
@@ -1824,13 +1824,13 @@ export const BookingModal: React.FC = () => {
           </div>
 
           {/* 7. DEDICATED DOMAIN PRICING BOX */}
-          <div className="p-3 bg-slate-100 dark:bg-slate-800/80 rounded-xl flex items-center justify-between border border-slate-200 dark:border-slate-700">
+          <div className="p-4 sm:p-5 bg-slate-900 dark:bg-slate-800 rounded-2xl flex items-center justify-between border border-slate-700 shadow-sm text-white">
             <div>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400 block truncate max-w-xs">
+              <span className="text-[11px] text-slate-300 dark:text-slate-300 block truncate max-w-xs">
                 {priceBreakdown}
               </span>
               <div className="flex items-baseline gap-2">
-                <span className="font-extrabold text-slate-900 dark:text-white text-base">
+                <span className="font-extrabold text-white text-xl">
                   {totalPrice === 0
                     ? 'Gratuit (0.00)'
                     : `${priceInPaymentCurrency.toLocaleString()} ${currencySymbols[paymentCurrency] || paymentCurrency}`}
