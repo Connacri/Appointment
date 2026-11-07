@@ -153,6 +153,7 @@ export interface TimelineBooking {
   mealPlan?: '' | 'bf' | 'hb' | 'fb';
   originChannel?: 'Direct' | 'Booking.com' | 'Airbnb' | 'Expedia';
   adults?: number;
+  adultGuests?: { fullName: string; phone: string; email: string; documentType: string; documentNumber: string; documentExpiryDate?: string }[];
   children?: number;
   extras?: { label: string; amount: number; category?: string }[];
   payments?: { amount: number; method: 'cash' | 'cib' | 'transfer'; date: string }[];
