@@ -668,6 +668,8 @@ export const BookingModal: React.FC = () => {
         passportNumber: guestType === 'foreigner' ? (passportNumber || idPieceNumber) : undefined,
         idDocumentExpiryDate: idDocumentExpiryDate || undefined,
         visaExpiryDate: guestType === 'foreigner' ? (visaExpiryDate || undefined) : undefined,
+        idDocumentExpiryDate: idDocumentExpiryDate || undefined,
+        visaExpiryDate: guestType === 'foreigner' ? (visaExpiryDate || undefined) : undefined,
         visaNumber: guestType === 'foreigner' ? visaNumber : undefined,
         entryDateInCountry: guestType === 'foreigner' ? entryDateInCountry : undefined,
         wilayaOfOrigin: guestType === 'algerian' ? wilayaOfOrigin : undefined,
@@ -723,6 +725,8 @@ export const BookingModal: React.FC = () => {
         idPieceNumber: idPieceNumber || (guestType === 'algerian' ? algerianIdNumber : passportNumber),
         specialAuthorizationDesc: idPieceType === 'special_authorization' ? specialAuthorizationDesc : undefined,
         passportNumber: guestType === 'foreigner' ? (passportNumber || idPieceNumber) : undefined,
+        idDocumentExpiryDate: idDocumentExpiryDate || undefined,
+        visaExpiryDate: guestType === 'foreigner' ? (visaExpiryDate || undefined) : undefined,
         visaNumber: guestType === 'foreigner' ? visaNumber : undefined,
         entryDateInCountry: guestType === 'foreigner' ? entryDateInCountry : undefined,
         wilayaOfOrigin: guestType === 'algerian' ? wilayaOfOrigin : undefined,
@@ -1168,6 +1172,26 @@ export const BookingModal: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Date d'expiration de la pièce</label>
+                    <input type="date" value={idDocumentExpiryDate} onChange={(e) => setIdDocumentExpiryDate(e.target.value)} className="w-full h-9 px-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"/>
+                    {documentExpiryWarning(idDocumentExpiryDate) && <p className={`mt-1 text-[11px] font-semibold ${documentExpiryWarning(idDocumentExpiryDate)?.tone === 'red' ? 'text-red-600' : documentExpiryWarning(idDocumentExpiryDate)?.tone === 'amber' ? 'text-amber-600' : 'text-emerald-600'}>{documentExpiryWarning(idDocumentExpiryDate)?.label}</p>}
+                  </div>
+                  {guestType === 'foreigner' && <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Date d'expiration du visa</label>
+                    <input type="date" value={visaExpiryDate} onChange={(e) => setVisaExpiryDate(e.target.value)} className="w-full h-9 px-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"/>
+                    {documentExpiryWarning(visaExpiryDate) && <p className={`mt-1 text-[11px] font-semibold ${documentExpiryWarning(visaExpiryDate)?.tone === 'red' ? 'text-red-600' : documentExpiryWarning(visaExpiryDate)?.tone === 'amber' ? 'text-amber-600' : 'text-emerald-600'}>{documentExpiryWarning(visaExpiryDate)?.label}</p>}
+                  </div>}
+                </div>
+                {matchedGuestHistory && <div className="rounded-xl border border-violet-200 dark:border-violet-900 bg-violet-50 dark:bg-violet-950/30 p-3 space-y-1">
+                  <p className="text-xs font-bold text-violet-900 dark:text-violet-200">Client déjà connu — dossier prérempli</p>
+                  <p className="text-[11px] text-violet-800 dark:text-violet-300">Dernier séjour : {matchedGuestHistory.startDate} → {matchedGuestHistory.endDate} • {matchedGuestHistory.resourceName}</p>
+                  {matchedGuestHistory.idDocumentExpiryDate && documentExpiryWarning(matchedGuestHistory.idDocumentExpiryDate) && <p className={`text-xs font-bold ${documentExpiryWarning(matchedGuestHistory.idDocumentExpiryDate)?.tone === 'red' ? 'text-red-600' : 'text-amber-700'}`}>⚠ Pièce : {documentExpiryWarning(matchedGuestHistory.idDocumentExpiryDate)?.label}</p>}
+                  {matchedGuestHistory.visaExpiryDate && documentExpiryWarning(matchedGuestHistory.visaExpiryDate) && <p className={`text-xs font-bold ${documentExpiryWarning(matchedGuestHistory.visaExpiryDate)?.tone === 'red' ? 'text-red-600' : 'text-amber-700'}`}>⚠ Visa : {documentExpiryWarning(matchedGuestHistory.visaExpiryDate)?.label}</p>}
+                  {(matchedGuestHistory.guestAlerts || []).map((alert) => <p key={alert.id} className="text-xs text-violet-800 dark:text-violet-300">• {alert.text}</p>)}
+                </div>}
 
                 {/* Conditional Description for Special Authorization */}
                 {idPieceType === 'special_authorization' && (
