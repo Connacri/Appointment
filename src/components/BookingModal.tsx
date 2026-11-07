@@ -49,6 +49,7 @@ export const BookingModal: React.FC = () => {
     selectedBooking,
     setSelectedBooking,
     addBooking,
+    checkConflict,
     updateBooking,
     updateBookingStatus,
     deleteBooking,
@@ -523,6 +524,10 @@ export const BookingModal: React.FC = () => {
         setConflictError('L’heure de départ doit être postérieure à l’heure d’arrivée.');
         return;
       }
+    }
+    if (activeDomain === 'hotel' && checkConflict(resourceId, startDate, endDate || startDate, selectedBooking?.id, checkInTime, checkOutTime)) {
+      setConflictError('Cette chambre n’est pas disponible sur ce créneau. Vérifiez les heures ou choisissez une autre chambre.');
+      return;
     }
     setConflictError(null);
 
