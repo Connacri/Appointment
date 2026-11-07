@@ -89,6 +89,8 @@ export const BookingModal: React.FC = () => {
   const [guestPhone, setGuestPhone] = useState('');
   const [startDate, setStartDate] = useState(currentBaseDate);
   const [endDate, setEndDate] = useState('');
+  const [checkInTime, setCheckInTime] = useState('14:00');
+  const [checkOutTime, setCheckOutTime] = useState('12:00');
   const [status, setStatus] = useState<BookingStatus>('confirmed');
   const [notes, setNotes] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending' | 'partial'>('paid');
@@ -181,6 +183,8 @@ export const BookingModal: React.FC = () => {
       setGuestPhone(selectedBooking.guestPhone || '');
       setStartDate(selectedBooking.startDate || currentBaseDate);
       setEndDate(selectedBooking.endDate || selectedBooking.startDate);
+      setCheckInTime(selectedBooking.checkInTime || '14:00');
+      setCheckOutTime(selectedBooking.checkOutTime || '12:00');
       setStatus(selectedBooking.status || 'confirmed');
       setNotes(selectedBooking.notes || '');
       setPaymentStatus(selectedBooking.paymentStatus || 'paid');
@@ -262,6 +266,8 @@ export const BookingModal: React.FC = () => {
         setResourceId(defaultResId);
       }
 
+      setCheckInTime(newBookingInitialSlot?.time || '14:00');
+      setCheckOutTime('12:00');
       if (newBookingInitialSlot?.date) {
         setStartDate(newBookingInitialSlot.date);
         const [y, m, d] = newBookingInitialSlot.date.split('-').map(Number);
@@ -561,6 +567,8 @@ export const BookingModal: React.FC = () => {
         guestPhone,
         startDate,
         endDate: endDate || startDate,
+        checkInTime,
+        checkOutTime,
         status,
         totalPrice,
         paymentStatus,
@@ -1483,6 +1491,20 @@ export const BookingModal: React.FC = () => {
               />
             </div>
           </div>
+          {activeDomain === 'hotel' && (
+            <div className="grid grid-cols-2 gap-2 rounded-xl border border-blue-100 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/20 p-3">
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Heure d'arrivée</label>
+                <input type="time" required value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 font-semibold text-slate-900 dark:text-white" />
+                <span className="mt-1 block text-[10px] text-slate-500">Check-in</span>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Heure de départ</label>
+                <input type="time" required value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 font-semibold text-slate-900 dark:text-white" />
+                <span className="mt-1 block text-[10px] text-slate-500">Check-out · 10 min de préparation avant la prochaine arrivée</span>
+              </div>
+            </div>
+          )}
 
           {/* 5. STATUS, MULTI-CURRENCY & PAYMENT */}
           <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-2.5">
