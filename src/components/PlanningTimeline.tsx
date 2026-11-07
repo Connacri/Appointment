@@ -1571,8 +1571,9 @@ export const PlanningTimeline: React.FC = () => {
                                     // first legal check-in slot after the 10-minute room turnover.
                                     const sameDayCheckoutMinutes = resBookings
                                       .filter((booking) =>
-                                        booking.status !== 'cancelled' &&
-                                        booking.endDate === day.dateStr
+                                        booking.status === 'checked_out' &&
+                                        booking.endDate === day.dateStr &&
+                                        Boolean(booking.actualCheckOutAt)
                                       )
                                       .map((booking) => {
                                         const [hours, minutes] = (booking.checkOutTime || '12:00').split(':').map(Number);
