@@ -182,6 +182,8 @@ export interface TimelineBooking {
   }>;
   passportNumber?: string;
   visaNumber?: string;
+  idDocumentExpiryDate?: string; // YYYY-MM-DD
+  visaExpiryDate?: string; // YYYY-MM-DD
   entryDateInCountry?: string;
   wilayaOfOrigin?: string;
   paymentCurrency?: 'DZD' | 'EUR' | 'USD' | 'RMB' | 'GBP' | 'SAR' | string;
