@@ -141,6 +141,7 @@ export interface TimelineBooking {
   endDate: string;   // YYYY-MM-DD
   checkInTime?: string; // HH:mm, defaults to 14:00 for hotel stays
   checkOutTime?: string; // HH:mm, defaults to 12:00 for hotel stays
+  actualCheckOutAt?: string; // ISO timestamp recorded by reception when the guest actually leaves
   status: BookingStatus;
   totalPrice: number;
   paymentStatus: 'paid' | 'pending' | 'partial';
