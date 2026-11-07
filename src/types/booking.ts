@@ -139,6 +139,8 @@ export interface TimelineBooking {
   guestPhone: string;
   startDate: string; // YYYY-MM-DD
   endDate: string;   // YYYY-MM-DD
+  checkInTime?: string; // HH:mm, defaults to 14:00 for hotel stays
+  checkOutTime?: string; // HH:mm, defaults to 12:00 for hotel stays
   status: BookingStatus;
   totalPrice: number;
   paymentStatus: 'paid' | 'pending' | 'partial';

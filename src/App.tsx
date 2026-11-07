@@ -194,6 +194,15 @@ const MainLayout: React.FC = () => {
   }, [refreshWorkspaces]);
 
   React.useEffect(() => {
+    const handleRefreshRequest = (event: Event) => {
+      const detail = (event as CustomEvent<{ onComplete?: () => void }>).detail;
+      void handlePullRefresh().finally(() => detail?.onComplete?.());
+    };
+    window.addEventListener('appointment-refresh-request', handleRefreshRequest);
+    return () => window.removeEventListener('appointment-refresh-request', handleRefreshRequest);
+  }, [handlePullRefresh]);
+
+  React.useEffect(() => {
     if (activeView === 'videos') setHasOpenedVideoHub(true);
   }, [activeView]);
 
