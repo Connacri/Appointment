@@ -878,10 +878,10 @@ export const BookingModal: React.FC = () => {
 
         {/* Modal Body */}
         {bookingConfirmation ? <section className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 dark:bg-slate-950"><div className="mx-auto max-w-xl rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-7 shadow-xl space-y-5"><div className="text-center"><div className="mx-auto mb-4 h-16 w-16 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 flex items-center justify-center ring-8 ring-indigo-50 dark:ring-indigo-950/50"><CheckCircle2 size={32}/></div><p className="text-xs font-bold uppercase tracking-[.16em] text-emerald-700 dark:text-emerald-300">Réservation enregistrée</p><h4 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white">Confirmation du séjour</h4><p className="mt-1 text-sm text-slate-500">Le dossier est créé. Vous pouvez maintenant encoder les cartes de chambre.</p></div><div className="rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Référence de réservation</p><p className="font-mono text-xl font-bold">{bookingConfirmation.id}</p></div><div className="grid grid-cols-2 gap-3 text-left">{[['Client',bookingConfirmation.guestName],['Chambre',bookingConfirmation.resourceName],['Arrivée',bookingConfirmation.startDate + ' • ' + (bookingConfirmation.checkInTime || '14:00')],['Départ',bookingConfirmation.endDate + ' • ' + (bookingConfirmation.checkOutTime || '12:00')],['Occupants',(bookingConfirmation.adults || 1) + ' adulte(s) • ' + (bookingConfirmation.children || 0) + ' enfant(s)'],['Montant',String(bookingConfirmation.totalPrice ?? totalPrice) + ' ' + paymentCurrency]].map(([label,value])=><div key={label} className="rounded-xl border border-slate-100 dark:border-slate-800 p-3"><p className="text-[10px] text-slate-500">{label}</p><p className="text-xs font-bold break-words">{value}</p></div>)}</div><div className="rounded-2xl border border-violet-200 dark:border-violet-900 bg-violet-50 dark:bg-violet-950/30 p-4 space-y-3"><div className="flex items-center justify-between gap-3"><div><p className="font-bold text-violet-950 dark:text-violet-200">Cartes de chambre RFID</p><p className="text-xs mt-1 text-violet-800/80 dark:text-violet-300">Quantité demandée : {bookingConfirmation.cardCountRequested}</p></div><div className="text-right"><p className="text-2xl font-black text-violet-700 dark:text-violet-300">{cardsCreatedCount}</p><p className="text-[10px] text-violet-700 dark:text-violet-300">carte(s) encodée(s)</p></div></div><div className="h-2 rounded-full bg-violet-100 dark:bg-violet-900 overflow-hidden"><div className="h-full rounded-full bg-violet-600 transition-all" style={{width:`${Math.min(100, (cardsCreatedCount / Math.max(1, bookingConfirmation.cardCountRequested)) * 100)}%`}} /></div><div className="flex flex-col sm:flex-row gap-2"><button type="button" onClick={() => void handleCreateRoomCard()} disabled={isCreatingCard || !usbConnected || cardsCreatedCount >= bookingConfirmation.cardCountRequested} className="flex-1 min-h-11 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold text-sm flex items-center justify-center gap-2"><KeyRound size={16}/>{isCreatingCard ? `Encodage… ${Math.round(cardProgress)}%` : cardsCreatedCount >= bookingConfirmation.cardCountRequested ? 'Cartes demandées encodées' : 'Encoder les cartes'}</button><div className="flex items-center gap-2 rounded-xl border border-violet-200 dark:border-violet-800 px-3"><label htmlFor="room-card-count-confirm" className="text-xs font-semibold text-violet-900 dark:text-violet-200">Nombre</label><input id="room-card-count-confirm" type="number" min={1} max={20} value={requestedCardCount} onChange={(e) => { const value=Math.max(1,Math.min(20,Number(e.target.value)||1)); setRequestedCardCount(value); setBookingConfirmation((current:any) => current ? {...current,cardCountRequested:value} : current); }} className="w-14 h-11 rounded-lg border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 px-1 text-center text-sm font-bold" aria-label="Nombre de cartes à encoder"/></div></div><p className="text-[11px] text-violet-800 dark:text-violet-300">{usbConnected ? 'Encodeur proUSB connecté : prêt à encoder.' : 'Connectez l’encodeur proUSB dans Serrures pour créer les cartes.'} Les cartes ne sont comptabilisées qu’après un retour positif de l’encodeur.</p></div><button type="button" onClick={closeModal} className="w-full rounded-xl bg-slate-950 dark:bg-white text-white dark:text-slate-950 font-bold py-3.5">Terminer</button></div></section> : (
-        <form onSubmit={handleSubmit} className="flex-1 min-h-0 p-3 sm:p-7 overflow-y-auto overscroll-contain space-y-5 text-sm pb-8 bg-slate-50/80 dark:bg-slate-950">
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm space-y-4">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 p-3 sm:p-7 overflow-y-auto overscroll-contain space-y-6 text-sm pb-8 bg-[#f5f7fb] dark:bg-slate-950">
+          <div className="rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between gap-2"><div><p className="text-sm font-bold text-slate-900 dark:text-white">Parcours de réservation</p><p className="text-[11px] text-slate-500">Progression du dossier</p></div><span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">{bookingStep + 1}/3</span></div>
-            <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${((bookingStep + 1) / 3) * 100}%` }} /></div>
+            <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${((bookingStep + 1) / 3) * 100}%` }} /></div>
             <div className="grid grid-cols-3 gap-2">{['Séjour', 'Client', 'Confirmation'].map((label, index) => <button key={label} type="button" onClick={() => { setBookingStep(index); document.getElementById(index === 0 ? 'booking-step-stay' : index === 1 ? 'booking-step-guest' : 'booking-step-confirm')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className={`rounded-xl min-h-12 px-2 py-2 text-xs font-bold transition ${bookingStep === index ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}><span className="block text-[10px] opacity-75">0{index + 1}</span>{label}</button>)}</div>
           </div>
           {conflictError && (
@@ -982,7 +982,7 @@ export const BookingModal: React.FC = () => {
             <select
               value={resourceId}
               onChange={(e) => setResourceId(e.target.value)}
-              className="w-full h-11 px-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full h-11 px-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
             >
               {domainResources.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -1015,7 +1015,7 @@ export const BookingModal: React.FC = () => {
                       ? 'Ex: Famille Delacroix (Villa 01)'
                       : 'Ex: Alexander Kaufmann'
                   }
-                  className="w-full h-9 pl-8 pr-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-11 pl-8 pr-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
                 />
               </div>
             </div>
@@ -1032,7 +1032,7 @@ export const BookingModal: React.FC = () => {
                     value={guestEmail}
                     onChange={(e) => setGuestEmail(e.target.value)}
                     placeholder="contact@exemple.com"
-                    className="w-full h-9 pl-8 pr-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-11 pl-8 pr-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
                   />
                 </div>
               </div>
@@ -1048,7 +1048,7 @@ export const BookingModal: React.FC = () => {
                     value={guestPhone}
                     onChange={(e) => setGuestPhone(e.target.value)}
                     placeholder="+33 6 12 34 56 78"
-                    className="w-full h-9 pl-8 pr-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-11 pl-8 pr-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
                   />
                 </div>
               </div>
@@ -1151,7 +1151,7 @@ export const BookingModal: React.FC = () => {
                         setPassportNumber(e.target.value);
                       }}
                       placeholder="Ex: 1102938491029 / 21EF98124"
-                      className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs font-bold"
+                      className="w-full h-11 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs font-bold"
                     />
                   </div>
 
@@ -1163,7 +1163,7 @@ export const BookingModal: React.FC = () => {
                       <select
                         value={wilayaOfOrigin}
                         onChange={(e) => setWilayaOfOrigin(e.target.value)}
-                        className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
+                        className="w-full h-11 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
                       >
                         {ALGERIA_69_WILAYAS.map((w) => (
                           <option key={w.code} value={`${w.code} - ${w.nameFr}`}>
@@ -1177,7 +1177,7 @@ export const BookingModal: React.FC = () => {
                         value={foreignNationality}
                         onChange={(e) => setForeignNationality(e.target.value)}
                         placeholder="Ex: Française, Tunisienne, Chinoise..."
-                        className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
+                        className="w-full h-11 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
                       />
                     )}
                   </div>
@@ -1186,12 +1186,12 @@ export const BookingModal: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Date d'expiration de la pièce</label>
-                    <input type="date" value={idDocumentExpiryDate} onChange={(e) => setIdDocumentExpiryDate(e.target.value)} className="w-full h-9 px-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"/>
+                    <input type="date" value={idDocumentExpiryDate} onChange={(e) => setIdDocumentExpiryDate(e.target.value)} className="w-full h-11 px-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"/>
                     {documentExpiryWarning(idDocumentExpiryDate) && <p className={`mt-1 text-[11px] font-semibold ${documentExpiryWarning(idDocumentExpiryDate)?.tone === 'red' ? 'text-red-600' : documentExpiryWarning(idDocumentExpiryDate)?.tone === 'amber' ? 'text-amber-600' : 'text-emerald-600'}>{documentExpiryWarning(idDocumentExpiryDate)?.label}</p>}
                   </div>
                   {guestType === 'foreigner' && <div>
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Date d'expiration du visa</label>
-                    <input type="date" value={visaExpiryDate} onChange={(e) => setVisaExpiryDate(e.target.value)} className="w-full h-9 px-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"/>
+                    <input type="date" value={visaExpiryDate} onChange={(e) => setVisaExpiryDate(e.target.value)} className="w-full h-11 px-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"/>
                     {documentExpiryWarning(visaExpiryDate) && <p className={`mt-1 text-[11px] font-semibold ${documentExpiryWarning(visaExpiryDate)?.tone === 'red' ? 'text-red-600' : documentExpiryWarning(visaExpiryDate)?.tone === 'amber' ? 'text-amber-600' : 'text-emerald-600'}>{documentExpiryWarning(visaExpiryDate)?.label}</p>}
                   </div>}
                 </div>
@@ -1233,7 +1233,7 @@ export const BookingModal: React.FC = () => {
                         value={visaNumber}
                         onChange={(e) => setVisaNumber(e.target.value)}
                         placeholder="Ex: VZ-2026/09"
-                        className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs uppercase"
+                        className="w-full h-11 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs uppercase"
                       />
                     </div>
                     <div>
@@ -1244,7 +1244,7 @@ export const BookingModal: React.FC = () => {
                         type="date"
                         value={entryDateInCountry}
                         onChange={(e) => setEntryDateInCountry(e.target.value)}
-                        className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
+                        className="w-full h-11 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 text-xs"
                       />
                     </div>
                   </div>
@@ -1268,12 +1268,12 @@ export const BookingModal: React.FC = () => {
                 {adultGuests.slice(0, hotelAdults).map((adult, index) => <div key={index} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2">
                   <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Adulte {index + 1} {index === 0 ? '(client principal)' : ''}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input value={adult.fullName} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,fullName:e.target.value}:item))} placeholder="Nom et prénom" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <input value={adult.phone} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,phone:e.target.value}:item))} placeholder="Téléphone" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <input type="email" value={adult.email} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,email:e.target.value}:item))} placeholder="E-mail" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <select value={adult.documentType} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentType:e.target.value}:item))} className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"><option value="cni">Carte d'identité</option><option value="passport">Passeport</option><option value="driving_license">Permis de conduire</option><option value="other">Autre document</option></select>
-                    <input value={adult.documentNumber} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentNumber:e.target.value}:item))} placeholder="Numéro du document" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <input type="date" value={adult.documentExpiryDate || ''} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentExpiryDate:e.target.value}:item))} className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs" aria-label="Expiration du document"/>
+                    <input value={adult.fullName} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,fullName:e.target.value}:item))} placeholder="Nom et prénom" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <input value={adult.phone} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,phone:e.target.value}:item))} placeholder="Téléphone" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <input type="email" value={adult.email} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,email:e.target.value}:item))} placeholder="E-mail" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <select value={adult.documentType} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentType:e.target.value}:item))} className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"><option value="cni">Carte d'identité</option><option value="passport">Passeport</option><option value="driving_license">Permis de conduire</option><option value="other">Autre document</option></select>
+                    <input value={adult.documentNumber} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentNumber:e.target.value}:item))} placeholder="Numéro du document" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <input type="date" value={adult.documentExpiryDate || ''} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentExpiryDate:e.target.value}:item))} className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs" aria-label="Expiration du document"/>
                   </div>
                 </div>)}
               </div>
@@ -1284,7 +1284,7 @@ export const BookingModal: React.FC = () => {
                   <select
                     value={hotelAdults}
                     onChange={(e) => setHotelAdults(Number(e.target.value))}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   >
                     {[1, 2, 3, 4, 5].map((n) => (
                       <option key={n} value={n}>
@@ -1299,7 +1299,7 @@ export const BookingModal: React.FC = () => {
                   <select
                     value={hotelChildren}
                     onChange={(e) => setHotelChildren(Number(e.target.value))}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   >
                     {[0, 1, 2, 3].map((n) => (
                       <option key={n} value={n}>
@@ -1315,7 +1315,7 @@ export const BookingModal: React.FC = () => {
                     type="time"
                     value={hotelCheckinTime}
                     onChange={(e) => setHotelCheckinTime(e.target.value)}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
@@ -1527,12 +1527,12 @@ export const BookingModal: React.FC = () => {
                 {adultGuests.slice(0, resortOccupants).map((adult, index) => <div key={index} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2">
                   <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Adulte {index + 1} {index === 0 ? '(client principal)' : ''}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input value={adult.fullName} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,fullName:e.target.value}:item))} placeholder="Nom et prénom" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <input value={adult.phone} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,phone:e.target.value}:item))} placeholder="Téléphone" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <input type="email" value={adult.email} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,email:e.target.value}:item))} placeholder="E-mail" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <select value={adult.documentType} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentType:e.target.value}:item))} className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"><option value="cni">Carte d'identité</option><option value="passport">Passeport</option><option value="driving_license">Permis de conduire</option><option value="other">Autre document</option></select>
-                    <input value={adult.documentNumber} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentNumber:e.target.value}:item))} placeholder="Numéro du document" className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <input type="date" value={adult.documentExpiryDate || ''} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentExpiryDate:e.target.value}:item))} className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs" aria-label="Expiration du document"/>
+                    <input value={adult.fullName} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,fullName:e.target.value}:item))} placeholder="Nom et prénom" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <input value={adult.phone} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,phone:e.target.value}:item))} placeholder="Téléphone" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <input type="email" value={adult.email} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,email:e.target.value}:item))} placeholder="E-mail" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <select value={adult.documentType} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentType:e.target.value}:item))} className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"><option value="cni">Carte d'identité</option><option value="passport">Passeport</option><option value="driving_license">Permis de conduire</option><option value="other">Autre document</option></select>
+                    <input value={adult.documentNumber} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentNumber:e.target.value}:item))} placeholder="Numéro du document" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
+                    <input type="date" value={adult.documentExpiryDate || ''} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentExpiryDate:e.target.value}:item))} className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs" aria-label="Expiration du document"/>
                   </div>
                 </div>)}
               </div>
@@ -1542,7 +1542,7 @@ export const BookingModal: React.FC = () => {
                   <select
                     value={resortOccupants}
                     onChange={(e) => setResortOccupants(Number(e.target.value))}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   >
                     {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => (
                       <option key={n} value={n}>
@@ -1557,7 +1557,7 @@ export const BookingModal: React.FC = () => {
                   <select
                     value={resortFormula}
                     onChange={(e) => setResortFormula(e.target.value as any)}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   >
                     <option value="all_inclusive">All-Inclusive Resort VIP (+60€ / pers / jour)</option>
                     <option value="half_board">Demi-Pension Gourmande (+35€ / pers / jour)</option>
@@ -1571,7 +1571,7 @@ export const BookingModal: React.FC = () => {
                     type="time"
                     value={resortCheckinTime}
                     onChange={(e) => setResortCheckinTime(e.target.value)}
-                    className="w-full h-8 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
@@ -1618,7 +1618,7 @@ export const BookingModal: React.FC = () => {
           )}
 
           {/* 4. DATES & SCHEDULE */}
-          <div id="booking-step-stay" className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 scroll-mt-4">
+          <div id="booking-step-stay" className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-5 border-t border-slate-200 dark:border-slate-800 scroll-mt-4">
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
                 <span>{language === 'fr' ? "Date d'arrivée / Début *" : 'Start / Check-in Date *'}</span>
@@ -1630,7 +1630,7 @@ export const BookingModal: React.FC = () => {
                 min={todayIso}
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full h-9 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                className="w-full h-11 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow font-medium"
               />
             </div>
 
@@ -1645,7 +1645,7 @@ export const BookingModal: React.FC = () => {
                 min={startDate || todayIso}
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full h-9 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                className="w-full h-11 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow font-medium"
               />
             </div>
           </div>
@@ -1653,12 +1653,12 @@ export const BookingModal: React.FC = () => {
             <div className="grid grid-cols-2 gap-2 rounded-xl border border-blue-100 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/20 p-3">
               <div>
                 <label className="mb-1 block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Heure d'arrivée</label>
-                <input type="time" required value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 font-semibold text-slate-900 dark:text-white" />
+                <input type="time" required value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} className="h-10 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 font-semibold text-slate-900 dark:text-white" />
                 <span className="mt-1 block text-[10px] text-slate-500">Check-in</span>
               </div>
               <div>
                 <label className="mb-1 block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Heure de départ</label>
-                <input type="time" required value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 font-semibold text-slate-900 dark:text-white" />
+                <input type="time" required value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} className="h-10 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 font-semibold text-slate-900 dark:text-white" />
                 <span className="mt-1 block text-[10px] text-slate-500">Check-out · 10 min de préparation avant la prochaine arrivée</span>
               </div>
             </div>
@@ -1693,7 +1693,7 @@ export const BookingModal: React.FC = () => {
                       setPaymentMethodType('cash_forex');
                     }
                   }}
-                  className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-bold"
+                  className="w-full h-11 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-bold"
                 >
                   <option value="DA">🇩🇿 DZD / DA (Dinar Algérien)</option>
                   <option value="EUR">🇪🇺 EUR (€ - Euro)</option>
@@ -1711,7 +1711,7 @@ export const BookingModal: React.FC = () => {
                 <select
                   value={paymentMethodType}
                   onChange={(e) => setPaymentMethodType(e.target.value as any)}
-                  className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                  className="w-full h-11 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                 >
                   {paymentCurrency === 'DA' ? (
                     <>
@@ -1736,7 +1736,7 @@ export const BookingModal: React.FC = () => {
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as BookingStatus)}
-                  className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-11 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
                 >
                   {(Object.keys(statusConfig) as BookingStatus[]).map((st) => (
                     <option key={st} value={st}>
@@ -1755,7 +1755,7 @@ export const BookingModal: React.FC = () => {
                 <select
                   value={paymentStatus}
                   onChange={(e) => setPaymentStatus(e.target.value as any)}
-                  className="w-full h-8 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-medium"
+                  className="w-full h-11 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-medium"
                 >
                   <option value="paid">
                     {language === 'fr' ? '✅ Règlement Total Effectué (Payé)' : '✅ Paid in Full'}
@@ -1795,7 +1795,7 @@ export const BookingModal: React.FC = () => {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Consignes particulières, heure d'arrivée, accompagnants..."
-              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-xs"
             />
           </div>
 
@@ -1916,7 +1916,7 @@ export const BookingModal: React.FC = () => {
                           : 'Create Guest Card'}
                   </span>
                 </button>
-                <div className="flex items-center gap-1.5 rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/70 dark:bg-violet-950/30 px-2 py-1.5"><label htmlFor="room-card-count" className="text-[10px] font-semibold text-violet-800 dark:text-violet-200 whitespace-nowrap">Cartes</label><input id="room-card-count" type="number" min={1} max={20} value={requestedCardCount} onChange={(e) => setRequestedCardCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-14 h-8 rounded-md border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 px-1 text-center text-xs font-bold text-slate-900 dark:text-white" aria-label="Nombre de cartes à créer"/><span className="text-[10px] text-violet-700 dark:text-violet-300">{occupantCount} occupant(s)</span></div>
+                <div className="flex items-center gap-1.5 rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/70 dark:bg-violet-950/30 px-2 py-1.5"><label htmlFor="room-card-count" className="text-[10px] font-semibold text-violet-800 dark:text-violet-200 whitespace-nowrap">Cartes</label><input id="room-card-count" type="number" min={1} max={20} value={requestedCardCount} onChange={(e) => setRequestedCardCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-14 h-11 rounded-md border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 px-1 text-center text-xs font-bold text-slate-900 dark:text-white" aria-label="Nombre de cartes à créer"/><span className="text-[10px] text-violet-700 dark:text-violet-300">{occupantCount} occupant(s)</span></div>
                 {!usbConnected && (
                   <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                     <AlertCircle size={12} />
@@ -1974,7 +1974,7 @@ export const BookingModal: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="min-h-11 flex-[2] basis-[calc(50%-0.25rem)] sm:basis-auto sm:flex-none justify-center px-4 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="min-h-12 flex-[2] basis-[calc(50%-0.25rem)] sm:basis-auto sm:flex-none justify-center px-5 sm:px-7 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl shadow-md transition-colors flex items-center gap-2 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <CheckCircle2 size={16} />
               <span>
