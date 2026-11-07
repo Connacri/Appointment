@@ -147,7 +147,6 @@ export const BookingModal: React.FC = () => {
   const [isCreatingCard, setIsCreatingCard] = useState(false);
   const [cardProgress, setCardProgress] = useState(0);
   const [requestedCardCount, setRequestedCardCount] = useState(2);
-  const [createdCardCount, setCreatedCardCount] = useState(0);
   const [bookingStep, setBookingStep] = useState(0);
   const [cardResult, setCardResult] = useState<CardResult | null>(null);
   const [usbConnected, setUsbConnected] = useState<boolean>(lockManager.getStatus() === 'connected');
@@ -317,8 +316,8 @@ export const BookingModal: React.FC = () => {
   // Card quantity defaults to all occupants; reception can override it.
   const occupantCount = activeDomain === 'hotel' ? hotelAdults + hotelChildren : activeDomain === 'resort' ? resortOccupants : 1;
   useEffect(() => {
-    if (!isEditing) setRequestedCardCount(Math.max(1, occupantCount));
-  }, [occupantCount, isEditing]);
+    setRequestedCardCount(Math.max(1, occupantCount));
+  }, [occupantCount]);
 
   // Current selected resource
   const currentResource = useMemo(() => {
@@ -364,7 +363,6 @@ export const BookingModal: React.FC = () => {
           'Admin',
         );
         successfulCards += 1;
-        setCreatedCardCount(successfulCards);
         setCardProgress(Math.round(((index + 1) / Math.max(1, requestedCardCount)) * 100));
       }
       if (!record) throw new Error('Aucune carte n’a été créée.');
