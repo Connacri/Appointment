@@ -502,7 +502,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return bookings.some((b) => {
       if (b.resourceId !== resourceId || b.id === excludeBookingId || b.status === 'cancelled') return false;
       const existingStart = toMinutes(b.startDate, b.checkInTime || '14:00');
-      const existingEnd = toMinutes(b.endDate, b.checkOutTime || '12:00') + turnoverMs;
+      const existingEnd = toMinutes(b.endDate, b.checkOutTime || '12:00') + (b.sector === 'hotel' ? turnoverMs : 0);
       return requestedStart < existingEnd && requestedEnd > existingStart;
     });
   };
