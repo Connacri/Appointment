@@ -93,7 +93,7 @@ interface AppContextType {
   resourceGroups: ResourceGroup[];
   setResourceGroups: React.Dispatch<React.SetStateAction<ResourceGroup[]>>;
   updateHousekeepingStatus: (resourceId: string, status: 'clean' | 'cleaning' | 'dirty' | 'out_of_order') => void;
-  checkConflict: (resourceId: string, startDate: string, endDate: string, excludeBookingId?: string) => boolean;
+  checkConflict: (resourceId: string, startDate: string, endDate: string, excludeBookingId?: string, checkInTime?: string, checkOutTime?: string) => boolean;
   addBooking: (booking: Omit<TimelineBooking, 'id'>) => { success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'; booking?: TimelineBooking };
   updateBooking: (id: string, updates: Partial<TimelineBooking>) => void;
   updateBookingStatus: (id: string, status: BookingStatus) => void;
@@ -110,7 +110,7 @@ interface AppContextType {
   setSelectedBooking: (booking: TimelineBooking | null) => void;
   isNewBookingModalOpen: boolean;
   setIsNewBookingModalOpen: (open: boolean) => void;
-  newBookingInitialSlot: { resourceId?: string; date?: string } | null;
+  newBookingInitialSlot: { resourceId?: string; date?: string; time?: string } | null;
   setNewBookingInitialSlot: (slot: { resourceId?: string; date?: string } | null) => void;
   isCockpitOpen: boolean;
   setIsCockpitOpen: (open: boolean) => void;
@@ -417,7 +417,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [selectedBooking, setSelectedBooking] = useState<TimelineBooking | null>(null);
   const [isNewBookingModalOpen, setIsNewBookingModalOpen] = useState(false);
-  const [newBookingInitialSlot, setNewBookingInitialSlot] = useState<{ resourceId?: string; date?: string } | null>(null);
+  const [newBookingInitialSlot, setNewBookingInitialSlot] = useState<{ resourceId?: string; date?: string; time?: string } | null>(null);
   const [isCockpitOpen, setIsCockpitOpen] = useState(false);
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
   const [isIndexedDBOpen, setIsIndexedDBOpen] = useState(false);
@@ -486,14 +486,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     resourceId: string,
     startDate: string,
     endDate: string,
-    excludeBookingId?: string
+    excludeBookingId?: string,
+    checkInTime = '14:00',
+    checkOutTime = '12:00'
   ): boolean => {
+    const toMinutes = (date: string, time: string) => {
+      const [year, month, day] = date.split('-').map(Number);
+      const [hour, minute] = time.split(':').map(Number);
+      return new Date(year, month - 1, day, hour, minute).getTime();
+    };
+    const requestedStart = toMinutes(startDate, checkInTime);
+    const requestedEnd = toMinutes(endDate, checkOutTime);
+    if (!Number.isFinite(requestedStart) || !Number.isFinite(requestedEnd) || requestedEnd <= requestedStart) return true;
+    const turnoverMs = 10 * 60 * 1000;
     return bookings.some((b) => {
-      if (b.resourceId !== resourceId) return false;
-      if (b.id === excludeBookingId) return false;
-      if (b.status === 'cancelled') return false;
-      // Overlap condition: start < otherEnd && end > otherStart
-      return startDate < b.endDate && endDate > b.startDate;
+      if (b.resourceId !== resourceId || b.id === excludeBookingId || b.status === 'cancelled') return false;
+      const existingStart = toMinutes(b.startDate, b.checkInTime || '14:00');
+      const existingEnd = toMinutes(b.endDate, b.checkOutTime || '12:00') + turnoverMs;
+      return requestedStart < existingEnd && requestedEnd > existingStart;
     });
   };
 
@@ -592,7 +602,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const hasConflict = checkConflict(
       bookingData.resourceId,
       bookingData.startDate,
-      bookingData.endDate
+      bookingData.endDate,
+      undefined,
+      bookingData.checkInTime || '14:00',
+      bookingData.checkOutTime || '12:00'
     );
 
     if (hasConflict) {
