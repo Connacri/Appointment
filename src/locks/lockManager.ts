@@ -230,6 +230,15 @@ class LockManager {
    * CardLock.exe — including byte-for-byte reuse of existing card records.
    */
   public async importMdb(file: File): Promise<MdbSnapshot> {
+    // Keep a reference to the previously loaded database for the migration
+    // guard, then force-clear the cached snapshot so stale data from a
+    // previous import can never mask a freshly read file.
+    const hadLoadedDatabase = !!this.mdbSnapshot?.systemProfile;
+    this.mdbSnapshot = null;
+    localStorage.removeItem('omnibook_prousb_mdb_snapshot');
+    // Also clear any previously imported cards so they don't mask new data.
+    this.issuedCards = this.issuedCards.filter((card) => !card.id.startsWith('mdb-card-'));
+    this.saveIssuedCards();
     const data = await file.arrayBuffer();
     const snapshot = await parseCardLockMdb(data, file.name);
     // Kept so the UI can flag a frozen `Program Files` copy (Windows writes the
@@ -253,7 +262,7 @@ class LockManager {
       // only come from a purge/disconnect, where the same site is the same
       // hotel and the import must be allowed (otherwise both import and card
       // issuance deadlock).
-      hasLoadedDatabase: !!this.mdbSnapshot?.systemProfile,
+      hasLoadedDatabase: hadLoadedDatabase,
       previousSite: previousSiteRaw,
       recommissioningRequired:
         localStorage.getItem('appointment_prousb_recommissioning_required') === 'true',
@@ -280,6 +289,7 @@ class LockManager {
 
     this.mdbSnapshot = snapshot;
     this.saveMdbSnapshot();
+    console.log('[LockManager] Imported:', file.name, 'modified:', file.lastModified, 'counts:', snapshot.counts, 'systemId:', snapshot.systemProfile ? ((snapshot.systemProfile.site[0] << 8) | snapshot.systemProfile.site[1]) & 0x3fff : 'none');
 
     // Reflect the imported data in the app model. Cards written by this app do
     // not exist in CardLock.mdb, so they must survive the import: keep the

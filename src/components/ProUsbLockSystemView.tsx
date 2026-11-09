@@ -2168,6 +2168,21 @@ export const ProUsbLockSystemView: React.FC = () => {
                     Déconnecter
                   </button>
                 )}
+                {mdbStatus.connected && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      lockManager.clearPersistedData();
+                      setMdbStatus(lockManager.getMdbStatus());
+                      setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
+                      showToast('success', 'Cache effacé. Réimportez la base CardLock depuis le VirtualStore pour charger les données à jour.');
+                    }}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                  >
+                    <RefreshCw size={14} />
+                    Vider le cache
+                  </button>
+                )}
               </div>
               {hotelRecommissioningRequired && (
                 <div role="alert" className="mt-3 rounded-xl border border-amber-400 bg-amber-50 dark:bg-amber-950/40 p-3 space-y-2 text-xs">
