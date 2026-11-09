@@ -763,6 +763,8 @@ export const BookingModal: React.FC = () => {
       }
       if (res.booking) {
         setBookingConfirmation({ ...res.booking, cardCountRequested: requestedCardCount });
+        setCardsCreatedCount(0);
+        setRequestedCardCount(2);
         setBookingStep(2);
       } else setIsNewBookingModalOpen(false);
     }
@@ -772,6 +774,8 @@ export const BookingModal: React.FC = () => {
     setBookingConfirmation(null);
     setIsNewBookingModalOpen(false);
     setSelectedBooking(null);
+    setCardsCreatedCount(0);
+    setRequestedCardCount(2);
   };
 
   // Keyboard accessibility hook called unconditionally BEFORE any early exit
