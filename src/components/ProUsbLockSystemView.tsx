@@ -68,6 +68,8 @@ import { decodeCardRecord } from '../locks/cards/codec';
 import { toHexFormatted } from '../locks/protocol/frames';
 import { fromHex } from '../locks/protocol/frames';
 import { formatMachineCode, formatReaderLabel } from '../locks/protocol/readerInfo';
+import type { ReaderInfo } from '../locks/protocol/readerInfo';
+import { getTranslation } from '../i18n/translations';
 import {
   buildCardInfoSyncScript,
   cardInfoId,
@@ -84,7 +86,15 @@ export const ProUsbLockSystemView: React.FC = () => {
   const { language, bookings, resourceGroups, setBookings, setResourceGroups } = useApp();
 
   const [activeTab, setActiveTab] = useState<
-    'reception' | 'staff_cards' | 'commissioning' | 'audit_log' | 'encoder_hardware' | 'settings' | 'security'
+    | 'reception'
+    | 'staff_cards'
+    | 'commissioning'
+    | 'audit_log'
+    | 'encoder_hardware'
+    | 'usb_reader'
+    | 'usbpro'
+    | 'settings'
+    | 'security'
   >('reception');
 
   const [logs, setLogs] = useState<TransportLogEntry[]>(lockManager.getLogs());
@@ -107,6 +117,11 @@ export const ProUsbLockSystemView: React.FC = () => {
   const [writingCardStep, setWritingCardStep] = useState<string | undefined>();
   // Dialogue système affiché après CHAQUE écriture (succès) ou alerte (échec).
   const [cardResult, setCardResult] = useState<CardResult | null>(null);
+
+  // USB Reader / USBPro — identité lecteur + confirmation du bip de lecture
+  const [readerInfo, setReaderInfo] = useState<ReaderInfo | null>(() => lockManager.getReaderInfo());
+  const [buzzerConfirmed, setBuzzerConfirmed] = useState(false);
+  const [hexCopied, setHexCopied] = useState(false);
 
   // Guest Card Form State
   const [selectedBookingId, setSelectedBookingId] = useState<string>('');
@@ -188,6 +203,50 @@ export const ProUsbLockSystemView: React.FC = () => {
   const showToast = (type: 'success' | 'error' | 'info', text: string) => {
     setStatusMessage({ type, text });
     setTimeout(() => setStatusMessage(null), 5000);
+  };
+
+  /** Traduction des chaînes des onglets USB Reader / USBPro. */
+  const t = (key: Parameters<typeof getTranslation>[0]) => getTranslation(key, language);
+
+  // Identité lecteur synchronisée avec le transport (connexion / déconnexion).
+  useEffect(() => {
+    setReaderInfo(lockManager.getReaderInfo());
+    return lockManager.subscribeState(() => setReaderInfo(lockManager.getReaderInfo()));
+  }, []);
+
+  /** Identité de l'encodeur (IniCard mode 2) — réutilisée par l'onglet USB Reader. */
+  const handleIdentifyReader = async () => {
+    setIsIdentifying(true);
+    try {
+      const info = await lockManager.refreshReaderInfo();
+      setReaderInfo(info);
+      if (info?.encoderNo != null) {
+        showToast(
+          'success',
+          `Encodeur identifié : ${info.text.trim()} (${formatReaderLabel(info.encoderNo) ?? ''}${
+            formatMachineCode(info.machineCode) ? ` — ${formatMachineCode(info.machineCode)}` : ''
+          })`,
+        );
+      } else {
+        showToast('error', "L'encodeur n'a pas renvoyé son numéro de lecteur.");
+      }
+    } catch (err: any) {
+      showToast('error', `Erreur d'identification : ${err.message}`);
+    } finally {
+      setIsIdentifying(false);
+    }
+  };
+
+  /** Copie la trame hexadécimale de la carte lue (onglet USB Reader). */
+  const handleCopyHex = async () => {
+    if (!currentReadCard) return;
+    try {
+      await navigator.clipboard.writeText(currentReadCard.rawHex.toUpperCase());
+      setHexCopied(true);
+      setTimeout(() => setHexCopied(false), 2000);
+    } catch {
+      showToast('error', 'Copie impossible : presse-papiers indisponible.');
+    }
   };
 
   // Cartes déjà présentes dans la table CardInfo de CardLock.mdb (elles seules
@@ -454,6 +513,7 @@ export const ProUsbLockSystemView: React.FC = () => {
         if (i < 1) await new Promise(r => setTimeout(r, 200));
       }
       await lockManager.testBuzzer();
+      setBuzzerConfirmed(true);
       showToast('success', "Bip d'écriture confirmé (2 longs 300ms) + test encoder OK.");
     } catch (err: any) {
       showToast('error', `Erreur de buzzer : ${err.message}`);
@@ -1070,8 +1130,10 @@ export const ProUsbLockSystemView: React.FC = () => {
           { id: 'commissioning', label: '3. Mise en Service', fullLabel: '3. Mise en Service Serrure', icon: Sliders },
           { id: 'audit_log', label: "4. Audit", fullLabel: "4. Journal d'Audit & Ouvertures", icon: History },
           { id: 'encoder_hardware', label: '5. Console Hex', fullLabel: '5. Encodeur & Console Trames', icon: Terminal },
-          { id: 'settings', label: '6. Options', fullLabel: '6. Options Serrures & Rôles', icon: Settings },
-          { id: 'security', label: '7. Sécurité', fullLabel: '7. Sécurité & Reset Persistant', icon: ShieldCheck },
+          { id: 'usb_reader', label: t('proUsbTabReaderShort'), fullLabel: t('proUsbTabReader'), icon: Usb },
+          { id: 'usbpro', label: t('proUsbTabUsbproShort'), fullLabel: t('proUsbTabUsbpro'), icon: Radio },
+          { id: 'settings', label: '8. Options', fullLabel: '8. Options Serrures & Rôles', icon: Settings },
+          { id: 'security', label: '9. Sécurité', fullLabel: '9. Sécurité & Reset Persistant', icon: ShieldCheck },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -2624,6 +2686,400 @@ export const ProUsbLockSystemView: React.FC = () => {
         )}
 
         {/* TAB 7: SECURITY & HARD RESET */}
+        {/* TAB: USB Reader — détection & lecture */}
+        {activeTab === 'usb_reader' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left: identité lecteur + lecture */}
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Usb size={18} className="text-blue-600" />
+                    <div>
+                      <h2 className="text-sm font-bold text-slate-900 dark:text-white">{t('proUsbReaderTitle')}</h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('proUsbReaderSubtitle')}</p>
+                    </div>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md ${
+                      usbStatus === 'connected'
+                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+                        : usbStatus === 'unsupported'
+                        ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
+                        : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        usbStatus === 'connected'
+                          ? 'bg-emerald-500 animate-pulse'
+                          : usbStatus === 'unsupported'
+                          ? 'bg-rose-500'
+                          : 'bg-amber-500'
+                      }`}
+                    />
+                    {usbStatus === 'connected'
+                      ? t('proUsbStatusConnected')
+                      : usbStatus === 'unsupported'
+                      ? t('proUsbStatusUnsupported').split(':')[0]
+                      : t('proUsbStatusDisconnected')}
+                  </span>
+                </div>
+
+                {usbStatus === 'unsupported' && (
+                  <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-[11px] text-rose-800 dark:text-rose-200">
+                    {t('proUsbStatusUnsupported')}
+                  </div>
+                )}
+
+                <div className="text-[11px] space-y-1.5">
+                  <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-slate-400">VID / PID :</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                      0x{(usbDevice?.vendorId ?? 0x9915).toString(16).toUpperCase().padStart(4, '0')} / 0x
+                      {(usbDevice?.productId ?? 0x1116).toString(16).toUpperCase().padStart(4, '0')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-slate-400">{t('proUsbEncoderNo')} :</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                      {readerInfo?.encoderNo != null ? formatReaderLabel(readerInfo.encoderNo) : '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-slate-400">{t('proUsbReaderLabel')} :</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                      {usbDevice?.readerLabel ?? '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1.5">
+                    <span className="text-slate-400">{t('proUsbMachineCode')} :</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                      {formatMachineCode(readerInfo?.machineCode ?? null) ?? '—'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleConnectHardware}
+                    disabled={isConnecting}
+                    className="min-h-[44px] py-2 px-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Usb size={14} />
+                    <span>{isConnecting ? '…' : usbStatus === 'connected' ? t('proUsbStatusConnected') : t('proUsbConnect')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleIdentifyReader}
+                    disabled={isIdentifying || usbStatus !== 'connected'}
+                    className="min-h-[44px] py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <RefreshCw size={14} className={isIdentifying ? 'animate-spin' : ''} />
+                    <span>{isIdentifying ? t('proUsbIdentifying') : t('proUsbIdentify')}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Lecture de carte */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <Radio size={16} className="text-emerald-600" />
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">ReadCard · AA 01 E4 4F</h3>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{t('proUsbReadHint')}</p>
+                <button
+                  type="button"
+                  onClick={handleReadCard}
+                  disabled={isReading}
+                  className="w-full min-h-[44px] py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <RefreshCw size={14} className={isReading ? 'animate-spin' : ''} />
+                  <span>{isReading ? t('proUsbReading') : t('proUsbReadCard')}</span>
+                </button>
+                {(isReading || readProgress > 0) && (
+                  <div className="space-y-1">
+                    <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 transition-all duration-300"
+                        style={{ width: `${readProgress}%` }}
+                      />
+                    </div>
+                    <div className="text-[10px] text-slate-400 text-right font-mono">{readProgress}%</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right: carte lue */}
+            <div className="space-y-6">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <CreditCard size={16} className="text-blue-600" />
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">{t('proUsbCardDetected')}</h3>
+                </div>
+
+                {!currentReadCard ? (
+                  <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-5 text-center space-y-2">
+                    <CreditCard size={28} className="mx-auto text-slate-300 dark:text-slate-600" />
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">{t('proUsbCardEmpty')}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 text-[11px]">
+                    {currentReadCard.isProUsbFormat === false && (
+                      <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200">
+                        Carte d’un autre système — aucun champ interprété.
+                      </div>
+                    )}
+                    <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+                      <span className="text-slate-400">{t('proUsbCardType')} :</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">
+                        {PROUSB_CARD_TYPES[currentReadCard.type]?.label[language] ||
+                          PROUSB_CARD_TYPES[currentReadCard.type]?.label.fr ||
+                          currentReadCard.type.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+                      <span className="text-slate-400">{t('proUsbSiteCode')} :</span>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                        {currentReadCard.siteCode}
+                        {currentReadCard.isUniversalSite ? ' (universel)' : ''}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+                      <span className="text-slate-400">{t('proUsbRoomFloor')} :</span>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                        {currentReadCard.roomNumber
+                          ? `${currentReadCard.roomNumber}${currentReadCard.floorNo != null ? ` · étage ${currentReadCard.floorNo}` : ''}`
+                          : '—'}
+                      </span>
+                    </div>
+                    <div className="py-1.5">
+                      <div className="text-slate-400 mb-1">{t('proUsbRawHex')} :</div>
+                      <code className="block break-all font-mono text-[10px] leading-relaxed bg-slate-50 dark:bg-slate-800/60 rounded-lg p-2 text-slate-800 dark:text-slate-200">
+                        {toHexFormatted(fromHex(currentReadCard.rawHex))}
+                      </code>
+                    </div>
+                    {(currentReadCard.notes?.length ?? 0) > 0 && (
+                      <ul className="space-y-1 text-amber-700 dark:text-amber-300">
+                        {currentReadCard.notes!.map((note, i) => (
+                          <li key={i} className="flex items-start gap-1.5">
+                            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                            <span>{note}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="grid grid-cols-1 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleCopyHex}
+                        className="min-h-[44px] py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <Copy size={14} />
+                        <span>{hexCopied ? t('proUsbCopied') : t('proUsbCopyHex')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('reception')}
+                        className="min-h-[44px] py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <ArrowRight size={14} />
+                        <span>{t('proUsbOpenDetail')}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: USBPro — écriture & vérification (flux CardLock) */}
+        {activeTab === 'usbpro' && (
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
+              <div className="flex items-start gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <Radio size={18} className="text-indigo-600 mt-0.5" />
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">{t('proUsbProTitle')}</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('proUsbProSubtitle')}</p>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">{t('proUsbFlowTitle')}</h3>
+                <ol className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {[
+                    { label: t('proUsbStepInit'), ok: usbStatus === 'connected', error: usbStatus === 'unsupported' },
+                    { label: t('proUsbStepRead'), ok: !!currentReadCard, error: false },
+                    {
+                      label: t('proUsbStepType'),
+                      ok: !!currentReadCard && currentReadCard.isProUsbFormat !== false,
+                      error: !!currentReadCard && currentReadCard.isProUsbFormat === false,
+                    },
+                    { label: t('proUsbStepWrite'), ok: issuedCards.length > 0, error: false },
+                    { label: t('proUsbStepVerify'), ok: issuedCards.length > 0, error: false },
+                    { label: t('proUsbStepBuzzer'), ok: buzzerConfirmed, error: false },
+                  ].map((step) => (
+                    <li
+                      key={step.label}
+                      className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-[11px] ${
+                        step.ok
+                          ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200'
+                          : step.error
+                          ? 'border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200'
+                          : 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      <span className="font-medium">{step.label}</span>
+                      <span className="font-bold shrink-0">
+                        {step.ok ? t('proUsbStepOk') : step.error ? t('proUsbStepError') : t('proUsbStepPending')}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Actions */}
+              <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">{t('proUsbActionsTitle')}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleConnectHardware}
+                    disabled={isConnecting}
+                    className="min-h-[44px] py-2 px-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Usb size={14} />
+                    <span>{t('proUsbInitUsb')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReadCard}
+                    disabled={isReading}
+                    className="min-h-[44px] py-2 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <RefreshCw size={14} className={isReading ? 'animate-spin' : ''} />
+                    <span>{isReading ? t('proUsbReading') : t('proUsbPreRead')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBuzzerTest}
+                    disabled={isBuzzerTesting}
+                    className="min-h-[44px] py-2 px-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Volume2 size={14} className={isBuzzerTesting ? 'animate-pulse' : ''} />
+                    <span>{t('proUsbBuzzerTest')}</span>
+                  </button>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 p-3 text-[11px] space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-slate-500 dark:text-slate-400">{t('proUsbLastWrite')} :</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">
+                      {issuedCards.length > 0
+                        ? `${PROUSB_CARD_TYPES[issuedCards[0].type]?.label[language] || issuedCards[0].type.toUpperCase()} · ${issuedCards[0].validUntil}`
+                        : t('proUsbNoWrite')}
+                    </span>
+                  </div>
+                  {buzzerConfirmed && (
+                    <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
+                      <CheckCircle2 size={12} />
+                      <span>{t('proUsbStepOk')} — Buzzer</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('reception')}
+                    className="min-h-[44px] py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <KeyRound size={14} />
+                    <span>{t('proUsbGoReception')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('staff_cards')}
+                    className="min-h-[44px] py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <ShieldCheck size={14} />
+                    <span>{t('proUsbGoStaff')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('commissioning')}
+                    className="min-h-[44px] py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Sliders size={14} />
+                    <span>{t('proUsbGoCommissioning')}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Erreurs CardLock + mapping */}
+              <div className="space-y-6">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">{t('proUsbErrorsTitle')}</h3>
+                  <ul className="space-y-2 text-[11px] text-slate-600 dark:text-slate-300">
+                    {(
+                      [
+                        ['proUsbErrOpenUsb', 'ErrOpenUSB'],
+                        ['proUsbErrNoUsb', 'ErrNoUSB'],
+                        ['proUsbErrReadCard', 'ErrReadCard'],
+                        ['proUsbErrWriteCard', 'ErrWriteCard'],
+                        ['proUsbErrVerify', 'E0038'],
+                        ['proUsbErrNoProMode', 'E0035'],
+                      ] as const
+                    ).map(([key, code]) => {
+                      const [head, ...rest] = t(key).split(' — ');
+                      return (
+                        <li key={code} className="flex gap-2 items-start">
+                          <span className="font-mono font-bold text-rose-600 dark:text-rose-400 shrink-0">{head}</span>
+                          <span>{rest.join(' — ')}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">{t('proUsbMapTitle')}</h3>
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="text-slate-400 text-left">
+                        <th className="font-semibold pb-1.5">{t('proUsbMapColFunc')}</th>
+                        <th className="font-semibold pb-1.5">{t('proUsbMapColFrame')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-slate-600 dark:text-slate-300">
+                      {[
+                        ['initializeUSB (proRFL)', 'WebHID open()'],
+                        ['IniUsbPro (d12c)', 'transport open / report 0x40'],
+                        ['ReadCard (proRFL)', 'AA 01 E4 4F'],
+                        ['IniCard mode 2 (proRFL)', 'AA 01 56 FD'],
+                        ['WriteCard (proRFL)', 'AA 11 EC <16B> CS'],
+                        ['Buzzer (proRFL)', 'AA 02 80 01 / 00'],
+                        ['readPortPro / writePortPro', 'feature report HID'],
+                      ].map(([fn, frame]) => (
+                        <tr key={fn} className="border-t border-slate-100 dark:border-slate-800">
+                          <td className="py-1.5 pr-2 font-mono">{fn}</td>
+                          <td className="py-1.5 font-mono">{frame}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'security' && (
           <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-red-200 dark:border-red-900 p-5 shadow-xs space-y-6">
             <div className="border-b border-red-100 dark:border-red-900 pb-3">

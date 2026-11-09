@@ -86,7 +86,7 @@ export const PlanningTimeline: React.FC = () => {
         : language === 'ar'
         ? `تم تسجيل مغادرة ${booking.guestName} في الساعة ${time}. ستصبح الغرفة متاحة بعد 10 دقائق.`
         : `Checkout for ${booking.guestName} recorded at ${time}. Room available after the 10-minute turnover.`,
-      tone: 'success',
+      tone: 'info',
       roomName: booking.resourceName,
     });
   };

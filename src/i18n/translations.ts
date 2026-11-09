@@ -1100,6 +1100,307 @@ export const translations = {
     en: 'Cancelled',
     ar: '┘à┘ä╪║┘ë',
   },
+  // proUSB — onglets « USB Reader » et « USBPro »
+  proUsbTabReader: {
+    fr: '6. Lecteur USB',
+    en: '6. USB Reader',
+    ar: '6. قارئ USB',
+  },
+  proUsbTabReaderShort: {
+    fr: 'Lecteur',
+    en: 'Reader',
+    ar: 'قارئ',
+  },
+  proUsbTabUsbpro: {
+    fr: '7. USBPro',
+    en: '7. USBPro',
+    ar: '7. USBPro',
+  },
+  proUsbTabUsbproShort: {
+    fr: 'USBPro',
+    en: 'USBPro',
+    ar: 'USBPro',
+  },
+  proUsbReaderTitle: {
+    fr: 'Lecteur USB — détection & lecture de carte',
+    en: 'USB Reader — detection & card read',
+    ar: 'قارئ USB — الكشف عن البطاقة وقراءتها',
+  },
+  proUsbReaderSubtitle: {
+    fr: 'Autorisation WebHID, identité de l’encodeur et lecture brute de la carte posée sur le lecteur.',
+    en: 'WebHID permission, encoder identity and raw read of the card placed on the reader.',
+    ar: 'إذن WebHID وهوية المُرمِّز والقراءة الخام للبطاقة الموضوعة على القارئ.',
+  },
+  proUsbReaderIdentity: {
+    fr: 'Identité du lecteur',
+    en: 'Reader identity',
+    ar: 'هوية القارئ',
+  },
+  proUsbReaderLabel: {
+    fr: 'Libellé lecteur',
+    en: 'Reader label',
+    ar: 'tasmia al-qari',
+  },
+  proUsbConnect: {
+    fr: 'Connecter l’encodeur USB (WebHID)',
+    en: 'Connect the USB encoder (WebHID)',
+    ar: 'توصيل مُرمِّز USB (WebHID)',
+  },
+  proUsbDisconnect: {
+    fr: 'Déconnecter',
+    en: 'Disconnect',
+    ar: 'قطع الاتصال',
+  },
+  proUsbStatusConnected: {
+    fr: 'Connecté',
+    en: 'Connected',
+    ar: 'متصل',
+  },
+  proUsbStatusDisconnected: {
+    fr: 'Déconnecté',
+    en: 'Disconnected',
+    ar: 'غير متصل',
+  },
+  proUsbStatusUnsupported: {
+    fr: 'WebHID indisponible : ce navigateur ne prend pas en charge l’API WebHID (Chrome, Edge ou Opera requis).',
+    en: 'WebHID unavailable: this browser does not support the WebHID API (Chrome, Edge or Opera required).',
+    ar: 'WebHID غير متاح: هذا المتصفح لا يدعم واجهة WebHID (يلزم Chrome أو Edge أو Opera).',
+  },
+  proUsbEncoderNo: {
+    fr: 'N° encodeur',
+    en: 'Encoder no.',
+    ar: 'رقم المُرمِّز',
+  },
+  proUsbMachineCode: {
+    fr: 'Code machine',
+    en: 'Machine code',
+    ar: 'رمز الجهاز',
+  },
+  proUsbIdentify: {
+    fr: 'Lire le n° de lecteur (IniCard)',
+    en: 'Read the reader number (IniCard)',
+    ar: 'قراءة رقم القارئ (IniCard)',
+  },
+  proUsbIdentifying: {
+    fr: 'Identification…',
+    en: 'Identifying…',
+    ar: 'جارٍ التحديد…',
+  },
+  proUsbReadCard: {
+    fr: 'Lire la carte',
+    en: 'Read the card',
+    ar: 'قراءة البطاقة',
+  },
+  proUsbReading: {
+    fr: 'Lecture en cours…',
+    en: 'Reading…',
+    ar: 'جارٍ القراءة…',
+  },
+  proUsbReadHint: {
+    fr: 'Posez la carte à plat sur le lecteur, puis lancez la lecture (ReadCard 0xE4).',
+    en: 'Place the card flat on the reader, then start the read (ReadCard 0xE4).',
+    ar: 'ضع البطاقة مسطحة على القارئ ثم ابدأ القراءة (ReadCard 0xE4).',
+  },
+  proUsbCardDetected: {
+    fr: 'Carte lue',
+    en: 'Card read',
+    ar: 'البطاقة المقروءة',
+  },
+  proUsbCardEmpty: {
+    fr: 'Aucune carte lue pour le moment. Posez une carte sur le lecteur puis appuyez sur « Lire la carte ».',
+    en: 'No card read yet. Place a card on the reader and press “Read the card”.',
+    ar: 'لم تُقرأ أي بطاقة بعد. ضع بطاقة على القارئ ثم اضغط «قراءة البطاقة».',
+  },
+  proUsbCardType: {
+    fr: 'Type',
+    en: 'Type',
+    ar: 'النوع',
+  },
+  proUsbSiteCode: {
+    fr: 'Code site',
+    en: 'Site code',
+    ar: 'رمز الموقع',
+  },
+  proUsbRoomFloor: {
+    fr: 'Chambre / étage',
+    en: 'Room / floor',
+    ar: 'الغرفة / الطابق',
+  },
+  proUsbRawHex: {
+    fr: 'Trame (hex)',
+    en: 'Frame (hex)',
+    ar: 'الإطار (hex)',
+  },
+  proUsbCopyHex: {
+    fr: 'Copier la trame',
+    en: 'Copy frame',
+    ar: 'نسخ الإطار',
+  },
+  proUsbCopied: {
+    fr: 'Trame copiée',
+    en: 'Frame copied',
+    ar: 'تم نسخ الإطار',
+  },
+  proUsbOpenDetail: {
+    fr: 'Voir le détail complet',
+    en: 'Open full details',
+    ar: 'عرض التفاصيل الكاملة',
+  },
+  proUsbProTitle: {
+    fr: 'USBPro — écriture & vérification de carte',
+    en: 'USBPro — card write & verification',
+    ar: 'USBPro — كتابة البطاقة والتحقق منها',
+  },
+  proUsbProSubtitle: {
+    fr: 'Chaîne reconstituée de CardLock.Exe : initializeUSB → ReadCard → IniCard/type → Write → relecture → Buzzer.',
+    en: 'CardLock.Exe flow rebuilt: initializeUSB → ReadCard → IniCard/type → Write → re-read → Buzzer.',
+    ar: 'تدفق CardLock.Exe المعاد بناؤه: initializeUSB → ReadCard → IniCard/type → Write → إعادة القراءة → Buzzer.',
+  },
+  proUsbFlowTitle: {
+    fr: 'Chaîne d’opération',
+    en: 'Operation chain',
+    ar: 'سلسلة العمليات',
+  },
+  proUsbStepInit: {
+    fr: 'initializeUSB — ouverture du port',
+    en: 'initializeUSB — port open',
+    ar: 'initializeUSB — فتح المنفذ',
+  },
+  proUsbStepRead: {
+    fr: 'ReadCard — pré-lecture de la carte',
+    en: 'ReadCard — card pre-read',
+    ar: 'ReadCard — القراءة المسبقة للبطاقة',
+  },
+  proUsbStepType: {
+    fr: 'IniCard / type — famille de carte résolue',
+    en: 'IniCard / type — card family resolved',
+    ar: 'IniCard / type — تحديد عائلة البطاقة',
+  },
+  proUsbStepWrite: {
+    fr: 'WriteCard — écriture de la trame',
+    en: 'WriteCard — frame written',
+    ar: 'WriteCard — كتابة الإطار',
+  },
+  proUsbStepVerify: {
+    fr: 'Relecture — vérification après écriture',
+    en: 'Re-read — post-write verification',
+    ar: 'إعادة القراءة — التحقق بعد الكتابة',
+  },
+  proUsbStepBuzzer: {
+    fr: 'Buzzer — bip de confirmation',
+    en: 'Buzzer — confirmation beep',
+    ar: 'Buzzer — نغمة التأكيد',
+  },
+  proUsbStepOk: {
+    fr: 'OK',
+    en: 'OK',
+    ar: 'حسنًا',
+  },
+  proUsbStepPending: {
+    fr: 'En attente',
+    en: 'Pending',
+    ar: 'في الانتظار',
+  },
+  proUsbStepError: {
+    fr: 'Erreur',
+    en: 'Error',
+    ar: 'خطأ',
+  },
+  proUsbActionsTitle: {
+    fr: 'Actions USBPro',
+    en: 'USBPro actions',
+    ar: 'إجراءات USBPro',
+  },
+  proUsbInitUsb: {
+    fr: 'Initialiser USB',
+    en: 'Initialize USB',
+    ar: 'تهيئة USB',
+  },
+  proUsbPreRead: {
+    fr: 'Pré-lire la carte',
+    en: 'Pre-read the card',
+    ar: 'القراءة المسبقة للبطاقة',
+  },
+  proUsbBuzzerTest: {
+    fr: 'Tester le bip (Buzzer)',
+    en: 'Test the beep (Buzzer)',
+    ar: 'اختبار النغمة (Buzzer)',
+  },
+  proUsbLastWrite: {
+    fr: 'Dernière écriture vérifiée',
+    en: 'Last verified write',
+    ar: 'آخر كتابة مُتحقَّق منها',
+  },
+  proUsbNoWrite: {
+    fr: 'Aucune carte encodée depuis l’ouverture de la session.',
+    en: 'No card encoded since the session started.',
+    ar: 'لم تُرمَّز أي بطاقة منذ بداية الجلسة.',
+  },
+  proUsbGoReception: {
+    fr: 'Encoder une carte client',
+    en: 'Encode a guest card',
+    ar: 'ترميز بطاقة نزيل',
+  },
+  proUsbGoStaff: {
+    fr: 'Encoder une carte de service',
+    en: 'Encode a staff card',
+    ar: 'ترميز بطاقة خدمة',
+  },
+  proUsbGoCommissioning: {
+    fr: 'Mise en service d’une serrure',
+    en: 'Commission a lock',
+    ar: 'تهيئة قفل',
+  },
+  proUsbErrorsTitle: {
+    fr: 'Codes d’erreur CardLock',
+    en: 'CardLock error codes',
+    ar: 'رموز أخطاء CardLock',
+  },
+  proUsbErrOpenUsb: {
+    fr: 'E0029 / ErrOpenUSB — initializeUSB() a échoué : lecteur absent ou port USB occupé.',
+    en: 'E0029 / ErrOpenUSB — initializeUSB() failed: reader missing or USB port busy.',
+    ar: 'E0029 / ErrOpenUSB — فشل initializeUSB(): القارئ مفقود أو منفذ USB مشغول.',
+  },
+  proUsbErrNoUsb: {
+    fr: 'ErrNoUSB — aucun périphérique USB de type lecteur détecté par le système.',
+    en: 'ErrNoUSB — no reader-type USB device detected by the system.',
+    ar: 'ErrNoUSB — لم يكتشف النظام أي جهاز USB من نوع قارئ.',
+  },
+  proUsbErrReadCard: {
+    fr: 'E0031 / ErrReadCard — ReadCard() sans réponse de l’encodeur (carte absente ou mal posée).',
+    en: 'E0031 / ErrReadCard — ReadCard() got no answer from the encoder (card missing or misplaced).',
+    ar: 'E0031 / ErrReadCard — لم يصل رد من المُرمِّز (البطاقة مفقودة أو موضوعة بشكل خاطئ).',
+  },
+  proUsbErrWriteCard: {
+    fr: 'ErrWriteCard — l’écriture radiofréquence de la trame a échoué.',
+    en: 'ErrWriteCard — the RF write of the frame failed.',
+    ar: 'ErrWriteCard — فشلت الكتابة اللاسلكية للإطار.',
+  },
+  proUsbErrVerify: {
+    fr: 'E0038 — la relecture de vérification ne correspond pas à la trame écrite.',
+    en: 'E0038 — the verification re-read does not match the written frame.',
+    ar: 'E0038 — لا تطابق إعادة القراءة الإطار المكتوب.',
+  },
+  proUsbErrNoProMode: {
+    fr: 'E0035 — IniUsbPro() n’a pas activé le mode Pro : le bip de confirmation est désactivé.',
+    en: 'E0035 — IniUsbPro() did not enable Pro mode: the confirmation beep is disabled.',
+    ar: 'E0035 — لم يُفعّل IniUsbPro() وضع Pro: نغمة التأكيد معطّلة.',
+  },
+  proUsbMapTitle: {
+    fr: 'Correspondance CardLock → Appointment',
+    en: 'CardLock → Appointment mapping',
+    ar: 'مطابقة CardLock → Appointment',
+  },
+  proUsbMapColFunc: {
+    fr: 'Fonction d’origine',
+    en: 'Original function',
+    ar: 'الدالة الأصلية',
+  },
+  proUsbMapColFrame: {
+    fr: 'Équivalent WebHID',
+    en: 'WebHID equivalent',
+    ar: 'مكافئ WebHID',
+  },
 };
 
 export function getTranslation(key: keyof typeof translations, lang: Language): string {

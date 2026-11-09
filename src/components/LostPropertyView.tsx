@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { TimelineBooking } from '../types/booking';
 import { PackageSearch, CheckCircle2, AlertTriangle, Clock3 } from 'lucide-react';
 
 type Tab = 'forgotten' | 'valuables' | 'alerts';
@@ -9,7 +10,7 @@ export const LostPropertyView: React.FC = () => {
   const [tab, setTab] = useState<Tab>('forgotten');
   const [search, setSearch] = useState('');
   const canManage = ['admin', 'manager', 'receptionist', 'staff'].includes(currentRole);
-  const rows = useMemo(() => bookings.flatMap((booking) => {
+  const rows = useMemo(() => bookings.flatMap((booking: TimelineBooking): { booking: TimelineBooking; item: any }[] => {
     const matches = !search.trim() || booking.guestName.toLowerCase().includes(search.toLowerCase()) || booking.resourceName.toLowerCase().includes(search.toLowerCase());
     if (!matches) return [];
     if (tab === 'forgotten') return (booking.forgottenItems || []).filter((item) => item.status === 'stored').map((item) => ({ booking, item }));
