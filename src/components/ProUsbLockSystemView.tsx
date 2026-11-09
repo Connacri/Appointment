@@ -2697,7 +2697,14 @@ export const ProUsbLockSystemView: React.FC = () => {
                     <Usb size={18} className="text-blue-600" />
                     <div>
                       <h2 className="text-sm font-bold text-slate-900 dark:text-white">{t('proUsbReaderTitle')}</h2>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('proUsbReaderSubtitle')}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        {t('proUsbReaderSubtitle')}
+                        {readerInfo?.machineCode && (
+                          <span className="ml-2 font-mono font-bold text-blue-600 dark:text-blue-400">
+                            ({formatMachineCode(readerInfo.machineCode)})
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
                   <span
