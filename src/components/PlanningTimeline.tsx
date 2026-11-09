@@ -281,6 +281,8 @@ export const PlanningTimeline: React.FC = () => {
     return () => media.removeEventListener('change', handleChange);
   }, []);
   const lastScrollLeftRef = useRef(0);
+  const isShiftingWindowRef = useRef(false);
+
   const handleTimelineScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const el = event.currentTarget;
     const currentScrollLeft = el.scrollLeft;
@@ -298,6 +300,47 @@ export const PlanningTimeline: React.FC = () => {
     const visibleDay = timelineDays[visibleDayIndex];
     if (visibleDay && visibleDay.dateStr) {
       setScrollVisibleDate(visibleDay.dateStr);
+    }
+
+    // Infinite scroll: when the user reaches the edge of the visible window,
+    // shift the base date so the window slides and new dates appear.
+    if (isShiftingWindowRef.current) return;
+    const edgeThreshold = colWidth * 14; // ~2 weeks from edge
+    const [y, m] = currentBaseDate.split('-').map(Number);
+    const safeYear = y || new Date().getFullYear();
+    const safeMonth = m || new Date().getMonth() + 1;
+
+    if (position > maxScroll - edgeThreshold) {
+      // Near right edge → shift forward by 3 months
+      isShiftingWindowRef.current = true;
+      const savedScroll = el.scrollLeft;
+      const next = new Date(safeYear, safeMonth + 3, 1);
+      const iso = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-01`;
+      setCurrentBaseDate(iso);
+      // After re-render, restore an equivalent scroll position
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          const newMax = Math.max(0, scrollContainerRef.current.scrollWidth - scrollContainerRef.current.clientWidth);
+          const shift = maxScroll - newMax;
+          scrollContainerRef.current.scrollLeft = Math.max(0, savedScroll + shift);
+        }
+        isShiftingWindowRef.current = false;
+      });
+    } else if (position < edgeThreshold) {
+      // Near left edge → shift backward by 3 months
+      isShiftingWindowRef.current = true;
+      const savedScroll = el.scrollLeft;
+      const prev = new Date(safeYear, safeMonth - 4, 1);
+      const iso = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-01`;
+      setCurrentBaseDate(iso);
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          const newMax = Math.max(0, scrollContainerRef.current.scrollWidth - scrollContainerRef.current.clientWidth);
+          const shift = newMax - maxScroll;
+          scrollContainerRef.current.scrollLeft = Math.max(0, savedScroll + shift);
+        }
+        isShiftingWindowRef.current = false;
+      });
     }
   };
 
@@ -374,17 +417,18 @@ export const PlanningTimeline: React.FC = () => {
     setCurrentBaseDate(todayIso);
   };
 
-  // Continuous stable 3-month window centered on the active month (prev month, active month, next month).
-  // This completely eliminates runaway prepending and date skipping!
+  // Continuous stable window: 12 months before + current month + 12 months after.
+  // This gives a very large scrolling range (24 months total) so the user
+  // can scroll freely without hitting the edge of the window.
   const { timelineWindowStart, timelineWindowDays } = useMemo(() => {
     const [y, m] = currentBaseDate.split('-').map(Number);
     const safeYear = y || new Date().getFullYear();
     const safeMonth = m || new Date().getMonth() + 1;
-    // Start of previous month
-    const prevMonthDate = new Date(safeYear, safeMonth - 2, 1);
+    // Start of 12 months before
+    const prevMonthDate = new Date(safeYear, safeMonth - 13, 1);
     const startStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
-    // End of next month
-    const nextMonthEndDate = new Date(safeYear, safeMonth + 1, 0);
+    // End of 12 months after
+    const nextMonthEndDate = new Date(safeYear, safeMonth + 12, 0);
     const diffTime = nextMonthEndDate.getTime() - prevMonthDate.getTime();
     const total = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
     return { timelineWindowStart: startStr, timelineWindowDays: Math.max(60, total) };
@@ -394,7 +438,7 @@ export const PlanningTimeline: React.FC = () => {
     const [y, m] = currentBaseDate.split('-').map(Number);
     const safeYear = y || new Date().getFullYear();
     const safeMonth = m || new Date().getMonth() + 1;
-    const prev = new Date(safeYear, safeMonth - 2, 1);
+    const prev = new Date(safeYear, safeMonth - 7, 1);
     const iso = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-01`;
     setCurrentBaseDate(iso);
   };
@@ -403,7 +447,7 @@ export const PlanningTimeline: React.FC = () => {
     const [y, m] = currentBaseDate.split('-').map(Number);
     const safeYear = y || new Date().getFullYear();
     const safeMonth = m || new Date().getMonth() + 1;
-    const next = new Date(safeYear, safeMonth, 1);
+    const next = new Date(safeYear, safeMonth + 6, 1);
     const iso = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-01`;
     setCurrentBaseDate(iso);
   };
