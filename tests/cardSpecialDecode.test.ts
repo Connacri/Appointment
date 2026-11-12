@@ -16,7 +16,7 @@ test('building and floor cards preserve zero-based CardLock identifiers', () => 
   assert.equal(floor.buildingNo, 0);
 });
 
-test('floor card scopes its building in byte [7]', () => {
+test('floor card uses the genuine 7F 00 / floor / building layout', () => {
   const validity = {
     startYear: 2026, startMonth: 11, startDay: 4, startHour: 8, startMinute: 20,
     endYear: 2027, endMonth: 11, endDay: 4, endHour: 23, endMinute: 59,
@@ -24,15 +24,53 @@ test('floor card scopes its building in byte [7]', () => {
   const bytes = encodeMasterCard({
     cardType: 'floor', floorNo: 2, buildingNo: 3, cardIndex: 5, nonce: 0x29, siteCodeLow: 0x033b, validity,
   });
-  assert.equal(bytes[4], 2); // floor
+  // Evidence: CardInfo IDs 1384-1393 in the live CardLock.mdb.
+  assert.equal(bytes[4], 0x7f); // floor-level marker, not the floor number
   assert.equal(bytes[5], 0x00); // [4..5] is the level field, not the start hour
-  assert.equal(bytes[7], 0x83); // 0x80 staff marker + building 3
+  assert.equal(bytes[6], 2); // floor number
+  assert.equal(bytes[7], 3); // plain BldNo — 0x80 here would mean "all buildings"
+  assert.equal(bytes[8], 0x00);
   assert.equal(bytes[9], 0xd5); // 0xD0 family + index 5
 
   const decoded = decodeCardRecord(bytes);
   assert.equal(decoded.type, 'floor');
   assert.equal(decoded.floorNo, 2);
   assert.equal(decoded.buildingNo, 3);
+  assert.deepEqual(decoded.notes, []);
+});
+
+test('a genuine floor card decodes and re-encodes byte for byte', () => {
+  // CardInfo ID 1384 (issued 2026-11-04): floor 2, building 1, index 6.
+  const hex = 'C912033B7F00020100D61B24F51C25FB';
+  const original = Uint8Array.from(hex.match(/../g)!.map((byte) => parseInt(byte, 16)));
+
+  const decoded = decodeCardRecord(original);
+  assert.equal(decoded.type, 'floor');
+  assert.equal(decoded.floorNo, 2);
+  assert.equal(decoded.buildingNo, 1);
+  assert.equal(decoded.cardIndex, 6);
+  assert.ok(decoded.validity);
+  assert.equal(decoded.validity!.startMonth, 11);
+  assert.equal(decoded.validity!.startDay, 4);
+  assert.equal(decoded.validity!.startHour, 19);
+  assert.equal(decoded.validity!.startMinute, 53);
+  assert.equal(decoded.validity!.endMonth, 12);
+  assert.equal(decoded.validity!.endDay, 4);
+  assert.equal(decoded.validity!.endHour, 23);
+  assert.equal(decoded.validity!.endMinute, 59);
+  // 4-bit year field: 2026 and the decoded year share the same nibble.
+  assert.equal((decoded.validity!.startYear - 2009) % 16, (2026 - 2009) % 16);
+  assert.equal(decoded.validity!.startYear, decoded.validity!.endYear);
+
+  const reencoded = encodeMasterCard({
+    cardType: 'floor',
+    floorNo: decoded.floorNo,
+    buildingNo: decoded.buildingNo,
+    cardIndex: decoded.cardIndex,
+    siteCodeLow: (original[2] << 8) | original[3],
+    validity: decoded.validity!,
+  });
+  assert.deepEqual(Array.from(reencoded), Array.from(original));
 });
 
 test('building card keeps its documented byte [4] and also scopes the building in [7]', () => {

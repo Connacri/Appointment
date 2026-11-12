@@ -316,16 +316,21 @@ export function encodeMasterCard(params: EncodeMasterCardParams): Uint8Array {
   card[2] = wildcardSite ? 0x00 : (siteLow >> 8) & 0xff;
   card[3] = wildcardSite ? 0x00 : siteLow & 0xff;
 
-  // Scope layout, shared with the verified guest record:
-  //   [4] = level  → 0xFF opens every level (master / emergency),
-  //                  a floor number for the FloorCard, the building for the BuildingCard;
-  //   [7] = 0x80 | BldNo  → the building the card is bound to.
-  // The genuine master record (`C9 12 03 3B FF 00 29 80 00 B0 …`) writes
-  // [7] = 0x80 with a zero building nibble, i.e. "all buildings". A card that
-  // omits the building therefore opens the same floor in every building — the
-  // wrong perimeter reported on hardware for the FloorCard. The BuildingCard
-  // keeps [4] = BldNo (documented layout) *and* now carries the building in
-  // [7], so a lock that reads either field lands on the right scope.
+  // Scope layout, verified against the eight genuine FloorCards still present
+  // in the live `CardLock.mdb` (`CardInfo` IDs 1384-1393, issued 2026-11-04):
+  //
+  //   C9 12 03 3B | 7F 00 02 01 00 D6 | 1B 24 F5 | 1C 25 FB
+  //                 4  5  6  7  8  9
+  //
+  //   [4..5] = level: 0xFF 0x00 = master / emergency (every level),
+  //                    0x7F 0x00 = FloorCard (floor-level scope);
+  //   [6]    = floor number (the lock compares it with its programmed FlrNo);
+  //   [7]    = building number, plain BldNo — NOT `0x80 | BldNo` (0x80 there
+  //            means "all buildings" on the genuine master record);
+  //   [9]    = family byte | card index.
+  //
+  // Earlier builds wrote [4] = floor, [6] = random nonce and [7] = 0x80|Bld,
+  // so a lock read the nonce as the floor: that is why FloorCards never opened.
   const buildingScope = (): number => {
     if (params.buildingNo === undefined) {
       throw new Error(
@@ -342,8 +347,12 @@ export function encodeMasterCard(params: EncodeMasterCardParams): Uint8Array {
           'Carte ÉTAGE : le numéro d’étage est obligatoire. Sélectionnez un étage réel du bâtiment choisi.',
         );
       }
-      card[4] = assertCardLockNumber(params.floorNo, MAX_CARDLOCK_FLOOR, 'Numéro d’étage');
-      card[7] = 0x80 | buildingScope();
+      // Genuine layout (CardInfo IDs 1384-1393): level 7F 00, floor in [6],
+      // building in [7]. See the block comment above.
+      card[4] = 0x7f;
+      card[5] = 0x00;
+      card[6] = assertCardLockNumber(params.floorNo, MAX_CARDLOCK_FLOOR, 'Numéro d’étage');
+      card[7] = buildingScope();
       card[9] = 0xd0 | index; // 0xD0 family for FloorCard
       break;
     }
@@ -370,11 +379,15 @@ export function encodeMasterCard(params: EncodeMasterCardParams): Uint8Array {
   // Byte [5] — the only genuine staff record (`C9 12 03 3B FF 00 29 80 00 B0
   // 94 4C 5A …`) carries 0x00 while its [10..12] stamp decodes to 17:26, so
   // [5] is not derived from the validity start time: it belongs to the
-  // [4..5] level field (master = FF 00). A previous attempt to derive it from
-  // the start hour was reverted; do not reintroduce that without a hardware
-  // capture showing the lock needs it.
+  // [4..5] level field (master = FF 00, floor = 7F 00). A previous attempt to
+  // derive it from the start hour was reverted; do not reintroduce that
+  // without a hardware capture showing the lock needs it.
   card[5] = 0x00;
-  card[6] = params.nonce !== undefined ? params.nonce & 0xff : pseudoRand(index + 29); // Per-card nonce
+  // [6] is already the floor number on a FloorCard; the other staff families
+  // carry a per-card nonce there (CardLock.exe writes a random value).
+  if (type !== 'floor') {
+    card[6] = params.nonce !== undefined ? params.nonce & 0xff : pseudoRand(index + 29);
+  }
   card[8] = 0x00;
 
   const [s0, s1, s2] = packDateTime(
@@ -858,10 +871,17 @@ export function decodeCardRecord(rawBytesOrHex: Uint8Array | string): DecodedPro
     // [7] low nibble = the building the staff card is bound to (0 = all).
     const scopedBuilding = bytes[7] & 0x0f;
     if (type === 'floor') {
-      decoded.floorNo = bytes[4];
+      // Genuine FloorCards (CardInfo IDs 1384-1393) carry 7F 00 in [4..5],
+      // the floor number in [6] and the plain building number in [7].
+      decoded.floorNo = bytes[6];
       decoded.buildingNo = scopedBuilding;
-      if (bytes[4] > MAX_CARDLOCK_FLOOR) {
-        notes.push(`Numéro d’étage hors plage en [4] : ${bytes[4]} (attendu 0 à ${MAX_CARDLOCK_FLOOR}).`);
+      if (bytes[4] !== 0x7f) {
+        notes.push(
+          `En-tête de carte Étage inattendu en [4] : 0x${bytes[4].toString(16).padStart(2, '0')} (attendu 0x7F sur les cartes d’origine).`,
+        );
+      }
+      if (bytes[6] > MAX_CARDLOCK_FLOOR) {
+        notes.push(`Numéro d’étage hors plage en [6] : ${bytes[6]} (attendu 0 à ${MAX_CARDLOCK_FLOOR}).`);
       }
     }
     if (type === 'building') {

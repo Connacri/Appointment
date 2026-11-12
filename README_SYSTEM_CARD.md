@@ -220,7 +220,9 @@ est utilisé (`DEFAULT_SYSTEM_CARD_TEMPLATE`).
 |---|---|---|
 | Système `0x00` | `~site` (vérifié, exposé via `siteComplementOk`) | **aléatoire** → `endIsUnknown: true`, aucune expiration affichée |
 | Client `0x60` | sentinelle `E3` / chambre | date de fin de séjour |
-| Master / étage / bâtiment `0xA0..0xD0` | niveau | date de fin de validité |
+| Master / urgence `0xA0`/`0xB0` | `FF 00` (tous niveaux) | date de fin de validité |
+| Étage `0xD0` | `7F 00`, **étage en `[6]`**, bâtiment en `[7]` (vérifié sur cartes d'origine) | date de fin de validité |
+| Bâtiment `0xC0` | bâtiment en `[4]` et dans `[7]` (`0x80 \| BldNo`, à confirmer sur matériel) | date de fin de validité |
 
 Garanties :
 

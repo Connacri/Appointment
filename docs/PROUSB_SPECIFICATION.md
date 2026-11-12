@@ -404,24 +404,43 @@ Octet 13-15: Date de fin
 
 **Rôle** : Ouvre toutes les chambres d'un étage sélectionné.
 
+**Structure vérifiée sur cartes d'origine** (`CardInfo` IDs 1384-1393 de la base
+vivante, émises le 2026-11-04) :
+
+```
+Octet 0:  0xC9
+Octet 1:  0x12
+Octet 2-3: Site code (0x033B sur l'installation de référence)
+Octet 4:  0x7F  (marqueur « carte étage »)
+Octet 5:  0x00
+Octet 6:  Numéro d'étage (FlrNo de la base, 0-127)
+Octet 7:  Numéro de bâtiment (BldNo brut, 0-15) — PAS 0x80 | BldNo
+Octet 8:  0x00
+Octet 9:  0xD0 | cardIndex
+Octet 10-12: Date de début
+Octet 13-15: Date de fin
+```
+
+Exemple authentique (étage 2, bâtiment 1, index 6) :
+`C9 12 03 3B 7F 00 02 01 00 D6 1B 24 F5 1C 25 FB`
+
 **Différence avec Master** :
-- Octet 4 = numéro d'étage (1-6)
-- Octet 5 = `0x00` (champ niveau `[4..5]`, jamais l'heure de début)
-- Octet 7 = `0x80 | BldNo` (bâtiment réel de la base importée, 0-15)
+- Octet 4 = `0x7F` (et non le numéro d'étage)
+- Octet 6 = numéro d'étage
+- Octet 7 = `BldNo` brut (le `0x80` de la carte maître signifie « tous les
+  bâtiments », il n'a pas sa place ici)
 - Octet 9 = `0xD0 | cardIndex`
 
-> **Note d'implémentation.** Le bâtiment est indispensable : sans lui, la
-> carte ouvre le même étage dans tous les bâtiments (périmètre erroné observé
-> sur matériel). Le nibble bas de l'octet 7 porte le `BldNo` ; la valeur 0 est
-> aussi le `BldNo` réel du bâtiment 0, donc une carte liée au bâtiment 0 est
-> indiscernable d'une carte « tous bâtiments » — c'est une limite du format,
-> pas un choix de l'application. Aucune valeur par défaut n'est inventée :
-> l'encodeur refuse une carte étage sans bâtiment.
+> **Note d'implémentation.** Les versions précédentes écrivaient `[4] = étage`,
+> `[6] = nonce` et `[7] = 0x80 | BldNo`. La serrure lisait donc le nonce comme
+> numéro d'étage : c'est la cause du non-fonctionnement observé sur matériel.
+> Le bâtiment reste obligatoire : l'encodeur refuse une carte étage sans
+> bâtiment et n'invente aucune valeur par défaut.
 
 **Ce que fait la serrure** :
 1. Vérifie le code site
 2. Vérifie le type 0xD0
-3. Vérifie que l'étage de la serrure correspond à l'octet 4
+3. Vérifie que l'étage programmé de la serrure correspond à l'octet 6
 4. Vérifie la validité temporelle
 5. Si correspondance : déverrouille
 
@@ -1253,6 +1272,12 @@ Dans la reconstruction React, **ce bridage est supprimé** — l'accès à l'enc
 | Étages max | 6 | Étages 1 à 6 |
 | Chambres par étage | 99 | Chambres 01 à 99 par étage |
 | Numérotation | BBECCC | BB = bâtiment, E = étage, CCC = chambre |
+
+> **Encodage réel** : l'interface d'origine limite la saisie à 3 bâtiments et
+> 6 étages, mais les champs de carte acceptent davantage. Le `BldNo` tient sur
+> 4 bits (0-15) et le `FlrNo` de la carte Étage sur un octet (0-127, vérifié
+> sur les cartes d'origine). L'encodeur refuse toute valeur hors de ces plages
+> au lieu de la tronquer silencieusement.
 
 ### 20.9 Limites de la licence (supprimée dans React)
 
