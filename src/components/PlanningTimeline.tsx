@@ -1667,7 +1667,8 @@ export const PlanningTimeline: React.FC = () => {
                             const firstVisibleDate = timelineDays[0]?.dateStr;
                             const lastVisibleDate = timelineDays[timelineDays.length - 1]?.dateStr;
 
-                            // Skip if outside visible timeline range
+                            // Skip if timeline not yet initialized or booking outside visible range
+                            if (!firstVisibleDate || !lastVisibleDate) return null;
                             if (bkg.endDate <= firstVisibleDate || bkg.startDate > lastVisibleDate) return null;
 
                             const startIndex = getDateIndex(bkg.startDate);
