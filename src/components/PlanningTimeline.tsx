@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -497,9 +497,13 @@ export const PlanningTimeline: React.FC = () => {
     return dates;
   }, [timelineWindowStart, timelineWindowDays, language, timelineSync.todayDateStr]);
 
-  // Center timeline on currentBaseDate when it changes (or on mount)
+  // Center timeline on currentBaseDate when it changes (or on mount).
+  // useLayoutEffect runs before paint so the first visible frame is already
+  // centered: without it, one frame shows scrollLeft=0 (oldest dates) where a
+  // past booking clamped to the left edge flashes as a full-width bar before
+  // scrolling out of view.
   const hasCenteredInitialDateRef = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const idx = timelineDays.findIndex((day) => day.dateStr === currentBaseDate);
     if (idx >= 0 && scrollContainerRef.current) {
       const el = scrollContainerRef.current;
