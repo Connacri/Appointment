@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   FileText,
   Plus,
@@ -131,6 +131,28 @@ export const BillingInvoicingView: React.FC = () => {
   const totalTTC = Math.max(0, subtotalHT - discountAmount + vatAmount);
   const balanceDue = Math.max(0, totalTTC - newDeposit);
 
+  // Dialog: focus handoff, Escape to close and body scroll lock while open.
+  const createDialogRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (!isCreateModalOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsCreateModalOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKeyDown);
+    createDialogRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isCreateModalOpen]);
+
+  const fieldClass =
+    'h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500';
+  const fieldLabelClass = 'mb-1 block text-[11px] font-semibold text-slate-600 dark:text-slate-300';
+
   const handleCreateDocument = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCustomerName.trim()) return;
@@ -174,6 +196,7 @@ export const BillingInvoicingView: React.FC = () => {
     // Reset Form
     setNewCustomerName('');
     setNewCustomerEmail('');
+    setNewCustomerPhone('');
     setNewCustomerAddress('');
     setNewSelectedPromo('');
     setNewDeposit(0);
@@ -521,165 +544,281 @@ export const BillingInvoicingView: React.FC = () => {
 
       {/* Modal: Create Document */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs pms-modal-backdrop">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh] pms-modal">
-            <div className="h-14 border-b border-slate-200 dark:border-slate-800 px-5 flex items-center justify-between bg-slate-50 dark:bg-slate-850">
-              <span className="font-bold text-slate-900 dark:text-white text-sm">
-                Émettre un Devis, Facture ou Pro Forma
-              </span>
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center overflow-y-auto bg-black/60 p-0 pms-modal-backdrop backdrop-blur-xs sm:items-center"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setIsCreateModalOpen(false);
+          }}
+        >
+          <form
+            ref={createDialogRef}
+            onSubmit={handleCreateDocument}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="billing-create-title"
+            tabIndex={-1}
+            className="pms-dialog-panel pms-modal pms-sheet my-0 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[1.75rem] bg-white text-xs shadow-2xl outline-none dark:bg-slate-900 sm:my-auto sm:max-h-[90dvh] sm:rounded-2xl"
+          >
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 pb-3 pt-4 dark:border-slate-800 dark:bg-slate-900 sm:px-6 sm:pb-4 sm:pt-5">
+              <div className="min-w-0">
+                <h2 id="billing-create-title" className="text-sm font-bold leading-tight text-slate-900 dark:text-white sm:text-base">
+                  Émettre un Devis, Facture ou Pro Forma
+                </h2>
+                <p className="mt-1 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+                  Renseignez le client et les prestations, puis enregistrez le document.
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={() => setIsCreateModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
+                aria-label="Fermer la fenêtre"
+                className="-me-1 inline-flex size-11 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateDocument} className="p-3 sm:p-5 overflow-y-auto overscroll-contain space-y-4 text-xs">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
               {/* Document Type */}
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Type de document comptable :
-                </label>
-                <div className="grid grid-cols-3 gap-2">
+                <span
+                  id="billing-doc-type-label"
+                  className="mb-1.5 block text-[11px] font-semibold text-slate-600 dark:text-slate-300"
+                >
+                  Type de document comptable
+                </span>
+                <div role="group" aria-labelledby="billing-doc-type-label" className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-1.5 sm:gap-2">
                   <button
                     type="button"
+                    aria-pressed={newDocType === 'invoice'}
                     onClick={() => setNewDocType('invoice')}
-                    className={`py-2 rounded-lg border font-semibold ${
+                    className={`min-h-11 rounded-xl border px-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
                       newDocType === 'invoice'
-                        ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-600'
                     }`}
                   >
                     Facture
                   </button>
                   <button
                     type="button"
+                    aria-pressed={newDocType === 'quote'}
                     onClick={() => setNewDocType('quote')}
-                    className={`py-2 rounded-lg border font-semibold ${
+                    className={`min-h-11 rounded-xl border px-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
                       newDocType === 'quote'
-                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-600'
                     }`}
                   >
-                    Devis (Quote)
+                    Devis
                   </button>
                   <button
                     type="button"
+                    aria-pressed={newDocType === 'proforma'}
                     onClick={() => setNewDocType('proforma')}
-                    className={`py-2 rounded-lg border font-semibold ${
+                    className={`min-h-11 rounded-xl border px-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 ${
                       newDocType === 'proforma'
-                        ? 'bg-purple-50 border-purple-500 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                        ? 'border-purple-500 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-600'
                     }`}
                   >
-                    Facture Pro Forma
+                    Pro forma
                   </button>
                 </div>
               </div>
 
               {/* Client Details */}
-              <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <span className="font-bold text-slate-900 dark:text-white block">
-                  Coordonnées du client :
-                </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Nom complet ou Société *"
-                    value={newCustomerName}
-                    onChange={(e) => setNewCustomerName(e.target.value)}
-                    className="h-9 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  />
-                  <input
-                    type="email"
-                    placeholder="E-mail (pour envoi PDF)"
-                    value={newCustomerEmail}
-                    onChange={(e) => setNewCustomerEmail(e.target.value)}
-                    className="h-9 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                  />
+              <div className="space-y-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+                <span className="block font-bold text-slate-900 dark:text-white">Coordonnées du client</span>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="billing-customer-name" className={fieldLabelClass}>
+                      Nom ou société *
+                    </label>
+                    <input
+                      id="billing-customer-name"
+                      type="text"
+                      required
+                      autoComplete="organization"
+                      placeholder="Nom complet ou société"
+                      value={newCustomerName}
+                      onChange={(e) => setNewCustomerName(e.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="billing-customer-email" className={fieldLabelClass}>
+                      E-mail
+                    </label>
+                    <input
+                      id="billing-customer-email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="client@exemple.com"
+                      value={newCustomerEmail}
+                      onChange={(e) => setNewCustomerEmail(e.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="billing-customer-phone" className={fieldLabelClass}>
+                      Téléphone
+                    </label>
+                    <input
+                      id="billing-customer-phone"
+                      type="tel"
+                      autoComplete="tel"
+                      placeholder="+213 00 00 00 00"
+                      value={newCustomerPhone}
+                      onChange={(e) => setNewCustomerPhone(e.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="billing-customer-address" className={fieldLabelClass}>
+                      Adresse de facturation
+                    </label>
+                    <input
+                      id="billing-customer-address"
+                      type="text"
+                      autoComplete="street-address"
+                      placeholder="15 Rue de la Paix, Paris"
+                      value={newCustomerAddress}
+                      onChange={(e) => setNewCustomerAddress(e.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  placeholder="Adresse de facturation (ex: 15 Rue de la Paix, Paris)"
-                  value={newCustomerAddress}
-                  onChange={(e) => setNewCustomerAddress(e.target.value)}
-                  className="w-full h-9 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
-                />
               </div>
 
               {/* Line Items */}
-              <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 dark:text-white">Lignes de prestations :</span>
+              <div className="space-y-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-slate-900 dark:text-white">Lignes de prestations</span>
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
+                      playClickFeedback();
                       setNewItems([
                         ...newItems,
                         { id: String(Date.now()), description: 'Option / Service supplémentaire', quantity: 1, unitPrice: 50, vatRate: 10, total: 50 },
-                      ])
-                    }
-                    className="text-blue-600 dark:text-blue-400 font-semibold"
+                      ]);
+                    }}
+                    className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold text-blue-600 transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:text-blue-400 dark:hover:bg-blue-950/40 sm:min-h-9"
                   >
-                    + Ajouter une ligne
+                    <Plus size={14} />
+                    Ajouter une ligne
                   </button>
                 </div>
 
+                <div className="hidden items-center gap-1.5 pb-0.5 sm:grid sm:grid-cols-12">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 sm:col-span-4">
+                    Description
+                  </span>
+                  <span className="text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 sm:col-span-2">
+                    Qté
+                  </span>
+                  <span className="text-end text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 sm:col-span-3">
+                    P.U. ({activeCurrency})
+                  </span>
+                  <span className="text-end text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 sm:col-span-2">
+                    Total
+                  </span>
+                  <span className="sm:col-span-1" />
+                </div>
+
                 {newItems.map((it, idx) => (
-                  <div key={it.id} className="grid grid-cols-12 gap-1.5 items-center">
-                    <input
-                      type="text"
-                      value={it.description}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setNewItems(newItems.map((item, i) => (i === idx ? { ...item, description: val } : item)));
-                      }}
-                      className="col-span-6 h-8 px-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-[11px]"
-                    />
-                    <input
-                      type="number"
-                      min="1"
-                      value={it.quantity}
-                      onChange={(e) => {
-                        const q = Number(e.target.value) || 1;
-                        setNewItems(newItems.map((item, i) => (i === idx ? { ...item, quantity: q, total: q * item.unitPrice } : item)));
-                      }}
-                      className="col-span-2 h-8 px-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-[11px] text-center"
-                    />
-                    <input
-                      type="number"
-                      min="0"
-                      value={it.unitPrice}
-                      onChange={(e) => {
-                        const p = Number(e.target.value) || 0;
-                        setNewItems(newItems.map((item, i) => (i === idx ? { ...item, unitPrice: p, total: item.quantity * p } : item)));
-                      }}
-                      className="col-span-3 h-8 px-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-[11px] text-right font-mono"
-                    />
-                    {newItems.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setNewItems(newItems.filter((_, i) => i !== idx))}
-                        className="col-span-1 text-rose-500 hover:text-rose-700 text-center"
-                      >
-                        ×
-                      </button>
-                    )}
+                  <div
+                    key={it.id}
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-700 dark:bg-slate-800/50 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0"
+                  >
+                    <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2 sm:grid-cols-12 sm:items-center sm:gap-1.5">
+                      <div className="col-span-2 sm:col-span-4">
+                        <label htmlFor={`line-description-${it.id}`} className={`${fieldLabelClass} sm:sr-only`}>
+                          Description
+                        </label>
+                        <input
+                          id={`line-description-${it.id}`}
+                          type="text"
+                          value={it.description}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNewItems(newItems.map((item, i) => (i === idx ? { ...item, description: val } : item)));
+                          }}
+                          className={`${fieldClass} sm:h-9 sm:rounded-lg sm:text-[11px]`}
+                        />
+                      </div>
+                      <div className="col-span-1 sm:col-span-2">
+                        <label htmlFor={`line-quantity-${it.id}`} className={`${fieldLabelClass} sm:sr-only`}>
+                          Qté
+                        </label>
+                        <input
+                          id={`line-quantity-${it.id}`}
+                          type="number"
+                          min="1"
+                          inputMode="numeric"
+                          value={it.quantity}
+                          onChange={(e) => {
+                            const q = Number(e.target.value) || 1;
+                            setNewItems(newItems.map((item, i) => (i === idx ? { ...item, quantity: q, total: q * item.unitPrice } : item)));
+                          }}
+                          className={`${fieldClass} text-center tabular-nums sm:h-9 sm:rounded-lg sm:text-[11px]`}
+                        />
+                      </div>
+                      <div className="col-span-1 sm:col-span-3">
+                        <label htmlFor={`line-unit-price-${it.id}`} className={`${fieldLabelClass} sm:sr-only`}>
+                          P.U. ({activeCurrency})
+                        </label>
+                        <input
+                          id={`line-unit-price-${it.id}`}
+                          type="number"
+                          min="0"
+                          inputMode="decimal"
+                          value={it.unitPrice}
+                          onChange={(e) => {
+                            const p = Number(e.target.value) || 0;
+                            setNewItems(newItems.map((item, i) => (i === idx ? { ...item, unitPrice: p, total: item.quantity * p } : item)));
+                          }}
+                          className={`${fieldClass} text-end tabular-nums sm:h-9 sm:rounded-lg sm:text-[11px]`}
+                        />
+                      </div>
+                      <div className={`${newItems.length > 1 ? 'col-span-1' : 'col-span-2'} sm:col-span-2`}>
+                        <span className={`${fieldLabelClass} sm:sr-only`}>Total</span>
+                        <div className="flex h-11 items-center justify-end rounded-xl bg-slate-100 px-2 text-sm font-semibold tabular-nums text-slate-700 dark:bg-slate-800 dark:text-slate-200 sm:h-9 sm:justify-start sm:bg-transparent sm:px-0 sm:text-[11px]">
+                          {(it.quantity * it.unitPrice).toFixed(2)}
+                        </div>
+                      </div>
+                      {newItems.length > 1 && (
+                        <div className="col-span-1 sm:col-span-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              playClickFeedback();
+                              setNewItems(newItems.filter((_, i) => i !== idx));
+                            }}
+                            aria-label={`Supprimer la ligne ${idx + 1}`}
+                            className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 text-[11px] font-semibold text-rose-600 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/40 sm:h-9 sm:w-9 sm:border-0"
+                          >
+                            <Trash2 size={15} />
+                            <span className="sm:hidden">Supprimer</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
 
               {/* Promo Code & Discount Selection */}
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
-                <label className="block font-semibold text-slate-700 dark:text-slate-300">
-                  Appliquer une Promotion ou Réduction :
+              <div className="space-y-1.5 border-t border-slate-100 pt-4 dark:border-slate-800">
+                <label htmlFor="billing-promo" className={fieldLabelClass}>
+                  Promotion ou réduction
                 </label>
                 <select
+                  id="billing-promo"
                   value={newSelectedPromo}
                   onChange={(e) => setNewSelectedPromo(e.target.value)}
-                  className="w-full h-9 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                  className={fieldClass}
                 >
                   <option value="">Aucune réduction</option>
                   {initialPromos.map((pr) => (
@@ -691,45 +830,57 @@ export const BillingInvoicingView: React.FC = () => {
               </div>
 
               {/* Financial Recap Box */}
-              <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl space-y-1 font-mono text-xs">
-                <div className="flex justify-between text-slate-500">
-                  <span>Sous-total HT :</span>
-                  <span>{subtotalHT.toFixed(2)} {activeCurrency}</span>
+              <div className="space-y-1.5 rounded-xl bg-slate-100 p-3 tabular-nums dark:bg-slate-800 sm:p-4">
+                <div className="flex items-baseline justify-between gap-3 text-slate-500 dark:text-slate-400">
+                  <span>Sous-total HT</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-200">
+                    {subtotalHT.toFixed(2)} {activeCurrency}
+                  </span>
                 </div>
                 {discountAmount > 0 && (
-                  <div className="flex justify-between text-rose-600">
-                    <span>Remise ({newSelectedPromo}) :</span>
-                    <span>- {discountAmount.toFixed(2)} {activeCurrency}</span>
+                  <div className="flex items-baseline justify-between gap-3 text-rose-600 dark:text-rose-400">
+                    <span>Remise ({newSelectedPromo})</span>
+                    <span className="font-medium">- {discountAmount.toFixed(2)} {activeCurrency}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-slate-500">
-                  <span>TVA estimée :</span>
-                  <span>{vatAmount.toFixed(2)} {activeCurrency}</span>
+                <div className="flex items-baseline justify-between gap-3 text-slate-500 dark:text-slate-400">
+                  <span>TVA estimée</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-200">
+                    {vatAmount.toFixed(2)} {activeCurrency}
+                  </span>
                 </div>
-                <div className="flex justify-between font-bold text-sm text-slate-900 dark:text-white border-t border-slate-200 dark:border-slate-700 pt-1">
-                  <span>TOTAL NET TTC :</span>
+                <div className="flex items-baseline justify-between gap-3 border-t border-slate-200 pt-1.5 text-sm font-bold text-slate-900 dark:border-slate-700 dark:text-white">
+                  <span>Total net TTC</span>
                   <span>{totalTTC.toFixed(2)} {activeCurrency}</span>
                 </div>
               </div>
+            </div>
 
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-2 pt-2">
+            {/* Sticky actions */}
+            <div className="shrink-0 border-t border-slate-200 bg-white px-4 pb-3 pt-3 dark:border-slate-800 dark:bg-slate-900 sm:px-6 sm:pb-4">
+              <div className="mb-2 flex items-baseline justify-between gap-3 text-xs sm:hidden">
+                <span className="text-slate-500 dark:text-slate-400">Total TTC</span>
+                <span className="font-bold tabular-nums text-slate-900 dark:text-white">
+                  {totalTTC.toFixed(2)} {activeCurrency}
+                </span>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 font-medium cursor-pointer"
+                  className="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 sm:w-auto"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold rounded-lg shadow-sm cursor-pointer"
+                  className="h-11 w-full rounded-xl bg-emerald-600 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 active:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 sm:w-auto"
                 >
-                  Générer le Document & Enregistrer
+                  Créer et enregistrer
                 </button>
               </div>
-            </form>
-          </div>
+            </div>
+          </form>
         </div>
       )}
 
