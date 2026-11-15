@@ -380,15 +380,18 @@ export async function parseCardLockMdb(
     let parsedBld = hasExplicitBuilding ? num(rawBld, -1) : -1;
     let parsedFlr = hasExplicitFloor ? num(rawFlr, -1) : -1;
 
-    // Composite room references are fallback values only when source columns are absent.
+    // RoomInfo is authoritative: when BldNo and FlrNo are present, RoomNo
+    // is the literal room label and MUST NOT be split, even when it contains
+    // hyphens (for example "1-101"). Composite parsing is only a fallback for
+    // legacy exports where the corresponding source columns are absent.
     const dashMatch = roomNumberStr.match(/^(\d+)-(\d+)(?:-(\d+))?$/);
-    if (dashMatch) {
+    if (dashMatch && (!hasExplicitBuilding || !hasExplicitFloor)) {
       if (dashMatch[3]) {
         if (!hasExplicitBuilding) parsedBld = num(dashMatch[1], -1);
         if (!hasExplicitFloor) parsedFlr = num(dashMatch[2], -1);
         roomNumberStr = dashMatch[3];
-      } else {
-        if (!hasExplicitBuilding) parsedBld = num(dashMatch[1], -1);
+      } else if (!hasExplicitBuilding) {
+        parsedBld = num(dashMatch[1], -1);
         roomNumberStr = dashMatch[2];
       }
     }
@@ -587,10 +590,13 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     };
   });
 
+  // RoomInfo.RoomNo is an opaque source identifier, not necessarily numeric.
+  // Keep its exact trimmed value so labels such as "1-101" do not collapse to
+  // "101" and accidentally match another room.
   const roomsByNo = new Map<string, ImportedRoom[]>();
   const importableRooms = rooms.filter((room) => Number.isFinite(room.building) && room.building >= 0 && knownBuildingNumbers.has(room.building));
   for (const room of importableRooms) {
-    const key = normalizeRoomNo(room.roomNo);
+    const key = str(room.roomNo);
     const matches = roomsByNo.get(key) ?? [];
     matches.push(room);
     roomsByNo.set(key, matches);
@@ -609,7 +615,7 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     const guestBuilding = hasBuilding ? Number(parts[0]) : null;
     const guestFloor = hasFloor ? Number(parts[1]) : null;
     const rawRoomNo = hasFloor ? parts.slice(2).join('-') : hasBuilding ? parts.slice(1).join('-') : rawRoomRef;
-    const roomNo = normalizeRoomNo(rawRoomNo);
+    const roomNo = str(rawRoomNo);
     const candidates = (roomsByNo.get(roomNo) ?? []).filter((candidate) =>
       guestBuilding === null || candidate.building === guestBuilding
     );
@@ -694,7 +700,9 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 function resourceIdFromRoom(r: ImportedRoom): string {
   const building = r.building >= 0 ? String(r.building) : 'unassigned';
   const floor = r.floor >= 0 ? String(r.floor) : 'unknown-floor';
-  return `mdb-rm-${building}-${floor}-${normalizeRoomNo(r.roomNo)}`;
+  // Encode, rather than normalize, the source room label. Normalizing here
+  // would make distinct values such as "101" and "1-101" share one ID.
+  return `mdb-rm-${building}-${floor}-${encodeURIComponent(str(r.roomNo))}`;
 }
 
 function normalizeHousekeepingStatus(value: string): ResourceItem['housekeepingStatus'] {
