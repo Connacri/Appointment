@@ -210,9 +210,8 @@ test('CardLock import does not fabricate building or floor 1 when source fields 
   };
 
   const planning = mdbSnapshotToPlanning(snapshot);
-  assert.equal(planning.resourceGroups[0].id, 'mdb-rooms-nobld');
-  assert.equal(planning.resourceGroups[0].resources[0].building, undefined);
-  assert.equal(planning.resourceGroups[0].resources[0].floor, undefined);
-  assert.equal(planning.resourceGroups[0].resources[0].type, 'Chambre spéciale');
+  assert.deepEqual(planning.resourceGroups, []);
+  assert.equal(planning.bookings.length, 0);
+  assert.ok(planning.warnings.some((warning) => warning.includes('1 chambre(s) exclue(s)')));
 });
 
