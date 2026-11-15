@@ -56,6 +56,28 @@ in source code and `docs/ARCHITECTURE.md` before changing architecture.
 - Do not invent imported buildings, rooms, reservations or source database values.
   Preserve source data and report incomplete or ambiguous imports.
 
+
+## Mandatory data-contract alignment (all agents)
+
+Before any change touching business data, models, IndexedDB, imports, repositories,
+Supabase/PostgreSQL, synchronization, or data-driven UI, read `docs/DATA_CONTRACT.md`
+in full and follow its change protocol.
+
+A data change is incomplete until business rules, domain models, local schema/upgrades,
+remote SQL/migrations, generated types, repositories, RLS/tenant constraints, imports,
+sync, UI and regression tests have been checked as one contract. Update the contract's
+alignment status in the same change set. Never mark a known gap as aligned.
+
+Enforce `Hotel → Establishment → Floor → Resource`. A workspace is only a technical
+tenant, not a business entity; ResourceGroup is only a functional classification. Never
+invent business records or silently merge physical buildings.
+
+For every data-contract change, add regression tests, add a versioned SQL migration for
+remote schema/constraint changes, update `docs/DATA_CONTRACT.md`, and run relevant
+typecheck/tests/i18n/build checks. Inspect actual CI and remote schema validation results.
+If the remote baseline or a safe test environment is unavailable, stop before speculative
+DDL and report the blocker. TypeScript compilation alone never proves alignment.
+
 ## 5. UI, accessibility and responsive behavior
 
 **Mandatory UI/UX skill:** Before creating, reviewing, redesigning or modifying any user
