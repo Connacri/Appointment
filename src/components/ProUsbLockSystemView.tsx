@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   KeyRound,
   ShieldCheck,
@@ -155,6 +156,21 @@ export const ProUsbLockSystemView: React.FC = () => {
   // Revoke cards by type confirmation
   const [revokePendingType, setRevokePendingType] = useState<ProUsbCardType | null>(null);
   const [revokePendingAll, setRevokePendingAll] = useState(false);
+
+  const isRevokeDialogOpen = revokePendingType !== null || revokePendingAll;
+  useEffect(() => {
+    if (!isRevokeDialogOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') cancelRevoke();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [isRevokeDialogOpen]);
 
   // Commissioning Form State
   const [commissionRoom, setCommissionRoom] = useState('101');
@@ -2021,34 +2037,86 @@ export const ProUsbLockSystemView: React.FC = () => {
           </div>
         )}
 
-        {/* REVOKE CONFIRMATION DIALOG */}
-        {(revokePendingType || revokePendingAll) && (
+        {/* REVOKE CONFIRMATION DIALOG — rendered in document.body to escape
+            ancestor stacking contexts, transforms and backdrop filters. */}
+        {isRevokeDialogOpen && createPortal(
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center"
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) cancelRevoke();
+            className="fixed inset-0 z-[10050] flex items-center justify-center overflow-y-auto p-4"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) cancelRevoke();
             }}
           >
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl border border-amber-300 dark:border-amber-600">
-              <div className="flex items-center gap-3 mb-4">
-                <AlertTriangle size={24} className="text-amber-600" />
-                <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200">
-                  Confirmer la Révocation
-                </h3>
-              </div>
-              <p className="text-sm text-amber-800 dark:text-amber-300 mb-6">
-                {revokePendingAll
-                  ? 'Confirmez-vous la révocation de toutes les cartes de service actives ? Les cartes système (mise en service) sont conservées.'
-                  : `Confirmez-vous la révocation de toutes les cartes actives de type « ${PROUSB_CARD_TYPES[revokePendingType!].label.fr} » ? Elles ne pourront plus ouvrir les serrures.`}
-              </p>
-              <div className="flex justify-end gap-3">
+            <div className="absolute inset-0 bg-slate-950/65 backdrop-blur-sm" aria-hidden="true" />
+            <section
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="revoke-dialog-title"
+              aria-describedby="revoke-dialog-description"
+              className="relative z-10 my-auto w-full max-w-lg overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl dark:border-amber-900 dark:bg-slate-900"
+            >
+              <div className="flex items-start gap-3 border-b border-amber-100 bg-amber-50 px-5 py-4 dark:border-amber-900/70 dark:bg-amber-950/40">
+                <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
+                  <AlertTriangle size={21} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 id="revoke-dialog-title" className="text-base font-bold text-amber-950 dark:text-amber-100">
+                    Confirmer la révocation
+                  </h3>
+                  <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
+                    Cette opération désactive les cartes concernées. Elle ne peut pas être annulée.
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={cancelRevoke}
-                  className="px-4 py-2 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  aria-label="Fermer la confirmation"
+                  className="rounded-lg p-2 text-slate-500 transition hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:hover:bg-slate-800 dark:hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-4 px-5 py-5">
+                <p id="revoke-dialog-description" className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                  {revokePendingAll
+                    ? 'Vous allez révoquer toutes les cartes de service actuellement actives. Les cartes système nécessaires à la mise en service des serrures seront préservées.'
+                    : `Vous allez révoquer toutes les cartes actives de type « ${PROUSB_CARD_TYPES[revokePendingType!].label.fr} ». Elles ne pourront plus ouvrir les serrures.`}
+                </p>
+
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/30">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+                      Cartes concernées
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
+                      {revokePendingAll ? 'Toutes les cartes de service actives' : PROUSB_CARD_TYPES[revokePendingType!].label.fr}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-2xl font-extrabold tabular-nums text-amber-700 dark:text-amber-300">
+                    {revokePendingAll
+                      ? issuedCards.filter((card) => card.status === 'active' && ['guest', 'master', 'building', 'floor', 'emergency', 'group', 'special', 'limit', 'checkout'].includes(card.type)).length
+                      : issuedCards.filter((card) => card.type === revokePendingType && card.status === 'active').length}
+                  </span>
+                </div>
+
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
+                  <div className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
+                    <History size={14} />
+                    Historique conservé
+                  </div>
+                  <p className="mt-1 leading-relaxed">
+                    Les enregistrements locaux restent disponibles avec le statut « révoquée » pour assurer la traçabilité.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={cancelRevoke}
+                  autoFocus
+                  className="rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                   Annuler
                 </button>
@@ -2056,17 +2124,15 @@ export const ProUsbLockSystemView: React.FC = () => {
                   type="button"
                   onClick={confirmRevoke}
                   disabled={isWriting}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
-                    isWriting
-                      ? 'bg-slate-300 text-slate-600 cursor-not-allowed'
-                      : 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
-                  }`}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isWriting ? 'Traitement…' : 'Confirmer la Révocation'}
+                  <ShieldCheck size={15} />
+                  {isWriting ? 'Traitement…' : 'Confirmer la révocation'}
                 </button>
               </div>
-            </div>
-          </div>
+            </section>
+          </div>,
+          document.body
         )}
 
         {/* TAB 3: LOCK COMMISSIONING (3 STEPS) */}
