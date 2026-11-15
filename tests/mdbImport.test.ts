@@ -84,7 +84,7 @@ test('preserves building 0 and floor 0 as valid CardLock identifiers', () => {
   const result = mdbSnapshotToPlanning(source);
   const room = result.resourceGroups[0].resources[0];
   assert.equal(result.resourceGroups[0].id, 'mdb-bld-0');
-  assert.equal(room.id, 'mdb-rm-0-007');
+  assert.equal(room.id, 'mdb-rm-0-0-007');
   assert.equal(room.building, '0');
   assert.equal(room.floor, '0');
   assert.equal(room.housekeepingStatus, undefined);
