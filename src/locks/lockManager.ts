@@ -143,12 +143,12 @@ class LockManager {
   private async hydrateIssuedCards(): Promise<void> {
     try {
       const persisted = await indexedDb.getAllFromStore<IssuedCardRecord>('issuedCards');
-      if (persisted.length > 0) {
-        this.issuedCards = persisted;
-      } else if (this.issuedCards.length > 0) {
-        // One-time migration from the legacy localStorage key.
-        await indexedDb.replaceStore('issuedCards', this.issuedCards);
-      }
+      const byId = new Map<string, IssuedCardRecord>();
+      for (const card of this.issuedCards) byId.set(card.id, card);
+      // IndexedDB wins on conflicts; the legacy key contributes only missing cards.
+      for (const card of persisted) byId.set(card.id, card);
+      this.issuedCards = [...byId.values()];
+      await indexedDb.replaceStore('issuedCards', this.issuedCards);
       try { localStorage.removeItem('omnibook_prousb_issued_cards'); } catch { /* optional legacy cleanup */ }
       this.notifyStateListeners();
     } catch (error) {
