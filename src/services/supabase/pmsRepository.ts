@@ -8,23 +8,28 @@ function unwrap<T>(result: { data: T | null; error: { message: string } | null }
   return result.data;
 }
 
-export async function createWorkspace(name: string) {
-  // Workspaces table insertion bypassed per user requirement to avoid RLS violations
-  return { id: 'default_workspace', name };
+export async function createWorkspace(name: string): Promise<{ id: string; name: string }> {
+  const normalized = name.trim();
+  if (normalized.length < 2 || normalized.length > 80) {
+    throw new Error('Le nom de l’espace doit contenir entre 2 et 80 caractères.');
+  }
+
+  // Do not fabricate a workspace ID. Creation needs a server-side operation
+  // whose INSERT policy and workspace_members bootstrap are verified first.
+  throw new Error(
+    'La création de workspace côté serveur n’est pas encore implémentée. Aucun espace fictif n’a été créé.'
+  );
 }
 
 export async function listWorkspaces() {
   const db = requireSupabase();
-  try {
-    const { data, error } = await db.from('workspaces').select('id,name,owner_id,workspace_members!inner(role)').order('created_at');
-    if (error) {
-      console.warn('[Supabase] Could not list workspaces:', error.message);
-      return [];
-    }
-    return data ?? [];
-  } catch {
-    return [];
-  }
+  const { data, error } = await db
+    .from('workspaces')
+    .select('id,name,owner_id,workspace_members!inner(role)')
+    .order('created_at');
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
 }
 
 export async function listEstablishments(workspaceId: WorkspaceId): Promise<HotelEstablishment[]> {
@@ -112,48 +117,38 @@ export async function addStockMovement(workspaceId: WorkspaceId, establishmentId
 
 export async function syncCardLockMdbToSupabase(
   groups: ResourceGroup[],
-  bookingsList: TimelineBooking[]
+  bookingsList: TimelineBooking[],
+  workspaceId: WorkspaceId,
+  establishmentId: string
 ): Promise<{ groupsCount: number; resourcesCount: number; bookingsCount: number }> {
-  const db = requireSupabase();
-  const { data: auth } = await db.auth.getUser();
-  if (!auth.user) throw new Error('Authentification Supabase requise pour la synchronisation cloud.');
-
-  let wsId = 'default_workspace';
-  try {
-    const workspaces = await listWorkspaces();
-    if (workspaces[0]?.id) wsId = workspaces[0].id;
-  } catch {
-    wsId = 'default_workspace';
+  if (!workspaceId.trim() || !establishmentId.trim() || establishmentId === 'all') {
+    throw new Error('Sélectionnez un workspace et un établissement réels avant la synchronisation CardLock.');
   }
 
-  // Ensure default establishment exists
-  const establishments = await listEstablishments(wsId);
-  let estId = establishments[0]?.id;
-  if (!estId) {
-    estId = 'adef_cv';
-    await saveEstablishment(wsId, {
-      id: estId,
-      code: 'HTL-ORAN',
-      name: 'Appointment Hotel & Resort',
-      city: 'Oran',
-      stars: 4,
-      taxRate: 19,
-      checkInTime: '14:00',
-      checkOutTime: '12:00',
-      facilities: ['WiFi', 'Parking', 'Climatisation', 'proUSB'],
-      domain: 'hotel',
-      currency: 'DZD',
-    });
+  const db = requireSupabase();
+  const { data: auth, error: authError } = await db.auth.getUser();
+  if (authError) throw new Error(authError.message);
+  if (!auth.user) throw new Error('Authentification Supabase requise pour la synchronisation cloud.');
+
+  // Never choose the first workspace or create a synthetic establishment.
+  const workspaces = await listWorkspaces();
+  if (!workspaces.some((workspace: { id: string }) => workspace.id === workspaceId)) {
+    throw new Error('Le workspace sélectionné n’est pas accessible au compte connecté.');
+  }
+
+  const establishments = await listEstablishments(workspaceId);
+  if (!establishments.some((establishment) => establishment.id === establishmentId)) {
+    throw new Error('L’établissement sélectionné n’existe pas dans ce workspace Supabase.');
   }
 
   let totalResources = 0;
   for (const group of groups) {
-    await saveResourceGroup(wsId, estId, group);
+    await saveResourceGroup(workspaceId, establishmentId, group);
     totalResources += group.resources.length;
   }
 
   for (const booking of bookingsList) {
-    await saveBooking(wsId, estId, booking);
+    await saveBooking(workspaceId, establishmentId, booking);
   }
 
   return {
