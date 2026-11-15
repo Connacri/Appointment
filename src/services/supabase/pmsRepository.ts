@@ -50,16 +50,30 @@ export async function listResourceGroups(workspaceId: WorkspaceId, establishment
   if (establishmentId) q = q.eq('establishment_id',establishmentId);
   const {data,error} = await q;
   if (error) throw new Error(error.message);
-  return (data ?? []).map((g:any)=>({id:g.id,name:g.name,sector:g.domain,icon:g.icon ?? undefined,resources:(g.resources ?? []).map((r:any)=>({id:r.id,name:r.name,type:r.resource_type,sector:r.domain,pricePerDay:Number(r.price_per_day),housekeepingStatus:r.housekeeping_status,capacity:r.capacity ?? undefined,building:r.building ?? undefined,floor:r.floor ?? undefined,view:r.view ?? undefined,beds:r.beds ?? undefined,sizeM2:r.size_m2===null?undefined:Number(r.size_m2),amenities:r.amenities ?? [],establishmentId:r.establishment_id}))}));
+  return (data ?? []).map((g:any)=>({id:g.id,name:g.name,sector:g.domain,icon:g.icon ?? undefined,resources:(g.resources ?? []).map((r:any)=>({id:r.id,groupId:r.group_id ?? g.id,name:r.name,type:r.resource_type,sector:r.domain,pricePerDay:Number(r.price_per_day),housekeepingStatus:r.housekeeping_status,capacity:r.capacity ?? undefined,building:r.building ?? undefined,floor:r.floor ?? undefined,view:r.view ?? undefined,beds:r.beds ?? undefined,sizeM2:r.size_m2===null?undefined:Number(r.size_m2),amenities:r.amenities ?? [],establishmentId:r.establishment_id}))}));
 }
 
 export async function saveResourceGroup(workspaceId: WorkspaceId, establishmentId: string, group: ResourceGroup) {
+  if (!workspaceId.trim() || !establishmentId.trim() || establishmentId === 'all') {
+    throw new Error('Un workspace et un établissement réels sont obligatoires.');
+  }
+  for (const resource of group.resources) {
+    if (resource.establishmentId && resource.establishmentId !== establishmentId) {
+      throw new Error(`La ressource ${resource.name} appartient à un autre établissement.`);
+    }
+  }
   const db = requireSupabase();
   unwrap(await db.from('resource_groups').upsert({id:group.id,workspace_id:workspaceId,establishment_id:establishmentId,name:group.name,domain:group.sector,icon:group.icon ?? null}).select().single());
   for (const r of group.resources) await saveResource(workspaceId,establishmentId,group.id,r);
 }
 
 export async function saveResource(workspaceId: WorkspaceId, establishmentId: string, groupId: string|null, item: ResourceItem) {
+  if (!workspaceId.trim() || !establishmentId.trim() || establishmentId === 'all') {
+    throw new Error('Un workspace et un établissement réels sont obligatoires.');
+  }
+  if (item.establishmentId && item.establishmentId !== establishmentId) {
+    throw new Error(`La ressource ${item.name} ne correspond pas à l'établissement sélectionné.`);
+  }
   const db = requireSupabase();
   return unwrap(await db.from('resources').upsert({id:item.id,workspace_id:workspaceId,establishment_id:establishmentId,group_id:groupId,name:item.name,resource_type:item.type,domain:item.sector,price_per_day:item.pricePerDay,capacity:item.capacity ?? null,housekeeping_status:item.housekeepingStatus ?? 'clean',building:item.building ?? null,floor:item.floor ?? null,view:item.view ?? null,beds:item.beds ?? null,size_m2:item.sizeM2 ?? null,amenities:item.amenities ?? []}).select().single());
 }
@@ -74,7 +88,18 @@ export async function listBookings(workspaceId: WorkspaceId, establishmentId?: s
 }
 
 export async function saveBooking(workspaceId: WorkspaceId, establishmentId: string, b: TimelineBooking) {
+  if (!workspaceId.trim() || !establishmentId.trim() || establishmentId === 'all') {
+    throw new Error('Un workspace et un établissement réels sont obligatoires.');
+  }
   const db = requireSupabase();
+  const { data: resource, error: resourceError } = await db.from('resources')
+    .select('id,workspace_id,establishment_id')
+    .eq('id', b.resourceId)
+    .maybeSingle();
+  if (resourceError) throw new Error(resourceError.message);
+  if (!resource || resource.workspace_id !== workspaceId || resource.establishment_id !== establishmentId) {
+    throw new Error('Réservation refusée : la chambre/ressource n’appartient pas à l’établissement et au workspace sélectionnés.');
+  }
   const {data:auth} = await db.auth.getUser();
   return unwrap(await db.from('bookings').upsert({id:b.id,workspace_id:workspaceId,establishment_id:establishmentId,resource_id:b.resourceId,domain:b.sector,resource_name:b.resourceName,guest_name:b.guestName,guest_email:b.guestEmail || null,guest_phone:b.guestPhone || null,start_date:b.startDate,end_date:b.endDate,status:b.status,total_price:b.totalPrice,payment_status:b.paymentStatus,adults:b.adults ?? 1,children:b.children ?? 0,notes:b.notes ?? null,meal_plan:b.mealPlan ?? null,origin_channel:b.originChannel ?? null,extras:b.extras ?? [],occupants:b.occupantsList ?? [],guest_metadata:b.customMetadata ?? {},created_by:auth.user?.id ?? null}).select().single());
 }
@@ -139,6 +164,19 @@ export async function syncCardLockMdbToSupabase(
   const establishments = await listEstablishments(workspaceId);
   if (!establishments.some((establishment) => establishment.id === establishmentId)) {
     throw new Error('L’établissement sélectionné n’existe pas dans ce workspace Supabase.');
+  }
+  // One CardLock BuildingInfo row represents one physical establishment.
+  // Never push several buildings into one selected establishment.
+  if (groups.length > 1) {
+    throw new Error(`Import cloud annulé : le fichier CardLock contient ${groups.length} bâtiments. Chaque bâtiment doit être rattaché à son propre établissement réel ; aucun enregistrement n’a été envoyé.`);
+  }
+  const resourceIds = new Set(groups.flatMap((group) => group.resources.map((resource) => resource.id)));
+  if (resourceIds.size !== groups.reduce((total, group) => total + group.resources.length, 0)) {
+    throw new Error('Import cloud annulé : des identifiants de ressources sont dupliqués.');
+  }
+  const orphanBookings = bookingsList.filter((booking) => !resourceIds.has(booking.resourceId));
+  if (orphanBookings.length > 0) {
+    throw new Error(`Import cloud annulé : ${orphanBookings.length} séjour(s) ne correspondent à aucune ressource importée.`);
   }
 
   let totalResources = 0;
