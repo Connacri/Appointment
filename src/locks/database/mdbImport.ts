@@ -504,7 +504,7 @@ export function parseAccessDateTime(value: unknown): string | null {
 
 /**
  * Convertit un snapshot CardLock.mdb importé en données de planning/Gantt :
- *   • un `ResourceGroup` par bâtiment (ou un groupe "Chambres" si aucun bâtiment)
+ *   • un `ResourceGroup` par bâtiment déclaré dans BuildingInfo
  *   • un `ResourceItem` par chambre (RoomInfo), avec son compteur de cartes
  *   • un `TimelineBooking` par séjour client (GuestInfo : comeTime → goTime)
  *
@@ -515,37 +515,31 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
   resourceGroups: ResourceGroup[];
   bookings: TimelineBooking[];
   buildingStats: { no: number; name: string; rooms: number }[];
-  /** Groupe rattaché à l'hôtel restauré (premier bâtiment importé), ou `null` si la base ne contient aucune chambre. */
+  /** Null until a real Establishment entity exists; group IDs are not establishment IDs. */
   establishmentId: string | null;
   skippedGuests: number;
   warnings: string[];
 } {
   const { rooms, guests } = snapshot;
 
-  // Keep ALL buildings from the snapshot, and recover any building number seen in rooms.
+  // BuildingInfo alone defines valid building groups. Orphan RoomInfo rows
+  // are excluded from the operational inventory and reported to the user.
   const buildingByNo = new Map<number, ImportedBuilding>();
   for (const building of snapshot.buildings) {
     if (Number.isFinite(building.no)) buildingByNo.set(building.no, building);
   }
-  for (const room of rooms) {
-    if (Number.isFinite(room.building) && room.building >= 0 && !buildingByNo.has(room.building)) {
-      buildingByNo.set(room.building, { no: room.building, name: `Bâtiment ${room.building}` });
-    }
-  }
-
   const buildings = [...buildingByNo.values()].sort((a, b) => a.no - b.no);
-
+  const knownBuildingNumbers = new Set(buildings.map((building) => building.no));
   const roomsByBuilding = new Map<number, ImportedRoom[]>();
-  const unassignedRooms: ImportedRoom[] = [];
+  const orphanRoomCount = rooms.filter((room) => !Number.isFinite(room.building) || room.building < 0 || !knownBuildingNumbers.has(room.building)).length;
   for (const room of rooms) {
-    if (Number.isFinite(room.building) && room.building >= 0) {
-      const buildingRooms = roomsByBuilding.get(room.building) ?? [];
-      buildingRooms.push(room);
-      roomsByBuilding.set(room.building, buildingRooms);
-    } else {
-      unassignedRooms.push(room);
-    }
+    if (!Number.isFinite(room.building) || room.building < 0 || !knownBuildingNumbers.has(room.building)) continue;
+    const buildingRooms = roomsByBuilding.get(room.building) ?? [];
+    buildingRooms.push(room);
+    roomsByBuilding.set(room.building, buildingRooms);
   }
+  const warnings = [...snapshot.warnings];
+  if (orphanRoomCount > 0) warnings.push(`${orphanRoomCount} chambre(s) exclue(s) : bâtiment absent de BuildingInfo ou BldNo invalide.`);
 
   const buildingStats = buildings.map((building) => ({
     no: building.no,
@@ -572,23 +566,6 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     };
   });
 
-  if (unassignedRooms.length > 0) {
-    resourceGroups.push({
-      id: 'mdb-rooms-nobld',
-      name: {
-        fr: 'Chambres sans bâtiment',
-        en: 'Rooms without a building',
-        ar: 'غرف بدون مبنى',
-      },
-      sector: 'hotel',
-      icon: 'Building',
-      resources: unassignedRooms.map((room) => ({
-        ...resourceItemFromRoom(room),
-        establishmentId: 'mdb-rooms-nobld',
-      })),
-    });
-  }
-
   const roomsByNo = new Map<string, ImportedRoom[]>();
   for (const room of rooms) {
     const key = normalizeRoomNo(room.roomNo);
@@ -596,7 +573,6 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     matches.push(room);
     roomsByNo.set(key, matches);
   }
-  const warnings = [...snapshot.warnings];
   let missingRoomReferences = 0;
   let invalidStayDates = 0;
   let skippedGuests = 0;
@@ -686,7 +662,8 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     resourceGroups,
     bookings,
     buildingStats,
-    establishmentId: resourceGroups[0]?.id ?? null,
+    // ResourceGroup is a presentation grouping, not a persisted Establishment.
+    establishmentId: null,
     skippedGuests,
     warnings,
   };
