@@ -54,7 +54,7 @@ export interface OutboxMutationContext { workspaceId: string; establishmentId?: 
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 4;
+  private dbVersion = 5;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -177,6 +177,10 @@ class IndexedDbStore {
           issuedCards.createIndex('issuedAt', 'issuedAt', { unique: false });
           issuedCards.createIndex('roomNumber', 'roomNumber', { unique: false });
         }
+        if (!db.objectStoreNames.contains('resourceGroups')) {
+          const groups = db.createObjectStore('resourceGroups', { keyPath: 'id' });
+          groups.createIndex('sector', 'sector', { unique: false });
+        }
       };
 
       req.onsuccess = () => {
@@ -197,7 +201,7 @@ class IndexedDbStore {
   }
 
   /** Read the complete contents of a dedicated operational store. */
-  public async getAllFromStore<T>(storeName: 'issuedCards'): Promise<T[]> {
+  public async getAllFromStore<T>(storeName: 'issuedCards' | 'resourceGroups'): Promise<T[]> {
     await this.openStore();
     if (!this.idb) {
       try {
@@ -217,7 +221,7 @@ class IndexedDbStore {
   }
 
   /** Atomically replace a dedicated operational store; IndexedDB remains authoritative. */
-  public async replaceStore<T extends { id: string }>(storeName: 'issuedCards', items: T[]): Promise<void> {
+  public async replaceStore<T extends { id: string }>(storeName: 'issuedCards' | 'resourceGroups', items: T[]): Promise<void> {
     await this.openStore();
     if (!this.idb) {
       localStorage.setItem(`ob_${storeName}`, JSON.stringify(items));
@@ -483,7 +487,7 @@ class IndexedDbStore {
       await this.openStore();
 
       if (this.idb) {
-        const tx = this.idb.transaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'issuedCards'], 'readwrite');
+        const tx = this.idb.transaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'issuedCards', 'resourceGroups'], 'readwrite');
         tx.objectStore('bookings').clear();
         tx.objectStore('invoices').clear();
         tx.objectStore('resources').clear();
@@ -491,6 +495,7 @@ class IndexedDbStore {
         tx.objectStore('tombstones').clear();
         tx.objectStore('workspaceEntities').clear();
         tx.objectStore('issuedCards').clear();
+        tx.objectStore('resourceGroups').clear();
         await waitForTransactionCompletion(tx, 'clear all stores');
       }
 
