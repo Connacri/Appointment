@@ -163,7 +163,10 @@ export const ProUsbLockSystemView: React.FC = () => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') cancelRevoke();
+      if (event.key === 'Escape') {
+        setRevokePendingType(null);
+        setRevokePendingAll(false);
+      }
     };
     window.addEventListener('keydown', handleEscape);
     return () => {
