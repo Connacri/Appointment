@@ -42,6 +42,7 @@ import { lockManager } from '../locks/lockManager';
 import { mdbSnapshotToPlanning, type MdbTableSummary } from '../locks/database/mdbImport';
 import { initialResourceGroups } from '../data/mockData';
 import { createClient } from '@supabase/supabase-js';
+import { getCardLockMdbPaths } from '../locks/database/mdbPaths';
 
 const DEMO_RESOURCE_GROUP_IDS = new Set(initialResourceGroups.map((group) => group.id));
 
@@ -319,6 +320,32 @@ export const IndexedDbInspectorModal: React.FC<{
   const t = COPY[language] || COPY.fr;
   const isRtl = language === 'ar';
   const mt = MANAGEMENT_COPY[language] || MANAGEMENT_COPY.fr;
+  const cardLockPaths = useMemo(() => getCardLockMdbPaths(), []);
+  const localPathText = useMemo(() => {
+    if (cardLockPaths.liveMdbPath) {
+      if (language === 'en') return `Live path (exact, ${cardLockPaths.platform}): ${cardLockPaths.liveMdbPath}${cardLockPaths.programFilesMdbPath ? ` — Program Files copy: ${cardLockPaths.programFilesMdbPath}` : ''}`;
+      if (language === 'ar') return `المسار الحي (دقيق، ${cardLockPaths.platform}): ${cardLockPaths.liveMdbPath}${cardLockPaths.programFilesMdbPath ? ` — نسخة Program Files: ${cardLockPaths.programFilesMdbPath}` : ''}`;
+      return `Base vivante (chemin exact, ${cardLockPaths.platform}) : ${cardLockPaths.liveMdbPath}${cardLockPaths.programFilesMdbPath ? ` — Copie Program Files : ${cardLockPaths.programFilesMdbPath}` : ''}`;
+    }
+    return cardLockPaths.accessNote;
+  }, [cardLockPaths, language]);
+  const localWarningText = useMemo(() => {
+    if (language === 'en') return cardLockPaths.platform === 'windows'
+      ? 'The browser cannot read local paths automatically. Select the live VirtualStore file manually using the exact path shown above.'
+      : `${cardLockPaths.accessNote} Select the real CardLock.mdb file manually.`;
+    if (language === 'ar') return cardLockPaths.platform === 'windows'
+      ? 'لا يستطيع المتصفح قراءة المسارات المحلية تلقائياً. اختر ملف VirtualStore الحي يدوياً باستخدام المسار الدقيق أعلاه.'
+      : `${cardLockPaths.accessNote} اختر ملف CardLock.mdb الحقيقي يدوياً.`;
+    return cardLockPaths.platform === 'windows'
+      ? 'Le navigateur ne peut pas lire les chemins locaux automatiquement. Sélectionnez manuellement le fichier vivant du VirtualStore en utilisant le chemin exact ci-dessus.'
+      : `${cardLockPaths.accessNote} Sélectionnez manuellement le fichier CardLock.mdb réel.`;
+  }, [cardLockPaths, language]);
+  const staleText = useMemo(() => {
+    const hint = cardLockPaths.liveMdbPath ? ` (${cardLockPaths.liveMdbPath})` : '';
+    if (language === 'en') return `Old file (> 90d): check the live copy${hint}.`;
+    if (language === 'ar') return `ملف قديم (> 90 يوماً): تحقق من النسخة الحية${hint}.`;
+    return `Fichier ancien (> 90j) : vérifiez la copie vivante${hint}.`;
+  }, [cardLockPaths, language]);
 
   const [stats, setStats] = useState<IndexedDbStoreStats | null>(null);
   const [activeStore, setActiveStore] = useState<StoreName>('bookings');
@@ -432,7 +459,7 @@ export const IndexedDbInspectorModal: React.FC<{
       const resultMessage = importNow
         ? mt.done(planning.buildingStats.length, snapshot.counts.rooms, planning.bookings.length, snapshot.counts.cards, snapshot.warnings.length + planning.warnings.length) + ` ${buildingSummary}. Tables: ${tableSummary}.`
         : mt.cancelled + ` Tables: ${tableSummary}.`;
-      setMdbMessage(resultMessage + (sourceIsOld ? ` ${mt.stale}` : ''));
+      setMdbMessage(resultMessage + (sourceIsOld ? ` ${staleText}` : ''));
       await loadStatsAndData();
     } catch (err) {
       setMdbMessage(err instanceof Error ? err.message : mt.importError);
@@ -931,8 +958,13 @@ export const IndexedDbInspectorModal: React.FC<{
               {/* Path and Instructions Card */}
               <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs space-y-3">
                 <div>
-                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">{mt.localPath}</div>
-                  <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">{mt.localWarning}</p>
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200 break-all">{localPathText}</div>
+                  <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">{localWarningText}</p>
+                  {cardLockPaths.backupDirectoryPath && (
+                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 break-all">
+                      {language === 'en' ? 'Automatic backups (exact path):' : language === 'ar' ? 'النسخ الاحتياطية التلقائية (المسار الدقيق):' : 'Sauvegardes automatiques (chemin exact) :'} <span className="font-mono">{cardLockPaths.backupDirectoryPath}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div className="pt-2 flex flex-wrap items-center gap-3">

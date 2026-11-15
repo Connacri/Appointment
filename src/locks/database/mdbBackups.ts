@@ -2,17 +2,28 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  *
- * Sauvegardes CardLock (`D:\proUSB_DBBak`) — listing via la File System Access
- * API.
+ * Sauvegardes CardLock — listing via la File System Access API.
+ *
+ * Le chemin exact du dossier de sauvegarde dépend de la plateforme et est
+ * fourni par `getCardLockBackupDirectoryPath()` (source de vérité :
+ * `mdbPaths.ts`). Sur Windows proUSB, il s'agit de `D:\proUSB_DBBak`.
  *
  * Un navigateur ne peut pas lister un disque local tout seul. On utilise
  * `window.showDirectoryPicker`, disponible sous Chromium, Edge et le WebView2
- * empaqueté. Partout ailleurs (Firefox, Safari, Android) `canListDirectory()`
- * retourne false et l'appelleur retombe sur un simple `<input type="file">` :
- * l'utilisateur navigue alors lui-même jusqu'au dossier `D:\proUSB_DBBak`.
+ * empaqueté. Partout ailleurs (Firefox, Safari, Android natif via WebView sans
+ * support) `canListDirectory()` retourne false et l'appelleur retombe sur un
+ * simple `<input type="file">` : l'utilisateur navigue alors lui-même jusqu'au
+ * dossier exact de sa plateforme.
  *
  * Tout est côté navigateur : aucun chemin local n'est jamais envoyé au serveur.
  */
+
+import { getCardLockBackupDirectoryPath } from './mdbPaths';
+
+/** Exact backup directory path for the current platform, or null if none. */
+export const CARDLOCK_BACKUP_DIRECTORY_PATH = getCardLockBackupDirectoryPath();
+
+export { getCardLockBackupDirectoryPath };
 
 export interface MdbBackupFile {
   /** Nom du fichier tel que vu sur le disque (`CardLock261104.MDB`). */
@@ -48,7 +59,9 @@ export function canListDirectory(): boolean {
 export async function pickMdbBackupDirectory(): Promise<FileSystemDirectoryHandle | null> {
   if (!canListDirectory()) return null;
   try {
-    return await window.showDirectoryPicker!({ mode: 'read' });
+    // `id` makes the browser remember the last chosen directory for this picker.
+    // The exact platform path is surfaced in the UI; the sandbox prevents opening it programmatically.
+    return await window.showDirectoryPicker!({ mode: 'read', id: 'cardlock-mdb-backups' });
   } catch {
     return null;
   }

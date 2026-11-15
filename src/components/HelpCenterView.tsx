@@ -6,6 +6,7 @@ import {
   AlertTriangle, Lightbulb, PlayCircle, GraduationCap, Wrench, FileText, Palette,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { WINDOWS_CARDLOCK_MDB_PATHS, ANDROID_CARDLOCK_MDB_PATHS, WEB_CARDLOCK_MDB_PATHS } from '../locks/database/mdbPaths';
 
 type Locale = 'fr' | 'en' | 'ar';
 type Tutorial = {
@@ -239,9 +240,21 @@ const tutorials: Tutorial[] = [
     title: { fr: 'Importer et contrôler CardLock.mdb', en: 'Import and verify CardLock.mdb', ar: 'استيراد وفحص قاعدة CardLock.mdb' },
     summary: { fr: 'Importer bâtiments, chambres, séjours et cartes sans inventer de chambres.', en: 'Import buildings, rooms, stays and cards without inventing rooms.', ar: 'استيراد المباني والغرف والإقامات والبطاقات دون إنشاء غرف وهمية.' },
     prerequisites: {
-      fr: ['Avoir accès au CardLock.mdb réellement utilisé par proUSB.', 'Si proUSB est installé sous Program Files (x86), vérifier aussi la copie active de %LOCALAPPDATA%\\VirtualStore.'],
-      en: ['Have access to the CardLock.mdb actually used by proUSB.', 'If proUSB is installed under Program Files (x86), also check the active %LOCALAPPDATA%\\VirtualStore copy.'],
-      ar: ['تأكد من توفر ملف CardLock.mdb المستخدم فعلياً من proUSB.', 'إذا كان proUSB مثبتاً داخل Program Files (x86)، تحقق أيضاً من نسخة VirtualStore النشطة.']
+      fr: [
+        `Windows (chemin exact) : base vivante ${WINDOWS_CARDLOCK_MDB_PATHS.liveMdbPath} ; copie Program Files ${WINDOWS_CARDLOCK_MDB_PATHS.programFilesMdbPath} ; sauvegardes ${WINDOWS_CARDLOCK_MDB_PATHS.backupDirectoryPath}.`,
+        `Android (chemin exact automatique : aucun) : ${ANDROID_CARDLOCK_MDB_PATHS.accessNote}`,
+        `Web hors Windows (chemin exact automatique : aucun) : ${WEB_CARDLOCK_MDB_PATHS.accessNote}`,
+      ],
+      en: [
+        `Windows (exact path): live database ${WINDOWS_CARDLOCK_MDB_PATHS.liveMdbPath}; Program Files copy ${WINDOWS_CARDLOCK_MDB_PATHS.programFilesMdbPath}; backups ${WINDOWS_CARDLOCK_MDB_PATHS.backupDirectoryPath}.`,
+        `Android (no automatic exact path): ${ANDROID_CARDLOCK_MDB_PATHS.accessNote}`,
+        `Web outside Windows (no automatic exact path): ${WEB_CARDLOCK_MDB_PATHS.accessNote}`,
+      ],
+      ar: [
+        `ويندوز (المسار الدقيق): القاعدة الحية ${WINDOWS_CARDLOCK_MDB_PATHS.liveMdbPath}؛ نسخة Program Files ${WINDOWS_CARDLOCK_MDB_PATHS.programFilesMdbPath}؛ النسخ الاحتياطية ${WINDOWS_CARDLOCK_MDB_PATHS.backupDirectoryPath}.`,
+        `أندرويد (لا يوجد مسار تلقائي دقيق): ${ANDROID_CARDLOCK_MDB_PATHS.accessNote}`,
+        `الويب خارج ويندوز (لا يوجد مسار تلقائي دقيق): ${WEB_CARDLOCK_MDB_PATHS.accessNote}`,
+      ]
     },
     steps: {
       fr: [

@@ -80,6 +80,7 @@ import { CardResultDialog, CardResult } from './CardResultDialog';
 import { CardCreationProgressModal } from './CardCreationProgressModal';
 import { isSupabaseConfigured } from '../services/supabase/supabaseClient';
 import { syncCardLockMdbToSupabase } from '../services/supabase/pmsRepository';
+import { getMdbPlatform, getCardLockMdbPaths } from '../locks/database/mdbPaths';
 
 const DEMO_RESOURCE_GROUP_IDS = new Set(initialResourceGroups.map((group) => group.id));
 
@@ -189,6 +190,7 @@ export const ProUsbLockSystemView: React.FC = () => {
   const [mdbStatus, setMdbStatus] = useState(lockManager.getMdbStatus());
   const [hotelRecommissioningRequired, setHotelRecommissioningRequired] = useState(lockManager.isHotelRecommissioningRequired());
   const [isImportingMdb, setIsImportingMdb] = useState(false);
+  const cardLockPaths = useMemo(() => getCardLockMdbPaths(), []);
   const [usbStatus, setUsbStatus] = useState(lockManager.getStatus());
   const [usbDevice, setUsbDevice] = useState<UsbDeviceInfo | null>(() => lockManager.getDeviceInfo());
   const [isIdentifying, setIsIdentifying] = useState(false);
@@ -483,7 +485,7 @@ export const ProUsbLockSystemView: React.FC = () => {
   /**
    * Génère immédiatement le script .vbs pour une seule carte lue (celle qui
    * affiche « ID absent » dans l'inspecteur). Le script ajoute la ligne dans
-   * CardInfo (ID AutoNumber + Operator Code) de la base vivante VirtualStore.
+   * CardInfo (ID AutoNumber + Operator Code) de la base vivante de la plateforme courante.
    */
   const handleCreateCardInfoRowForReadCard = () => {
     if (!currentReadCard) {
@@ -902,11 +904,13 @@ export const ProUsbLockSystemView: React.FC = () => {
           ? Math.floor((Date.now() - lastModified.getTime()) / 86_400_000)
           : 0;
       if (lastModified && ageDays > 90) {
+        const mdbPaths = getCardLockMdbPaths();
+        const livePathHint = mdbPaths.liveMdbPath ? ` (${mdbPaths.liveMdbPath})` : '';
         showToast(
           'error',
           `Copie figée : ce fichier n'a pas été modifié depuis le ${lastModified.toLocaleDateString(
             'fr-FR'
-          )}. C'est très probablement la copie de Program Files — importez la base vivante du VirtualStore (AppData\\Local\\VirtualStore\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb).`,
+          )}. Sur Windows proUSB, importez la base vivante${livePathHint} plutôt que la copie de Program Files.`,
         );
         return;
       }
@@ -1440,14 +1444,20 @@ export const ProUsbLockSystemView: React.FC = () => {
                 </p>
 
                 <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-lg px-3 py-2">
-                  <strong>Windows redirige les écritures de CardLock.exe vers VirtualStore.</strong> La base réellement
-                  utilisée est{' '}
-                  <code className="font-mono break-all">
-                    %LOCALAPPDATA%\VirtualStore\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb
-                  </code>{' '}
-                  — pas celle de <code className="font-mono">Program Files (x86)</code>, qui reste figée. Le script
-                  détecte tout seul la copie vivante (la plus récente), ne demande aucun droit administrateur, puis
-                  relit chaque ligne et affiche l'<strong>ID</strong> et l'<strong>Operator Code</strong> obtenus.
+                  {cardLockPaths.platform === 'windows' && cardLockPaths.liveMdbPath ? (
+                    <>
+                      <strong>Windows redirige les écritures de CardLock.exe vers VirtualStore.</strong> La base réellement utilisée (chemin exact, plateforme Windows) est{' '}
+                      <code className="font-mono break-all">{cardLockPaths.liveMdbPath}</code>
+                      {cardLockPaths.programFilesMdbPath ? (
+                        <> — pas la copie figée de <code className="font-mono break-all">{cardLockPaths.programFilesMdbPath}</code>.</>
+                      ) : null}{' '}
+                      Le script détecte tout seul la copie vivante (la plus récente), ne demande aucun droit administrateur, puis relit chaque ligne et affiche l'<strong>ID</strong> et l'<strong>Operator Code</strong> obtenus.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Chemin exact de la base CardLock.mdb :</strong> non disponible automatiquement sur cette plateforme ({cardLockPaths.platform}). {cardLockPaths.accessNote}
+                    </>
+                  )}
                 </p>
 
                 <div className="overflow-x-auto">
@@ -1655,8 +1665,10 @@ export const ProUsbLockSystemView: React.FC = () => {
                             {!row && (
                               <p className="text-[10px] leading-snug font-sans text-amber-600 dark:text-amber-400">
                                 {mdbImportedLabel
-                                  ? `Instantané CardLock.mdb importé le ${mdbImportedLabel} : si cette carte est plus récente, réimportez la base vivante du VirtualStore pour afficher son ID et son Operator Code.`
-                                  : "Aucune base CardLock.mdb importée : importez la copie vivante du VirtualStore pour afficher l'ID et l'Operator Code."}
+                                  ? `Instantané CardLock.mdb importé le ${mdbImportedLabel} : si cette carte est plus récente, réimportez la base vivante${cardLockPaths.liveMdbPath ? ` (${cardLockPaths.liveMdbPath})` : ''} pour afficher son ID et son Operator Code.`
+                                  : cardLockPaths.liveMdbPath
+                                    ? `Aucune base CardLock.mdb importée : importez la copie vivante (${cardLockPaths.liveMdbPath}) pour afficher l'ID et l'Operator Code.`
+                                    : "Aucune base CardLock.mdb importée : importez le fichier CardLock.mdb réel pour cette plateforme afin d'afficher l'ID et l'Operator Code."}
                               </p>
                             )}
                           </div>
@@ -2174,16 +2186,21 @@ export const ProUsbLockSystemView: React.FC = () => {
                   {mdbStatus.connected ? 'CONNECTÉE' : 'NON IMPORTÉE'}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                Importez la base <strong>vivante</strong> :{' '}
-                <code className="font-mono break-all">
-                  %LOCALAPPDATA%\VirtualStore\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb
-                </code>{' '}
-                — Windows y redirige les écritures de CardLock.exe. La copie de{' '}
-                <code className="font-mono">C:\Program Files (x86)\…</code> n'est plus mise à jour par le logiciel (elle
-                ne contient que les cartes d'origine). L'app réutilise alors les mêmes chambres, clients et cartes que
-                le logiciel d'origine et écrit les cartes système avec le <strong>vrai code site</strong> lu dans la
-                base (plus de <code className="font-mono">N9067</code>). Sans base importée, l'app reste autonome.
+                            <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                {cardLockPaths.liveMdbPath ? (
+                  <>
+                    Importez la base <strong>vivante</strong> (chemin exact, plateforme {cardLockPaths.platform}) :{' '}
+                    <code className="font-mono break-all">{cardLockPaths.liveMdbPath}</code>
+                    {cardLockPaths.programFilesMdbPath ? (
+                      <> — la copie de <code className="font-mono break-all">{cardLockPaths.programFilesMdbPath}</code> peut rester figée.</>
+                    ) : null}{' '}
+                    L'app réutilise alors les mêmes chambres, clients et cartes que le logiciel d'origine et écrit les cartes système avec le <strong>vrai code site</strong> lu dans la base. Sans base importée, l'app reste autonome.
+                  </>
+                ) : (
+                  <>
+                    {cardLockPaths.accessNote}{cardLockPaths.backupDirectoryPath ? <> Chemin exact des sauvegardes : <code className="font-mono break-all">{cardLockPaths.backupDirectoryPath}</code>.</> : null} Sans base importée, l'app reste autonome.
+                  </>
+                )}
               </p>
               {mdbStatus.connected && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-slate-700 dark:text-slate-200">
@@ -2267,7 +2284,9 @@ export const ProUsbLockSystemView: React.FC = () => {
                       lockManager.clearPersistedData();
                       setMdbStatus(lockManager.getMdbStatus());
                       setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
-                      showToast('success', 'Cache effacé. Réimportez la base CardLock depuis le VirtualStore pour charger les données à jour.');
+                      showToast('success', cardLockPaths.liveMdbPath
+                        ? `Cache effacé. Réimportez la base CardLock depuis ${cardLockPaths.liveMdbPath} pour charger les données à jour.`
+                        : 'Cache effacé. Réimportez la base CardLock.mdb réelle pour cette plateforme pour charger les données à jour.');
                     }}
                     className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40"
                   >

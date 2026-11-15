@@ -9,7 +9,7 @@
  * - Coordonnées, Type, Logo (Upload image ou Préréglages vectoriels), NIF/RC/RIB pour les Factures et Devis
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   Building2,
   Upload,
@@ -44,6 +44,7 @@ import { playSuccessFeedback, playClickFeedback } from '../utils/audioFeedback';
 import { lockManager } from '../locks/lockManager';
 import { mdbSnapshotToPlanning } from '../locks/database/mdbImport';
 import { canListDirectory, pickMdbBackupDirectory, listMdbBackups, type MdbBackupFile } from '../locks/database/mdbBackups';
+import { getCardLockMdbPaths } from '../locks/database/mdbPaths';
 import { initialResourceGroups } from '../data/mockData';
 
 const DEMO_RESOURCE_GROUP_IDS = new Set(initialResourceGroups.map((group) => group.id));
@@ -87,6 +88,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   const [isImportingMdb, setIsImportingMdb] = useState(false);
   const [mdbBackups, setMdbBackups] = useState<MdbBackupFile[] | null>(null);
   const [isPickingBackups, setIsPickingBackups] = useState(false);
+  const cardLockPaths = useMemo(() => getCardLockMdbPaths(), []);
 
   if (!isOpen) return null;
 
@@ -191,7 +193,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
         ? ` · Fichier modifié le ${sourceDate.toLocaleDateString('fr-FR')}`
         : '';
       const sourceIsOld = sourceDateValid && Date.now() - sourceDate.getTime() > 90 * 86_400_000;
-      setStructureMessage(`Import réussi : ${snapshot.counts.rooms} chambre(s) RoomInfo, ${snapshot.buildings.length} bâtiment(s), ${planning.bookings.length} séjour(s) liés, ${snapshot.counts.cards} carte(s). ${buildingSummary}. Tables : ${tableSummary}${sourceDateLabel}${sourceIsOld ? ' (copie ancienne : vérifiez la base vivante du VirtualStore)' : ''}${planning.skippedGuests ? ` · ${planning.skippedGuests} séjour(s) non importé(s)` : ''}${allWarnings.length ? ' · Avertissements : ' + allWarnings.join(' ') : ''}`);
+      setStructureMessage(`Import réussi : ${snapshot.counts.rooms} chambre(s) RoomInfo, ${snapshot.buildings.length} bâtiment(s), ${planning.bookings.length} séjour(s) liés, ${snapshot.counts.cards} carte(s). ${buildingSummary}. Tables : ${tableSummary}${sourceDateLabel}${sourceIsOld ? (cardLockPaths.liveMdbPath ? ` (copie ancienne : vérifiez la base vivante ${cardLockPaths.liveMdbPath})` : ' (copie ancienne : vérifiez la base vivante pour cette plateforme)') : ''}${planning.skippedGuests ? ` · ${planning.skippedGuests} séjour(s) non importé(s)` : ''}${allWarnings.length ? ' · Avertissements : ' + allWarnings.join(' ') : ''}`);
       playSuccessFeedback();
     } catch (error) {
       setStructureMessage(`Échec de l’import : ${error instanceof Error ? error.message : 'fichier illisible'}`);
@@ -810,9 +812,11 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                 <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                   Sélectionnez la base existante depuis Windows. Pour importer les données à jour, privilégiez la copie VirtualStore si elle existe. L’application ne peut pas accéder seule à un chemin local Windows.
                 </p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 break-all">
-                  Cible habituelle : C:\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb
-                </p>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 break-all">
+                  {cardLockPaths.liveMdbPath && <p><strong>Base vivante (chemin exact, {cardLockPaths.platform}) :</strong> <span className="font-mono">{cardLockPaths.liveMdbPath}</span></p>}
+                  {cardLockPaths.programFilesMdbPath && <p><strong>Copie Program Files (souvent figée) :</strong> <span className="font-mono">{cardLockPaths.programFilesMdbPath}</span></p>}
+                  {!cardLockPaths.liveMdbPath && <p>{cardLockPaths.accessNote}</p>}
+                </div>
                 <input ref={mdbInputRef} type="file" accept=".mdb,application/x-msaccess" onChange={handleMdbImport} className="hidden" />
                 <div className="flex flex-wrap gap-2">
                   <button type="button" disabled={isImportingMdb} onClick={() => mdbInputRef.current?.click()}
@@ -827,8 +831,12 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                   )}
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 break-all">
-                  Sauvegardes automatiques : <span className="font-mono">D:\proUSB_DBBak</span> (ex. CardLock260611.MDB → CardLock261104.MDB).
-                  {!canListDirectory() && ' Ouvrez le dossier manuellement avec « Choisir CardLock.mdb ».'}
+                  {cardLockPaths.backupDirectoryPath ? (
+                    <>Sauvegardes automatiques (chemin exact, {cardLockPaths.platform}) : <span className="font-mono">{cardLockPaths.backupDirectoryPath}</span> (ex. CardLock260611.MDB → CardLock261104.MDB).</>
+                  ) : (
+                    <>{cardLockPaths.accessNote}</>
+                  )}
+                  {!canListDirectory() && cardLockPaths.backupDirectoryPath && ' Ouvrez ce dossier manuellement avec « Choisir CardLock.mdb ».'}
                 </p>
                 {mdbBackups && mdbBackups.length > 0 && (
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 p-2 space-y-1 max-h-56 overflow-y-auto">
