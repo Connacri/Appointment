@@ -61,7 +61,7 @@ Migrations distantes enregistrées :
 
 Le schéma et le client sont alignés sur le socle PMS, mais le produit n'est pas encore synchronisé de bout en bout :
 
-- Les mutations de `AppContext` restent majoritairement locales (localStorage/IndexedDB) et ne passent pas toutes par `pmsRepository`.
+- Les réservations, ressources et groupes de ressources sont désormais persistés localement dans IndexedDB ; les autres domaines (`tasks`, stock, tarifs, facturation) restent majoritairement locaux et ne passent pas tous par `pmsRepository`.
 - Aucun sélecteur de workspace/établissement ne pilote encore les mutations de l'application.
 - Un Outbox IndexedDB transactionnel est livré en étape partielle (stores versionnés, isolation par workspace, clés d'idempotence, tombstones). Le CRUD des réservations y est raccordé uniquement pour les enregistrements non-démo et lorsqu'un workspace est actif.
 - Aucun moteur pull/push automatique ne consomme encore l'Outbox ; les autres domaines métier ne sont pas encore raccordés.
