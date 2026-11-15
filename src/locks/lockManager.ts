@@ -119,6 +119,7 @@ class LockManager {
   private mdbSnapshot: MdbSnapshot | null = this.loadMdbSnapshot();
 
   private issuedCards: IssuedCardRecord[] = this.loadIssuedCards();
+  private issuedCardsReady: Promise<void> = Promise.resolve();
   private auditRecords: LockAuditRecord[] = this.loadAuditRecords();
   private settings: ProUsbLockSettings = this.loadSettings();
   private readerInfo: ReaderInfo | null = null;
@@ -137,7 +138,7 @@ class LockManager {
     // Auto-connect only to a previously authorized proUSB device; first-time WebHID
     // permission must be granted from the USB button by an explicit user gesture.
     this.webHidTransport.setAutoConnectEnabled(true);
-    void this.hydrateIssuedCards();
+    this.issuedCardsReady = this.hydrateIssuedCards();
   }
 
   private async hydrateIssuedCards(): Promise<void> {
@@ -169,16 +170,18 @@ class LockManager {
   }
 
   private saveIssuedCards(): void {
-    const snapshot = [...this.issuedCards];
-    void indexedDb.replaceStore('issuedCards', snapshot).then(() => {
-      try { localStorage.removeItem('omnibook_prousb_issued_cards'); } catch { /* optional legacy cleanup */ }
-    }).catch((error) => {
-      // Keep a best-effort legacy copy only when IndexedDB itself is unavailable.
-      try {
-        localStorage.setItem('omnibook_prousb_issued_cards', JSON.stringify(snapshot));
-      } catch (fallbackError) {
-        console.error('[LockManager] Issued cards could not be persisted to IndexedDB or localStorage:', { error, fallbackError });
-      }
+    void this.issuedCardsReady.then(() => {
+      const snapshot = [...this.issuedCards];
+      return indexedDb.replaceStore('issuedCards', snapshot).then(() => {
+        try { localStorage.removeItem('omnibook_prousb_issued_cards'); } catch { /* optional legacy cleanup */ }
+      }).catch((error) => {
+        // Keep a best-effort legacy copy only when IndexedDB itself is unavailable.
+        try {
+          localStorage.setItem('omnibook_prousb_issued_cards', JSON.stringify(snapshot));
+        } catch (fallbackError) {
+          console.error('[LockManager] Issued cards could not be persisted to IndexedDB or localStorage:', { error, fallbackError });
+        }
+      });
     });
   }
 
