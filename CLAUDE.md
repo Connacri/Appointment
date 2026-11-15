@@ -15,3 +15,15 @@ pretending the skill was loaded.
 
 This repository-level pointer is intentionally short. The canonical skill is the
 single source of truth; do not fork or silently rewrite its rules in this file.
+
+## Data contract — mandatory
+
+For every task involving domain data, IndexedDB, PostgreSQL/Supabase, repositories,
+imports, synchronization or data-driven UI, read and follow `docs/DATA_CONTRACT.md`
+in full. Trace and validate business rules, domain types, local schema/upgrades, remote
+schema/migrations, generated database types, constraints, RLS, repositories, UI and tests
+together. Update the contract status and add regression tests in the same change set.
+Never claim alignment from TypeScript compilation alone. Do not invent hotels,
+establishments, floors, rooms or workspaces. If remote schema history or a safe test
+environment is unavailable, do not guess or apply speculative production DDL; report
+the blocker.
