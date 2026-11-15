@@ -380,12 +380,7 @@ class IndexedDbStore {
         existingRequest.onerror = () => tx.abort();
         await waitForTransactionCompletion(tx, `replaceAll ${storeName}`);
 
-        // IndexedDB is authoritative. The localStorage snapshot is only a fallback mirror.
-        try {
-          localStorage.setItem(`ob_${storeName}`, JSON.stringify(items));
-        } catch (error) {
-          console.warn('[IndexedDB] Snapshot fallback mirror failed:', error);
-        }
+        // IndexedDB is authoritative; do not duplicate large collections in localStorage.
         return;
       }
 
@@ -410,17 +405,7 @@ class IndexedDbStore {
         tx.objectStore(storeName).put(item);
         await waitForTransactionCompletion(tx, `put ${storeName}/${item.id}`);
 
-        // Keep the fallback mirror best-effort; it is never authoritative when IDB is available.
-        try {
-          const raw = localStorage.getItem(`ob_${storeName}`);
-          const list: T[] = raw ? JSON.parse(raw) : [];
-          localStorage.setItem(
-            `ob_${storeName}`,
-            JSON.stringify([...list.filter((entry) => entry.id !== item.id), item])
-          );
-        } catch (error) {
-          console.warn('[IndexedDB] Fallback mirror update failed:', error);
-        }
+        // Do not mirror operational records into localStorage when IndexedDB is available.
         return;
       }
 
@@ -450,18 +435,7 @@ class IndexedDbStore {
         tx.objectStore(storeName).delete(id);
         await waitForTransactionCompletion(tx, `remove ${storeName}/${id}`);
 
-        try {
-          const raw = localStorage.getItem(`ob_${storeName}`);
-          if (raw) {
-            const list = JSON.parse(raw) as Array<{ id: string }>;
-            localStorage.setItem(
-              `ob_${storeName}`,
-              JSON.stringify(list.filter((entry) => entry.id !== id))
-            );
-          }
-        } catch (error) {
-          console.warn('[IndexedDB] Fallback mirror remove failed:', error);
-        }
+        // IndexedDB is authoritative; no duplicate localStorage snapshot is maintained.
         return;
       }
 
