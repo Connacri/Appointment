@@ -39,6 +39,30 @@ test('does not invent a floor or a price when RoomInfo fields are empty', () => 
   assert.equal(room.floor, undefined);
   assert.equal(room.pricePerDay, 0);
 });
+test('distinguishes identical room numbers on different floors of the same building', () => {
+  const source = snapshot({
+    buildings: [{ no: 1, name: 'Bâtiment principal' }],
+    rooms: [
+      { building: 1, floor: 1, roomNo: '101', type: 'Single', status: '', price: '', cardCount: 0, maxCards: 1 },
+      { building: 1, floor: 2, roomNo: '101', type: 'Double', status: '', price: '', cardCount: 0, maxCards: 1 },
+    ],
+    guests: [
+      { roomNo: '1-1-101', name: 'Étage 1', comeTime: '2026-11-05T14:00:00.000Z', goTime: '2026-11-07T12:00:00.000Z', cardId: 'F1', flag: '' },
+      { roomNo: '1-2-101', name: 'Étage 2', comeTime: '2026-11-05T14:00:00.000Z', goTime: '2026-11-07T12:00:00.000Z', cardId: 'F2', flag: '' },
+    ],
+    counts: { cards: 0, guests: 2, rooms: 2, openings: 0 },
+  });
+  const result = mdbSnapshotToPlanning(source);
+  assert.deepEqual(
+    result.resourceGroups[0].resources.map((resource) => resource.id),
+    ['mdb-rm-1-1-101', 'mdb-rm-1-2-101'],
+  );
+  assert.deepEqual(
+    result.bookings.map((booking) => booking.resourceId),
+    ['mdb-rm-1-1-101', 'mdb-rm-1-2-101'],
+  );
+});
+
 test('links a stay only to the exact building, floor and room', () => {
   const result = mdbSnapshotToPlanning(snapshot());
   assert.equal(result.bookings.length, 1);
