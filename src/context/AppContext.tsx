@@ -483,10 +483,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .map((group) => ({ ...group, resources: [] as ResourceItem[] }));
 
         let hydratedGroups: ResourceGroup[] = groupMetadata.map((group) => ({ ...group, resources: [] }));
-        const groupById = new Map<string, ResourceGroup>(hydratedGroups.map((group) => [group.id, group] as const));
+        const hydratedGroupById = new Map<string, ResourceGroup>(
+          hydratedGroups.map((group) => [group.id, group] as const)
+        );
         const fallbackGroups = new Map<string, ResourceGroup>();
         for (const resource of sourceResources) {
-          const parent = resource.groupId ? groupById.get(resource.groupId) : undefined;
+          const parent = resource.groupId ? hydratedGroupById.get(resource.groupId) : undefined;
           if (parent) {
             parent.resources.push(resource);
             continue;
