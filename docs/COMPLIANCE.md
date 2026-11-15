@@ -23,7 +23,9 @@ PostHog, Plausible or Matomo).
 
 | Data | Where it lives | Why | Retention | User control |
 |---|---|---|---|---|
-| Reservations, rooms/resources, invoices, preferences, housekeeping and pricing state | IndexedDB `OmniBook_ObjectBox_Store` (localStorage fallback `ob_<store>`) | Core offline functionality | Until deleted on device | In-app purge (Privacy & Account → Local data), or clear site data |
+| Reservations, rooms/resources and resource-group metadata | IndexedDB `OmniBook_ObjectBox_Store` (localStorage `ob_<store>` only when IndexedDB is unavailable) | Core offline functionality | Until deleted on device | In-app purge (Privacy & Account → Local data), or clear site data |
+| proUSB issued-card records | IndexedDB `issuedCards` store (one-time migration from `omnibook_prousb_issued_cards`) | Lock operation history and re-commissioning safety | Until deleted on device | In-app purge, or clear site data |
+| Invoices, preferences, housekeeping and pricing state | IndexedDB and/or application preferences in localStorage, depending on feature | Offline application features | Until deleted on device | In-app purge, or clear site data |
 | proUSB issued-card list, encoder audit log, encoder settings, imported `CardLock.mdb` snapshot | localStorage `omnibook_prousb_*`, `appointment_prousb_*` | Lock operation history and re-commissioning safety | Until deleted on device | In-app purge, or clear site data |
 | Selected language, onboarding flags, workspace hints | localStorage `omnibook_lang`, `omnibook_*`, `appointment_*` | Preferences | Until deleted on device | In-app purge, or clear site data |
 | Account email, password (hashed by Supabase), user id, session token | Supabase Auth (only when Supabase is configured and the user signs up) | Optional sign-in and cross-device workspace | Until account deletion | Delete-account procedure |
