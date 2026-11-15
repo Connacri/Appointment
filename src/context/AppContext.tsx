@@ -7,6 +7,7 @@ import {
   TimelineBooking,
   BookingStatus,
   ResourceGroup,
+  ResourceItem,
   DomainType,
   UserRole,
   ClientProfile,
