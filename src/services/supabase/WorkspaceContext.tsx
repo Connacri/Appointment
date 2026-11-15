@@ -52,9 +52,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (!validWorkspaceId) localStorage.removeItem(STORAGE_KEY);
       setActiveWorkspaceIdState(validWorkspaceId);
     } catch (cause) {
-      console.warn('[WorkspaceContext] Workspace load bypassed:', cause);
+      console.error('[WorkspaceContext] Workspace load failed:', cause);
       setWorkspaces([]);
       setActiveWorkspaceIdState('');
+      setError(cause instanceof Error ? cause.message : 'Impossible de charger les workspaces Supabase.');
     } finally {
       setLoading(false);
     }
