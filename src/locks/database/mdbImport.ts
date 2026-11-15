@@ -163,6 +163,18 @@ function num(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/** CardLock stores BldNo/FlrNo as Access Byte fields. Never accept parseInt
+ * prefixes such as "2x" as valid identifiers. */
+function sourceByte(value: unknown): number {
+  if (typeof value === 'number') {
+    return Number.isInteger(value) && value >= 0 && value <= 255 ? value : -1;
+  }
+  const raw = str(value);
+  if (!/^\\d{1,3}$/.test(raw)) return -1;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= 255 ? parsed : -1;
+}
+
 function str(value: unknown): string {
   if (value === null || value === undefined) return '';
   return String(value).trim();
@@ -353,7 +365,7 @@ export async function parseCardLockMdb(
   const buildings: ImportedBuilding[] = rawBuildings.flatMap((r) => {
     const noVal = getNonEmptyField(r, ['BldNo', 'bldno', 'Bld_No', 'BuildingNo', 'BuildingID', 'ID', 'No']);
     const nameVal = getNonEmptyField(r, ['BldName', 'bldname', 'Bld_Name', 'BuildingName', 'Name', 'Description']);
-    const buildingNumber = noVal !== undefined ? num(noVal, -1) : -1;
+    const buildingNumber = noVal !== undefined ? sourceByte(noVal) : -1;
     if (!Number.isInteger(buildingNumber) || buildingNumber < 0) {
       warnings.push('Ligne BuildingInfo ignorée : BldNo absent ou invalide.');
       return [];
@@ -367,14 +379,14 @@ export async function parseCardLockMdb(
     const rawBld = getNonEmptyField(r, ['BldNo', 'bldno', 'Bld_No', 'BuildingNo', 'Building', 'Bld', 'bld_no']);
     const rawFlr = getNonEmptyField(r, ['FlrNo', 'flrno', 'Flr_No', 'FloorNo', 'Floor', 'Flr', 'flr_no']);
     const rawRoomNo = getNonEmptyField(r, ['RoomNo', 'roomno', 'Room_No']);
-    const rawRoomId = getNonEmptyField(r, ['RomID2', 'RomID', 'Room', 'RomNo', 'ID']);
+    // RomID/RomID2 are internal Access identifiers, not room labels. Using\n    // them as a fallback manufactures visible rooms when RoomNo is empty.
     const rawType = getNonEmptyField(r, ['sType', 'stype', 'RoomType', 'Type', 'type']);
     const rawStatus = getNonEmptyField(r, ['Status', 'status']);
     const rawPrice = getNonEmptyField(r, ['Price', 'price', 'Rate', 'rate']);
     const rawCardCount = getNonEmptyField(r, ['CardCount', 'cardcount', 'Card_Count']);
     const rawMaxCards = getNonEmptyField(r, ['MaxCards', 'maxcards', 'Max_Cards']);
 
-    let roomNumberStr = str(rawRoomNo) || str(rawRoomId);
+    let roomNumberStr = str(rawRoomNo);
     const hasExplicitBuilding = rawBld !== undefined;
     const hasExplicitFloor = rawFlr !== undefined;
     let parsedBld = hasExplicitBuilding ? num(rawBld, -1) : -1;
@@ -399,6 +411,10 @@ export async function parseCardLockMdb(
       skippedRoomsWithoutNumber += 1;
       return [];
     }
+    if (parsedBld < 0) {
+      warnings.push(`Ligne RoomInfo ignorée : BldNo absent ou invalide (RoomNo « ${roomNumberStr} »).`);
+      return [];
+    }
     return [{
       building: parsedBld,
       floor: parsedFlr,
@@ -410,7 +426,7 @@ export async function parseCardLockMdb(
       maxCards: num(rawMaxCards, 0),
     }];
   });
-  if (skippedRoomsWithoutNumber > 0) warnings.push(`${skippedRoomsWithoutNumber} ligne(s) RoomInfo ignorée(s) : numéro absent.`);
+  if (skippedRoomsWithoutNumber > 0) warnings.push(`${skippedRoomsWithoutNumber} ligne(s) RoomInfo ignorée(s) : RoomNo absent (RomID/RomID2 ne sont pas des numéros de chambre).`);
 
   // RoomInfo.BldNo is also authoritative evidence of a physical building.
   // Recover missing BuildingInfo metadata without inventing buildings that have
@@ -427,10 +443,26 @@ export async function parseCardLockMdb(
   if (recoveredBuildingNumbers.length > 0) {
     warnings.push(`${recoveredBuildingNumbers.length} bâtiment(s) récupéré(s) depuis RoomInfo.BldNo : métadonnées absentes de BuildingInfo.`);
   }
+  // A RoomInfo record is a real room only when its source building and
+  // RoomNo are valid. Collapse duplicate physical keys instead of creating
+  // duplicate resources with the same IndexedDB identity.
+  const uniqueRooms = new Map<string, ImportedRoom>();
+  let duplicateRoomCount = 0;
+  for (const room of rooms) {
+    if (room.building < 0) continue;
+    const key = `${room.building}:${room.floor}:${room.roomNo}`;
+    if (uniqueRooms.has(key)) {
+      duplicateRoomCount += 1;
+      continue;
+    }
+    uniqueRooms.set(key, room);
+  }
+  const validatedRooms = [...uniqueRooms.values()];
+  if (duplicateRoomCount > 0) warnings.push(`${duplicateRoomCount} ligne(s) RoomInfo dupliquée(s) ignorée(s) : même bâtiment, étage et RoomNo.`);
   const completeBuildings = [...buildingsByNo.values()].sort((a, b) => a.no - b.no);
   const knownBuildingNumbers = new Set(completeBuildings.map((building) => building.no));
-  const orphanRoomCount = rooms.filter((room) => room.building < 0 || !knownBuildingNumbers.has(room.building)).length;
-  if (orphanRoomCount > 0) warnings.push(`${orphanRoomCount} chambre(s) ignorée(s) : BldNo absent ou bâtiment inexistant dans BuildingInfo et RoomInfo.`);
+  const orphanRoomCount = validatedRooms.filter((room) => !knownBuildingNumbers.has(room.building)).length;
+  if (orphanRoomCount > 0) warnings.push(`${orphanRoomCount} chambre(s) ignorée(s) : bâtiment inexistant dans BuildingInfo et RoomInfo.`);
 
   const rawGuests = read('GuestInfo', ['Guest', 'Guests', 'tblGuest']);
   const guests: ImportedGuest[] = rawGuests.map((r) => ({
@@ -478,7 +510,7 @@ export async function parseCardLockMdb(
     guests,
     cards,
     systemProfile: deriveSystemProfile(cards),
-    counts: { cards: cards.length, guests: guests.length, rooms: rooms.length, openings },
+    counts: { cards: cards.length, guests: guests.length, rooms: validatedRooms.filter((room) => knownBuildingNumbers.has(room.building)).length, openings },
     warnings,
   };
 }
