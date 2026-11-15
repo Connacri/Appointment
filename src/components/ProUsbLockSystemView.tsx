@@ -83,7 +83,15 @@ import { syncCardLockMdbToSupabase } from '../services/supabase/pmsRepository';
 const DEMO_RESOURCE_GROUP_IDS = new Set(initialResourceGroups.map((group) => group.id));
 
 export const ProUsbLockSystemView: React.FC = () => {
-  const { language, bookings, resourceGroups, setBookings, setResourceGroups } = useApp();
+  const {
+    language,
+    bookings,
+    resourceGroups,
+    setBookings,
+    setResourceGroups,
+    activeWorkspaceId,
+    selectedEstablishmentId,
+  } = useApp();
 
   const [activeTab, setActiveTab] = useState<
     | 'reception'
@@ -918,18 +926,32 @@ export const ProUsbLockSystemView: React.FC = () => {
             `Planning mis à jour : ${mdbGroups.length} groupe(s), ${snapshot.counts.rooms} chambres RoomInfo, ${mdbBookings.length} séjour(s), ${skippedGuests} séjour(s) ignoré(s). ${buildingSummary}.`,
           );
 
-          // Align with Supabase if configured
+          // Cloud sync is opt-in to an explicitly selected, real workspace/establishment.
           if (isSupabaseConfigured) {
-            syncCardLockMdbToSupabase(mdbGroups, mdbBookings)
-              .then((res) => {
-                showToast(
-                  'success',
-                  `Supabase synchronisé : ${res.groupsCount} bâtiment(s), ${res.resourcesCount} chambre(s), ${res.bookingsCount} séjour(s).`
-                );
-              })
-              .catch((syncErr) => {
-                console.warn('[ProUsb] Supabase sync notice:', syncErr);
-              });
+            if (!activeWorkspaceId || !selectedEstablishmentId || selectedEstablishmentId === 'all') {
+              showToast(
+                'info',
+                'Import local terminé. Sélectionnez un workspace et un établissement pour envoyer ces données vers Supabase.'
+              );
+            } else {
+              syncCardLockMdbToSupabase(
+                mdbGroups,
+                mdbBookings,
+                activeWorkspaceId,
+                selectedEstablishmentId
+              )
+                .then((res) => {
+                  showToast(
+                    'success',
+                    `Supabase synchronisé : ${res.groupsCount} bâtiment(s), ${res.resourcesCount} chambre(s), ${res.bookingsCount} séjour(s).`
+                  );
+                })
+                .catch((syncErr) => {
+                  const message = syncErr instanceof Error ? syncErr.message : 'Erreur inconnue.';
+                  console.error('[ProUsb] Supabase sync failed:', syncErr);
+                  showToast('error', `Import local conservé ; synchronisation Supabase échouée : ${message}`);
+                });
+            }
           }
         }
       }
