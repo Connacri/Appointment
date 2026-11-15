@@ -474,7 +474,7 @@ class IndexedDbStore {
       }
 
       // Clear the fallback only after the authoritative IDB transaction commits.
-      for (const storeName of ['bookings', 'invoices', 'resources'] as const) {
+      for (const storeName of ['bookings', 'invoices', 'resources', 'issuedCards', 'resourceGroups'] as const) {
         localStorage.removeItem(`ob_${storeName}`);
       }
     } finally {
