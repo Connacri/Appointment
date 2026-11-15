@@ -168,7 +168,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     setStructureMessage('');
     try {
       const snapshot = await lockManager.importMdb(file);
-      if (snapshot.counts.rooms === 0) throw new Error('Aucune chambre exploitable trouvée dans RoomInfo. L’inventaire existant a été conservé.');
+      if (snapshot.buildings.length === 0 && snapshot.counts.rooms === 0) throw new Error('Aucun bâtiment déclaré dans BuildingInfo ni aucune chambre dans RoomInfo. L’inventaire existant a été conservé.');
       const planning = mdbSnapshotToPlanning(snapshot);
       setResourceGroups((current) => [
         ...current.filter((group) => !group.id.startsWith('mdb-') && !DEMO_RESOURCE_GROUP_IDS.has(group.id)),
