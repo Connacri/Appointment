@@ -560,6 +560,9 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
     roomsByBuilding.set(room.building, buildingRooms);
   }
   const warnings = [...snapshot.warnings];
+  if (recoveredBuildingNumbers.length > 0) {
+    warnings.push(`${recoveredBuildingNumbers.length} bâtiment(s) récupéré(s) depuis RoomInfo.BldNo : métadonnées absentes de BuildingInfo.`);
+  }
   if (orphanRoomCount > 0) warnings.push(`${orphanRoomCount} chambre(s) exclue(s) : bâtiment absent de BuildingInfo ou BldNo invalide.`);
 
   const buildingStats = buildings.map((building) => ({

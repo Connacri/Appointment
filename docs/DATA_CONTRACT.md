@@ -22,6 +22,10 @@ proof of synchronization or referential integrity.
 - **Hotel**: parent commercial/operating entity. One hotel may own several establishments.
 - **Establishment**: one real physical building/site belonging to one hotel. Each actual
   CardLock `BuildingInfo` record maps to one establishment under the explicitly selected hotel.
+  When `BuildingInfo` metadata is missing but `RoomInfo.BldNo` provides valid source evidence
+  of a building, the importer may recover that building (with an explicit fallback label and a
+  warning) rather than dropping its rooms; this is source-backed recovery, not invention.
+  Rooms with invalid or missing building identifiers remain excluded and reported.
 - **Floor**: a real floor belonging to one establishment. Preserve source identifiers.
 - **Resource**: a real room/unit/asset belonging to one floor and establishment.
 - **Booking**: references a real resource and shares its hotel/establishment/tenant scope.

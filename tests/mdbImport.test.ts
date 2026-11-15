@@ -72,7 +72,7 @@ test('links a stay only to the exact building, floor and room', () => {
   assert.equal(result.skippedGuests, 3);
   assert.ok(result.warnings.some((warning) => warning.includes('RoomInfo')));
 });
-test('excludes rooms whose building is absent from BuildingInfo without creating a pseudo-building', () => {
+test('recovers a building referenced by RoomInfo when BuildingInfo metadata is missing, but excludes rooms with invalid building numbers', () => {
   const source = snapshot({
     rooms: [
       ...snapshot().rooms,
@@ -81,9 +81,14 @@ test('excludes rooms whose building is absent from BuildingInfo without creating
     ],
   });
   const result = mdbSnapshotToPlanning(source);
-  assert.deepEqual(result.resourceGroups.map((group) => group.id), ['mdb-bld-1', 'mdb-bld-2']);
-  assert.equal(result.resourceGroups.reduce((total, group) => total + group.resources.length, 0), 2);
-  assert.ok(result.warnings.some((warning) => warning.includes('2 chambre(s) exclue(s)')));
+  assert.deepEqual(result.resourceGroups.map((group) => group.id), ['mdb-bld-1', 'mdb-bld-2', 'mdb-bld-99']);
+  assert.equal(result.resourceGroups[0].resources.length, 1);
+  assert.equal(result.resourceGroups[1].resources.length, 1);
+  assert.equal(result.resourceGroups[2].resources.length, 1);
+  assert.equal(result.resourceGroups[2].name.fr, 'Bâtiment 99');
+  assert.equal(result.resourceGroups.reduce((total, group) => total + group.resources.length, 0), 3);
+  assert.ok(result.warnings.some((warning) => warning.includes('1 bâtiment(s) récupéré(s) depuis RoomInfo.BldNo')));
+  assert.ok(result.warnings.some((warning) => warning.includes('1 chambre(s) exclue(s)')));
 });
 
 test('does not guess when a room number exists in more than one building', () => {
