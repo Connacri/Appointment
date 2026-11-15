@@ -507,7 +507,7 @@ export async function parseCardLockMdb(
     fileLastModified: null,
     importedAt: new Date().toISOString(),
     buildings: completeBuildings,
-    rooms,
+    rooms: validatedRooms.filter((room) => knownBuildingNumbers.has(room.building)),
     guests,
     cards,
     systemProfile: deriveSystemProfile(cards),
