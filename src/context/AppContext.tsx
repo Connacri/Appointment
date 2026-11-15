@@ -258,7 +258,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('omnibook_establishment_profile');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved) as EstablishmentProfile;
+        // Older releases persisted a fabricated demo hotel as if it were real.
+        if (parsed.id === 'est_default_oran' && parsed.name === 'Grand Hôtel & Resort Méditerranée') {
+          localStorage.removeItem('omnibook_establishment_profile');
+          return DEFAULT_ESTABLISHMENT_PROFILE;
+        }
+        return parsed;
       } catch (e) {
         console.error(e);
       }
