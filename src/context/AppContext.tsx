@@ -440,9 +440,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     void (async () => {
       try {
         await indexedDb.openStore();
-        const [storedBookings, storedResources] = await Promise.all([
+        const [storedBookings, storedResources, storedGroups] = await Promise.all([
           indexedDb.queryStore<TimelineBooking>('bookings'),
           indexedDb.queryStore<ResourceItem>('resources'),
+          indexedDb.getAllFromStore<ResourceGroup>('resourceGroups'),
         ]);
         const demoBookingIds = new Set(initialBookings.map((booking) => booking.id));
         const demoResourceIds = new Set(initialResourceGroups.flatMap((group) => group.resources.map((resource) => resource.id)));
@@ -457,33 +458,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const legacyGroups = readLegacy<ResourceGroup>('omnibook_resource_groups')
           .filter((group) => !demoGroupIds.has(group.id));
-        const legacyResources = legacyGroups.flatMap((group) => group.resources);
-        const sourceResources = storedResources.total > 0
-          ? storedResources.data.filter((resource) => !demoResourceIds.has(resource.id))
-          : legacyResources.filter((resource) => !demoResourceIds.has(resource.id));
-
-        let hydratedGroups: ResourceGroup[] = [];
-        if (storedResources.total === 0 && legacyGroups.length > 0) {
-          const allowedIds = new Set(sourceResources.map((resource) => resource.id));
-          hydratedGroups = legacyGroups
-            .map((group) => ({ ...group, resources: group.resources.filter((resource) => allowedIds.has(resource.id)) }))
-            .filter((group) => group.resources.length > 0);
-          await indexedDb.replaceAll('resources', sourceResources);
-        } else if (sourceResources.length > 0) {
-          const groupsByBuilding = new Map<string, ResourceItem[]>();
-          for (const resource of sourceResources) {
-            if (!resource.building) continue;
-            const items = groupsByBuilding.get(resource.building) ?? [];
-            items.push(resource);
-            groupsByBuilding.set(resource.building, items);
-          }
-          hydratedGroups = [...groupsByBuilding.entries()].map(([building, resources]) => ({
-            id: `local-building-${building}`,
-            name: { fr: building, en: building, ar: building },
-            sector: resources[0]?.sector ?? 'hotel',
-            icon: 'Building',
-            resources,
+        const legacyGroupByResourceId = new Map<string, string>();
+        for (const group of legacyGroups) {
+          for (const resource of group.resources) legacyGroupByResourceId.set(resource.id, group.id);
+        }
+        const legacyResources = legacyGroups.flatMap((group) =>
+          group.resources.map((resource) => ({ ...resource, groupId: group.id }))
+        );
+        const sourceResources = (storedResources.total > 0
+          ? storedResources.data
+          : legacyResources).filter((resource) => !demoResourceIds.has(resource.id))
+          .map((resource) => ({
+            ...resource,
+            groupId: resource.groupId ?? legacyGroupByResourceId.get(resource.id),
           }));
+        const groupMetadata = (storedGroups.length > 0 ? storedGroups : legacyGroups)
+          .filter((group) => !demoGroupIds.has(group.id))
+          .map((group) => ({ ...group, resources: [] as ResourceItem[] }));
+
+        let hydratedGroups: ResourceGroup[] = groupMetadata.map((group) => ({ ...group, resources: [] }));
+        const groupById = new Map(hydratedGroups.map((group) => [group.id, group]));
+        const fallbackGroups = new Map<string, ResourceGroup>();
+        for (const resource of sourceResources) {
+          const parent = resource.groupId ? groupById.get(resource.groupId) : undefined;
+          if (parent) {
+            parent.resources.push(resource);
+            continue;
+          }
+          // Older records have no groupId. Reconstruct only a presentation group
+          // from their explicit building label; never create an Establishment.
+          if (!resource.groupId && resource.building) {
+            const id = `local-building-${resource.building}`;
+            let group = fallbackGroups.get(id);
+            if (!group) {
+              group = {
+                id,
+                name: { fr: resource.building, en: resource.building, ar: resource.building },
+                sector: resource.sector,
+                icon: 'Building',
+                resources: [],
+              };
+              fallbackGroups.set(id, group);
+            }
+            group.resources.push(resource);
+          }
+        }
+        hydratedGroups = [...hydratedGroups, ...fallbackGroups.values()];
+        if (storedResources.total === 0 && sourceResources.length > 0) {
+          await indexedDb.replaceAll('resources', sourceResources);
+        }
+        if (storedGroups.length === 0 && groupMetadata.length > 0) {
+          await indexedDb.replaceStore('resourceGroups', groupMetadata);
         }
         if (cancelled) return;
         setBookings(realBookings);
@@ -507,9 +532,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     if (!isCoreDataHydrated) return;
-    const resources = resourceGroups.flatMap((group) => group.resources);
-    void indexedDb.replaceAll('resources', resources).catch((error) => {
-      console.error('[AppContext] Failed to persist resources to IndexedDB:', error);
+    const groupMetadata = resourceGroups.map((group) => ({ ...group, resources: [] as ResourceItem[] }));
+    const resources = resourceGroups.flatMap((group) =>
+      group.resources.map((resource) => ({ ...resource, groupId: group.id }))
+    );
+    void Promise.all([
+      indexedDb.replaceStore('resourceGroups', groupMetadata),
+      indexedDb.replaceAll('resources', resources),
+    ]).catch((error) => {
+      console.error('[AppContext] Failed to persist resource groups/resources to IndexedDB:', error);
     });
   }, [resourceGroups, isCoreDataHydrated]);
 
