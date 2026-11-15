@@ -209,7 +209,16 @@ class LockManager {
     try {
       const saved = localStorage.getItem('omnibook_prousb_settings');
       if (saved) {
-        return { ...initialSettings, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved) as Partial<ProUsbLockSettings>;
+        const merged = { ...initialSettings, ...parsed };
+        // Remove the exact demo defaults shipped by older builds; never infer a
+        // real hotel name or default building from those placeholders.
+        if (merged.hotelName === 'Grand Hotel Oran') merged.hotelName = '';
+        if (merged.companyName === 'Appointment Luxury Hotel & Clinic') merged.companyName = '';
+        if (parsed.hotelName === 'Grand Hotel Oran' && parsed.defaultBuildingNo === 1) {
+          merged.defaultBuildingNo = -1;
+        }
+        return merged;
       }
     } catch (e) {
       console.warn('[LockManager] Failed to load settings from localStorage:', e);
