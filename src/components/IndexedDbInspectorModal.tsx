@@ -412,8 +412,8 @@ export const IndexedDbInspectorModal: React.FC<{
       const snapshot = await lockManager.importMdb(file);
       setMdbTables(snapshot.tables ?? []);
       const sourceIsOld = snapshot.fileLastModified ? (Date.now() - new Date(snapshot.fileLastModified).getTime()) / 86400000 > 90 : false;
-      if (snapshot.counts.rooms === 0) {
-        throw new Error('Aucune chambre exploitable trouvée dans RoomInfo. L’inventaire existant a été conservé.');
+      if (snapshot.buildings.length === 0 && snapshot.counts.rooms === 0) {
+        throw new Error('Aucun bâtiment déclaré dans BuildingInfo ni aucune chambre dans RoomInfo. L’inventaire existant a été conservé.');
       }
       const planning = mdbSnapshotToPlanning(snapshot);
       const importNow = window.confirm(mt.confirm(snapshot.counts.rooms, snapshot.counts.guests, snapshot.counts.cards));
