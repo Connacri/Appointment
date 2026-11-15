@@ -483,13 +483,14 @@ class IndexedDbStore {
       await this.openStore();
 
       if (this.idb) {
-        const tx = this.idb.transaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities'], 'readwrite');
+        const tx = this.idb.transaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'issuedCards'], 'readwrite');
         tx.objectStore('bookings').clear();
         tx.objectStore('invoices').clear();
         tx.objectStore('resources').clear();
         tx.objectStore('outbox').clear();
         tx.objectStore('tombstones').clear();
         tx.objectStore('workspaceEntities').clear();
+        tx.objectStore('issuedCards').clear();
         await waitForTransactionCompletion(tx, 'clear all stores');
       }
 
