@@ -8,7 +8,7 @@ function unwrap<T>(result: { data: T | null; error: { message: string } | null }
   return result.data;
 }
 
-export async function createWorkspace(name: string): Promise<never> {
+export async function createWorkspace(name: string): Promise<{ id: string; name: string }> {
   const normalized = name.trim();
   if (normalized.length < 2 || normalized.length > 80) {
     throw new Error('Le nom de l’espace doit contenir entre 2 et 80 caractères.');
