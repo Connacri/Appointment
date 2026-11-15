@@ -27,6 +27,13 @@ test('keeps every source building and only source RoomInfo rooms', () => {
   assert.equal(result.resourceGroups[0].resources.length, 1);
   assert.equal(result.resourceGroups[1].resources.length, 1);
 });
+test('preserves buildings declared in BuildingInfo even when RoomInfo is empty', () => {
+  const result = mdbSnapshotToPlanning(snapshot({ rooms: [], guests: [], counts: { cards: 0, guests: 0, rooms: 0, openings: 0 } }));
+  assert.deepEqual(result.resourceGroups.map((group) => group.id), ['mdb-bld-1', 'mdb-bld-2']);
+  assert.deepEqual(result.resourceGroups.map((group) => group.resources.length), [0, 0]);
+  assert.equal(result.bookings.length, 0);
+});
+
 test('does not invent a floor or a price when RoomInfo fields are empty', () => {
   const room = mdbSnapshotToPlanning(snapshot()).resourceGroups[0].resources[0];
   assert.equal(room.floor, undefined);
