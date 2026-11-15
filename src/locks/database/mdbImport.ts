@@ -170,7 +170,7 @@ function sourceByte(value: unknown): number {
     return Number.isInteger(value) && value >= 0 && value <= 255 ? value : -1;
   }
   const raw = str(value);
-  if (!/^\\d{1,3}$/.test(raw)) return -1;
+  if (!/^\d{1,3}$/.test(raw)) return -1;
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed >= 0 && parsed <= 255 ? parsed : -1;
 }
@@ -379,7 +379,8 @@ export async function parseCardLockMdb(
     const rawBld = getNonEmptyField(r, ['BldNo', 'bldno', 'Bld_No', 'BuildingNo', 'Building', 'Bld', 'bld_no']);
     const rawFlr = getNonEmptyField(r, ['FlrNo', 'flrno', 'Flr_No', 'FloorNo', 'Floor', 'Flr', 'flr_no']);
     const rawRoomNo = getNonEmptyField(r, ['RoomNo', 'roomno', 'Room_No']);
-    // RomID/RomID2 are internal Access identifiers, not room labels. Using\n    // them as a fallback manufactures visible rooms when RoomNo is empty.
+    // RomID/RomID2 are internal Access identifiers, not room labels.
+    // Using them as a fallback manufactures visible rooms when RoomNo is empty.
     const rawType = getNonEmptyField(r, ['sType', 'stype', 'RoomType', 'Type', 'type']);
     const rawStatus = getNonEmptyField(r, ['Status', 'status']);
     const rawPrice = getNonEmptyField(r, ['Price', 'price', 'Rate', 'rate']);
@@ -389,8 +390,8 @@ export async function parseCardLockMdb(
     let roomNumberStr = str(rawRoomNo);
     const hasExplicitBuilding = rawBld !== undefined;
     const hasExplicitFloor = rawFlr !== undefined;
-    let parsedBld = hasExplicitBuilding ? num(rawBld, -1) : -1;
-    let parsedFlr = hasExplicitFloor ? num(rawFlr, -1) : -1;
+    let parsedBld = hasExplicitBuilding ? sourceByte(rawBld) : -1;
+    let parsedFlr = hasExplicitFloor ? sourceByte(rawFlr) : -1;
 
     // RoomInfo is authoritative: when BldNo and FlrNo are present, RoomNo
     // is the literal room label and MUST NOT be split, even when it contains
