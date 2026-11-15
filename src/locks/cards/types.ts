@@ -264,5 +264,5 @@ export interface ProUsbLockSettings {
   dontDisturbMode: boolean;
   lockAfterReleaseKnob: boolean;
   ignoreCoverFunction: boolean;
-  defaultBuildingNo: number;
+  defaultBuildingNo: number; // -1 means no default building has been explicitly selected
 }
