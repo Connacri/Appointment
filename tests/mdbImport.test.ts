@@ -41,6 +41,20 @@ test('links a stay only to the exact building, floor and room', () => {
   assert.equal(result.skippedGuests, 3);
   assert.ok(result.warnings.some((warning) => warning.includes('RoomInfo')));
 });
+test('excludes rooms whose building is absent from BuildingInfo without creating a pseudo-building', () => {
+  const source = snapshot({
+    rooms: [
+      ...snapshot().rooms,
+      { building: 99, floor: 1, roomNo: '999', type: 'Single', status: '', price: '', cardCount: 0, maxCards: 1 },
+      { building: -1, floor: 0, roomNo: '000', type: 'Single', status: '', price: '', cardCount: 0, maxCards: 1 },
+    ],
+  });
+  const result = mdbSnapshotToPlanning(source);
+  assert.deepEqual(result.resourceGroups.map((group) => group.id), ['mdb-bld-1', 'mdb-bld-2']);
+  assert.equal(result.resourceGroups.reduce((total, group) => total + group.resources.length, 0), 2);
+  assert.ok(result.warnings.some((warning) => warning.includes('2 chambre(s) exclue(s)')));
+});
+
 test('does not guess when a room number exists in more than one building', () => {
   const source = snapshot({ guests: [{
     roomNo: '101', name: 'Référence ambiguë',
@@ -83,11 +97,11 @@ test('keeps unknown housekeeping status unset instead of marking the room clean'
   assert.equal(result.resourceGroups[1].resources[0].housekeepingStatus, undefined);
 });
 
-test('exposes the restored establishment id and stamps it on every room resource', () => {
+test('does not confuse a visual building group with a persisted establishment', () => {
   const result = mdbSnapshotToPlanning(snapshot());
-  assert.equal(result.establishmentId, 'mdb-bld-1');
+  assert.equal(result.establishmentId, null);
   assert.ok(result.resourceGroups[0].resources.length > 0);
-  assert.equal(result.resourceGroups[0].resources[0].establishmentId, 'mdb-bld-1');
+  assert.equal(result.resourceGroups[0].resources[0].establishmentId, undefined);
 });
 
 test('returns a null establishment id when the base has no rooms', () => {
