@@ -119,10 +119,10 @@ test('CardLock import uses building-qualified room IDs and links stays to the co
   };
 
   const planning = mdbSnapshotToPlanning(snapshot);
-  assert.equal(planning.resourceGroups[0].resources[0].id, 'mdb-rm-1-101');
-  assert.equal(planning.resourceGroups[1].resources[0].id, 'mdb-rm-2-101');
-  assert.equal(planning.bookings[0].resourceId, 'mdb-rm-1-101');
-  assert.equal(planning.bookings[1].resourceId, 'mdb-rm-2-101');
+  assert.equal(planning.resourceGroups[0].resources[0].id, 'mdb-rm-1-1-101');
+  assert.equal(planning.resourceGroups[1].resources[0].id, 'mdb-rm-2-1-101');
+  assert.equal(planning.bookings[0].resourceId, 'mdb-rm-1-1-101');
+  assert.equal(planning.bookings[1].resourceId, 'mdb-rm-2-1-101');
 });
 
 test('CardLock import resolves three-part building-floor-room stay references', () => {
@@ -151,9 +151,9 @@ test('CardLock import resolves three-part building-floor-room stay references', 
   assert.deepEqual(
     planning.bookings.map((booking) => [booking.resourceId, booking.customMetadata?.floor]),
     [
-      ['mdb-rm-1-12064', 1],
-      ['mdb-rm-1-3012', 3],
-      ['mdb-rm-2-12074', 1],
+      ['mdb-rm-1-1-12064', 1],
+      ['mdb-rm-1-3-3012', 3],
+      ['mdb-rm-2-1-12074', 1],
     ]
   );
 });
