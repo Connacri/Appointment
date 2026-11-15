@@ -18,7 +18,6 @@ import {
 import {
   initialResourceGroups,
   initialBookings,
-  initialInvoices,
   initialStockItems,
   initialPmsTasks,
 } from '../data/mockData';
@@ -353,30 +352,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   });
 
-  const [resourceGroups, setResourceGroups] = useState<ResourceGroup[]>(() => {
-    const saved = localStorage.getItem('omnibook_resource_groups');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return initialResourceGroups;
-  });
-
-  const [bookings, setBookings] = useState<TimelineBooking[]>(() => {
-    const saved = localStorage.getItem('omnibook_bookings');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return initialBookings;
-  });
+  // Operational inventory starts empty. Real records are hydrated from IndexedDB;
+  // mockData is retained only as a legacy-ID deny-list during migration.
+  const [resourceGroups, setResourceGroups] = useState<ResourceGroup[]>([]);
+  const [bookings, setBookings] = useState<TimelineBooking[]>([]);
+  const [isCoreDataHydrated, setIsCoreDataHydrated] = useState(false);
 
   // Only explicit user-created/edited records enter the outbox. Bootstrap mock records are excluded.
   const persistBookingMutation = (booking: TimelineBooking) => {
@@ -441,40 +421,96 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
   }, [language]);
 
-  // IndexedDB is the durable store. localStorage is best-effort legacy fallback only:
-  // quota failures must never prevent the IndexedDB write from running.
+  // Hydrate the operational collections before enabling persistence. This prevents
+  // the first React render (empty state) from overwriting existing IndexedDB data.
   useEffect(() => {
-    try {
-      localStorage.setItem('omnibook_bookings', JSON.stringify(bookings));
-    } catch (error) {
-      console.warn('[AppContext] Booking snapshot exceeds localStorage quota; continuing with IndexedDB:', error);
-    }
-    // Atomic replacement keeps IndexedDB aligned, including deletions.
+    let cancelled = false;
+    const readLegacy = <T,>(key: string): T[] => {
+      try {
+        const value = localStorage.getItem(key);
+        const parsed = value ? JSON.parse(value) : [];
+        return Array.isArray(parsed) ? parsed as T[] : [];
+      } catch (error) {
+        console.warn(`[AppContext] Legacy data ${key} could not be parsed:`, error);
+        return [];
+      }
+    };
+
+    void (async () => {
+      try {
+        await indexedDb.openStore();
+        const [storedBookings, storedResources] = await Promise.all([
+          indexedDb.queryStore<TimelineBooking>('bookings'),
+          indexedDb.queryStore<ResourceItem>('resources'),
+        ]);
+        const demoBookingIds = new Set(initialBookings.map((booking) => booking.id));
+        const demoResourceIds = new Set(initialResourceGroups.flatMap((group) => group.resources.map((resource) => resource.id)));
+        const demoGroupIds = new Set(initialResourceGroups.map((group) => group.id));
+
+        const legacyBookings = readLegacy<TimelineBooking>('omnibook_bookings');
+        const sourceBookings = storedBookings.total > 0 ? storedBookings.data : legacyBookings;
+        const realBookings = sourceBookings.filter((booking) => !demoBookingIds.has(booking.id));
+        if (storedBookings.total === 0 && realBookings.length > 0) {
+          await indexedDb.replaceAll('bookings', realBookings);
+        }
+
+        const legacyGroups = readLegacy<ResourceGroup>('omnibook_resource_groups')
+          .filter((group) => !demoGroupIds.has(group.id));
+        const legacyResources = legacyGroups.flatMap((group) => group.resources);
+        const sourceResources = storedResources.total > 0
+          ? storedResources.data.filter((resource) => !demoResourceIds.has(resource.id))
+          : legacyResources.filter((resource) => !demoResourceIds.has(resource.id));
+
+        let hydratedGroups: ResourceGroup[] = [];
+        if (storedResources.total === 0 && legacyGroups.length > 0) {
+          const allowedIds = new Set(sourceResources.map((resource) => resource.id));
+          hydratedGroups = legacyGroups
+            .map((group) => ({ ...group, resources: group.resources.filter((resource) => allowedIds.has(resource.id)) }))
+            .filter((group) => group.resources.length > 0);
+          await indexedDb.replaceAll('resources', sourceResources);
+        } else if (sourceResources.length > 0) {
+          const groupsByBuilding = new Map<string, ResourceItem[]>();
+          for (const resource of sourceResources) {
+            if (!resource.building) continue;
+            const items = groupsByBuilding.get(resource.building) ?? [];
+            items.push(resource);
+            groupsByBuilding.set(resource.building, items);
+          }
+          hydratedGroups = [...groupsByBuilding.entries()].map(([building, resources]) => ({
+            id: `local-building-${building}`,
+            name: { fr: building, en: building, ar: building },
+            sector: resources[0]?.sector ?? 'hotel',
+            icon: 'Building',
+            resources,
+          }));
+        }
+        if (cancelled) return;
+        setBookings(realBookings);
+        setResourceGroups(hydratedGroups);
+        setIsCoreDataHydrated(true);
+      } catch (error) {
+        console.error('[AppContext] Core IndexedDB hydration failed; writes are disabled to protect existing data:', error);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // IndexedDB is the authoritative store. No full booking/resource snapshots are
+  // written to localStorage, avoiding quota exhaustion and stale dual-write state.
+  useEffect(() => {
+    if (!isCoreDataHydrated) return;
     void indexedDb.replaceAll('bookings', bookings).catch((error) => {
       console.error('[AppContext] Failed to persist bookings to IndexedDB:', error);
     });
-  }, [bookings]);
+  }, [bookings, isCoreDataHydrated]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('omnibook_resource_groups', JSON.stringify(resourceGroups));
-    } catch (error) {
-      console.warn('[AppContext] Resource snapshot exceeds localStorage quota; continuing with IndexedDB:', error);
-    }
-    const resources = resourceGroups.flatMap((g) => g.resources);
+    if (!isCoreDataHydrated) return;
+    const resources = resourceGroups.flatMap((group) => group.resources);
     void indexedDb.replaceAll('resources', resources).catch((error) => {
       console.error('[AppContext] Failed to persist resources to IndexedDB:', error);
     });
-  }, [resourceGroups]);
-
-  // Seed initial IndexedDB data on startup
-  useEffect(() => {
-    indexedDb.openStore().then(() => {
-      initialInvoices.forEach((inv) => indexedDb.put('invoices', inv));
-    }).catch((error) => {
-      console.error('[AppContext] IndexedDB initialization failed:', error);
-    });
-  }, []);
+  }, [resourceGroups, isCoreDataHydrated]);
 
   // Housekeeping status updater
   const updateHousekeepingStatus = (
