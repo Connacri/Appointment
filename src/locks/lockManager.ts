@@ -51,6 +51,7 @@ import {
 } from './database/mdbImport';
 import { encoderAudio } from './sound/encoderAudio';
 import { resolveCardLockImport } from './cardLockMigration';
+import { indexedDb } from '../db/indexedDb';
 
 // Types expected by TopBar (remote API compatibility)
 export type UsbConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'unsupported';
@@ -136,6 +137,23 @@ class LockManager {
     // Auto-connect only to a previously authorized proUSB device; first-time WebHID
     // permission must be granted from the USB button by an explicit user gesture.
     this.webHidTransport.setAutoConnectEnabled(true);
+    void this.hydrateIssuedCards();
+  }
+
+  private async hydrateIssuedCards(): Promise<void> {
+    try {
+      const persisted = await indexedDb.getAllFromStore<IssuedCardRecord>('issuedCards');
+      if (persisted.length > 0) {
+        this.issuedCards = persisted;
+      } else if (this.issuedCards.length > 0) {
+        // One-time migration from the legacy localStorage key.
+        await indexedDb.replaceStore('issuedCards', this.issuedCards);
+      }
+      try { localStorage.removeItem('omnibook_prousb_issued_cards'); } catch { /* optional legacy cleanup */ }
+      this.notifyStateListeners();
+    } catch (error) {
+      console.error('[LockManager] Issued-card IndexedDB hydration failed:', error);
+    }
   }
 
   private loadIssuedCards(): IssuedCardRecord[] {
@@ -151,11 +169,17 @@ class LockManager {
   }
 
   private saveIssuedCards(): void {
-    try {
-      localStorage.setItem('omnibook_prousb_issued_cards', JSON.stringify(this.issuedCards));
-    } catch (e) {
-      console.warn('[LockManager] Failed to save issued cards:', e);
-    }
+    const snapshot = [...this.issuedCards];
+    void indexedDb.replaceStore('issuedCards', snapshot).then(() => {
+      try { localStorage.removeItem('omnibook_prousb_issued_cards'); } catch { /* optional legacy cleanup */ }
+    }).catch((error) => {
+      // Keep a best-effort legacy copy only when IndexedDB itself is unavailable.
+      try {
+        localStorage.setItem('omnibook_prousb_issued_cards', JSON.stringify(snapshot));
+      } catch (fallbackError) {
+        console.error('[LockManager] Issued cards could not be persisted to IndexedDB or localStorage:', { error, fallbackError });
+      }
+    });
   }
 
   private loadAuditRecords(): LockAuditRecord[] {
