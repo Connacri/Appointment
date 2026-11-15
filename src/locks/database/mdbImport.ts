@@ -409,17 +409,11 @@ export async function parseCardLockMdb(
   });
   if (skippedRoomsWithoutNumber > 0) warnings.push(`${skippedRoomsWithoutNumber} ligne(s) RoomInfo ignorée(s) : numéro absent.`);
 
-  // Never drop a building that exists in BuildingInfo or is referenced in RoomInfo.
-  const buildingByNo = new Map<number, ImportedBuilding>();
-  for (const building of buildings) {
-    buildingByNo.set(building.no, building);
-  }
-  for (const room of rooms) {
-    if (room.building >= 0 && !buildingByNo.has(room.building)) {
-      buildingByNo.set(room.building, { no: room.building, name: `Bâtiment ${room.building}` });
-    }
-  }
-  const completeBuildings = [...buildingByNo.values()].sort((a, b) => a.no - b.no);
+  // BuildingInfo is the only authoritative source for building entities.
+  const knownBuildingNumbers = new Set(buildings.map((building) => building.no));
+  const orphanRoomCount = rooms.filter((room) => room.building < 0 || !knownBuildingNumbers.has(room.building)).length;
+  if (orphanRoomCount > 0) warnings.push(`${orphanRoomCount} chambre(s) ignorée(s) : BldNo absent ou bâtiment inexistant dans BuildingInfo.`);
+  const completeBuildings = [...buildings].sort((a, b) => a.no - b.no);
 
   const rawGuests = read('GuestInfo', ['Guest', 'Guests', 'tblGuest']);
   const guests: ImportedGuest[] = rawGuests.map((r) => ({
