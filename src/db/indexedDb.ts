@@ -54,7 +54,7 @@ export interface OutboxMutationContext { workspaceId: string; establishmentId?: 
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 3;
+  private dbVersion = 4;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -171,6 +171,12 @@ class IndexedDbStore {
           entities.createIndex('workspaceEntityId', ['workspaceId', 'entityId'], { unique: false });
           entities.createIndex('workspaceUpdatedAt', ['workspaceId', 'updatedAt'], { unique: false });
         }
+        if (!db.objectStoreNames.contains('issuedCards')) {
+          const issuedCards = db.createObjectStore('issuedCards', { keyPath: 'id' });
+          issuedCards.createIndex('status', 'status', { unique: false });
+          issuedCards.createIndex('issuedAt', 'issuedAt', { unique: false });
+          issuedCards.createIndex('roomNumber', 'roomNumber', { unique: false });
+        }
       };
 
       req.onsuccess = () => {
@@ -188,6 +194,40 @@ class IndexedDbStore {
         reject(new Error('Opening the local IndexedDB database was blocked by another tab'));
       };
     });
+  }
+
+  /** Read the complete contents of a dedicated operational store. */
+  public async getAllFromStore<T>(storeName: 'issuedCards'): Promise<T[]> {
+    await this.openStore();
+    if (!this.idb) {
+      try {
+        return JSON.parse(localStorage.getItem(`ob_${storeName}`) || '[]') as T[];
+      } catch {
+        return [];
+      }
+    }
+    const tx = this.idb.transaction(storeName, 'readonly');
+    const request = tx.objectStore(storeName).getAll();
+    const result = await new Promise<T[]>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result as T[]);
+      request.onerror = () => reject(request.error);
+    });
+    await waitForTransactionCompletion(tx, `getAllFromStore ${storeName}`);
+    return result;
+  }
+
+  /** Atomically replace a dedicated operational store; IndexedDB remains authoritative. */
+  public async replaceStore<T extends { id: string }>(storeName: 'issuedCards', items: T[]): Promise<void> {
+    await this.openStore();
+    if (!this.idb) {
+      localStorage.setItem(`ob_${storeName}`, JSON.stringify(items));
+      return;
+    }
+    const tx = this.idb.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    store.clear();
+    for (const item of items) store.put(item);
+    await waitForTransactionCompletion(tx, `replaceStore ${storeName}`);
   }
 
   // Generic paginated box query with true storage-side cursor pagination (IndexedDB §11 pattern)
