@@ -57,6 +57,18 @@ Migrations distantes enregistrées :
 - Repository PMS pour workspaces, établissements, ressources, réservations, tâches et stock.
 - Les lectures du repository excluent les enregistrements portant un tombstone.
 
+## Écart de modèle métier à résoudre
+
+Le schéma Supabase actuel ne représente pas encore la hiérarchie métier cible :
+- aucune table `hotels` (entité hôtelière parente) ;
+- `establishments` ne porte pas de `hotel_id` ; il n'est donc pas possible de rattacher plusieurs bâtiments à un même hôtel ;
+- aucun référentiel `floors` ; `resources.building` et `resources.floor` restent des champs texte ;
+- les clés étrangères de réservation/tâche vers ressource contrôlent le workspace, mais pas encore le triplet ressource + établissement + workspace au niveau SQL.
+
+Les vérifications de cohérence exécutées sur les données distantes ont retourné zéro ligne pour les divergences réservation/ressource, tâche/ressource, groupe/établissement et les clés de ressources dupliquées. Le contrôle applicatif bloque désormais les écritures de réservation si la ressource n'appartient pas au workspace et à l'établissement sélectionnés. L'import cloud CardLock de plusieurs bâtiments est bloqué plutôt que de rattacher tous les bâtiments à un seul établissement.
+
+La migration relationnelle `Hotel → Establishment → Floor → Resource` reste à versionner et à tester avant déploiement. Aucun DDL de production n'a été appliqué dans cette livraison.
+
 ## Limites fonctionnelles non résolues
 
 Le schéma et le client sont alignés sur le socle PMS, mais le produit n'est pas encore synchronisé de bout en bout :
