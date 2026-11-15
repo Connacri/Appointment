@@ -300,28 +300,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('omnibook_stock_items');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const demoIds = new Set(initialStockItems.map((item) => item.id));
+        return (JSON.parse(saved) as StockItem[]).filter((item) => !demoIds.has(item.id));
       } catch (e) {
         console.error(e);
       }
     }
-    return initialStockItems;
+    return [];
   });
 
   const [stockMovements, setStockMovements] = useState<StockMovement[]>(() => {
     const saved = localStorage.getItem('omnibook_stock_movements');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const demoMovementIds = new Set(['sm_1', 'sm_2', 'sm_3']);
+        return (JSON.parse(saved) as StockMovement[]).filter((movement) => !demoMovementIds.has(movement.id));
       } catch (e) {
         console.error(e);
       }
     }
-    return [
-      { id: 'sm_1', timestamp: '2026-10-26 08:30', itemId: 'draps', itemName: 'Jeu de draps grand lit', delta: -4, reason: 'Rotation départ VIP', room: 'CV-101', user: 'Amina' },
-      { id: 'sm_2', timestamp: '2026-10-26 09:15', itemId: 'eau', itemName: 'Eau minérale 50 cl', delta: -6, reason: 'Réassort minibar', room: 'PL-305', user: 'Yacine' },
-      { id: 'sm_3', timestamp: '2026-10-25 17:00', itemId: 'shamp', itemName: 'Shampooing argan 30 ml', delta: 100, reason: 'Livraison fournisseur', user: 'Gouvernante' },
-    ];
+    return [];
   });
 
   // PMS Tasks & Deliveries
@@ -329,12 +327,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('omnibook_pms_tasks');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const demoIds = new Set(initialPmsTasks.map((task) => task.id));
+        return (JSON.parse(saved) as PmsTask[]).filter((task) => !demoIds.has(task.id));
       } catch (e) {
         console.error(e);
       }
     }
-    return initialPmsTasks;
+    return [];
   });
 
   // Dynamic Rates Matrix
@@ -347,16 +346,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error(e);
       }
     }
-    return {
-      'Double Standard': {
-        '2026-10-30': 10500,
-        '2026-10-31': 11000,
-      },
-      'Double Deluxe': {
-        '2026-10-30': 16000,
-        '2026-10-31': 17500,
-      },
-    };
+    return {};
   });
 
   // Operational inventory starts empty. Real records are hydrated from IndexedDB;
@@ -383,18 +373,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('omnibook_client_profile');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved) as ClientProfile;
+        if (parsed.id === 'clt_2026_9812' && parsed.email === 'alex.kaufmann@example.com') {
+          localStorage.removeItem('omnibook_client_profile');
+          return { id: '', name: '', email: '', phone: '', memberNumber: '', loyaltyPoints: 0 };
+        }
+        return parsed;
       } catch (e) {
         console.error(e);
       }
     }
     return {
-      id: 'clt_2026_9812',
-      name: 'Alexander Kaufmann',
-      email: 'alex.kaufmann@example.com',
-      phone: '+33 6 12 34 56 78',
-      memberNumber: 'CLT-2026-9812',
-      loyaltyPoints: 350,
+      id: '',
+      name: '',
+      email: '',
+      phone: '',
+      memberNumber: '',
+      loyaltyPoints: 0,
     };
   });
 
