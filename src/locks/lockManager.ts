@@ -94,8 +94,8 @@ export interface IssuedCardRecord {
 }
 
 const initialSettings: ProUsbLockSettings = {
-  companyName: 'Appointment Luxury Hotel & Clinic',
-  hotelName: 'Grand Hotel Oran',
+  companyName: '',
+  hotelName: '',
   skin: 'mxskin20.skn',
   checkinTime: '14:00:00',
   checkoutTime: '12:00:00',
@@ -106,7 +106,7 @@ const initialSettings: ProUsbLockSettings = {
   dontDisturbMode: true,
   lockAfterReleaseKnob: true,
   ignoreCoverFunction: false,
-  defaultBuildingNo: 1,
+  defaultBuildingNo: -1,
 };
 
 class LockManager {
@@ -339,14 +339,8 @@ class LockManager {
       this.saveIssuedCards();
     }
 
-    if (snapshot.buildings.length > 0) {
-      this.settings = {
-        ...this.settings,
-        hotelName: snapshot.buildings[0].name || this.settings.hotelName,
-        defaultBuildingNo: snapshot.buildings[0].no ?? this.settings.defaultBuildingNo,
-      };
-      this.saveSettings();
-    }
+    // BuildingInfo contains buildings, not the parent hotel's identity or a user-selected default.
+    // Do not copy the first building into hotelName/defaultBuildingNo.
 
     this.notifyStateListeners();
     console.log('[LockManager] CardLock.mdb imported:', snapshot.counts, snapshot.systemProfile);
