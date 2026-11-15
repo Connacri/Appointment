@@ -559,15 +559,13 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
       },
       sector: 'hotel',
       icon: 'Building',
-      resources: (roomsByBuilding.get(building.no) ?? []).map((room) => ({
-        ...resourceItemFromRoom(room),
-        establishmentId: id,
-      })),
+      resources: (roomsByBuilding.get(building.no) ?? []).map(resourceItemFromRoom),
     };
   });
 
   const roomsByNo = new Map<string, ImportedRoom[]>();
-  for (const room of rooms) {
+  const importableRooms = rooms.filter((room) => Number.isFinite(room.building) && room.building >= 0 && knownBuildingNumbers.has(room.building));
+  for (const room of importableRooms) {
     const key = normalizeRoomNo(room.roomNo);
     const matches = roomsByNo.get(key) ?? [];
     matches.push(room);
