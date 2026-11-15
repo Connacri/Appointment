@@ -57,6 +57,7 @@ into one establishment.
 - Offline mutations are durable and idempotent. Outbox pending is not synced; only a
   verified server ACK confirms synchronization.
 - Imports preserve source IDs/provenance and report orphan/ambiguous rows.
+- CardLock MDB source locations are centralized per platform in `src/locks/database/mdbPaths.ts` (Windows live VirtualStore path, Program Files copy path, and `D:\proUSB_DBBak` backups as exact paths; Android/web have no automatic exact local proUSB path). UI and import guidance must use these canonical exact paths; sandboxed runtimes cannot open arbitrary filesystem paths automatically and must rely on explicit user file/directory selection.
 
 ## 4. Mandatory change protocol
 
