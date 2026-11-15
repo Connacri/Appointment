@@ -409,11 +409,25 @@ export async function parseCardLockMdb(
   });
   if (skippedRoomsWithoutNumber > 0) warnings.push(`${skippedRoomsWithoutNumber} ligne(s) RoomInfo ignorée(s) : numéro absent.`);
 
-  // BuildingInfo is the only authoritative source for building entities.
-  const knownBuildingNumbers = new Set(buildings.map((building) => building.no));
+  // RoomInfo.BldNo is also authoritative evidence of a physical building.
+  // Recover missing BuildingInfo metadata without inventing buildings that have
+  // no source record at all; use a clearly identifiable fallback label.
+  const buildingsByNo = new Map<number, ImportedBuilding>();
+  for (const building of buildings) buildingsByNo.set(building.no, building);
+  const recoveredBuildingNumbers = [...new Set(rooms
+    .map((room) => room.building)
+    .filter((buildingNo) => Number.isInteger(buildingNo) && buildingNo >= 0))]
+    .filter((buildingNo) => !buildingsByNo.has(buildingNo));
+  for (const buildingNo of recoveredBuildingNumbers) {
+    buildingsByNo.set(buildingNo, { no: buildingNo, name: `Bâtiment ${buildingNo}` });
+  }
+  if (recoveredBuildingNumbers.length > 0) {
+    warnings.push(`${recoveredBuildingNumbers.length} bâtiment(s) récupéré(s) depuis RoomInfo.BldNo : métadonnées absentes de BuildingInfo.`);
+  }
+  const completeBuildings = [...buildingsByNo.values()].sort((a, b) => a.no - b.no);
+  const knownBuildingNumbers = new Set(completeBuildings.map((building) => building.no));
   const orphanRoomCount = rooms.filter((room) => room.building < 0 || !knownBuildingNumbers.has(room.building)).length;
-  if (orphanRoomCount > 0) warnings.push(`${orphanRoomCount} chambre(s) ignorée(s) : BldNo absent ou bâtiment inexistant dans BuildingInfo.`);
-  const completeBuildings = [...buildings].sort((a, b) => a.no - b.no);
+  if (orphanRoomCount > 0) warnings.push(`${orphanRoomCount} chambre(s) ignorée(s) : BldNo absent ou bâtiment inexistant dans BuildingInfo et RoomInfo.`);
 
   const rawGuests = read('GuestInfo', ['Guest', 'Guests', 'tblGuest']);
   const guests: ImportedGuest[] = rawGuests.map((r) => ({
@@ -522,11 +536,18 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 } {
   const { rooms, guests } = snapshot;
 
-  // BuildingInfo alone defines valid building groups. Orphan RoomInfo rows
-  // are excluded from the operational inventory and reported to the user.
+  // Preserve BuildingInfo names, but recover a missing building record when
+  // RoomInfo carries a valid BldNo. This is source-backed, not a fabricated site.
   const buildingByNo = new Map<number, ImportedBuilding>();
   for (const building of snapshot.buildings) {
-    if (Number.isFinite(building.no)) buildingByNo.set(building.no, building);
+    if (Number.isInteger(building.no) && building.no >= 0) buildingByNo.set(building.no, building);
+  }
+  const recoveredBuildingNumbers = [...new Set(rooms
+    .map((room) => room.building)
+    .filter((buildingNo) => Number.isInteger(buildingNo) && buildingNo >= 0))]
+    .filter((buildingNo) => !buildingByNo.has(buildingNo));
+  for (const buildingNo of recoveredBuildingNumbers) {
+    buildingByNo.set(buildingNo, { no: buildingNo, name: `Bâtiment ${buildingNo}` });
   }
   const buildings = [...buildingByNo.values()].sort((a, b) => a.no - b.no);
   const knownBuildingNumbers = new Set(buildings.map((building) => building.no));
