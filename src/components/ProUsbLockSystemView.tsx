@@ -900,6 +900,7 @@ export const ProUsbLockSystemView: React.FC = () => {
       // Propose d'importer aussi les chambres et séjours dans le planning/Gantt
       // afin de ne pas repartir d'une base vide.
       if (
+        snapshot.buildings.length > 0 ||
         snapshot.counts.rooms > 0 ||
         snapshot.counts.guests > 0
       ) {
