@@ -450,11 +450,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const demoGroupIds = new Set(initialResourceGroups.map((group) => group.id));
 
         const legacyBookings = readLegacy<TimelineBooking>('omnibook_bookings');
-        const sourceBookings = storedBookings.total > 0 ? storedBookings.data : legacyBookings;
-        const realBookings = sourceBookings.filter((booking) => !demoBookingIds.has(booking.id));
-        if (storedBookings.total === 0 && realBookings.length > 0) {
-          await indexedDb.replaceAll('bookings', realBookings);
-        }
+        const bookingById = new Map<string, TimelineBooking>();
+        for (const booking of legacyBookings) bookingById.set(booking.id, booking);
+        // IndexedDB wins on conflicts; legacy localStorage contributes only missing IDs.
+        for (const booking of storedBookings.data) bookingById.set(booking.id, booking);
+        const realBookings = [...bookingById.values()].filter((booking) => !demoBookingIds.has(booking.id));
 
         const legacyGroups = readLegacy<ResourceGroup>('omnibook_resource_groups')
           .filter((group) => !demoGroupIds.has(group.id));
@@ -465,14 +465,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const legacyResources = legacyGroups.flatMap((group) =>
           group.resources.map((resource) => ({ ...resource, groupId: group.id }))
         );
-        const sourceResources = (storedResources.total > 0
-          ? storedResources.data
-          : legacyResources).filter((resource) => !demoResourceIds.has(resource.id))
+        const resourceById = new Map<string, ResourceItem>();
+        for (const resource of legacyResources) resourceById.set(resource.id, resource);
+        for (const resource of storedResources.data) resourceById.set(resource.id, resource);
+        const sourceResources = [...resourceById.values()]
+          .filter((resource) => !demoResourceIds.has(resource.id))
           .map((resource) => ({
             ...resource,
             groupId: resource.groupId ?? legacyGroupByResourceId.get(resource.id),
           }));
-        const groupMetadata = (storedGroups.length > 0 ? storedGroups : legacyGroups)
+        const groupById = new Map<string, ResourceGroup>();
+        for (const group of legacyGroups) groupById.set(group.id, group);
+        for (const group of storedGroups) groupById.set(group.id, group);
+        const groupMetadata = [...groupById.values()]
           .filter((group) => !demoGroupIds.has(group.id))
           .map((group) => ({ ...group, resources: [] as ResourceItem[] }));
 
@@ -504,11 +509,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
         hydratedGroups = [...hydratedGroups, ...fallbackGroups.values()];
-        if (storedResources.total === 0 && sourceResources.length > 0) {
-          await indexedDb.replaceAll('resources', sourceResources);
-        }
-        if (storedGroups.length === 0 && groupMetadata.length > 0) {
-          await indexedDb.replaceStore('resourceGroups', groupMetadata);
+        // Commit the merged, demo-filtered migration before deleting legacy snapshots.
+        await Promise.all([
+          indexedDb.replaceAll('bookings', realBookings),
+          indexedDb.replaceAll('resources', sourceResources),
+          indexedDb.replaceStore('resourceGroups', groupMetadata),
+        ]);
+        try {
+          localStorage.removeItem('omnibook_bookings');
+          localStorage.removeItem('omnibook_resource_groups');
+        } catch (cleanupError) {
+          console.warn('[AppContext] Legacy snapshot cleanup failed after IndexedDB migration:', cleanupError);
         }
         if (cancelled) return;
         setBookings(realBookings);
