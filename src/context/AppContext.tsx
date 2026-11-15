@@ -441,17 +441,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
   }, [language]);
 
-  // Save bookings & resources to localStorage & IndexedDB
+  // IndexedDB is the durable store. localStorage is best-effort legacy fallback only:
+  // quota failures must never prevent the IndexedDB write from running.
   useEffect(() => {
-    localStorage.setItem('omnibook_bookings', JSON.stringify(bookings));
-    // Atomic replacement keeps IndexedDB and its fallback aligned, including deletions.
+    try {
+      localStorage.setItem('omnibook_bookings', JSON.stringify(bookings));
+    } catch (error) {
+      console.warn('[AppContext] Booking snapshot exceeds localStorage quota; continuing with IndexedDB:', error);
+    }
+    // Atomic replacement keeps IndexedDB aligned, including deletions.
     void indexedDb.replaceAll('bookings', bookings).catch((error) => {
       console.error('[AppContext] Failed to persist bookings to IndexedDB:', error);
     });
   }, [bookings]);
 
   useEffect(() => {
-    localStorage.setItem('omnibook_resource_groups', JSON.stringify(resourceGroups));
+    try {
+      localStorage.setItem('omnibook_resource_groups', JSON.stringify(resourceGroups));
+    } catch (error) {
+      console.warn('[AppContext] Resource snapshot exceeds localStorage quota; continuing with IndexedDB:', error);
+    }
     const resources = resourceGroups.flatMap((g) => g.resources);
     void indexedDb.replaceAll('resources', resources).catch((error) => {
       console.error('[AppContext] Failed to persist resources to IndexedDB:', error);
