@@ -113,6 +113,8 @@ export interface ResourceGroup {
 
 export interface ResourceItem {
   id: string;
+  /** Persisted parent group; not an establishment/building foreign key. */
+  groupId?: string;
   name: string; // e.g. "101", "Purple Room", "Dr. Martin - Cabinet 1"
   type: string; // e.g. "Single Room", "Cardiologie", "Spa Zen"
   sector: SectorType;
