@@ -669,7 +669,8 @@ export function mdbSnapshotToPlanning(snapshot: MdbSnapshot): {
 
 function resourceIdFromRoom(r: ImportedRoom): string {
   const building = r.building >= 0 ? String(r.building) : 'unassigned';
-  return `mdb-rm-${building}-${normalizeRoomNo(r.roomNo)}`;
+  const floor = r.floor >= 0 ? String(r.floor) : 'unknown-floor';
+  return `mdb-rm-${building}-${floor}-${normalizeRoomNo(r.roomNo)}`;
 }
 
 function normalizeHousekeepingStatus(value: string): ResourceItem['housekeepingStatus'] {
