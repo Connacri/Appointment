@@ -243,10 +243,10 @@ export const SpaManagementView: React.FC = () => {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
-        a.guestName.toLowerCase().includes(q) ||
+        (a.guestName ?? '').toLowerCase().includes(q) ||
         (a.guestRoom && a.guestRoom.toLowerCase().includes(q)) ||
-        a.treatmentName.toLowerCase().includes(q) ||
-        a.therapistName.toLowerCase().includes(q)
+        (a.treatmentName ?? '').toLowerCase().includes(q) ||
+        (a.therapistName ?? '').toLowerCase().includes(q)
       );
     }
     return true;

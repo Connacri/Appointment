@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   Calendar,
@@ -41,6 +41,15 @@ import { CardCreationProgressModal } from './CardCreationProgressModal';
 import { ALGERIA_69_WILAYAS } from '../data/algeriaWilayas';
 import { HOSPITALITY_MEAL_PLANS, DIETARY_PREFERENCES } from '../data/mealPlans';
 import { KeyRound, Loader2, Utensils, UtensilsCrossed, ShieldAlert, Award, FileSpreadsheet } from 'lucide-react';
+import { normalizeBookingText } from '../utils/bookingText';
+
+/**
+ * Imported or legacy bookings can miss text fields (guest name, e-mail, alert
+ * text). Reading them directly throws during render, which unmounts the whole
+ * React tree and leaves a blank page — exactly what happened right after a
+ * booking was confirmed. Every booking-side string comparison goes through here.
+ */
+const bookingText = normalizeBookingText;
 
 export const BookingModal: React.FC = () => {
   const {
@@ -136,17 +145,26 @@ export const BookingModal: React.FC = () => {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   useEffect(() => {
-    if (selectedBooking || currentRole === 'client') return;
+    if (!isOpen || selectedBooking || currentRole === 'client') return;
     const name = guestName.trim().toLocaleLowerCase();
     const email = guestEmail.trim().toLocaleLowerCase();
     if (name.length < 4 && !email.includes('@')) { setMatchedGuestHistory(null); return; }
+    // Imported or legacy bookings may miss these fields (or store dates as Date
+    // objects). Normalise them before comparing: an exception raised here escapes
+    // the effect, unmounts the React tree and leaves a blank page right after a
+    // booking is confirmed, because this effect re-runs as soon as `bookings` changes.
+    const sortKey = (booking: TimelineBooking) => {
+      const raw: unknown = booking.lastModifiedAt ?? booking.startDate;
+      if (raw instanceof Date) return String(raw.getTime());
+      return typeof raw === 'string' ? raw : '';
+    };
     const previous = bookings
       .filter((booking) => booking.sector === activeDomain)
       .filter((booking) =>
-        (email && booking.guestEmail?.trim().toLocaleLowerCase() === email) ||
-        (name.length >= 4 && booking.guestName?.trim().toLocaleLowerCase() === name)
+        (email && bookingText(booking.guestEmail) === email) ||
+        (name.length >= 4 && bookingText(booking.guestName) === name)
       )
-      .sort((a, b) => (b.lastModifiedAt || b.startDate).localeCompare(a.lastModifiedAt || a.startDate))[0];
+      .sort((a, b) => sortKey(b).localeCompare(sortKey(a)))[0];
     if (!previous) { setMatchedGuestHistory(null); return; }
     setMatchedGuestHistory(previous);
     setGuestName(previous.guestName || guestName);
@@ -163,8 +181,8 @@ export const BookingModal: React.FC = () => {
     setWilayaOfOrigin(previous.wilayaOfOrigin || previous.wilaya || '31 - Oran');
     setIdDocumentExpiryDate(previous.idDocumentExpiryDate || '');
     setVisaExpiryDate(previous.visaExpiryDate || '');
-    setGuestAlertsText((previous.guestAlerts || []).map((alert) => alert.text).join('\\n'));
-  }, [guestName, guestEmail, bookings, activeDomain, currentRole, selectedBooking]);
+    setGuestAlertsText((previous.guestAlerts || []).map((alert) => alert?.text ?? '').join('\\n'));
+  }, [isOpen, guestName, guestEmail, bookings, activeDomain, currentRole, selectedBooking]);
 
   const documentExpiryWarning = (date?: string) => {
     if (!date) return null;
@@ -205,6 +223,22 @@ export const BookingModal: React.FC = () => {
   const [cardsCreatedCount, setCardsCreatedCount] = useState(0);
   const [cardResult, setCardResult] = useState<CardResult | null>(null);
   const [usbConnected, setUsbConnected] = useState<boolean>(lockManager.getStatus() === 'connected');
+
+  // A confirmed booking must never leak into the next sheet: reopening the dialog
+  // used to show the previous confirmation (and its step indicator) instead of a
+  // fresh form. Reset the confirmation, the step and the card counters on open.
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      setBookingConfirmation(null);
+      setBookingStep(0);
+      setCardsCreatedCount(0);
+      setRequestedCardCount(2);
+      setCardResult(null);
+      setConflictError(null);
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
 
   // Mirror the encoder connection state while the modal is open.
   useEffect(() => {
@@ -881,7 +915,7 @@ export const BookingModal: React.FC = () => {
         </div>
 
         {/* Modal Body */}
-        {bookingConfirmation ? <section className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 dark:bg-slate-950"><div className="mx-auto max-w-xl rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-7 shadow-xl space-y-5"><div className="text-center"><div className="mx-auto mb-4 h-16 w-16 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 flex items-center justify-center ring-8 ring-indigo-50 dark:ring-indigo-950/50"><CheckCircle2 size={32}/></div><p className="text-xs font-bold uppercase tracking-[.16em] text-emerald-700 dark:text-emerald-300">Réservation enregistrée</p><h4 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white">Confirmation du séjour</h4><p className="mt-1 text-sm text-slate-500">Le dossier est créé. Vous pouvez maintenant encoder les cartes de chambre.</p></div><div className="rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Référence de réservation</p><p className="font-mono text-xl font-bold">{bookingConfirmation.id}</p></div><div className="grid grid-cols-2 gap-3 text-left">{[['Client',bookingConfirmation.guestName],['Chambre',bookingConfirmation.resourceName],['Arrivée',bookingConfirmation.startDate + ' • ' + (bookingConfirmation.checkInTime || '14:00')],['Départ',bookingConfirmation.endDate + ' • ' + (bookingConfirmation.checkOutTime || '12:00')],['Occupants',(bookingConfirmation.adults || 1) + ' adulte(s) • ' + (bookingConfirmation.children || 0) + ' enfant(s)'],['Montant',String(bookingConfirmation.totalPrice ?? totalPrice) + ' ' + paymentCurrency]].map(([label,value])=><div key={label} className="rounded-xl border border-slate-100 dark:border-slate-800 p-3"><p className="text-[10px] text-slate-500">{label}</p><p className="text-xs font-bold break-words">{value}</p></div>)}</div><div className="rounded-2xl border border-violet-200 dark:border-violet-900 bg-violet-50 dark:bg-violet-950/30 p-4 space-y-3"><div className="flex items-center justify-between gap-3"><div><p className="font-bold text-violet-950 dark:text-violet-200">Cartes de chambre RFID</p><p className="text-xs mt-1 text-violet-800/80 dark:text-violet-300">Quantité demandée : {bookingConfirmation.cardCountRequested}</p></div><div className="text-right"><p className="text-2xl font-black text-violet-700 dark:text-violet-300">{cardsCreatedCount}</p><p className="text-[10px] text-violet-700 dark:text-violet-300">carte(s) encodée(s)</p></div></div><div className="h-2 rounded-full bg-violet-100 dark:bg-violet-900 overflow-hidden"><div className="h-full rounded-full bg-violet-600 transition-all" style={{width:`${Math.min(100, (cardsCreatedCount / Math.max(1, bookingConfirmation.cardCountRequested)) * 100)}%`}} /></div><div className="flex flex-col sm:flex-row gap-2"><button type="button" onClick={() => void handleCreateRoomCard()} disabled={isCreatingCard || !usbConnected || cardsCreatedCount >= bookingConfirmation.cardCountRequested} className="flex-1 min-h-11 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold text-sm flex items-center justify-center gap-2"><KeyRound size={16}/>{isCreatingCard ? `Encodage… ${Math.round(cardProgress)}%` : cardsCreatedCount >= bookingConfirmation.cardCountRequested ? 'Cartes demandées encodées' : 'Encoder les cartes'}</button><div className="flex items-center gap-2 rounded-xl border border-violet-200 dark:border-violet-800 px-3"><label htmlFor="room-card-count-confirm" className="text-xs font-semibold text-violet-900 dark:text-violet-200">Nombre</label><input id="room-card-count-confirm" type="number" min={1} max={20} value={requestedCardCount} onChange={(e) => { const value=Math.max(1,Math.min(20,Number(e.target.value)||1)); setRequestedCardCount(value); setBookingConfirmation((current:any) => current ? {...current,cardCountRequested:value} : current); }} className="w-14 h-11 rounded-lg border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 px-1 text-center text-sm font-bold" aria-label="Nombre de cartes à encoder"/></div></div><p className="text-[11px] text-violet-800 dark:text-violet-300">{usbConnected ? 'Encodeur proUSB connecté : prêt à encoder.' : 'Connectez l’encodeur proUSB dans Serrures pour créer les cartes.'} Les cartes ne sont comptabilisées qu’après un retour positif de l’encodeur.</p></div><button type="button" onClick={closeModal} className="w-full rounded-xl bg-slate-950 dark:bg-white text-white dark:text-slate-950 font-bold py-3.5">Terminer</button></div></section> : (
+        {bookingConfirmation ? <section className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 dark:bg-slate-950"><div className="mx-auto max-w-xl rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-7 shadow-xl space-y-5"><div className="text-center"><div className="mx-auto mb-4 h-16 w-16 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 flex items-center justify-center ring-8 ring-indigo-50 dark:ring-indigo-950/50"><CheckCircle2 size={32}/></div><p className="text-xs font-bold uppercase tracking-[.16em] text-emerald-700 dark:text-emerald-300">Réservation enregistrée</p><h4 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white">Confirmation du séjour</h4><p className="mt-1 text-sm text-slate-500">Le dossier est créé. Vous pouvez maintenant encoder les cartes de chambre.</p></div><div className="rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Référence de réservation</p><p className="font-mono text-xl font-bold">{bookingConfirmation.id}</p></div><div className="grid grid-cols-2 gap-3 text-left">{[['Client',bookingConfirmation.guestName],['Chambre',bookingConfirmation.resourceName],['Arrivée',bookingConfirmation.startDate + ' • ' + (bookingConfirmation.checkInTime || '14:00')],['Départ',bookingConfirmation.endDate + ' • ' + (bookingConfirmation.checkOutTime || '12:00')],['Occupants',(bookingConfirmation.adults || 1) + ' adulte(s) • ' + (bookingConfirmation.children || 0) + ' enfant(s)'],['Montant',String(bookingConfirmation.totalPrice ?? totalPrice) + ' ' + paymentCurrency]].map(([label,value])=><div key={label} className="rounded-xl border border-slate-100 dark:border-slate-800 p-3"><p className="text-[10px] text-slate-500">{label}</p><p className="text-xs font-bold break-words">{value}</p></div>)}</div><div className="rounded-2xl border border-violet-200 dark:border-violet-900 bg-violet-50 dark:bg-violet-950/30 p-4 space-y-3"><div className="flex items-center justify-between gap-3"><div><p className="font-bold text-violet-950 dark:text-violet-200">Cartes de chambre RFID</p><p className="text-xs mt-1 text-violet-800/80 dark:text-violet-300">Quantité demandée : {bookingConfirmation.cardCountRequested}</p></div><div className="text-right"><p className="text-2xl font-black text-violet-700 dark:text-violet-300">{cardsCreatedCount}</p><p className="text-[10px] text-violet-700 dark:text-violet-300">carte(s) encodée(s)</p></div></div><div className="h-2 rounded-full bg-violet-100 dark:bg-violet-900 overflow-hidden"><div className="h-full rounded-full bg-violet-600 transition-all" style={{width:`${Math.min(100, (cardsCreatedCount / Math.max(1, bookingConfirmation.cardCountRequested)) * 100)}%`}} /></div><div className="flex flex-col sm:flex-row gap-2"><button type="button" onClick={() => void handleCreateRoomCard()} disabled={isCreatingCard || !usbConnected || cardsCreatedCount >= bookingConfirmation.cardCountRequested} className="flex-1 min-h-11 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold text-sm flex items-center justify-center gap-2"><KeyRound size={16}/>{isCreatingCard ? `Encodage… ${Math.round(cardProgress)}%` : cardsCreatedCount >= bookingConfirmation.cardCountRequested ? 'Cartes demandées encodées' : 'Encoder les cartes'}</button><div className="flex items-center gap-2 rounded-xl border border-violet-200 dark:border-violet-800 px-3"><label htmlFor="room-card-count-confirm" className="text-xs font-semibold text-violet-900 dark:text-violet-200">Nombre</label><input id="room-card-count-confirm" type="number" min={1} max={20} value={requestedCardCount} onChange={(e) => { const value=Math.max(1,Math.min(20,Number(e.target.value)||1)); setRequestedCardCount(value); setBookingConfirmation((current:any) => current ? {...current,cardCountRequested:value} : current); }} className="w-14 h-11 rounded-lg border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 px-1 text-center text-sm font-bold" aria-label="Nombre de cartes à encoder"/></div></div><p className="text-[11px] text-violet-800 dark:text-violet-300">{usbConnected ? 'Encodeur proUSB connecté : prêt à encoder.' : 'Connectez l’encodeur proUSB dans Serrures pour créer les cartes.'} Les cartes ne sont comptabilisées qu’après un retour positif de l’encodeur.</p></div><div className="sticky bottom-0 z-10 -mx-1 mt-1 rounded-xl bg-white/95 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur dark:bg-slate-900/95"><button type="button" onClick={closeModal} className="w-full rounded-xl bg-slate-950 dark:bg-white text-white dark:text-slate-950 font-bold py-3.5">Terminer</button></div></div></section> : (
         <form onSubmit={handleSubmit} className="flex-1 min-h-0 p-3 sm:p-7 overflow-y-auto overscroll-contain space-y-6 text-sm pb-8 bg-[#f5f7fb] dark:bg-slate-950">
           <div className="rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between gap-2"><div><p className="text-sm font-bold text-slate-900 dark:text-white">Parcours de réservation</p><p className="text-[11px] text-slate-500">Progression du dossier</p></div><span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">{bookingStep + 1}/3</span></div>
@@ -1827,10 +1861,10 @@ export const BookingModal: React.FC = () => {
               <textarea rows={2} value={guestAlertsText} onChange={(e) => setGuestAlertsText(e.target.value)} placeholder="Un point par ligne : préférence, anomalie constatée, demande particulière..." className="w-full rounded-xl border border-sky-200 dark:border-sky-800 bg-white/90 dark:bg-slate-950 p-3 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/25 focus:border-sky-500"/>
               <p className="text-[11px] leading-relaxed text-sky-800 dark:text-sky-300">Ces observations restent dans l'historique et seront rappelées lors d'une prochaine réservation de ce client.</p>
             </div>
-            {bookings.filter((booking) => booking.id !== selectedBooking?.id && guestName.trim() && (booking.guestName.toLowerCase() === guestName.trim().toLowerCase() || (guestEmail && booking.guestEmail.toLowerCase() === guestEmail.trim().toLowerCase())) && (booking.guestAlerts?.length || booking.forgottenItems?.some((item) => item.status === 'stored'))).length > 0 && (
+            {bookings.filter((booking) => booking.id !== selectedBooking?.id && guestName.trim() && (bookingText(booking.guestName) === guestName.trim().toLowerCase() || (guestEmail && bookingText(booking.guestEmail) === guestEmail.trim().toLowerCase())) && (booking.guestAlerts?.length || booking.forgottenItems?.some((item) => item?.status === 'stored'))).length > 0 && (
               <div className="md:col-span-2 rounded-xl border border-violet-200 dark:border-violet-900 bg-violet-50 dark:bg-violet-950/20 p-3">
                 <p className="text-xs font-bold text-violet-900 dark:text-violet-200 mb-2">Historique à signaler pour ce client</p>
-                {bookings.filter((booking) => booking.id !== selectedBooking?.id && guestName.trim() && (booking.guestName.toLowerCase() === guestName.trim().toLowerCase() || (guestEmail && booking.guestEmail.toLowerCase() === guestEmail.trim().toLowerCase()))).flatMap((booking) => [...(booking.guestAlerts || []).map((alert) => alert.text), ...(booking.forgottenItems || []).filter((item) => item.status === 'stored').map((item) => `Objet oublié : ${item.description}`)]).map((item, index) => <p key={index} className="text-xs text-violet-800 dark:text-violet-300">• {item}</p>)}
+                {bookings.filter((booking) => booking.id !== selectedBooking?.id && guestName.trim() && (bookingText(booking.guestName) === guestName.trim().toLowerCase() || (guestEmail && bookingText(booking.guestEmail) === guestEmail.trim().toLowerCase()))).flatMap((booking) => [...(booking.guestAlerts || []).map((alert) => alert?.text ?? ''), ...(booking.forgottenItems || []).filter((item) => item?.status === 'stored' && item?.description).map((item) => `Objet oublié : ${item.description}`)]).filter(Boolean).map((item, index) => <p key={index} className="text-xs text-violet-800 dark:text-violet-300">• {item}</p>)}
               </div>
             )}
             </div>

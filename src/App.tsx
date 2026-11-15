@@ -119,7 +119,6 @@ class VideoHubErrorBoundary extends React.Component<
         <div className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-3 bg-slate-50 p-6 text-center dark:bg-slate-950">
           <div className="text-base font-semibold text-slate-900 dark:text-white">HackTube n’a pas pu être affiché</div>
           <p className="max-w-xl text-sm text-slate-600 dark:text-slate-400">Une erreur JavaScript a interrompu le chargement de cet onglet. Rechargez l’application pour relancer son module.</p>
-          <pre className="max-w-full overflow-auto rounded-lg bg-slate-200/70 p-3 text-left text-xs text-rose-700 dark:bg-slate-900 dark:text-rose-300">{this.state.error.message}</pre>
           <button type="button" onClick={() => window.location.reload()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500">Recharger l’application</button>
         </div>
       );
@@ -128,10 +127,72 @@ class VideoHubErrorBoundary extends React.Component<
   }
 }
 
+/**
+ * Safety net for the working area: a rendering exception used to unmount the
+ * whole React tree and leave a blank page behind the dialogs. The boundary keeps
+ * the shell, explains what happened and offers a retry without a full reload.
+ */
+class ViewErrorBoundary extends React.Component<
+  { children: React.ReactNode; language: string },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[App] View rendering failed:', error, info.componentStack);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+
+    const isFr = this.props.language === 'fr';
+    const isAr = this.props.language === 'ar';
+    return (
+      <div
+        role="alert"
+        className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-3 bg-[rgb(var(--pms-canvas))] p-6 text-center"
+      >
+        <div className="text-base font-semibold text-slate-900 dark:text-white">
+          {isFr ? 'Cet écran n’a pas pu être affiché' : isAr ? 'تعذّر عرض هذه الشاشة' : 'This screen could not be displayed'}
+        </div>
+        <p className="max-w-xl text-sm text-slate-600 dark:text-slate-400">
+          {isFr
+            ? 'Vos données sont intactes. Réessayez, puis rechargez l’application si le problème persiste.'
+            : isAr
+            ? 'بياناتك سليمة. أعد المحاولة، ثم أعد تحميل التطبيق إذا استمرت المشكلة.'
+            : 'Your data is intact. Try again, then reload the app if the problem persists.'}
+        </p>
+        <pre className="max-w-full overflow-auto rounded-lg bg-slate-200/70 p-3 text-left text-xs text-rose-700 dark:bg-slate-900 dark:text-rose-300">{this.state.error.message}</pre>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => this.setState({ error: null })}
+            className="min-h-10 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            {isFr ? 'Réessayer' : isAr ? 'إعادة المحاولة' : 'Try again'}
+          </button>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="min-h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
+          >
+            {isFr ? 'Recharger l’application' : isAr ? 'إعادة تحميل التطبيق' : 'Reload the app'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
+
 const MainLayout: React.FC = () => {
   const {
     activeView,
     setActiveView,
+    language,
     isIndexedDBOpen,
     setIsIndexedDBOpen,
     isAboutModalOpen,
@@ -227,41 +288,43 @@ const MainLayout: React.FC = () => {
         <div className="relative z-0 flex-1 flex flex-col h-full overflow-hidden min-w-0">
 
           <main key={activeView} className="flex-1 flex flex-col overflow-hidden relative pms-fade">
-            <Suspense fallback={<ViewFallback />}>
-              {activeView === 'planning' && (
-                <>
-                  <PlanningTimeline />
-                  <LegendBar />
-                </>
-              )}
+            <ViewErrorBoundary language={language}>
+              <Suspense fallback={<ViewFallback />}>
+                {activeView === 'planning' && (
+                  <>
+                    <PlanningTimeline />
+                    <LegendBar />
+                  </>
+                )}
 
-              {activeView === 'tasks' && <TasksManagementView />}
+                {activeView === 'tasks' && <TasksManagementView />}
 
-              {activeView === 'stock' && <StockManagementView />}
+                {activeView === 'stock' && <StockManagementView />}
 
-              {activeView === 'pricing' && <DynamicPricingView />}
+                {activeView === 'pricing' && <DynamicPricingView />}
 
-              {activeView === 'analytics' && <BookingAnalyticsView />}
+                {activeView === 'analytics' && <BookingAnalyticsView />}
 
-              {activeView === 'billing' && <BillingInvoicingView />}
+                {activeView === 'billing' && <BillingInvoicingView />}
 
-              {activeView === 'my_bookings' && <MyBookingsView />}
+                {activeView === 'my_bookings' && <MyBookingsView />}
 
-              {activeView === 'housekeeping' && <HousekeepingView />}
+                {activeView === 'housekeeping' && <HousekeepingView />}
 
-              {activeView === 'lost_property' && <LostPropertyView />}
+                {activeView === 'lost_property' && <LostPropertyView />}
 
-              {activeView === 'channels' && <ChannelManagerView />}
+                {activeView === 'channels' && <ChannelManagerView />}
 
-              {activeView === 'reports' && <ReportsView />}
+                {activeView === 'reports' && <ReportsView />}
 
-              {activeView === 'prousb' && <ProUsbLockSystemView />}
+                {activeView === 'prousb' && <ProUsbLockSystemView />}
 
-              {activeView === 'spa' && <SpaManagementView />}
+                {activeView === 'spa' && <SpaManagementView />}
 
-              {activeView === 'help' && <HelpCenterView />}
+                {activeView === 'help' && <HelpCenterView />}
 
-            </Suspense>
+              </Suspense>
+            </ViewErrorBoundary>
           </main>
 
           {/* Keep HackTube mounted after first use: changing workspace views must not

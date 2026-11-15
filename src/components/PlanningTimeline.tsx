@@ -29,8 +29,10 @@ import {
   ListChecks,
   Check,
   Undo2,
+  SearchX,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { normalizeBookingText } from '../utils/bookingText';
 import { ResourceGroup, ResourceItem, TimelineBooking, BookingStatus } from '../types/booking';
 import { statusConfig } from './LegendBar';
 import { getTranslation } from '../i18n/translations';
@@ -51,6 +53,7 @@ export const PlanningTimeline: React.FC = () => {
     bookings,
     setBookings,
     searchQuery,
+    setSearchQuery,
     currentDomain,
     currentRole,
     resourceGroups,
@@ -535,14 +538,17 @@ export const PlanningTimeline: React.FC = () => {
         let matchingResources = grp.resources;
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
+          // Imported inventory and legacy bookings may carry missing fields; a
+          // thrown exception here would unmount the whole view, so compare text safely.
+          const text = normalizeBookingText;
           matchingResources = matchingResources.filter(
             (r) =>
-              r.name.toLowerCase().includes(q) ||
-              r.type.toLowerCase().includes(q) ||
+              text(r.name).includes(q) ||
+              text(r.type).includes(q) ||
               bookings.some(
                 (b) =>
                   b.resourceId === r.id &&
-                  (b.guestName.toLowerCase().includes(q) || b.guestEmail.toLowerCase().includes(q))
+                  (text(b.guestName).includes(q) || text(b.guestEmail).includes(q))
               )
           );
         }
@@ -645,6 +651,20 @@ export const PlanningTimeline: React.FC = () => {
     }
     setCollapsedFloors(next);
   };
+
+  // Recovery action when no room row can be rendered: the workspace must never stay
+  // blank behind a dialog, and clearing the filters must not require a page reload.
+  const resetTimelineFilters = () => {
+    setSearchQuery('');
+    setSelectedEstablishmentId('all');
+    setCollapsedGroups({});
+    setCollapsedFloors({});
+  };
+
+  const hasDomainInventory = useMemo(
+    () => resourceGroups.some((grp) => grp.sector === currentDomain),
+    [resourceGroups, currentDomain]
+  );
 
   // Calculate day-by-day availability per group
   const groupAvailability = useMemo(() => {
@@ -1287,6 +1307,52 @@ export const PlanningTimeline: React.FC = () => {
       )}
 
       {/* Main Gantt Matrix: Left Sticky Resource Tree + Right Scrollable Day Matrix */}
+      {/* Empty state: an active filter must never leave the workspace blank */}
+      {filteredGroups.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-[85] flex items-center justify-center p-4 pt-16">
+          <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] p-5 text-center shadow-xl">
+            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+              <SearchX size={20} />
+            </div>
+            <p className="text-sm font-bold text-slate-900 dark:text-white">
+              {hasDomainInventory
+                ? language === 'fr'
+                  ? 'Aucune chambre ne correspond aux filtres actifs'
+                  : language === 'ar'
+                    ? 'لا توجد غرفة تطابق عوامل التصفية النشطة'
+                    : 'No room matches the active filters'
+                : language === 'fr'
+                  ? 'Aucune chambre importée'
+                  : language === 'ar'
+                    ? 'لم يتم استيراد أي غرفة'
+                    : 'No room imported yet'}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              {hasDomainInventory
+                ? language === 'fr'
+                  ? 'La recherche, le bâtiment sélectionné ou les groupes repliés masquent tout l’inventaire.'
+                  : language === 'ar'
+                    ? 'البحث أو المبنى المحدد أو المجموعات المطوية يخفي كل المخزون.'
+                    : 'The search, the selected building or the collapsed groups hide the whole inventory.'
+                : language === 'fr'
+                  ? 'Importez la base de l’établissement pour afficher le planning.'
+                  : language === 'ar'
+                    ? 'استورد قاعدة المؤسسة لعرض المخطط الزمني.'
+                    : 'Import the property database to display the timeline.'}
+            </p>
+            {hasDomainInventory && (
+              <button
+                type="button"
+                onClick={resetTimelineFilters}
+                className="mt-4 min-h-10 w-full rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
+              >
+                {language === 'fr' ? 'Réinitialiser les filtres' : language === 'ar' ? 'إعادة تعيين عوامل التصفية' : 'Reset filters'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div
         ref={scrollContainerRef}
         onClickCapture={onTimelineClickCapture}

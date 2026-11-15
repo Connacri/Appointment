@@ -51,7 +51,7 @@ export const StockManagementView: React.FC = () => {
     if (selectedCategory !== 'all' && item.category !== selectedCategory) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      return item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q);
+      return (item.name ?? '').toLowerCase().includes(q) || (item.category ?? '').toLowerCase().includes(q);
     }
     return true;
   });

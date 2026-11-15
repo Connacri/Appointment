@@ -160,8 +160,8 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
     ? pendingArrivals.filter(
         (b) =>
           b.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          b.guestName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          b.resourceName.toLowerCase().includes(searchQuery.toLowerCase())
+          (b.guestName ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (b.resourceName ?? '').toLowerCase().includes(searchQuery.toLowerCase())
       )
     : pendingArrivals;
 

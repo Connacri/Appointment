@@ -23,6 +23,18 @@ index.html
 demand with `React.lazy` inside a `Suspense` boundary (`ViewFallback`), and modals are only
 mounted while open. Adding a view means adding it to the lazy map, never to the eager imports.
 
+### View error boundary
+
+The working area is wrapped in `ViewErrorBoundary` (also in `src/App.tsx`). A rendering
+exception thrown by a screen must never unmount the shell: the boundary keeps the header and
+the navigation, states that local data is intact, and offers "Try again" and "Reload".
+
+Stored records can come from older versions or CardLock imports and miss text or date fields.
+Every comparison over `bookings`, `resourceGroups` or stock items therefore goes through
+`normalizeBookingText` (`src/utils/bookingText.ts`) instead of calling `.toLowerCase()`
+directly: an exception thrown during render is what turned a confirmed booking into a blank
+page.
+
 ## 2. Source layout
 
 | Path | Responsibility |

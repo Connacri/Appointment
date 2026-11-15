@@ -491,7 +491,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     checkInTime = '14:00',
     checkOutTime = '12:00'
   ): boolean => {
-    const toMinutes = (date: string, time: string) => {
+    const toMinutes = (date: string | undefined, time: string | undefined) => {
+      if (typeof date !== 'string' || typeof time !== 'string') return Number.NaN;
       const [year, month, day] = date.split('-').map(Number);
       const [hour, minute] = time.split(':').map(Number);
       return new Date(year, month - 1, day, hour, minute).getTime();
@@ -504,6 +505,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (b.resourceId !== resourceId || b.id === excludeBookingId || b.status === 'cancelled') return false;
       const existingStart = toMinutes(b.startDate, b.checkInTime || '14:00');
       const existingEnd = toMinutes(b.endDate, b.checkOutTime || '12:00') + (b.sector === 'hotel' ? turnoverMs : 0);
+      // Imported/legacy records without usable dates occupy no slot: skip them
+      // instead of throwing inside the submit handler, which silently blocked
+      // every new booking made on the same room.
+      if (!Number.isFinite(existingStart) || !Number.isFinite(existingEnd)) return false;
       return requestedStart < existingEnd && requestedEnd > existingStart;
     });
   };

@@ -11,7 +11,7 @@ export const LostPropertyView: React.FC = () => {
   const [search, setSearch] = useState('');
   const canManage = ['admin', 'manager', 'receptionist', 'staff'].includes(currentRole);
   const rows = useMemo(() => bookings.flatMap((booking: TimelineBooking): { booking: TimelineBooking; item: any }[] => {
-    const matches = !search.trim() || booking.guestName.toLowerCase().includes(search.toLowerCase()) || booking.resourceName.toLowerCase().includes(search.toLowerCase());
+    const matches = !search.trim() || (booking.guestName ?? '').toLowerCase().includes(search.toLowerCase()) || (booking.resourceName ?? '').toLowerCase().includes(search.toLowerCase());
     if (!matches) return [];
     if (tab === 'forgotten') return (booking.forgottenItems || []).filter((item) => item.status === 'stored').map((item) => ({ booking, item }));
     if (tab === 'valuables') return (booking.valuablesAtReception || []).filter((item) => item.status === 'held' || item.status === 'forgotten').map((item) => ({ booking, item }));
