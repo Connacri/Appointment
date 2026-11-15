@@ -15,6 +15,14 @@
 
 ## Limites fonctionnelles explicites
 
+### Persistance locale (IndexedDB v5)
+
+- Les réservations et ressources sont hydratées depuis IndexedDB avant toute écriture, afin d'éviter qu'un état React initial vide n'écrase les données existantes.
+- Les snapshots complets de réservations et de ressources ne sont plus dupliqués dans `localStorage`.
+- Les métadonnées des groupes de ressources sont conservées dans le store `resourceGroups`, séparément des ressources.
+- Les cartes proUSB émises sont migrées vers le store `issuedCards`; les journaux et paramètres proUSB restent encore dans les clés locales historiques.
+- Les IDs de démonstration connus sont exclus lors de la migration locale. Aucun hôtel ou établissement n'est créé automatiquement.
+
 Cette livraison ne doit pas être interprétée comme une synchronisation bidirectionnelle opérationnelle :
 
 1. L'Outbox actuelle est consommée par aucune tâche réseau. Le compteur Push indique uniquement les événements locaux prêts à être traités.
