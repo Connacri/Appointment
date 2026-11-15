@@ -15,6 +15,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  data-contract:
+    name: Data contract change-set validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout full history for PR/push diff
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate data-contract change set
+        run: npm run data-contract:check
+
   typecheck:
     name: TypeScript typecheck
     runs-on: ubuntu-latest
@@ -91,6 +109,7 @@ jobs:
           TYPECHECK_RESULT: ${{ needs.typecheck.result }}
           TEST_RESULT: ${{ needs.regression-tests.result }}
           BUILD_RESULT: ${{ needs.production-build.result }}
+          DATA_CONTRACT_RESULT: ${{ needs.data-contract.result }}
         run: |
           {
             echo "## CI quality checks"
@@ -100,9 +119,10 @@ jobs:
             echo "| TypeScript typecheck | $TYPECHECK_RESULT |"
             echo "| Regression tests | $TEST_RESULT |"
             echo "| Production build | $BUILD_RESULT |"
+            echo "| Data contract | $DATA_CONTRACT_RESULT |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "$TYPECHECK_RESULT" != "success" || "$TEST_RESULT" != "success" || "$BUILD_RESULT" != "success" ]]; then
+          if [[ "$TYPECHECK_RESULT" != "success" || "$TEST_RESULT" != "success" || "$BUILD_RESULT" != "success" || "$DATA_CONTRACT_RESULT" != "success" ]]; then
             echo "::error::At least one required quality check did not succeed."
             exit 1
           fi
