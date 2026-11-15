@@ -27,6 +27,36 @@ test('keeps every source building and only source RoomInfo rooms', () => {
   assert.equal(result.resourceGroups[0].resources.length, 1);
   assert.equal(result.resourceGroups[1].resources.length, 1);
 });
+test('preserves hyphenated RoomInfo room numbers and keeps their identities distinct', () => {
+  const source = snapshot({
+    buildings: [{ no: 1, name: 'Bâtiment principal' }],
+    rooms: [
+      { building: 1, floor: 1, roomNo: '1-101', type: 'Double', status: '', price: '', cardCount: 0, maxCards: 1 },
+      { building: 1, floor: 1, roomNo: '101', type: 'Single', status: '', price: '', cardCount: 0, maxCards: 1 },
+      { building: 1, floor: 2, roomNo: '1-101', type: 'Suite', status: '', price: '', cardCount: 0, maxCards: 1 },
+    ],
+    guests: [
+      { roomNo: '1-1-1-101', name: 'Chambre avec tiret', comeTime: '2026-11-05T14:00:00.000Z', goTime: '2026-11-07T12:00:00.000Z', cardId: 'H1', flag: '' },
+      { roomNo: '1-1-101', name: 'Chambre numérique', comeTime: '2026-11-05T14:00:00.000Z', goTime: '2026-11-07T12:00:00.000Z', cardId: 'N1', flag: '' },
+      { roomNo: '1-2-1-101', name: 'Même libellé autre étage', comeTime: '2026-11-05T14:00:00.000Z', goTime: '2026-11-07T12:00:00.000Z', cardId: 'H2', flag: '' },
+    ],
+    counts: { cards: 0, guests: 3, rooms: 3, openings: 0 },
+  });
+
+  const result = mdbSnapshotToPlanning(source);
+  const resources = result.resourceGroups[0].resources;
+  assert.deepEqual(resources.map((room) => room.name), ['1-101', '101', '1-101']);
+  assert.deepEqual(resources.map((room) => room.id), [
+    'mdb-rm-1-1-1-101',
+    'mdb-rm-1-1-101',
+    'mdb-rm-1-2-1-101',
+  ]);
+  assert.deepEqual(
+    result.bookings.map((booking) => booking.resourceId),
+    ['mdb-rm-1-1-1-101', 'mdb-rm-1-1-101', 'mdb-rm-1-2-1-101'],
+  );
+});
+
 test('preserves buildings declared in BuildingInfo even when RoomInfo is empty', () => {
   const result = mdbSnapshotToPlanning(snapshot({ rooms: [], guests: [], counts: { cards: 0, guests: 0, rooms: 0, openings: 0 } }));
   assert.deepEqual(result.resourceGroups.map((group) => group.id), ['mdb-bld-1', 'mdb-bld-2']);
