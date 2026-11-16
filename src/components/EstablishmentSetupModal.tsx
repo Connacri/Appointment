@@ -814,7 +814,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                 </p>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 break-all">
                   {cardLockPaths.liveMdbPath && <p><strong>Base vivante (chemin exact, {cardLockPaths.platform}) :</strong> <span className="font-mono">{cardLockPaths.liveMdbPath}</span></p>}
-                  {cardLockPaths.programFilesMdbPath && <p><strong>Copie Program Files (souvent figée) :</strong> <span className="font-mono">{cardLockPaths.programFilesMdbPath}</span></p>}
+                  {null}
                   {!cardLockPaths.liveMdbPath && <p>{cardLockPaths.accessNote}</p>}
                 </div>
                 <input ref={mdbInputRef} type="file" accept=".mdb,application/x-msaccess" onChange={handleMdbImport} className="hidden" />

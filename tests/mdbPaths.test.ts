@@ -17,10 +17,8 @@ test('defines exact Windows CardLock MDB paths', () => {
     WINDOWS_CARDLOCK_MDB_PATHS.liveMdbPath,
     '%LOCALAPPDATA%\\VirtualStore\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb',
   );
-  assert.equal(
-    WINDOWS_CARDLOCK_MDB_PATHS.programFilesMdbPath,
-    'C:\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb',
-  );
+  // No separate Program Files path is kept; the live path is the one to use.
+  assert.equal(WINDOWS_CARDLOCK_MDB_PATHS.programFilesMdbPath, WINDOWS_CARDLOCK_MDB_PATHS.liveMdbPath);
   assert.equal(WINDOWS_CARDLOCK_MDB_PATHS.backupDirectoryPath, 'D:\\proUSB_DBBak');
 });
 

@@ -18,7 +18,7 @@ export interface CardLockMdbPlatformPaths {
   platform: MdbPlatform;
   /** Exact path to the live CardLock.mdb for this platform, or null when none. */
   liveMdbPath: string | null;
-  /** Exact path to the frozen/original Program Files copy, when applicable. */
+  /** Legacy field retained for compatibility; set to the live MDB path to use (no separate Program Files path kept). */
   programFilesMdbPath: string | null;
   /** Exact path to the automatic backup directory, when applicable. */
   backupDirectoryPath: string | null;
@@ -29,7 +29,6 @@ export interface CardLockMdbPlatformPaths {
 /**
  * Exact Windows paths for proUSB Hotel Lock System.
  * - Live DB: written by CardLock.exe under UAC virtualization (VirtualStore).
- * - Program Files copy: often frozen; never treat as the current source.
  * - Backups: automatic copies written by proUSB.
  */
 export const WINDOWS_CARDLOCK_MDB_PATHS: CardLockMdbPlatformPaths = {
@@ -37,10 +36,10 @@ export const WINDOWS_CARDLOCK_MDB_PATHS: CardLockMdbPlatformPaths = {
   liveMdbPath:
     '%LOCALAPPDATA%\\VirtualStore\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb',
   programFilesMdbPath:
-    'C:\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb',
+    '%LOCALAPPDATA%\\VirtualStore\\Program Files (x86)\\ProUSB SOFTWARE\\proUSBHotelLockSystem\\CardLock.mdb',
   backupDirectoryPath: 'D:\\proUSB_DBBak',
   accessNote:
-    'Windows (proUSB desktop): the live database is the VirtualStore copy. Select it manually in the file picker; the browser cannot read this path directly.',
+    'Windows (proUSB desktop): utilisez la base vivante (VirtualStore) au chemin exact. Sélectionnez-la manuellement dans le sélecteur de fichiers ; le navigateur ne peut pas lire ce chemin directement.',
 };
 
 /**
@@ -111,6 +110,7 @@ export function getLiveCardLockMdbPath(platform: MdbPlatform = getMdbPlatform())
   return getCardLockMdbPaths(platform).liveMdbPath;
 }
 
+/** @deprecated No separate Program Files path is kept; returns the live MDB path to use. */
 export function getProgramFilesCardLockMdbPath(platform: MdbPlatform = getMdbPlatform()): string | null {
   return getCardLockMdbPaths(platform).programFilesMdbPath;
 }

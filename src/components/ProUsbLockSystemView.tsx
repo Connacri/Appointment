@@ -1448,9 +1448,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                     <>
                       <strong>Windows redirige les écritures de CardLock.exe vers VirtualStore.</strong> La base réellement utilisée (chemin exact, plateforme Windows) est{' '}
                       <code className="font-mono break-all">{cardLockPaths.liveMdbPath}</code>
-                      {cardLockPaths.programFilesMdbPath ? (
-                        <> — pas la copie figée de <code className="font-mono break-all">{cardLockPaths.programFilesMdbPath}</code>.</>
-                      ) : null}{' '}
+                      {' '}
                       Le script détecte tout seul la copie vivante (la plus récente), ne demande aucun droit administrateur, puis relit chaque ligne et affiche l'<strong>ID</strong> et l'<strong>Operator Code</strong> obtenus.
                     </>
                   ) : (
@@ -2191,9 +2189,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                   <>
                     Importez la base <strong>vivante</strong> (chemin exact, plateforme {cardLockPaths.platform}) :{' '}
                     <code className="font-mono break-all">{cardLockPaths.liveMdbPath}</code>
-                    {cardLockPaths.programFilesMdbPath ? (
-                      <> — la copie de <code className="font-mono break-all">{cardLockPaths.programFilesMdbPath}</code> peut rester figée.</>
-                    ) : null}{' '}
+                    {' '}
                     L'app réutilise alors les mêmes chambres, clients et cartes que le logiciel d'origine et écrit les cartes système avec le <strong>vrai code site</strong> lu dans la base. Sans base importée, l'app reste autonome.
                   </>
                 ) : (

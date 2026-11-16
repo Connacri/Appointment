@@ -241,17 +241,17 @@ const tutorials: Tutorial[] = [
     summary: { fr: 'Importer bâtiments, chambres, séjours et cartes sans inventer de chambres.', en: 'Import buildings, rooms, stays and cards without inventing rooms.', ar: 'استيراد المباني والغرف والإقامات والبطاقات دون إنشاء غرف وهمية.' },
     prerequisites: {
       fr: [
-        `Windows (chemin exact) : base vivante ${WINDOWS_CARDLOCK_MDB_PATHS.liveMdbPath} ; copie Program Files ${WINDOWS_CARDLOCK_MDB_PATHS.programFilesMdbPath} ; sauvegardes ${WINDOWS_CARDLOCK_MDB_PATHS.backupDirectoryPath}.`,
+        `Windows (chemin exact à utiliser) : ${WINDOWS_CARDLOCK_MDB_PATHS.liveMdbPath} ; sauvegardes ${WINDOWS_CARDLOCK_MDB_PATHS.backupDirectoryPath}.`,
         `Android (chemin exact automatique : aucun) : ${ANDROID_CARDLOCK_MDB_PATHS.accessNote}`,
         `Web hors Windows (chemin exact automatique : aucun) : ${WEB_CARDLOCK_MDB_PATHS.accessNote}`,
       ],
       en: [
-        `Windows (exact path): live database ${WINDOWS_CARDLOCK_MDB_PATHS.liveMdbPath}; Program Files copy ${WINDOWS_CARDLOCK_MDB_PATHS.programFilesMdbPath}; backups ${WINDOWS_CARDLOCK_MDB_PATHS.backupDirectoryPath}.`,
+        `Windows (exact path to use): ${WINDOWS_CARDLOCK_MDB_PATHS.liveMdbPath}; backups ${WINDOWS_CARDLOCK_MDB_PATHS.backupDirectoryPath}.`,
         `Android (no automatic exact path): ${ANDROID_CARDLOCK_MDB_PATHS.accessNote}`,
         `Web outside Windows (no automatic exact path): ${WEB_CARDLOCK_MDB_PATHS.accessNote}`,
       ],
       ar: [
-        `ويندوز (المسار الدقيق): القاعدة الحية ${WINDOWS_CARDLOCK_MDB_PATHS.liveMdbPath}؛ نسخة Program Files ${WINDOWS_CARDLOCK_MDB_PATHS.programFilesMdbPath}؛ النسخ الاحتياطية ${WINDOWS_CARDLOCK_MDB_PATHS.backupDirectoryPath}.`,
+        `ويندوز (المسار الدقيق المطلوب استخدامه): ${WINDOWS_CARDLOCK_MDB_PATHS.liveMdbPath}؛ النسخ الاحتياطية ${WINDOWS_CARDLOCK_MDB_PATHS.backupDirectoryPath}.`,
         `أندرويد (لا يوجد مسار تلقائي دقيق): ${ANDROID_CARDLOCK_MDB_PATHS.accessNote}`,
         `الويب خارج ويندوز (لا يوجد مسار تلقائي دقيق): ${WEB_CARDLOCK_MDB_PATHS.accessNote}`,
       ]

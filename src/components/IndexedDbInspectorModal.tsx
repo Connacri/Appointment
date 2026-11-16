@@ -323,9 +323,9 @@ export const IndexedDbInspectorModal: React.FC<{
   const cardLockPaths = useMemo(() => getCardLockMdbPaths(), []);
   const localPathText = useMemo(() => {
     if (cardLockPaths.liveMdbPath) {
-      if (language === 'en') return `Live path (exact, ${cardLockPaths.platform}): ${cardLockPaths.liveMdbPath}${cardLockPaths.programFilesMdbPath ? ` — Program Files copy: ${cardLockPaths.programFilesMdbPath}` : ''}`;
-      if (language === 'ar') return `المسار الحي (دقيق، ${cardLockPaths.platform}): ${cardLockPaths.liveMdbPath}${cardLockPaths.programFilesMdbPath ? ` — نسخة Program Files: ${cardLockPaths.programFilesMdbPath}` : ''}`;
-      return `Base vivante (chemin exact, ${cardLockPaths.platform}) : ${cardLockPaths.liveMdbPath}${cardLockPaths.programFilesMdbPath ? ` — Copie Program Files : ${cardLockPaths.programFilesMdbPath}` : ''}`;
+      if (language === 'en') return `Database path to use (exact, ${cardLockPaths.platform}): ${cardLockPaths.liveMdbPath}`;
+      if (language === 'ar') return `مسار القاعدة المطلوب استخدامه (دقيق، ${cardLockPaths.platform}): ${cardLockPaths.liveMdbPath}`;
+      return `Chemin de la base à utiliser (exact, ${cardLockPaths.platform}) : ${cardLockPaths.liveMdbPath}`;
     }
     return cardLockPaths.accessNote;
   }, [cardLockPaths, language]);
