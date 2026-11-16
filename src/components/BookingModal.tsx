@@ -76,6 +76,7 @@ export const BookingModal: React.FC = () => {
 
   const isEditing = !!selectedBooking;
   const isOpen = isNewBookingModalOpen || isEditing;
+  const isRoomCellBooking = !isEditing && !!newBookingInitialSlot?.resourceId;
 
   // Active domain: locked to currentDomain for new bookings, or the booking's own sector when editing.
   // Never mix domains: each domain has its own dedicated reservation sheet!
@@ -884,8 +885,15 @@ export const BookingModal: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 id="booking-dialog-title" className="font-bold text-slate-900 dark:text-white text-base leading-tight">
-                  {sheetTitle[language] || sheetTitle.en}
+                <h3
+                  id="booking-dialog-title"
+                  className={isRoomCellBooking
+                    ? 'font-extrabold text-slate-900 dark:text-white text-lg leading-tight'
+                    : 'font-bold text-slate-900 dark:text-white text-base leading-tight'}
+                >
+                  {isRoomCellBooking
+                    ? (currentResource?.name || resourceNameFallback || domainResources.find((r) => r.id === resourceId)?.name || '')
+                    : (sheetTitle[language] || sheetTitle.en)}
                 </h3>
                 {isEditing && selectedBooking && (
                   <span
@@ -1004,32 +1012,34 @@ export const BookingModal: React.FC = () => {
           )}
 
           {/* 1. SECTOR RESOURCE ASSIGNMENT (Strictly scoped to activeDomain) */}
-          <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-1">
-            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
-              <span>
-                {language === 'fr'
-                  ? `${domainCfg.unitTerm.fr} assignée :`
-                  : language === 'ar'
-                  ? `${domainCfg.unitTerm.ar} المخصصة:`
-                  : `Assigned ${domainCfg.unitTerm.en}:`}
-              </span>
-              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-normal">
-                {domainResources.length} {language === 'fr' ? 'disponibles dans ce domaine' : 'available in this domain'}
-              </span>
-            </label>
-            <select
-              value={resourceId}
-              onChange={(e) => setResourceId(e.target.value)}
-              className="w-full h-11 px-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
-            >
-              {domainResources.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name} — {r.type} ({r.pricePerDay > 0 ? `${r.pricePerDay} € / unité` : 'Inclus / Gratuit'})
-                  {r.capacity ? ` • Capacité: ${r.capacity}p` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!isRoomCellBooking && (
+            <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-1">
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                <span>
+                  {language === 'fr'
+                    ? `${domainCfg.unitTerm.fr} assignée :`
+                    : language === 'ar'
+                    ? `${domainCfg.unitTerm.ar} المخصصة:`
+                    : `Assigned ${domainCfg.unitTerm.en}:`}
+                </span>
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-normal">
+                  {domainResources.length} {language === 'fr' ? 'disponibles dans ce domaine' : 'available in this domain'}
+                </span>
+              </label>
+              <select
+                value={resourceId}
+                onChange={(e) => setResourceId(e.target.value)}
+                className="w-full h-11 px-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+              >
+                {domainResources.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} — {r.type} ({r.pricePerDay > 0 ? `${r.pricePerDay} € / unité` : 'Inclus / Gratuit'})
+                    {r.capacity ? ` • Capacité: ${r.capacity}p` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* 2. BENEFICIARY / CLIENT / PATIENT IDENTITY */}
           <div id="booking-step-guest" className="space-y-4 scroll-mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm">
@@ -1927,53 +1937,75 @@ export const BookingModal: React.FC = () => {
           <div id="booking-step-confirm" className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 scroll-mt-4 backdrop-blur-md px-3 sm:px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-end gap-2 z-10">
             {activeDomain === 'hotel' && (
               <div className="flex items-center gap-2 w-full sm:w-auto sm:mr-auto">
-                <button
-                  type="button"
-                  onClick={() => void handleCreateRoomCard()}
-                  disabled={isCreatingCard}
-                  className={`min-h-11 flex-1 sm:flex-none justify-center px-3 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-violet-500 ${
-                    isCreatingCard
-                      ? 'bg-slate-300 text-slate-600 cursor-wait'
-                      : usbConnected
-                        ? 'bg-violet-600 hover:bg-violet-500 text-white cursor-pointer'
-                        : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
-                  }`}
-                  title={
-                    usbConnected
-                      ? 'Encoder la carte client proUSB pour cette chambre et ce séjour'
-                      : "Encodeur proUSB non connecté — branchez-le d'abord dans l'onglet Serrures"
-                  }
-                >
-                  {isCreatingCard ? (
-                    <div className="relative w-4 h-4 shrink-0 mr-1">
-                      <svg className="w-4 h-4 -rotate-90" viewBox="0 0 36 36">
-                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="4" className="opacity-25" />
-                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${Math.max(5, cardProgress)}, 100`} />
-                      </svg>
+                {isEditing && selectedBooking?.status === 'confirmed' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void handleCreateRoomCard()}
+                      disabled={isCreatingCard}
+                      className={`min-h-11 flex-1 sm:flex-none justify-center px-3 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-violet-500 ${
+                        isCreatingCard
+                          ? 'bg-slate-300 text-slate-600 cursor-wait'
+                          : usbConnected
+                            ? 'bg-violet-600 hover:bg-violet-500 text-white cursor-pointer'
+                            : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+                      }`}
+                      title={
+                        usbConnected
+                          ? 'Encoder la carte client proUSB pour cette chambre et ce s?jour'
+                          : "Encodeur proUSB non connect? - branchez-le d'abord dans l'onglet Serrures"
+                      }
+                    >
+                      {isCreatingCard ? (
+                        <div className="relative w-4 h-4 shrink-0 mr-1">
+                          <svg className="w-4 h-4 -rotate-90" viewBox="0 0 36 36">
+                            <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                            <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${Math.max(5, cardProgress)}, 100`} />
+                          </svg>
+                        </div>
+                      ) : (
+                        <KeyRound size={14} />
+                      )}
+                      <span>
+                        {isCreatingCard
+                          ? `Encodage. ${Math.round(cardProgress)}%`
+                          : language === 'fr'
+                            ? 'Cr?er la carte client'
+                            : language === 'ar'
+                              ? '????? ????? ??????'
+                              : 'Create Guest Card'}
+                      </span>
+                    </button>
+                    <div className="flex items-center gap-1.5 rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/70 dark:bg-violet-950/30 px-2 py-1.5">
+                      <label htmlFor="room-card-count" className="text-[10px] font-semibold text-violet-800 dark:text-violet-200 whitespace-nowrap">Cartes</label>
+                      <input id="room-card-count" type="number" min={1} max={20} value={requestedCardCount} onChange={(e) => setRequestedCardCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-14 h-11 rounded-md border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 px-1 text-center text-xs font-bold text-slate-900 dark:text-white" aria-label="Nombre de cartes ? cr?er" />
+                      <span className="text-[10px] text-violet-700 dark:text-violet-300">{occupantCount} occupant(s)</span>
                     </div>
-                  ) : (
-                    <KeyRound size={14} />
-                  )}
-                  <span>
-                    {isCreatingCard
-                      ? `Encodage… ${Math.round(cardProgress)}%`
-                      : language === 'fr'
-                        ? 'Créer la carte client'
-                        : language === 'ar'
-                          ? 'إنشاء بطاقة الضيف'
-                          : 'Create Guest Card'}
-                  </span>
-                </button>
-                <div className="flex items-center gap-1.5 rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/70 dark:bg-violet-950/30 px-2 py-1.5"><label htmlFor="room-card-count" className="text-[10px] font-semibold text-violet-800 dark:text-violet-200 whitespace-nowrap">Cartes</label><input id="room-card-count" type="number" min={1} max={20} value={requestedCardCount} onChange={(e) => setRequestedCardCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-14 h-11 rounded-md border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 px-1 text-center text-xs font-bold text-slate-900 dark:text-white" aria-label="Nombre de cartes à créer"/><span className="text-[10px] text-violet-700 dark:text-violet-300">{occupantCount} occupant(s)</span></div>
-                {!usbConnected && (
-                  <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                    <AlertCircle size={12} />
-                    {language === 'fr'
-                      ? 'Encodeur non connecté'
-                      : language === 'ar'
-                        ? 'المحول غير متصل'
-                        : 'Encoder not connected'}
-                  </span>
+                    {!usbConnected && (
+                      <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                        <AlertCircle size={12} />
+                        {language === 'fr' ? 'Encodeur non connect?' : language === 'ar' ? '?????? ??? ????' : 'Encoder not connected'}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <div className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                      {language === 'fr' ? 'R?capitulatif du s?jour' : language === 'ar' ? '???? ???????' : 'Stay summary'}
+                    </p>
+                    <p className="text-xs text-slate-700 dark:text-slate-200 mt-0.5 leading-relaxed">{priceBreakdown}</p>
+                    <p className="text-sm font-black text-slate-900 dark:text-white mt-1 tabular-nums">
+                      {totalPrice === 0
+                        ? (language === 'fr' ? 'Gratuit (0.00)' : 'Free (0.00)')
+                        : `${priceInPaymentCurrency.toLocaleString('fr-FR')} ${currencySymbols[paymentCurrency] || paymentCurrency}`}
+                    </p>
+                    {totalPrice > 0 && (
+                      <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                        {priceInDzd.toLocaleString('fr-FR')} DA ? contre-valeur DZD
+                        {paymentCurrency === 'DA' ? ` (${totalPrice.toLocaleString('fr-FR')} ? base)` : ''}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             )}
