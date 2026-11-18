@@ -8,13 +8,11 @@ import {
   Database,
   Eye,
   EyeOff,
-  Flame,
   Globe,
   Key,
   RefreshCw,
   Server,
   ShieldCheck,
-  Trash2,
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { useApp, type CloudRecoveryReport } from '../context/AppContext';
@@ -26,16 +24,6 @@ import {
   resetSupabaseRuntimeConfig,
   saveSupabaseRuntimeConfig,
 } from '../services/supabase/supabaseClient';
-import {
-  clearFirebaseCloudConfig,
-  isFirebaseFirestoreConfigured,
-  isFirebaseRtdbConfigured,
-  parseFirebaseConfigInput,
-  readFirebaseCloudConfig,
-  saveFirebaseCloudConfig,
-  testFirebaseCloudConnection,
-  type FirebaseCloudConfig,
-} from '../services/cloud/firebaseRecovery';
 import type { EstablishmentProfile } from '../types/establishment';
 
 interface CloudConfigPanelProps {
@@ -50,11 +38,11 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
     activeWorkspaceId,
     setActiveWorkspaceId,
     refreshWorkspaces,
-    triggerCloudRecovery,
+    cloudSyncStatus,
+    forceSupabaseSync,
   } = useApp();
 
   const initialSupabase = useMemo(() => readSupabaseRuntimeConfig(), []);
-  const initialFirebase = useMemo(() => readFirebaseCloudConfig(), []);
 
   // Supabase state
   const [supabaseUrl, setSupabaseUrl] = useState(initialSupabase.url);
@@ -68,32 +56,21 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
     text: string;
   }>({ tone: 'idle', text: '' });
 
-  // Firebase (Firestore / RTDB) state
-  const [fbConfig, setFbConfig] = useState<FirebaseCloudConfig>(initialFirebase);
-  const [showFbApiKey, setShowFbApiKey] = useState(false);
-  const [showJsonImporter, setShowJsonImporter] = useState(false);
-  const [jsonSnippet, setJsonSnippet] = useState('');
-  const [firebaseStatus, setFirebaseStatus] = useState<{
-    tone: 'idle' | 'busy' | 'success' | 'error';
-    text: string;
-  }>({ tone: 'idle', text: '' });
-
-  // Global cloud recovery feedback
+  // Global cloud sync feedback
   const [isRecovering, setIsRecovering] = useState(false);
   const [recoveryNotice, setRecoveryNotice] = useState<{
     tone: 'idle' | 'success' | 'warning' | 'error';
     text: string;
   }>({ tone: 'idle', text: '' });
 
-  const firestoreConfigured = isFirebaseFirestoreConfigured(fbConfig);
-  const rtdbConfigured = isFirebaseRtdbConfigured(fbConfig);
   const supabaseConfigured = Boolean(supabaseUrl.trim() && (supabasePublishableKey.trim() || supabaseAnonKey.trim()));
 
   const formatReportNotice = (report: CloudRecoveryReport) => {
     if (report.skippedOffline) {
       return { tone: 'warning' as const, text: getTranslation('cloudStatusOffline', language) };
     }
-    const total =
+    const pushed = report.pushedCount ?? 0;
+    const pulled =
       report.recoveredGroupsCount +
       report.recoveredBookingsCount +
       report.recoveredTasksCount +
@@ -101,21 +78,28 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
     if (report.recoveredProfile && onRecoveredProfile) {
       onRecoveredProfile(report.recoveredProfile);
     }
-    if (report.warnings.length > 0 && total === 0) {
+    if (report.warnings.length > 0 && pushed === 0 && pulled === 0) {
       return { tone: 'error' as const, text: report.warnings.join(' · ') };
     }
-    if (report.sources.length === 0 || (total === 0 && !report.recoveredProfile)) {
+    if (report.sources.length === 0) {
       return { tone: 'warning' as const, text: getTranslation('cloudRecoveryNone', language) };
     }
-    const summary = getTranslation('cloudRecoverySummary', language)
+    const summary = getTranslation('supabaseSyncSummary', language)
       .replace('{sources}', report.sources.join(' + '))
+      .replace('{pushed}', String(pushed))
       .replace('{groups}', String(report.recoveredGroupsCount))
       .replace('{bookings}', String(report.recoveredBookingsCount))
       .replace('{tasks}', String(report.recoveredTasksCount))
       .replace('{stock}', String(report.recoveredStockCount));
+    if (report.warnings.length > 0 || (report.pushFailedCount ?? 0) > 0) {
+      return {
+        tone: 'warning' as const,
+        text: `${summary}${report.warnings.length ? ` (${report.warnings.join(' · ')})` : ''}`,
+      };
+    }
     return {
       tone: 'success' as const,
-      text: report.warnings.length > 0 ? `${summary} (${report.warnings.join(' · ')})` : summary,
+      text: summary,
     };
   };
 
@@ -123,12 +107,12 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
     setIsRecovering(true);
     try {
       await refreshWorkspaces();
-      const report = await triggerCloudRecovery();
+      const report = await forceSupabaseSync();
       setRecoveryNotice(formatReportNotice(report));
     } catch (err) {
       setRecoveryNotice({
         tone: 'error',
-        text: err instanceof Error ? err.message : 'Erreur lors de la récupération cloud.',
+        text: err instanceof Error ? err.message : 'Erreur lors de la synchronisation Supabase.',
       });
     } finally {
       setIsRecovering(false);
@@ -201,98 +185,28 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
     await runImmediateRecovery();
   };
 
-  const handleParseFirebaseJson = () => {
-    try {
-      const parsed = parseFirebaseConfigInput(jsonSnippet);
-      setFbConfig((prev) => ({ ...prev, ...parsed }));
-      setJsonSnippet('');
-      setShowJsonImporter(false);
-      setFirebaseStatus({
-        tone: 'success',
-        text:
-          language === 'fr'
-            ? 'Configuration Firebase extraite. Cliquez sur « Enregistrer & récupérer » pour activer.'
-            : 'Firebase config parsed. Click "Save & recover" to activate.',
-      });
-    } catch (err) {
-      setFirebaseStatus({
-        tone: 'error',
-        text: err instanceof Error ? err.message : 'JSON Firebase invalide.',
-      });
-    }
-  };
-
-  const handleTestFirebase = async () => {
-    if (!firestoreConfigured && !rtdbConfigured) {
-      setFirebaseStatus({
-        tone: 'error',
-        text:
-          language === 'fr'
-            ? 'Renseignez un Project ID (Firestore) ou une Database URL (Realtime Database).'
-            : 'Provide a Project ID (Firestore) or Database URL (Realtime Database).',
-      });
-      return;
-    }
-    setFirebaseStatus({
-      tone: 'busy',
-      text: language === 'fr' ? 'Test Firestore / Realtime Database…' : 'Testing Firestore / Realtime Database…',
-    });
-    const res = await testFirebaseCloudConnection(fbConfig);
-    const messages: string[] = [];
-    let anyError = false;
-    if (res.firestore.configured) {
-      if (res.firestore.ok) {
-        messages.push(`Firestore OK (${res.firestore.latencyMs ?? 0} ms)`);
-      } else {
-        anyError = true;
-        messages.push(`Firestore : ${res.firestore.error ?? 'échec'}`);
-      }
-    }
-    if (res.realtimeDatabase.configured) {
-      if (res.realtimeDatabase.ok) {
-        messages.push(`Realtime DB OK (${res.realtimeDatabase.latencyMs ?? 0} ms)`);
-      } else {
-        anyError = true;
-        messages.push(`Realtime DB : ${res.realtimeDatabase.error ?? 'échec'}`);
-      }
-    }
-    setFirebaseStatus({
-      tone: anyError ? 'error' : 'success',
-      text: messages.join(' · '),
-    });
-  };
-
-  const handleSaveFirebase = async () => {
-    if (!firestoreConfigured && !rtdbConfigured) {
-      setFirebaseStatus({
-        tone: 'error',
-        text:
-          language === 'fr'
-            ? 'Renseignez un Project ID (Firestore) ou une Database URL (Realtime Database).'
-            : 'Provide a Project ID (Firestore) or Database URL (Realtime Database).',
-      });
-      return;
-    }
-    saveFirebaseCloudConfig(fbConfig);
-    setFirebaseStatus({
-      tone: 'success',
-      text: language === 'fr' ? 'Configuration Firebase enregistrée.' : 'Firebase configuration saved.',
-    });
-    await runImmediateRecovery();
-  };
-
-  const handleClearFirebase = () => {
-    clearFirebaseCloudConfig();
-    setFbConfig({});
-    setFirebaseStatus({
-      tone: 'idle',
-      text: language === 'fr' ? 'Configuration Firebase effacée.' : 'Firebase configuration cleared.',
-    });
-  };
+  const syncBusy = isRecovering || cloudSyncStatus.isSyncing;
+  const supabaseStateText = syncBusy
+    ? getTranslation('supabaseSyncing', language)
+    : cloudSyncStatus.phase === 'synced'
+      ? getTranslation('supabaseStatusSynced', language)
+      : cloudSyncStatus.phase === 'offline'
+        ? getTranslation('cloudStatusOffline', language)
+        : cloudSyncStatus.phase === 'error'
+          ? getTranslation('supabaseStatusError', language)
+          : cloudSyncStatus.phase === 'pending'
+            ? getTranslation('supabaseStatusPending', language).replace('{count}', String(cloudSyncStatus.pendingCount))
+            : cloudSyncStatus.phase === 'no_workspace'
+              ? getTranslation('supabaseStatusNoWorkspace', language)
+              : cloudSyncStatus.phase === 'unauthenticated'
+                ? getTranslation('supabaseStatusAuthRequired', language)
+                : supabaseConfigured
+                  ? getTranslation('cloudStatusConfigured', language)
+                  : getTranslation('cloudStatusNotConfigured', language);
 
   return (
     <div className="space-y-5 pms-fade text-xs">
-      {/* Intro & Auto-Detection Banner */}
+      {/* Intro & Bidirectional Auto-Sync + Force Sync Banner */}
       <section className="rounded-2xl border border-blue-200 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-950/25 p-4 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="min-w-0 space-y-1">
@@ -307,72 +221,84 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
 
           <button
             type="button"
-            disabled={isRecovering || isOffline}
+            data-testid="cloud-panel-force-sync-btn"
+            disabled={syncBusy || isOffline}
             onClick={() => void runImmediateRecovery()}
             className="min-h-11 px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
-            <RefreshCw size={15} className={isRecovering ? 'animate-spin' : ''} />
+            <RefreshCw size={15} className={syncBusy ? 'animate-spin' : ''} />
             <span>
-              {isRecovering
+              {syncBusy
                 ? getTranslation('cloudRecovering', language)
-                : getTranslation('cloudDetectAndRecoverBtn', language)}
+                : getTranslation('supabaseForceSyncFullBtn', language)}
             </span>
           </button>
         </div>
 
-        {/* Cloud Detection Status Grid (Non-color-only: Icon + Status Text + Engine Name) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        {/* Cloud & Local Detection Status Grid (Non-color-only: Icon + Status Text + Engine Name) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5 flex items-center gap-2.5 min-w-0">
-            <Cloud size={16} className={supabaseConfigured ? 'text-emerald-600 dark:text-emerald-400 shrink-0' : 'text-slate-400 shrink-0'} />
+            <Database size={16} className="text-blue-600 dark:text-blue-400 shrink-0" />
             <div className="min-w-0 flex-1">
-              <div className="font-bold text-slate-900 dark:text-white truncate">Supabase</div>
+              <div className="font-bold text-slate-900 dark:text-white truncate">IndexedDB (Local)</div>
               <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
-                {supabaseConfigured ? (
-                  <>
-                    <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span>{getTranslation('cloudStatusConfigured', language)}</span>
-                  </>
-                ) : (
-                  <span>{getTranslation('cloudStatusNotConfigured', language)}</span>
-                )}
+                <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>
+                  {cloudSyncStatus.pendingCount > 0
+                    ? getTranslation('supabaseSyncPendingRemain', language).replace('{pending}', String(cloudSyncStatus.pendingCount))
+                    : language === 'fr'
+                      ? 'Base locale principale'
+                      : language === 'ar'
+                        ? 'القاعدة المحلية الأساسية'
+                        : 'Primary offline store'}
+                </span>
               </div>
             </div>
           </div>
 
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5 flex items-center gap-2.5 min-w-0">
-            <Flame size={16} className={firestoreConfigured ? 'text-amber-600 dark:text-amber-400 shrink-0' : 'text-slate-400 shrink-0'} />
+            <Cloud
+              size={16}
+              className={
+                cloudSyncStatus.phase === 'synced'
+                  ? 'text-emerald-600 dark:text-emerald-400 shrink-0'
+                  : cloudSyncStatus.phase === 'error'
+                    ? 'text-rose-600 dark:text-rose-400 shrink-0'
+                    : cloudSyncStatus.phase === 'pending'
+                      ? 'text-amber-600 dark:text-amber-400 shrink-0'
+                      : supabaseConfigured
+                        ? 'text-blue-600 dark:text-blue-400 shrink-0'
+                        : 'text-slate-400 shrink-0'
+              }
+            />
             <div className="min-w-0 flex-1">
-              <div className="font-bold text-slate-900 dark:text-white truncate">Cloud Firestore</div>
+              <div className="font-bold text-slate-900 dark:text-white truncate">Supabase Cloud</div>
               <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
-                {firestoreConfigured ? (
-                  <>
-                    <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span className="truncate font-mono">{fbConfig.projectId}</span>
-                  </>
-                ) : (
-                  <span>{getTranslation('cloudStatusNotConfigured', language)}</span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5 flex items-center gap-2.5 min-w-0">
-            <Database size={16} className={rtdbConfigured ? 'text-amber-600 dark:text-amber-400 shrink-0' : 'text-slate-400 shrink-0'} />
-            <div className="min-w-0 flex-1">
-              <div className="font-bold text-slate-900 dark:text-white truncate">Realtime Database</div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
-                {rtdbConfigured ? (
-                  <>
-                    <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span>{getTranslation('cloudStatusConfigured', language)}</span>
-                  </>
-                ) : (
-                  <span>{getTranslation('cloudStatusNotConfigured', language)}</span>
-                )}
+                {cloudSyncStatus.phase === 'synced' ? (
+                  <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                ) : cloudSyncStatus.phase === 'error' || cloudSyncStatus.phase === 'pending' ? (
+                  <AlertCircle size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                ) : null}
+                <span>
+                  {supabaseStateText}
+                  {cloudSyncStatus.lastSyncedAt && cloudSyncStatus.phase === 'synced'
+                    ? ` · ${new Date(cloudSyncStatus.lastSyncedAt).toLocaleTimeString()}`
+                    : ''}
+                </span>
               </div>
             </div>
           </div>
         </div>
+
+        {cloudSyncStatus.lastError && recoveryNotice.tone === 'idle' && (
+          <div
+            role="status"
+            className="rounded-xl border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200 p-3 text-xs flex items-start gap-2"
+          >
+            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+            <span className="min-w-0 break-words">{cloudSyncStatus.lastError}</span>
+          </div>
+        )}
 
         {recoveryNotice.tone !== 'idle' && (
           <div
@@ -545,169 +471,6 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
             <CheckCircle2 size={14} />
             <span>{getTranslation('cloudSaveAndRecover', language)}</span>
           </button>
-        </div>
-      </section>
-
-      {/* FIREBASE FIRESTORE & REALTIME DATABASE CONFIGURATION */}
-      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900 dark:text-white">
-            <Flame size={17} className="text-amber-600 dark:text-amber-400 shrink-0" />
-            <span>{getTranslation('cloudFirebaseTitle', language)}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowJsonImporter((prev) => !prev)}
-            className="min-h-9 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 cursor-pointer"
-          >
-            {getTranslation('cloudFirebasePasteToggle', language)}
-          </button>
-        </div>
-
-        {showJsonImporter && (
-          <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 p-3 space-y-2.5">
-            <label htmlFor="setup-firebase-json" className="block font-semibold text-slate-700 dark:text-slate-200">
-              {getTranslation('cloudFirebasePasteToggle', language)}
-            </label>
-            <textarea
-              id="setup-firebase-json"
-              rows={4}
-              value={jsonSnippet}
-              onChange={(e) => setJsonSnippet(e.target.value)}
-              placeholder={'{\n  "apiKey": "AIza...",\n  "projectId": "mon-hotel-pms",\n  "databaseURL": "https://mon-hotel-pms-default-rtdb.firebaseio.com"\n}'}
-              className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-[11px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              type="button"
-              onClick={handleParseFirebaseJson}
-              className="min-h-10 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold cursor-pointer"
-            >
-              {getTranslation('cloudFirebasePasteApply', language)}
-            </button>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          <div className="min-w-0">
-            <label htmlFor="setup-firebase-project" className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              {getTranslation('cloudFirebaseProjectIdLabel', language)}
-            </label>
-            <input
-              id="setup-firebase-project"
-              type="text"
-              value={fbConfig.projectId || ''}
-              onChange={(e) => setFbConfig((prev) => ({ ...prev, projectId: e.target.value }))}
-              placeholder="mon-hotel-pms"
-              className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="min-w-0">
-            <label htmlFor="setup-firebase-rtdb" className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              {getTranslation('cloudFirebaseDatabaseUrlLabel', language)}
-            </label>
-            <input
-              id="setup-firebase-rtdb"
-              type="url"
-              inputMode="url"
-              value={fbConfig.databaseURL || ''}
-              onChange={(e) => setFbConfig((prev) => ({ ...prev, databaseURL: e.target.value }))}
-              placeholder="https://mon-hotel-pms-default-rtdb.firebaseio.com"
-              className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="min-w-0">
-            <div className="flex items-center justify-between mb-1 gap-2">
-              <label htmlFor="setup-firebase-apikey" className="font-semibold text-slate-700 dark:text-slate-300">
-                {getTranslation('cloudFirebaseApiKeyLabel', language)}
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowFbApiKey((prev) => !prev)}
-                className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 inline-flex items-center gap-1 cursor-pointer"
-              >
-                {showFbApiKey ? <EyeOff size={13} /> : <Eye size={13} />}
-                <span>{showFbApiKey ? getTranslation('cloudHideSecret', language) : getTranslation('cloudShowSecret', language)}</span>
-              </button>
-            </div>
-            <input
-              id="setup-firebase-apikey"
-              type={showFbApiKey ? 'text' : 'password'}
-              autoComplete="off"
-              value={fbConfig.apiKey || ''}
-              onChange={(e) => setFbConfig((prev) => ({ ...prev, apiKey: e.target.value }))}
-              placeholder="AIzaSy..."
-              className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="min-w-0">
-            <label htmlFor="setup-firebase-root" className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              {getTranslation('cloudFirebaseRootPathLabel', language)}
-            </label>
-            <input
-              id="setup-firebase-root"
-              type="text"
-              value={fbConfig.rootPath || ''}
-              onChange={(e) => setFbConfig((prev) => ({ ...prev, rootPath: e.target.value }))}
-              placeholder="pms / tenants/hotel-oran"
-              className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
-        {firebaseStatus.tone !== 'idle' && firebaseStatus.text && (
-          <div
-            role="status"
-            className={`rounded-xl border p-2.5 text-xs flex items-center gap-2 ${
-              firebaseStatus.tone === 'success'
-                ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200'
-                : firebaseStatus.tone === 'busy'
-                  ? 'border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-900/70 dark:bg-blue-950/40 dark:text-blue-200'
-                  : 'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-200'
-            }`}
-          >
-            {firebaseStatus.tone === 'busy' ? (
-              <RefreshCw size={14} className="animate-spin shrink-0" />
-            ) : firebaseStatus.tone === 'success' ? (
-              <CheckCircle2 size={14} className="shrink-0" />
-            ) : (
-              <AlertCircle size={14} className="shrink-0" />
-            )}
-            <span className="min-w-0 break-words">{firebaseStatus.text}</span>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            disabled={firebaseStatus.tone === 'busy'}
-            onClick={() => void handleTestFirebase()}
-            className="min-h-11 px-4 py-2 rounded-xl border border-amber-600 dark:border-amber-500 text-amber-700 dark:text-amber-300 font-bold hover:bg-amber-50 dark:hover:bg-amber-950/40 flex items-center gap-2 cursor-pointer disabled:opacity-50"
-          >
-            <Activity size={14} />
-            <span>{getTranslation('cloudTestConnection', language)}</span>
-          </button>
-          <button
-            type="button"
-            disabled={isRecovering}
-            onClick={() => void handleSaveFirebase()}
-            className="min-h-11 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold flex items-center gap-2 cursor-pointer disabled:opacity-50"
-          >
-            <CheckCircle2 size={14} />
-            <span>{getTranslation('cloudSaveAndRecover', language)}</span>
-          </button>
-          {(firestoreConfigured || rtdbConfigured || fbConfig.apiKey) && (
-            <button
-              type="button"
-              onClick={handleClearFirebase}
-              className="min-h-11 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold flex items-center gap-1.5 cursor-pointer"
-            >
-              <Trash2 size={14} />
-              <span>{getTranslation('cloudFirebaseClearBtn', language)}</span>
-            </button>
-          )}
         </div>
       </section>
 

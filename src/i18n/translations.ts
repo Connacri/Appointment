@@ -1453,19 +1453,74 @@ export const translations = {
     ar: 'الاسترداد التلقائي وبوابات السحابة',
   },
   cloudConfigIntroDesc: {
-    fr: 'IndexedDB reste votre base locale prioritaire hors ligne. Si une base Supabase, Firestore ou Firebase Realtime Database est configurée et accessible, ses données sont récupérées automatiquement sans écraser vos saisies locales en attente.',
-    en: 'IndexedDB remains your offline-first primary store. When a Supabase, Firestore, or Firebase Realtime Database is configured and reachable, existing records are recovered automatically without overwriting pending local changes.',
-    ar: 'يبقى IndexedDB قاعدة البيانات المحلية الأساسية للعمل دون اتصال. عند تهيئة وتوفر قاعدة Supabase أو Firestore أو Firebase Realtime Database، يتم استرداد السجلات تلقائياً دون استبدال التعديلات المحلية المعلقة.',
+    fr: 'IndexedDB reste votre base locale prioritaire hors ligne. Dès qu’un workspace Supabase est connecté, vos modifications Outbox sont poussées automatiquement et les données distantes sont récupérées sans écraser vos saisies en attente.',
+    en: 'IndexedDB remains your offline-first primary store. When a Supabase workspace is connected, local Outbox changes are pushed automatically and remote records are synced without overwriting pending edits.',
+    ar: 'يبقى IndexedDB قاعدة البيانات المحلية الأساسية للعمل دون اتصال. عند اتصال مساحة عمل Supabase، تُرفع التعديلات المعلقة تلقائياً وتُسترد البيانات دون استبدال التعديلات غير المؤكدة.',
   },
   cloudDetectAndRecoverBtn: {
-    fr: 'Détecter & récupérer maintenant',
-    en: 'Detect & recover now',
-    ar: 'اكتشاف واسترداد الآن',
+    fr: 'Forcer sync',
+    en: 'Force sync',
+    ar: 'مزامنة فورية',
   },
   cloudRecovering: {
-    fr: 'Analyse des bases cloud…',
-    en: 'Scanning cloud databases…',
-    ar: 'جارٍ فحص قواعد السحابة…',
+    fr: 'Synchronisation Supabase…',
+    en: 'Syncing with Supabase…',
+    ar: 'جارٍ المزامنة مع Supabase…',
+  },
+  supabaseForceSyncBtn: {
+    fr: 'Forcer sync',
+    en: 'Force sync',
+    ar: 'مزامنة فورية',
+  },
+  supabaseForceSyncFullBtn: {
+    fr: 'Forcer la synchronisation',
+    en: 'Force sync now',
+    ar: 'مزامنة فورية الآن',
+  },
+  supabaseSyncing: {
+    fr: 'Sync…',
+    en: 'Syncing…',
+    ar: 'مزامنة…',
+  },
+  supabaseStatusSynced: {
+    fr: 'Synchronisé',
+    en: 'Synced',
+    ar: 'متزامن',
+  },
+  supabaseStatusPending: {
+    fr: 'En attente ({count})',
+    en: 'Pending ({count})',
+    ar: 'قيد الانتظار ({count})',
+  },
+  supabaseStatusError: {
+    fr: 'Erreur sync',
+    en: 'Sync error',
+    ar: 'خطأ مزامنة',
+  },
+  supabaseStatusNoWorkspace: {
+    fr: 'Workspace requis',
+    en: 'Workspace required',
+    ar: 'مساحة عمل مطلوبة',
+  },
+  supabaseStatusAuthRequired: {
+    fr: 'Connexion requise',
+    en: 'Sign-in required',
+    ar: 'يلزم تسجيل الدخول',
+  },
+  supabaseSyncSummary: {
+    fr: 'Synchronisation vérifiée ({sources}) : {pushed} envoyé(s), {groups} groupe(s), {bookings} séjour(s), {tasks} tâche(s), {stock} article(s) synchronisé(s).',
+    en: 'Verified sync ({sources}): {pushed} pushed, {groups} group(s), {bookings} booking(s), {tasks} task(s), {stock} stock item(s) synced.',
+    ar: 'مزامنة مؤكدة ({sources}): تم إرسال {pushed}، {groups} مجموعة، {bookings} حجز، {tasks} مهمة، {stock} عنصر مخزون.',
+  },
+  supabaseSyncPendingRemain: {
+    fr: '{pending} modification(s) restent en file Outbox.',
+    en: '{pending} change(s) remain queued in Outbox.',
+    ar: 'تبقى {pending} تعديلات في قائمة Outbox.',
+  },
+  supabaseLastSyncedAt: {
+    fr: 'Dernière sync vérifiée : {time}',
+    en: 'Last verified sync: {time}',
+    ar: 'آخر مزامنة مؤكدة: {time}',
   },
   cloudStatusConfigured: {
     fr: 'Configuré',
@@ -1533,54 +1588,14 @@ export const translations = {
     ar: 'اختبار الاتصال',
   },
   cloudSaveAndRecover: {
-    fr: 'Enregistrer & récupérer',
-    en: 'Save & recover',
-    ar: 'حفظ واسترداد',
+    fr: 'Enregistrer & synchroniser',
+    en: 'Save & sync',
+    ar: 'حفظ ومزامنة',
   },
   cloudResetDefault: {
     fr: 'Rétablir défaut',
     en: 'Reset default',
     ar: 'استعادة الافتراضي',
-  },
-  cloudFirebaseTitle: {
-    fr: 'Firebase (Firestore & Realtime Database)',
-    en: 'Firebase (Firestore & Realtime Database)',
-    ar: 'Firebase (Firestore و Realtime Database)',
-  },
-  cloudFirebasePasteToggle: {
-    fr: 'Importer / coller un JSON firebaseConfig',
-    en: 'Import / paste firebaseConfig JSON',
-    ar: 'استيراد / لصق JSON لإعدادات Firebase',
-  },
-  cloudFirebasePasteApply: {
-    fr: 'Analyser et remplir',
-    en: 'Parse & fill',
-    ar: 'تحليل وتعبئة',
-  },
-  cloudFirebaseProjectIdLabel: {
-    fr: 'Project ID (Firestore)',
-    en: 'Project ID (Firestore)',
-    ar: 'معرّف المشروع Project ID (Firestore)',
-  },
-  cloudFirebaseDatabaseUrlLabel: {
-    fr: 'Database URL (Realtime Database)',
-    en: 'Database URL (Realtime Database)',
-    ar: 'رابط قاعدة البيانات Database URL (Realtime DB)',
-  },
-  cloudFirebaseApiKeyLabel: {
-    fr: 'Web API Key (optionnel)',
-    en: 'Web API Key (optional)',
-    ar: 'مفتاح Web API Key (اختياري)',
-  },
-  cloudFirebaseRootPathLabel: {
-    fr: 'Préfixe / Chemin racine (optionnel)',
-    en: 'Root path / prefix (optional)',
-    ar: 'المسار الجذري / البادئة (اختياري)',
-  },
-  cloudFirebaseClearBtn: {
-    fr: 'Effacer Firebase',
-    en: 'Clear Firebase',
-    ar: 'مسح إعدادات Firebase',
   },
   cloudNeonTitle: {
     fr: 'Neon / PostgreSQL Serveur',
@@ -1636,11 +1651,6 @@ export const translations = {
     fr: '{count} réservation(s)',
     en: '{count} booking(s)',
     ar: '{count} حجز',
-  },
-  ganttQuickCreateShort: {
-    fr: 'Créer',
-    en: 'Create',
-    ar: 'حجز',
   },
   ganttQuickCreateLabel: {
     fr: 'Création rapide de réservation',

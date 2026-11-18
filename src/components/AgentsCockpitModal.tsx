@@ -43,7 +43,7 @@ export const AgentsCockpitModal: React.FC = () => {
       checks: [
         'Zéro fuite de secret dans Git (.env, *.jks, service_account ignorés)',
         'Keystore d\'upload généré uniquement hors dépôt via bootstrap-secrets.sh',
-        'TLS 1.3 forcé et authentification Firebase / Google OAuth sécurisée',
+        'TLS 1.3 forcé et authentification Supabase Auth / RLS sécurisée',
       ],
     },
     {

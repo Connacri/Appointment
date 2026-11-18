@@ -28,19 +28,17 @@ Le schéma public possède 16 tables avec RLS activée. Les entités mutables pr
 6. Tests multi-workspace RLS, retry, offline/online, suppression, conflit et concurrence.
 7. Extension Facility/Spa/Events/Rentals/Access Control selon les décisions métier validées.
 
-## Implémentation Outbox livrée — étape partielle
+## Implémentation Outbox livrée — worker push/pull Supabase (bookings + housekeeping resources)
 
-La base IndexedDB est passée en version 3 sans supprimer les stores existants. Elle crée les stores `outbox`, `tombstones` et `workspaceEntities` (clé composite workspace/entité/ID). La mise à niveau crée ces stores vides : elle ne transforme et n'envoie aucun enregistrement existant.
+La base IndexedDB est passée en version 5 (`outbox`, `tombstones`, `workspaceEntities`, `issuedCards`, `resourceGroups`). La mise à niveau crée les stores Outbox vides : aucune donnée de démonstration n'est mise en file.
 
 - `putWithOutbox` et `deleteWithOutbox` englobent l'instantané local workspace-scoped, l'événement Outbox et le tombstone dans une seule transaction IndexedDB.
-- Chaque événement porte `workspaceId`, `establishmentId` facultatif, entité, ID, opération, version, payload et clé d'idempotence déterministe.
-- Les tentatives peuvent être différées et les ACK marquent l'événement comme synchronisé.
-- `getPendingOutbox(workspaceId)` ne retourne que les événements du workspace demandé.
-- Le CRUD réservation (création, édition, statut, paiement, check-in, suppression) utilise ces primitives seulement lorsqu'un workspace est explicitement actif.
-- Les IDs présents dans `initialBookings` et les ressources présentes dans `initialResourceGroups` sont explicitement exclus de l'Outbox. Une réservation liée à une ressource de démonstration n'est pas mise en file. Les données initiales `mockData` ne sont pas migrées dans les stores workspace ni mises en file.
-- Sans workspace actif, les modifications restent locales et ne sont pas mises en file.
+- Le moteur bidirectionnel (`src/services/supabase/supabaseSync.ts`) exécute automatiquement (démarrage, reconnexion `online`, focus/visibilité, intervalle périodique, debounce post-mutation) ou sur clic **« Forcer sync »** :
+  1. Le push séquentiel des événements Outbox en attente (`resource` avant `booking`) vers `pmsRepository` (`saveBooking`, `deleteBooking`, `saveResource`, `deleteResource`), en n'appelant `markOutboxSynced` qu'après ACK serveur vérifié et en appliquant un backoff exponentiel (`markOutboxFailed`) sur erreur.
+  2. Le pull du snapshot workspace Supabase suivi d'un merge protégé contre la résurrection de tombstones et l'écrasement d'upserts Outbox encore en attente (y compris ceux en backoff).
+  3. Un statut strictement fondé sur les preuves (`cloudSyncStatus` dans `TopBar` et `CloudConfigPanel`) : jamais `Synchronisé` tant qu'un événement Outbox reste `pending` ou en erreur.
 
-**Limite actuelle :** aucun worker réseau ne consomme encore l'Outbox. Les événements restent `pending` jusqu'à ce qu'un Sync Engine les traite. Les autres domaines (ressources, factures, tâches, stocks, tarifs) ne sont pas encore raccordés à ces primitives. Les clés d'idempotence locales ne constituent pas encore une garantie d'idempotence serveur tant que le push n'est pas implémenté.
+**Limites restantes :** les créations/éditions complètes de tâches, articles de stock, tarifs dynamiques, factures et nouveaux groupes/chambres hors CardLock/housekeeping ne sont pas encore toutes raccordées à `putWithOutbox` ; la hiérarchie relationnelle distante `Hotel → Establishment → Floor → Resource` reste documentée comme écart non résolu dans `docs/DATA_CONTRACT.md` §7.
 ## Contraintes de sécurité et de cohérence
 
 - Toutes les requêtes distantes doivent inclure le workspace ciblé ; RLS demeure la frontière de sécurité.

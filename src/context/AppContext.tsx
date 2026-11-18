@@ -27,19 +27,25 @@ import { indexedDb } from '../db/indexedDb';
 import { useWorkspace } from '../services/supabase/WorkspaceContext';
 import { isSupabaseConfigured, supabase } from '../services/supabase/supabaseClient';
 import {
+  deleteBooking as remoteDeleteBooking,
+  deleteResource as remoteDeleteResource,
   listBookings,
   listDynamicRates,
   listEstablishments,
   listResourceGroups,
   listStockItems,
   listTasks,
+  saveBooking as remoteSaveBooking,
+  saveResource as remoteSaveResource,
+  saveStockItem as remoteSaveStockItem,
+  saveTask as remoteSaveTask,
 } from '../services/supabase/pmsRepository';
-import { mergeCloudStateWithLocal } from '../services/supabase/cloudRecovery';
 import {
-  isAnyFirebaseCloudConfigured,
-  readFirebaseCloudConfig,
-  recoverFromFirebaseCloud,
-} from '../services/cloud/firebaseRecovery';
+  deriveIdleSyncPhase,
+  INITIAL_CLOUD_SYNC_STATUS,
+  runSupabaseSync,
+  type CloudSyncStatus,
+} from '../services/supabase/supabaseSync';
 import { isValidCalendarDate, shouldMarkPaymentAsPaid } from '../utils/bookingValidation';
 import { isRoomReadyForBooking } from '../utils/roomReadiness';
 import { lockManager } from '../locks/lockManager';
@@ -178,14 +184,18 @@ interface AppContextType {
   hasOnboarded: boolean;
   setHasOnboarded: (done: boolean) => void;
   triggerCloudRecovery: () => Promise<CloudRecoveryReport>;
+  cloudSyncStatus: CloudSyncStatus;
+  forceSupabaseSync: () => Promise<CloudRecoveryReport>;
 }
 
 export interface CloudRecoveryReport {
-  sources: Array<'supabase' | 'firestore' | 'realtime_database'>;
+  sources: Array<'supabase'>;
   recoveredGroupsCount: number;
   recoveredBookingsCount: number;
   recoveredTasksCount: number;
   recoveredStockCount: number;
+  pushedCount?: number;
+  pushFailedCount?: number;
   recoveredProfile: Partial<EstablishmentProfile> | null;
   warnings: string[];
   skippedOffline?: boolean;
@@ -268,9 +278,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeView, setActiveView] = useState<ActiveAppView>('planning');
 
   // PMS Hotel Complex & Multi-Currency (DZD, EUR, USD, RMB, GBP, SAR)
-  // The Gantt selector is populated from real hotel building groups in resourceGroups.
-  // Keep this compatibility field empty: mock establishments must never appear as real inventory.
-  const establishments: HotelEstablishment[] = [];
+  // Populated only from verified remote Supabase establishments (never fabricated locally).
+  const [establishments, setEstablishments] = useState<HotelEstablishment[]>([]);
   const [selectedEstablishmentId, setSelectedEstablishmentId] = useState<string | 'all'>('all');
   const [currency, setCurrencyState] = useState<string>(() => {
     return localStorage.getItem('omnibook_currency') || 'DA';
@@ -383,18 +392,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [bookings, setBookings] = useState<TimelineBooking[]>([]);
   const [isCoreDataHydrated, setIsCoreDataHydrated] = useState(false);
 
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>(INITIAL_CLOUD_SYNC_STATUS);
+  const autoSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerSyncFnRef = useRef<((options?: { force?: boolean }) => Promise<CloudRecoveryReport>) | null>(null);
+
+  const scheduleAutoSync = useCallback((delayMs = 900) => {
+    if (autoSyncTimerRef.current) {
+      clearTimeout(autoSyncTimerRef.current);
+    }
+    autoSyncTimerRef.current = setTimeout(() => {
+      autoSyncTimerRef.current = null;
+      if (triggerSyncFnRef.current) {
+        void triggerSyncFnRef.current({ force: false });
+      }
+    }, delayMs);
+  }, []);
+
   // Only explicit user-created/edited records enter the outbox. Bootstrap mock records are excluded.
   const persistBookingMutation = (booking: TimelineBooking) => {
     if (!workspace.activeWorkspaceId || DEMO_BOOKING_IDS.has(booking.id) || DEMO_RESOURCE_IDS.has(booking.resourceId)) return;
+    const bookedResource = latestGroupsRef.current
+      .flatMap((group) => group.resources)
+      .find((resource) => resource.id === booking.resourceId);
+    const resolvedEstablishmentId =
+      selectedEstablishmentId !== 'all'
+        ? selectedEstablishmentId
+        : bookedResource?.establishmentId;
     void indexedDb.putWithOutbox(
       'bookings',
       booking,
       {
         workspaceId: workspace.activeWorkspaceId,
-        establishmentId: selectedEstablishmentId === 'all' ? undefined : selectedEstablishmentId,
+        establishmentId: resolvedEstablishmentId,
       },
       'booking'
-    ).catch((error) => console.error('[Outbox] Booking mutation was not queued:', error));
+    )
+      .then(() => {
+        scheduleAutoSync();
+      })
+      .catch((error) => console.error('[Outbox] Booking mutation was not queued:', error));
   };
 
   const [clientProfile, setClientProfileState] = useState<ClientProfile>(() => {
@@ -434,7 +470,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isIndexedDBOpen, setIsIndexedDBOpen] = useState(false);
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [activeQrPassBooking, setActiveQrPassBooking] = useState<TimelineBooking | null>(null);
-  const [isOffline, setIsOffline] = useState(false);
+  const [isOffline, setIsOffline] = useState(() => (typeof navigator !== 'undefined' ? !navigator.onLine : false));
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
 
@@ -592,155 +628,209 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   latestBookingsRef.current = bookings;
   latestGroupsRef.current = resourceGroups;
   latestProfileRef.current = establishmentProfile;
-  const isRecoveringCloudRef = useRef(false);
 
-  // Automatic cloud database recovery (Supabase, Firestore, Firebase Realtime DB):
-  // detects any configured & reachable cloud store when online, recovers records
-  // into local state while preserving pending Outbox mutations and tombstones.
-  const recoverFromCloudDb = useCallback(async (): Promise<CloudRecoveryReport> => {
+  const syncInFlightRef = useRef<Promise<CloudRecoveryReport> | null>(null);
+  const pendingResyncRef = useRef(false);
+  const pendingForceRef = useRef(false);
+  const cloudSyncStatusRef = useRef(cloudSyncStatus);
+  cloudSyncStatusRef.current = cloudSyncStatus;
+  const activeWorkspaceIdRef = useRef(workspace.activeWorkspaceId);
+  activeWorkspaceIdRef.current = workspace.activeWorkspaceId;
+  const selectedEstablishmentIdRef = useRef(selectedEstablishmentId);
+  selectedEstablishmentIdRef.current = selectedEstablishmentId;
+  const isOfflineRef = useRef(isOffline);
+  isOfflineRef.current = isOffline;
+  const isHydratedRef = useRef(isCoreDataHydrated);
+  isHydratedRef.current = isCoreDataHydrated;
+
+  // Keep cloudSyncStatus evidence-based whenever Outbox records change locally
+  useEffect(() => {
+    let active = true;
+    const refreshSummary = async () => {
+      const wsId = activeWorkspaceIdRef.current;
+      const prev = cloudSyncStatusRef.current;
+      if (prev.isSyncing) return;
+      const emptySummary: { pendingCount: number; failedCount: number; dueCount: number; lastError?: string } = {
+        pendingCount: 0,
+        failedCount: 0,
+        dueCount: 0,
+      };
+      const summary = wsId ? await indexedDb.getOutboxSummary(wsId).catch(() => emptySummary) : emptySummary;
+      let hasSession = false;
+      if (isSupabaseConfigured && supabase && !isOfflineRef.current) {
+        try {
+          const { data } = await supabase.auth.getSession();
+          hasSession = Boolean(data.session);
+        } catch {
+          hasSession = false;
+        }
+      }
+      if (!active) return;
+      const phase = deriveIdleSyncPhase({
+        isOffline: isOfflineRef.current,
+        isConfigured: isSupabaseConfigured,
+        isAuthenticated: hasSession,
+        workspaceId: wsId,
+        summary,
+        lastSyncedAt: prev.lastSyncedAt,
+        lastError: summary.lastError ?? prev.lastError,
+      });
+      setCloudSyncStatus((current) => ({
+        ...current,
+        phase,
+        pendingCount: summary.pendingCount,
+        failedCount: summary.failedCount,
+        lastError: summary.lastError ?? (phase === 'synced' ? null : current.lastError),
+        workspaceId: wsId,
+      }));
+    };
+
+    void refreshSummary();
+    const unsubscribe = indexedDb.subscribeOutboxChanges(() => {
+      void refreshSummary();
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [workspace.activeWorkspaceId, isOffline]);
+
+  // Bidirectional automatic Supabase synchronization:
+  // pushes Outbox mutations sequentially (ACK before dequeue), pulls latest remote state,
+  // and merges safely without overwriting pending local edits or tombstones.
+  const executeSyncOnce = useCallback(async (force = false): Promise<CloudRecoveryReport> => {
     const emptyReport: CloudRecoveryReport = {
       sources: [],
       recoveredGroupsCount: 0,
       recoveredBookingsCount: 0,
       recoveredTasksCount: 0,
       recoveredStockCount: 0,
+      pushedCount: 0,
+      pushFailedCount: 0,
       recoveredProfile: null,
       warnings: [],
     };
-    if (!isCoreDataHydrated || isOffline) {
-      return { ...emptyReport, skippedOffline: isOffline };
+    const wsId = activeWorkspaceIdRef.current;
+    if (!isHydratedRef.current) {
+      return emptyReport;
     }
-    if (isRecoveringCloudRef.current) return emptyReport;
-    isRecoveringCloudRef.current = true;
+
+    setCloudSyncStatus((prev) => ({
+      ...prev,
+      phase: isOfflineRef.current ? 'offline' : 'syncing',
+      isSyncing: !isOfflineRef.current,
+      workspaceId: wsId,
+    }));
 
     try {
-      const workspaceId = workspace.activeWorkspaceId;
-      const firebaseConfig = readFirebaseCloudConfig();
-      const hasFirebase = isAnyFirebaseCloudConfigured(firebaseConfig);
-
-      const allRemoteGroups: ResourceGroup[] = [];
-      const allRemoteBookings: TimelineBooking[] = [];
-      const allRemoteTasks: PmsTask[] = [];
-      const allRemoteStock: StockItem[] = [];
-      const mergedRemoteRates: Record<string, Record<string, number>> = {};
-      const sources: Array<'supabase' | 'firestore' | 'realtime_database'> = [];
-      const warnings: string[] = [];
-      let recoveredProfile: Partial<EstablishmentProfile> | null = null;
-
-      // 1. Supabase recovery (when configured, authenticated, and workspace selected)
-      if (isSupabaseConfigured && supabase && workspaceId) {
-        try {
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (sessionData.session) {
+      const result = await runSupabaseSync({
+        force,
+        isOffline: isOfflineRef.current,
+        isConfigured: isSupabaseConfigured,
+        workspaceId: wsId,
+        selectedEstablishmentId: selectedEstablishmentIdRef.current,
+        localGroups: latestGroupsRef.current,
+        localBookings: latestBookingsRef.current,
+        previousStatus: cloudSyncStatusRef.current,
+        demoGroupIds: DEMO_GROUP_IDS,
+        demoResourceIds: DEMO_RESOURCE_IDS,
+        demoBookingIds: DEMO_BOOKING_IDS,
+        adapter: {
+          hasSession: async () => {
+            if (!supabase) return false;
+            const { data } = await supabase.auth.getSession();
+            return Boolean(data.session);
+          },
+          getPendingOutbox: (targetWsId, limit, includeFutureRetries) =>
+            indexedDb.getPendingOutbox(targetWsId, limit, { includeFutureRetries }),
+          getOutboxSummary: (targetWsId) => indexedDb.getOutboxSummary(targetWsId),
+          getTombstones: (targetWsId) => indexedDb.getTombstones(targetWsId),
+          markOutboxSynced: (id) => indexedDb.markOutboxSynced(id),
+          markOutboxFailed: (id, error, nextAttemptAt) =>
+            indexedDb.markOutboxFailed(id, error, nextAttemptAt),
+          pushBookingUpsert: async (targetWsId, estId, booking) => {
+            await remoteSaveBooking(targetWsId, estId, booking);
+          },
+          pushBookingDelete: async (targetWsId, bookingId) => {
+            await remoteDeleteBooking(bookingId, targetWsId);
+          },
+          pushResourceUpsert: async (targetWsId, estId, resource) => {
+            await remoteSaveResource(targetWsId, estId, resource.groupId ?? null, resource);
+          },
+          pushResourceDelete: async (targetWsId, resourceId) => {
+            await remoteDeleteResource(resourceId, targetWsId);
+          },
+          pushTaskUpsert: async (targetWsId, estId, task) => {
+            await remoteSaveTask(targetWsId, estId, task);
+          },
+          pushStockItemUpsert: async (targetWsId, estId, item) => {
+            await remoteSaveStockItem(targetWsId, estId, item);
+          },
+          pullRemoteState: async (targetWsId) => {
             const [remoteGroups, remoteBookings, remoteEstablishments, remoteRates] = await Promise.all([
-              listResourceGroups(workspaceId),
-              listBookings(workspaceId),
-              listEstablishments(workspaceId).catch(() => []),
-              listDynamicRates(workspaceId).catch(() => ({} as Record<string, Record<string, number>>)),
+              listResourceGroups(targetWsId),
+              listBookings(targetWsId),
+              listEstablishments(targetWsId).catch(() => [] as HotelEstablishment[]),
+              listDynamicRates(targetWsId).catch(() => ({} as Record<string, Record<string, number>>)),
             ]);
-            sources.push('supabase');
-            allRemoteGroups.push(...remoteGroups);
-            allRemoteBookings.push(...remoteBookings);
-            for (const [roomType, dates] of Object.entries(remoteRates)) {
-              mergedRemoteRates[roomType] = { ...(mergedRemoteRates[roomType] || {}), ...dates };
-            }
+            let remoteTasks: PmsTask[] = [];
+            let remoteStockItems: StockItem[] = [];
             if (remoteEstablishments.length > 0) {
-              const firstEst = remoteEstablishments[0];
-              if (firstEst.name) {
-                recoveredProfile = {
-                  name: firstEst.name,
-                  city: firstEst.city || undefined,
-                  stars: firstEst.stars,
-                  checkInTime: firstEst.checkInTime,
-                  checkOutTime: firstEst.checkOutTime,
-                };
-              }
               const [taskLists, stockLists] = await Promise.all([
-                Promise.all(remoteEstablishments.map((est) => listTasks(workspaceId, est.id).catch(() => []))),
-                Promise.all(remoteEstablishments.map((est) => listStockItems(workspaceId, est.id).catch(() => []))),
+                Promise.all(remoteEstablishments.map((est) => listTasks(targetWsId, est.id).catch(() => []))),
+                Promise.all(remoteEstablishments.map((est) => listStockItems(targetWsId, est.id).catch(() => []))),
               ]);
-              allRemoteTasks.push(...taskLists.flat());
-              allRemoteStock.push(...stockLists.flat());
+              remoteTasks = taskLists.flat();
+              remoteStockItems = stockLists.flat();
             }
-          }
-        } catch (err) {
-          warnings.push(`Supabase : ${err instanceof Error ? err.message : 'échec récupération'}`);
-        }
+            return {
+              establishments: remoteEstablishments,
+              groups: remoteGroups,
+              bookings: remoteBookings,
+              tasks: remoteTasks,
+              stockItems: remoteStockItems,
+              dynamicRates: remoteRates,
+            };
+          },
+        },
+      });
+
+      setCloudSyncStatus(result.status);
+
+      if (result.remoteEstablishments) {
+        setEstablishments(result.remoteEstablishments);
+      }
+      if (result.mergedGroups) {
+        setResourceGroups(result.mergedGroups);
+      }
+      if (result.mergedBookings) {
+        setBookings(result.mergedBookings);
       }
 
-      // 2. Firebase Firestore / Realtime Database recovery (if configured)
-      if (hasFirebase) {
-        try {
-          const fb = await recoverFromFirebaseCloud(firebaseConfig);
-          sources.push(...fb.sources);
-          warnings.push(...fb.warnings);
-          allRemoteGroups.push(...fb.groups);
-          allRemoteBookings.push(...fb.bookings);
-          allRemoteTasks.push(...fb.tasks);
-          allRemoteStock.push(...fb.stockItems);
-          for (const [roomType, dates] of Object.entries(fb.dynamicRates)) {
-            mergedRemoteRates[roomType] = { ...(mergedRemoteRates[roomType] || {}), ...dates };
-          }
-          if (fb.establishmentProfile) {
-            recoveredProfile = { ...(recoveredProfile || {}), ...fb.establishmentProfile };
-          }
-        } catch (err) {
-          warnings.push(`Firebase : ${err instanceof Error ? err.message : 'échec récupération'}`);
-        }
-      }
-
-      let recoveredGroupsCount = 0;
-      let recoveredBookingsCount = 0;
-
-      if (allRemoteGroups.length > 0 || allRemoteBookings.length > 0) {
-        const outboxScope = workspaceId || 'firebase';
-        const [pendingOutbox, tombstones] = await Promise.all([
-          indexedDb.getPendingOutbox(outboxScope).catch(() => []),
-          indexedDb.getTombstones(outboxScope).catch(() => []),
-        ]);
-
-        const merged = mergeCloudStateWithLocal({
-          localGroups: latestGroupsRef.current,
-          localBookings: latestBookingsRef.current,
-          remoteGroups: allRemoteGroups,
-          remoteBookings: allRemoteBookings,
-          pendingOutbox,
-          tombstones,
-          demoGroupIds: DEMO_GROUP_IDS,
-          demoResourceIds: DEMO_RESOURCE_IDS,
-          demoBookingIds: DEMO_BOOKING_IDS,
-        });
-
-        recoveredGroupsCount = merged.recoveredGroupsCount;
-        recoveredBookingsCount = merged.recoveredBookingsCount;
-        setResourceGroups(merged.groups);
-        setBookings(merged.bookings);
-      }
-
-      if (allRemoteTasks.length > 0) {
+      if (result.remoteTasks.length > 0) {
         setTasks((prev) => {
           const byId = new Map(prev.map((t) => [t.id, t]));
-          for (const task of allRemoteTasks) byId.set(task.id, task);
+          for (const task of result.remoteTasks) byId.set(task.id, task);
           const next = [...byId.values()];
           localStorage.setItem('omnibook_pms_tasks', JSON.stringify(next));
           return next;
         });
       }
 
-      if (allRemoteStock.length > 0) {
+      if (result.remoteStockItems.length > 0) {
         setStockItems((prev) => {
           const byId = new Map(prev.map((s) => [s.id, s]));
-          for (const item of allRemoteStock) byId.set(item.id, item);
+          for (const item of result.remoteStockItems) byId.set(item.id, item);
           const next = [...byId.values()];
           localStorage.setItem('omnibook_stock_items', JSON.stringify(next));
           return next;
         });
       }
 
-      if (Object.keys(mergedRemoteRates).length > 0) {
+      if (Object.keys(result.remoteDynamicRates).length > 0) {
         setDynamicRates((prev) => {
           const next = { ...prev };
-          for (const [roomType, dates] of Object.entries(mergedRemoteRates)) {
+          for (const [roomType, dates] of Object.entries(result.remoteDynamicRates)) {
             next[roomType] = { ...(next[roomType] || {}), ...dates };
           }
           localStorage.setItem('omnibook_dynamic_rates', JSON.stringify(next));
@@ -748,16 +838,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       }
 
-      // If local profile is still an unnamed draft and cloud returned a real establishment
-      // profile, populate missing fields safely without overwriting user edits.
       if (
-        recoveredProfile &&
+        result.recoveredProfile &&
         !latestProfileRef.current.name.trim() &&
-        recoveredProfile.name?.trim()
+        result.recoveredProfile.name?.trim()
       ) {
         const hydratedProfile: EstablishmentProfile = {
           ...latestProfileRef.current,
-          ...recoveredProfile,
+          ...result.recoveredProfile,
           id: latestProfileRef.current.id === 'establishment-draft' ? 'establishment-cloud' : latestProfileRef.current.id,
           updatedAt: new Date().toISOString(),
         };
@@ -765,46 +853,134 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       return {
-        sources: [...new Set(sources)],
-        recoveredGroupsCount,
-        recoveredBookingsCount,
-        recoveredTasksCount: allRemoteTasks.length,
-        recoveredStockCount: allRemoteStock.length,
-        recoveredProfile,
-        warnings,
+        sources: result.skippedReason ? [] : ['supabase'],
+        recoveredGroupsCount: result.recoveredGroupsCount,
+        recoveredBookingsCount: result.recoveredBookingsCount,
+        recoveredTasksCount: result.recoveredTasksCount,
+        recoveredStockCount: result.recoveredStockCount,
+        pushedCount: result.pushedCount,
+        pushFailedCount: result.pushFailedCount,
+        recoveredProfile: result.recoveredProfile,
+        warnings: result.warnings,
+        skippedOffline: result.skippedReason === 'offline',
       };
     } catch (error) {
-      console.warn('[AppContext] Automatic cloud DB recovery skipped:', error);
+      const msg = error instanceof Error ? error.message : 'Erreur synchronisation Supabase';
+      console.warn('[AppContext] Supabase sync failed:', error);
+      setCloudSyncStatus((prev) => ({
+        ...prev,
+        phase: 'error',
+        isSyncing: false,
+        lastAttemptAt: new Date().toISOString(),
+        lastError: msg,
+        workspaceId: wsId,
+      }));
       return {
         ...emptyReport,
-        warnings: [error instanceof Error ? error.message : 'Erreur récupération cloud'],
+        warnings: [msg],
       };
-    } finally {
-      isRecoveringCloudRef.current = false;
     }
-  }, [isCoreDataHydrated, workspace.activeWorkspaceId, isOffline]);
+  }, []);
 
-  useEffect(() => {
-    void recoverFromCloudDb();
-  }, [recoverFromCloudDb]);
+  const syncWithSupabase = useCallback(async (options?: { force?: boolean }): Promise<CloudRecoveryReport> => {
+    const force = options?.force === true;
+    if (syncInFlightRef.current) {
+      pendingResyncRef.current = true;
+      if (force) pendingForceRef.current = true;
+      return syncInFlightRef.current;
+    }
 
+    const runner = (async () => {
+      let report = await executeSyncOnce(force);
+      while (pendingResyncRef.current) {
+        const nextForce = pendingForceRef.current;
+        pendingResyncRef.current = false;
+        pendingForceRef.current = false;
+        report = await executeSyncOnce(nextForce);
+      }
+      return report;
+    })();
+
+    syncInFlightRef.current = runner;
+    try {
+      return await runner;
+    } finally {
+      syncInFlightRef.current = null;
+    }
+  }, [executeSyncOnce]);
+
+  triggerSyncFnRef.current = syncWithSupabase;
+
+  const forceSupabaseSync = useCallback(async (): Promise<CloudRecoveryReport> => {
+    if (autoSyncTimerRef.current) {
+      clearTimeout(autoSyncTimerRef.current);
+      autoSyncTimerRef.current = null;
+    }
+    if (!isOfflineRef.current && isSupabaseConfigured && supabase) {
+      await workspace.refreshWorkspaces().catch(() => undefined);
+    }
+    return syncWithSupabase({ force: true });
+  }, [syncWithSupabase, workspace.refreshWorkspaces]);
+
+  // Automatic initial & reconnect sync
   useEffect(() => {
-    const handleRefresh = () => {
-      void recoverFromCloudDb();
+    if (!isCoreDataHydrated) return;
+    void syncWithSupabase({ force: false });
+  }, [isCoreDataHydrated, workspace.activeWorkspaceId, isOffline, syncWithSupabase]);
+
+  // Automatic periodic, focus, visibility, and explicit refresh sync triggers
+  useEffect(() => {
+    const handleForcedEvent = () => {
+      void forceSupabaseSync();
     };
-    window.addEventListener('appointment-refresh', handleRefresh);
-    window.addEventListener('appointment-cloud-config-updated', handleRefresh);
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      if (isOfflineRef.current || !activeWorkspaceIdRef.current) return;
+      const lastAttemptMs = cloudSyncStatusRef.current.lastAttemptAt
+        ? Date.parse(cloudSyncStatusRef.current.lastAttemptAt)
+        : 0;
+      if (Number.isFinite(lastAttemptMs) && Date.now() - lastAttemptMs < 15_000) return;
+      void syncWithSupabase({ force: false });
+    };
+    const intervalId = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      if (isOfflineRef.current || !activeWorkspaceIdRef.current) return;
+      void syncWithSupabase({ force: false });
+    }, 45_000);
+
+    window.addEventListener('appointment-refresh', handleForcedEvent);
+    window.addEventListener('appointment-cloud-config-updated', handleForcedEvent);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    }
     return () => {
-      window.removeEventListener('appointment-refresh', handleRefresh);
-      window.removeEventListener('appointment-cloud-config-updated', handleRefresh);
+      clearInterval(intervalId);
+      window.removeEventListener('appointment-refresh', handleForcedEvent);
+      window.removeEventListener('appointment-cloud-config-updated', handleForcedEvent);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      }
+      if (autoSyncTimerRef.current) {
+        clearTimeout(autoSyncTimerRef.current);
+      }
     };
-  }, [recoverFromCloudDb]);
+  }, [forceSupabaseSync, syncWithSupabase]);
 
   // Housekeeping status updater
   const updateHousekeepingStatus = (
     resourceId: string,
     status: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'
   ) => {
+    let updatedResource: ResourceItem | undefined;
+    for (const grp of latestGroupsRef.current) {
+      const match = grp.resources.find((r) => r.id === resourceId);
+      if (match) {
+        updatedResource = { ...match, groupId: match.groupId ?? grp.id, housekeepingStatus: status };
+        break;
+      }
+    }
     setResourceGroups((prev) =>
       prev.map((grp) => ({
         ...grp,
@@ -813,6 +989,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ),
       }))
     );
+    if (updatedResource && workspace.activeWorkspaceId && !DEMO_RESOURCE_IDS.has(resourceId)) {
+      const resolvedEstId =
+        updatedResource.establishmentId ??
+        (selectedEstablishmentId === 'all' ? undefined : selectedEstablishmentId);
+      void indexedDb
+        .putWithOutbox(
+          'resources',
+          updatedResource,
+          { workspaceId: workspace.activeWorkspaceId, establishmentId: resolvedEstId },
+          'resource'
+        )
+        .then(() => scheduleAutoSync())
+        .catch((error) => console.error('[Outbox] Resource status update was not queued:', error));
+    }
   };
 
   // Conflict detection according to international hospitality/clinic standards
@@ -1023,10 +1213,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteBooking = (id: string) => {
     const existing = bookings.find((booking) => booking.id === id);
     if (existing && workspace.activeWorkspaceId && !DEMO_BOOKING_IDS.has(id) && !DEMO_RESOURCE_IDS.has(existing.resourceId)) {
+      const bookedResource = latestGroupsRef.current
+        .flatMap((group) => group.resources)
+        .find((resource) => resource.id === existing.resourceId);
+      const resolvedEstablishmentId =
+        selectedEstablishmentId !== 'all'
+          ? selectedEstablishmentId
+          : bookedResource?.establishmentId;
       void indexedDb.deleteWithOutbox('bookings', id, {
         workspaceId: workspace.activeWorkspaceId,
-        establishmentId: selectedEstablishmentId === 'all' ? undefined : selectedEstablishmentId,
-      }, 'booking').catch((error) => console.error('[Outbox] Booking deletion was not queued:', error));
+        establishmentId: resolvedEstablishmentId,
+      }, 'booking')
+        .then(() => scheduleAutoSync())
+        .catch((error) => console.error('[Outbox] Booking deletion was not queued:', error));
     }
     setBookings((prev) => prev.filter((b) => b.id !== id));
     if (selectedBooking && selectedBooking.id === id) {
@@ -1487,7 +1686,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsEstablishmentModalOpen,
         hasOnboarded,
         setHasOnboarded,
-        triggerCloudRecovery: recoverFromCloudDb,
+        triggerCloudRecovery: forceSupabaseSync,
+        cloudSyncStatus,
+        forceSupabaseSync,
       }}
     >
       {children}

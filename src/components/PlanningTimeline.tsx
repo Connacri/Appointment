@@ -34,7 +34,6 @@ import {
   ZoomOut,
   Search,
   ChevronUp,
-  Plus,
   Crosshair,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -63,7 +62,6 @@ import {
   doesResourceMatchQuery,
   findMatchingTimelineBookings,
   getResourceSubgroupMeta,
-  hasSameDayCheckout,
   isTimelineCellAvailableForQuickCreate,
 } from '../utils/timelineSearch';
 
@@ -2080,7 +2078,7 @@ export const PlanningTimeline: React.FC = () => {
                                 : 'pms-gantt-surface pms-gantt-row-hover'
                             }`}
                           >
-                            {/* Background Grid Cells with Quick Create shortcut on empty bookable cells */}
+                            {/* Background Grid Cells (clicking an empty bookable cell opens pre-filled booking modal) */}
                             {timelineDays.map((day) => {
                               const isPast = day.dateStr < realTodayStr;
                               const isEmptyBookable = isTimelineCellAvailableForQuickCreate(
@@ -2089,43 +2087,21 @@ export const PlanningTimeline: React.FC = () => {
                                 realTodayStr,
                                 resBookings
                               );
-                              const checkoutOnDay = isEmptyBookable && hasSameDayCheckout(day.dateStr, resBookings);
 
                               if (isEmptyBookable) {
                                 return (
-                                  <div
+                                  <button
                                     key={day.dateStr}
+                                    type="button"
+                                    data-quick-create="true"
                                     style={{ width: `${colWidth}px` }}
-                                    className={`relative shrink-0 border-r border-[rgb(var(--pms-border)/0.45)] h-full transition-colors ${
+                                    onClick={() => openQuickCreateForCell(res, day.dateStr, resBookings)}
+                                    aria-label={`${getTranslation('ganttQuickCreateLabel', language)} • ${res.name} • ${day.dateStr}`}
+                                    title={`${getTranslation('ganttQuickCreateLabel', language)} • ${res.name} • ${day.dateStr}`}
+                                    className={`relative shrink-0 border-r border-[rgb(var(--pms-border)/0.45)] h-full p-0 cursor-pointer pms-gantt-cell-hover pms-gantt-cell-active transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-primary)] ${
                                       day.isWeekend ? 'bg-slate-50/30 dark:bg-slate-900/20' : ''
                                     }`}
-                                  >
-                                    <button
-                                      type="button"
-                                      data-quick-create="true"
-                                      onClick={() => openQuickCreateForCell(res, day.dateStr, resBookings)}
-                                      aria-label={`${getTranslation('ganttQuickCreateLabel', language)} • ${res.name} • ${day.dateStr}`}
-                                      title={`${getTranslation('ganttQuickCreateLabel', language)} • ${res.name} • ${day.dateStr}`}
-                                      className={`group/cell w-full h-full flex items-center ${
-                                        checkoutOnDay ? 'justify-end pe-1' : 'justify-center'
-                                      } p-0.5 cursor-pointer pms-gantt-cell-hover pms-gantt-cell-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-primary)]`}
-                                    >
-                                      <span
-                                        className={`inline-flex items-center justify-center gap-1 rounded-md border border-dashed border-slate-300/60 dark:border-slate-700/60 bg-[rgb(var(--pms-surface)/0.55)] text-slate-500 dark:text-slate-400 opacity-55 transition-colors group-focus-visible/cell:opacity-100 group-focus-visible/cell:border-transparent group-focus-visible/cell:bg-[var(--theme-primary)] group-focus-visible/cell:text-white [@media(hover:hover)]:group-hover/cell:opacity-100 [@media(hover:hover)]:group-hover/cell:border-transparent [@media(hover:hover)]:group-hover/cell:bg-[var(--theme-primary)] [@media(hover:hover)]:group-hover/cell:text-white [@media(hover:hover)]:group-hover/cell:shadow-xs ${
-                                          colWidth >= 90 && !checkoutOnDay
-                                            ? 'h-6 px-2 text-[10px] font-semibold'
-                                            : colWidth < 34
-                                            ? 'size-5'
-                                            : 'size-6'
-                                        }`}
-                                      >
-                                        <Plus size={colWidth < 34 ? 10 : 12} strokeWidth={2.4} aria-hidden="true" />
-                                        {colWidth >= 90 && !checkoutOnDay && (
-                                          <span>{getTranslation('ganttQuickCreateShort', language)}</span>
-                                        )}
-                                      </span>
-                                    </button>
-                                  </div>
+                                  />
                                 );
                               }
 

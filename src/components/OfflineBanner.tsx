@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
 
 export const OfflineBanner: React.FC = () => {
-  const { isOffline, setIsOffline, language } = useApp();
+  const { isOffline, setIsOffline, language, cloudSyncStatus, forceSupabaseSync } = useApp();
 
   if (!isOffline) return null;
 
@@ -15,14 +15,25 @@ export const OfflineBanner: React.FC = () => {
         <span>
           <strong>{getTranslation('offlineTitle', language)} :</strong>{' '}
           {getTranslation('offlineDesc', language)}
+          {cloudSyncStatus.pendingCount > 0 && (
+            <span className="ms-1.5 font-bold">
+              ({getTranslation('supabaseStatusPending', language).replace('{count}', String(cloudSyncStatus.pendingCount))})
+            </span>
+          )}
         </span>
       </div>
       <button
-        onClick={() => setIsOffline(false)}
-        className="px-2.5 py-1 bg-slate-950 text-white rounded text-[11px] font-bold hover:bg-slate-800 transition-colors shrink-0 flex items-center gap-1"
+        type="button"
+        onClick={() => {
+          if (typeof navigator === 'undefined' || navigator.onLine) {
+            setIsOffline(false);
+            void forceSupabaseSync();
+          }
+        }}
+        className="px-2.5 py-1 bg-slate-950 text-white rounded text-[11px] font-bold hover:bg-slate-800 transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
       >
         <RotateCcw size={12} />
-        <span>Reconnecter</span>
+        <span>{getTranslation('supabaseForceSyncBtn', language)}</span>
       </button>
     </div>
   );

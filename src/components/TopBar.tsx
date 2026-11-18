@@ -23,8 +23,12 @@ import {
   Info,
   ChevronDown,
   RefreshCw,
+  Cloud,
+  CloudOff,
+  AlertTriangle,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { getTranslation } from '../i18n/translations';
 import { lockManager, UsbConnectionStatus, UsbDeviceInfo } from '../locks/lockManager';
 import { indexedDb, IndexedDbSyncState } from '../db/indexedDb';
 import { UserRole } from '../types/booking';
@@ -52,6 +56,9 @@ export const TopBar: React.FC = () => {
     setActiveView,
     currency,
     setCurrency,
+    cloudSyncStatus,
+    forceSupabaseSync,
+    isOffline,
   } = useApp();
 
   const [usbStatus, setUsbStatus] = useState<UsbConnectionStatus>(lockManager.getStatus());
@@ -338,7 +345,7 @@ export const TopBar: React.FC = () => {
         </div>
 
         {/* CENTER SECTION: Tablet & Desktop Global Search */}
-        <div className="pms-app-topbar-search hidden md:flex relative items-center h-9 md:w-[90px] md:max-w-[90px] lg:w-48 lg:max-w-[220px] xl:w-64 xl:max-w-[280px] shrink-0">
+        <div className="pms-app-topbar-search hidden md:flex relative items-center h-9 md:w-[88px] md:max-w-[88px] lg:w-36 lg:max-w-[160px] xl:w-44 xl:max-w-[190px] 2xl:w-56 2xl:max-w-[240px] shrink-0">
           <div className="relative flex min-w-0 flex-1 items-center h-9">
             <Search size={14} className="absolute left-2.5 rtl:left-auto rtl:right-2.5 text-slate-400 pointer-events-none" />
             <input
@@ -361,16 +368,82 @@ export const TopBar: React.FC = () => {
           </div>
         </div>
 
-        {/* RIGHT SECTION: Local Storage, USB, Currency, + Nouveau, Options [⋮] */}
-        <div className="pms-app-topbar-actions flex items-center gap-1.5 shrink-0 overflow-visible">
-          <button type="button" disabled={isRefreshing} onClick={() => { setIsRefreshing(true); window.dispatchEvent(new CustomEvent('appointment-refresh-request', { detail: { onComplete: () => setIsRefreshing(false) } })); }} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0" title={language === 'fr' ? 'Actualiser toutes les pages' : language === 'ar' ? 'تحديث جميع الصفحات' : 'Refresh all pages'} aria-label={language === 'fr' ? 'Actualiser' : language === 'ar' ? 'تحديث' : 'Refresh'}>
-            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''}/><span className="hidden lg:inline">{language === 'fr' ? 'Actualiser' : language === 'ar' ? 'تحديث' : 'Refresh'}</span>
+        {/* RIGHT SECTION: Force Sync Supabase, Refresh, Local Storage, USB, Currency, + Nouveau, Options [⋮] */}
+        <div className="pms-app-topbar-actions flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-visible">
+          {/* Bidirectional Supabase Auto-Sync + Force Sync Button */}
+          {(() => {
+            const syncBusy = cloudSyncStatus.isSyncing;
+            const pendingCount = cloudSyncStatus.pendingCount;
+            const phase = cloudSyncStatus.phase;
+            const statusText = syncBusy
+              ? getTranslation('supabaseSyncing', language)
+              : phase === 'synced'
+              ? getTranslation('supabaseStatusSynced', language)
+              : phase === 'offline'
+              ? getTranslation('cloudStatusOffline', language)
+              : phase === 'error'
+              ? getTranslation('supabaseStatusError', language)
+              : phase === 'pending'
+              ? getTranslation('supabaseStatusPending', language).replace('{count}', String(pendingCount))
+              : phase === 'no_workspace'
+              ? getTranslation('supabaseStatusNoWorkspace', language)
+              : phase === 'unauthenticated'
+              ? getTranslation('supabaseStatusAuthRequired', language)
+              : getTranslation('supabaseForceSyncBtn', language);
+            const lastSyncLabel = cloudSyncStatus.lastSyncedAt
+              ? ` · ${getTranslation('supabaseLastSyncedAt', language).replace('{time}', new Date(cloudSyncStatus.lastSyncedAt).toLocaleTimeString())}`
+              : '';
+            const toneClass = syncBusy
+              ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+              : phase === 'synced'
+              ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/50'
+              : phase === 'error'
+              ? 'border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/60'
+              : phase === 'pending'
+              ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/60'
+              : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200';
+            const titleText = `Supabase : ${statusText}${lastSyncLabel}${cloudSyncStatus.lastError ? ` — ${cloudSyncStatus.lastError}` : ''} — ${getTranslation('supabaseForceSyncFullBtn', language)}`;
+            return (
+              <button
+                type="button"
+                data-testid="force-supabase-sync-btn"
+                disabled={syncBusy || isOffline}
+                onClick={() => void forceSupabaseSync()}
+                className={`h-9 w-9 sm:w-auto sm:px-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-2xs shrink-0 whitespace-nowrap relative ${toneClass}`}
+                title={titleText}
+                aria-label={`${getTranslation('supabaseForceSyncBtn', language)} (${statusText})`}
+              >
+                {syncBusy ? (
+                  <RefreshCw size={14} className="animate-spin shrink-0" />
+                ) : phase === 'offline' ? (
+                  <CloudOff size={14} className="shrink-0" />
+                ) : phase === 'error' || phase === 'pending' ? (
+                  <AlertTriangle size={14} className="shrink-0" />
+                ) : (
+                  <Cloud size={14} className="shrink-0" />
+                )}
+                <span className="hidden lg:inline">
+                  {syncBusy
+                    ? getTranslation('supabaseSyncing', language)
+                    : getTranslation('supabaseForceSyncBtn', language)}
+                </span>
+                {pendingCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-extrabold leading-none">
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+            );
+          })()}
+
+          <button type="button" disabled={isRefreshing} onClick={() => { setIsRefreshing(true); window.dispatchEvent(new CustomEvent('appointment-refresh-request', { detail: { onComplete: () => setIsRefreshing(false) } })); }} className="hidden sm:flex h-9 w-9 2xl:w-auto 2xl:px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 text-slate-700 dark:text-slate-200 text-xs font-semibold items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0" title={language === 'fr' ? 'Actualiser toutes les pages' : language === 'ar' ? 'تحديث جميع الصفحات' : 'Refresh all pages'} aria-label={language === 'fr' ? 'Actualiser' : language === 'ar' ? 'تحديث' : 'Refresh'}>
+            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''}/><span className="hidden 2xl:inline">{language === 'fr' ? 'Actualiser' : language === 'ar' ? 'تحديث' : 'Refresh'}</span>
           </button>
           {/* Local database sync indicator */}
           <button
             type="button"
             onClick={() => setIsIndexedDBOpen(true)}
-            className="h-9 px-2.5 sm:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0"
+            className="hidden sm:flex h-9 px-2 2xl:px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0"
             title={`${
               language === 'fr' ? 'Stockage local' : language === 'ar' ? 'التخزين المحلي' : 'Local storage'
             }: ${
@@ -383,14 +456,14 @@ export const TopBar: React.FC = () => {
           >
             <Database size={14} className={indexedDbSync === 'synced' ? 'text-emerald-600 dark:text-emerald-400' : indexedDbSync === 'syncing' ? 'text-blue-600 dark:text-blue-400' : 'text-rose-600 dark:text-rose-400'} />
             <span className={`w-2 h-2 rounded-full ${indexedDbSync === 'synced' ? 'bg-emerald-500 animate-pulse' : indexedDbSync === 'syncing' ? 'bg-blue-500 animate-spin' : 'bg-rose-500'}`} />
-            <span className="hidden lg:inline">{language === 'fr' ? 'Local' : language === 'ar' ? 'محلي' : 'Local'}</span>
+            <span className="hidden 2xl:inline">{language === 'fr' ? 'Local' : language === 'ar' ? 'محلي' : 'Local'}</span>
           </button>
 
           {/* USB Hardware Button */}
           <button
             type="button"
             onClick={handlePhysicalUsbClick}
-            className={`h-9 px-2.5 sm:px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 ${
+            className={`hidden md:flex h-9 px-2 xl:px-2.5 rounded-xl border text-xs font-semibold items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 ${
               usbStatus === 'connected'
                 ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
                 : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
@@ -421,13 +494,16 @@ export const TopBar: React.FC = () => {
             </span>
             <Usb size={14} />
             <span className="whitespace-nowrap hidden lg:inline">
-              USB • {usbStatus === 'connected' ? (usbDevice?.readerLabel ?? (language === 'fr' ? 'Prêt' : language === 'ar' ? 'جاهز' : 'Ready')) : (language === 'fr' ? 'Connecter' : language === 'ar' ? 'اتصال' : 'Connect')}
+              USB
+              <span className="hidden 2xl:inline">
+                {' '}• {usbStatus === 'connected' ? (usbDevice?.readerLabel ?? (language === 'fr' ? 'Prêt' : language === 'ar' ? 'جاهز' : 'Ready')) : (language === 'fr' ? 'Connecter' : language === 'ar' ? 'اتصال' : 'Connect')}
+              </span>
             </span>
           </button>
 
           {/* Global Currency Switcher */}
-          <div className="pms-app-topbar-currency h-9 flex items-center bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-2 sm:px-2.5 text-xs font-mono font-bold text-amber-600 dark:text-amber-400 shadow-2xs shrink-0">
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 mr-1 rtl:mr-0 rtl:ml-1 font-sans hidden xl:inline">
+          <div className="pms-app-topbar-currency hidden sm:flex h-9 items-center bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-2 text-xs font-mono font-bold text-amber-600 dark:text-amber-400 shadow-2xs shrink-0">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 mr-1 rtl:mr-0 rtl:ml-1 font-sans hidden 2xl:inline">
               {language === 'fr' ? 'Devise:' : language === 'ar' ? 'العملة:' : 'Currency:'}
             </span>
             <select
@@ -493,6 +569,62 @@ export const TopBar: React.FC = () => {
                 </button>
 
                 <div className="pt-1 border-t border-slate-100 dark:border-slate-800 my-1" />
+
+                {/* Force Supabase Cloud Sync (mobile + accessible menu entry) */}
+                <button
+                  type="button"
+                  disabled={cloudSyncStatus.isSyncing || isOffline}
+                  onClick={() => {
+                    void forceSupabaseSync();
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors cursor-pointer text-left rtl:text-right"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <Cloud size={14} className={cloudSyncStatus.phase === 'synced' ? 'text-emerald-500 shrink-0' : cloudSyncStatus.phase === 'error' ? 'text-rose-500 shrink-0' : 'text-blue-500 shrink-0'} />
+                    <span className="truncate font-semibold">{getTranslation('supabaseForceSyncFullBtn', language)}</span>
+                  </span>
+                  {cloudSyncStatus.pendingCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-[10px] font-bold">
+                      {cloudSyncStatus.pendingCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Mobile-only quick tools (hidden in Row 1 on <640px to prevent clipping) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRefreshing(true);
+                    window.dispatchEvent(new CustomEvent('appointment-refresh-request', { detail: { onComplete: () => setIsRefreshing(false) } }));
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="sm:hidden w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left rtl:text-right"
+                >
+                  <RefreshCw size={14} className="text-slate-500 shrink-0" />
+                  <span>{language === 'fr' ? 'Actualiser toutes les pages' : language === 'ar' ? 'تحديث جميع الصفحات' : 'Refresh all pages'}</span>
+                </button>
+
+                <div className="sm:hidden flex items-center justify-between gap-2 px-2.5 py-1.5">
+                  <span className="text-slate-500 dark:text-slate-400 font-semibold">
+                    {language === 'fr' ? 'Devise' : language === 'ar' ? 'العملة' : 'Currency'}
+                  </span>
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    aria-label={language === 'fr' ? 'Devise' : language === 'ar' ? 'العملة' : 'Currency'}
+                    className="h-8 px-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-amber-600 dark:text-amber-400 font-mono font-bold text-xs"
+                  >
+                    <option value="DZD">🇩🇿 DZD (DA)</option>
+                    <option value="DA">🇩🇿 DA</option>
+                    <option value="EUR">🇪🇺 EUR (€)</option>
+                    <option value="USD">🇺🇸 USD ($)</option>
+                    <option value="GBP">🇬🇧 GBP (£)</option>
+                    <option value="SAR">🇸🇦 SAR (﷼)</option>
+                    <option value="RMB">🇨🇳 RMB (¥)</option>
+                    <option value="CAD">🇨🇦 CAD ($)</option>
+                  </select>
+                </div>
 
                 {/* Establishment Setup */}
                 <button

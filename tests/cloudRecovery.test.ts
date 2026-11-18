@@ -1,12 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { mergeCloudStateWithLocal } from '../src/services/supabase/cloudRecovery';
-import {
-  decodeFirestoreDocument,
-  decodeFirestoreValue,
-  normalizeFirebaseSnapshot,
-  parseFirebaseConfigInput,
-} from '../src/services/cloud/firebaseRecovery';
 import type { OutboxRecord, TombstoneRecord } from '../src/db/indexedDb';
 import type { ResourceGroup, TimelineBooking } from '../src/types/booking';
 
@@ -124,78 +118,4 @@ test('mergeCloudStateWithLocal never resurrects tombstoned records and protects 
   assert.equal(merged.bookings[0].guestName, 'Local Updated Name');
   assert.equal(merged.groups.length, 1);
   assert.deepEqual(merged.groups[0].resources.map((r) => r.id), ['r-live']);
-});
-
-test('parseFirebaseConfigInput parses JS/JSON Web configs and rejects service-account private keys', () => {
-  const jsSnippet = `const firebaseConfig = {
-    apiKey: "AIzaPublicClientKeyExample",
-    projectId: "hotel-oran-pms",
-    databaseURL: "https://hotel-oran-pms-default-rtdb.firebaseio.com/",
-  };`;
-
-  const parsed = parseFirebaseConfigInput(jsSnippet);
-  assert.equal(parsed.projectId, 'hotel-oran-pms');
-  assert.equal(parsed.databaseURL, 'https://hotel-oran-pms-default-rtdb.firebaseio.com');
-  assert.equal(parsed.apiKey, 'AIzaPublicClientKeyExample');
-
-  assert.throws(
-    () =>
-      parseFirebaseConfigInput(
-        JSON.stringify({
-          type: 'service_account',
-          project_id: 'secret-proj',
-          private_key: '-----BEGIN PRIVATE KEY-----',
-        }),
-      ),
-    /service_account|private_key/i,
-  );
-});
-
-test('decodeFirestoreDocument and normalizeFirebaseSnapshot recover Firestore and RTDB records safely', () => {
-  assert.equal(decodeFirestoreValue({ integerValue: '42' }), 42);
-  assert.equal(decodeFirestoreValue({ doubleValue: 19.5 }), 19.5);
-  assert.equal(decodeFirestoreValue({ booleanValue: true }), true);
-  assert.equal(decodeFirestoreValue({ arrayValue: { values: [{ stringValue: 'wifi' }] } })?.toString(), 'wifi');
-
-  const doc = decodeFirestoreDocument({
-    name: 'projects/p/databases/(default)/documents/bookings/fs-bkg-1',
-    fields: {
-      resourceId: { stringValue: 'room-202' },
-      resourceName: { stringValue: '202' },
-      guestName: { stringValue: 'Nadia B.' },
-      startDate: { stringValue: '2026-11-20' },
-      endDate: { stringValue: '2026-11-23' },
-      totalPrice: { integerValue: '27000' },
-      status: { stringValue: 'confirmed' },
-    },
-  });
-
-  const snapshot = normalizeFirebaseSnapshot({
-    resources: {
-      'room-202': {
-        name: '202',
-        building: 'Annexe Mer',
-        floor: '2',
-        pricePerDay: 9000,
-      },
-      'room-deleted': {
-        name: '203',
-        deletedAt: '2026-11-17T00:00:00Z',
-      },
-    },
-    bookings: doc ? [doc] : [],
-    establishmentProfile: {
-      name: 'Hôtel Horizon',
-      city: 'Oran',
-      stars: 4,
-    },
-  });
-
-  assert.equal(snapshot.groups.length, 1);
-  assert.equal(snapshot.groups[0].resources.length, 1);
-  assert.equal(snapshot.groups[0].resources[0].id, 'room-202');
-  assert.equal(snapshot.bookings.length, 1);
-  assert.equal(snapshot.bookings[0].id, 'fs-bkg-1');
-  assert.equal(snapshot.bookings[0].totalPrice, 27000);
-  assert.equal(snapshot.establishmentProfile?.name, 'Hôtel Horizon');
 });

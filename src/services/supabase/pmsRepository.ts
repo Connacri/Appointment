@@ -104,9 +104,19 @@ export async function saveBooking(workspaceId: WorkspaceId, establishmentId: str
   return unwrap(await db.from('bookings').upsert({id:b.id,workspace_id:workspaceId,establishment_id:establishmentId,resource_id:b.resourceId,domain:b.sector,resource_name:b.resourceName,guest_name:b.guestName,guest_email:b.guestEmail || null,guest_phone:b.guestPhone || null,start_date:b.startDate,end_date:b.endDate,status:b.status,total_price:b.totalPrice,payment_status:b.paymentStatus,adults:b.adults ?? 1,children:b.children ?? 0,notes:b.notes ?? null,meal_plan:b.mealPlan ?? null,origin_channel:b.originChannel ?? null,extras:b.extras ?? [],occupants:b.occupantsList ?? [],guest_metadata:b.customMetadata ?? {},created_by:auth.user?.id ?? null}).select().single());
 }
 
-export async function deleteBooking(id: string) {
+export async function deleteResource(id: string, workspaceId?: WorkspaceId) {
   const db = requireSupabase();
-  const {error} = await db.from('bookings').update({deleted_at:new Date().toISOString()}).eq('id',id);
+  let q = db.from('resources').update({ deleted_at: new Date().toISOString(), is_active: false }).eq('id', id);
+  if (workspaceId?.trim()) q = q.eq('workspace_id', workspaceId);
+  const { error } = await q;
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteBooking(id: string, workspaceId?: WorkspaceId) {
+  const db = requireSupabase();
+  let q = db.from('bookings').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+  if (workspaceId?.trim()) q = q.eq('workspace_id', workspaceId);
+  const { error } = await q;
   if (error) throw new Error(error.message);
 }
 

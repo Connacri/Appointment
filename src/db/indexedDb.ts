@@ -50,6 +50,12 @@ export interface TombstoneRecord {
   entityId: string; version: number; deletedAt: string;
 }
 export interface OutboxMutationContext { workspaceId: string; establishmentId?: string; }
+export interface OutboxSummary {
+  pendingCount: number;
+  failedCount: number;
+  dueCount: number;
+  lastError?: string;
+}
 
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
@@ -59,6 +65,7 @@ class IndexedDbStore {
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
   private syncListeners = new Set<(status: IndexedDbSyncState) => void>();
+  private outboxListeners = new Set<() => void>();
   private activeSyncOps = 0;
 
   constructor() {
@@ -81,6 +88,21 @@ class IndexedDbStore {
     this.syncListeners.add(listener);
     listener(this.getSyncStatus());
     return () => this.syncListeners.delete(listener);
+  }
+
+  public subscribeOutboxChanges(listener: () => void): () => void {
+    this.outboxListeners.add(listener);
+    return () => this.outboxListeners.delete(listener);
+  }
+
+  private emitOutboxChange(): void {
+    this.outboxListeners.forEach((fn) => {
+      try {
+        fn();
+      } catch (e) {
+        console.error(e);
+      }
+    });
   }
 
   private setSyncState(newState: IndexedDbSyncState) {
@@ -477,6 +499,7 @@ class IndexedDbStore {
       for (const storeName of ['bookings', 'invoices', 'resources', 'issuedCards', 'resourceGroups'] as const) {
         localStorage.removeItem(`ob_${storeName}`);
       }
+      this.emitOutboxChange();
     } finally {
       this.endSyncOp();
     }
@@ -538,6 +561,7 @@ class IndexedDbStore {
     request.onerror = () => tx.abort();
     tombstoneRequest.onerror = () => tx.abort();
     await waitForTransactionCompletion(tx, `putWithOutbox ${entity}/${item.id}`);
+    this.emitOutboxChange();
   }
 
   /** Atomically delete the local row and retain a workspace-scoped tombstone + delete intent. */
@@ -576,22 +600,58 @@ class IndexedDbStore {
     request.onerror = () => tx.abort();
     tombstoneRequest.onerror = () => tx.abort();
     await waitForTransactionCompletion(tx, `deleteWithOutbox ${entity}/${entityId}`);
+    this.emitOutboxChange();
   }
 
-  public async getPendingOutbox(workspaceId: string, limit = 100): Promise<OutboxRecord[]> {
+  public async getPendingOutbox(
+    workspaceId: string,
+    limit = 100,
+    options?: { includeFutureRetries?: boolean }
+  ): Promise<OutboxRecord[]> {
     if (!workspaceId.trim()) return [];
     await this.openStore();
     if (!this.idb) throw new Error('Outbox is unavailable without IndexedDB.');
+    const nowIso = new Date().toISOString();
+    const includeFuture = options?.includeFutureRetries === true;
     const tx = this.idb.transaction('outbox', 'readonly');
     const records = await new Promise<OutboxRecord[]>((resolve, reject) => {
       const request = tx.objectStore('outbox').getAll();
       request.onsuccess = () => resolve((request.result as OutboxRecord[])
-        .filter((record) => record.workspaceId === workspaceId && record.status === 'pending' && record.nextAttemptAt <= new Date().toISOString())
+        .filter((record) =>
+          record.workspaceId === workspaceId &&
+          record.status === 'pending' &&
+          (includeFuture || record.nextAttemptAt <= nowIso)
+        )
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(0, Math.max(1, limit)));
       request.onerror = () => reject(request.error);
     });
     await waitForTransactionCompletion(tx, 'getPendingOutbox');
     return records;
+  }
+
+  public async getOutboxSummary(workspaceId: string): Promise<OutboxSummary> {
+    if (!workspaceId.trim()) return { pendingCount: 0, failedCount: 0, dueCount: 0 };
+    await this.openStore();
+    if (!this.idb) return { pendingCount: 0, failedCount: 0, dueCount: 0 };
+    const nowIso = new Date().toISOString();
+    const tx = this.idb.transaction('outbox', 'readonly');
+    const records = await new Promise<OutboxRecord[]>((resolve, reject) => {
+      const request = tx.objectStore('outbox').getAll();
+      request.onsuccess = () =>
+        resolve((request.result as OutboxRecord[]).filter((record) => record.workspaceId === workspaceId));
+      request.onerror = () => reject(request.error);
+    });
+    await waitForTransactionCompletion(tx, 'getOutboxSummary');
+    const pendingRecords = records.filter((record) => record.status === 'pending');
+    const erroredRecords = records
+      .filter((record) => record.status === 'failed' || (record.status === 'pending' && record.attempts > 0))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return {
+      pendingCount: pendingRecords.length,
+      failedCount: erroredRecords.length,
+      dueCount: pendingRecords.filter((record) => record.nextAttemptAt <= nowIso).length,
+      lastError: erroredRecords[0]?.lastError,
+    };
   }
 
   public async getTombstones(workspaceId: string): Promise<TombstoneRecord[]> {
@@ -633,12 +693,14 @@ class IndexedDbStore {
     };
     request.onerror = () => tx.abort();
     await waitForTransactionCompletion(tx, `markOutboxSynced ${id}`);
+    this.emitOutboxChange();
   }
 
   public async markOutboxFailed(id: string, error: string, nextAttemptAt: string): Promise<void> {
     await this.updateOutboxRecord(id, (record) => ({
       ...record, status: 'pending', attempts: record.attempts + 1, lastError: error, nextAttemptAt,
     }));
+    this.emitOutboxChange();
   }
 
   private async updateOutboxRecord(id: string, update: (record: OutboxRecord) => OutboxRecord): Promise<void> {
