@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { isSupabaseConfigured, supabase } from './supabaseClient';
+import { isSupabaseConfigured, onSupabaseConfigChange, supabase } from './supabaseClient';
 
 type Props = { children: React.ReactNode };
 
@@ -11,9 +11,18 @@ export function SupabaseAuthGate({ children }: Props) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [configEpoch, setConfigEpoch] = useState(0);
+
+  useEffect(() => onSupabaseConfigChange(() => {
+    setConfigEpoch((prev) => prev + 1);
+  }), []);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase) {
+      setSignedIn(false);
+      setSessionReady(true);
+      return;
+    }
     let alive = true;
     supabase.auth.getSession().then(({data}) => {
       if (alive) {
@@ -26,7 +35,7 @@ export function SupabaseAuthGate({ children }: Props) {
       setSessionReady(true);
     });
     return () => { alive = false; subscription.unsubscribe(); };
-  }, []);
+  }, [configEpoch]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();

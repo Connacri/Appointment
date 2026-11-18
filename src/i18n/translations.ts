@@ -733,6 +733,41 @@ export const translations = {
     en: 'Normal',
     ar: 'عادي',
   },
+  ganttViewDay: {
+    fr: 'Jour',
+    en: 'Day',
+    ar: 'يوم',
+  },
+  ganttViewWeek: {
+    fr: 'Semaine',
+    en: 'Week',
+    ar: 'أسبوع',
+  },
+  ganttViewMonth: {
+    fr: 'Mois',
+    en: 'Month',
+    ar: 'شهر',
+  },
+  ganttZoomGroupLabel: {
+    fr: 'Échelle du planning',
+    en: 'Timeline scale',
+    ar: 'مقياس المخطط',
+  },
+  ganttZoomSliderLabel: {
+    fr: 'Curseur de zoom du planning',
+    en: 'Timeline zoom slider',
+    ar: 'شريط تكبير المخطط',
+  },
+  ganttZoomOut: {
+    fr: 'Dézoomer (vue mensuelle)',
+    en: 'Zoom out (monthly view)',
+    ar: 'تصغير (عرض شهري)',
+  },
+  ganttZoomIn: {
+    fr: 'Zoomer (vue journalière)',
+    en: 'Zoom in (daily view)',
+    ar: 'تكبير (عرض يومي)',
+  },
   ganttAvailHelp: {
     fr: 'Dispo',
     en: 'Avail.',
@@ -1400,6 +1435,217 @@ export const translations = {
     fr: 'Équivalent WebHID',
     en: 'WebHID equivalent',
     ar: 'مكافئ WebHID',
+  },
+  // Establishment Setup — Cloud Configuration & Recovery
+  setupTabCloudsShort: {
+    fr: '6. Clouds',
+    en: '6. Clouds',
+    ar: '6. السحابة',
+  },
+  setupTabCloudsFull: {
+    fr: '6. Configuration des Clouds',
+    en: '6. Cloud Configuration',
+    ar: '6. إعدادات السحابة',
+  },
+  cloudConfigIntroTitle: {
+    fr: 'Récupération automatique & passerelles Cloud',
+    en: 'Automatic Recovery & Cloud Gateways',
+    ar: 'الاسترداد التلقائي وبوابات السحابة',
+  },
+  cloudConfigIntroDesc: {
+    fr: 'IndexedDB reste votre base locale prioritaire hors ligne. Si une base Supabase, Firestore ou Firebase Realtime Database est configurée et accessible, ses données sont récupérées automatiquement sans écraser vos saisies locales en attente.',
+    en: 'IndexedDB remains your offline-first primary store. When a Supabase, Firestore, or Firebase Realtime Database is configured and reachable, existing records are recovered automatically without overwriting pending local changes.',
+    ar: 'يبقى IndexedDB قاعدة البيانات المحلية الأساسية للعمل دون اتصال. عند تهيئة وتوفر قاعدة Supabase أو Firestore أو Firebase Realtime Database، يتم استرداد السجلات تلقائياً دون استبدال التعديلات المحلية المعلقة.',
+  },
+  cloudDetectAndRecoverBtn: {
+    fr: 'Détecter & récupérer maintenant',
+    en: 'Detect & recover now',
+    ar: 'اكتشاف واسترداد الآن',
+  },
+  cloudRecovering: {
+    fr: 'Analyse des bases cloud…',
+    en: 'Scanning cloud databases…',
+    ar: 'جارٍ فحص قواعد السحابة…',
+  },
+  cloudStatusConfigured: {
+    fr: 'Configuré',
+    en: 'Configured',
+    ar: 'مُهيّأ',
+  },
+  cloudStatusNotConfigured: {
+    fr: 'Non configuré',
+    en: 'Not configured',
+    ar: 'غير مُهيّأ',
+  },
+  cloudStatusOffline: {
+    fr: 'Hors ligne (mode local)',
+    en: 'Offline (local mode)',
+    ar: 'غير متصل (الوضع المحلي)',
+  },
+  cloudRecoveryNone: {
+    fr: 'Aucune nouvelle donnée distante trouvée (ou connexion requise). Les données locales restent intactes.',
+    en: 'No new remote records found (or sign-in required). Local data remains intact.',
+    ar: 'لم يتم العثور على سجلات جديدة (أو يلزم تسجيل الدخول). تبقى البيانات المحلية سليمة.',
+  },
+  cloudRecoverySummary: {
+    fr: 'Récupération réussie ({sources}) : {groups} bâtiment(s)/groupe(s), {bookings} séjour(s), {tasks} tâche(s), {stock} article(s).',
+    en: 'Recovery succeeded ({sources}): {groups} group(s), {bookings} booking(s), {tasks} task(s), {stock} stock item(s).',
+    ar: 'تم الاسترداد بنجاح ({sources}): {groups} مجموعة/مبنى، {bookings} حجز، {tasks} مهمة، {stock} عنصر مخزون.',
+  },
+  cloudSupabaseTitle: {
+    fr: 'Supabase Cloud (PostgreSQL & Auth RLS)',
+    en: 'Supabase Cloud (PostgreSQL & Auth RLS)',
+    ar: 'سحابة Supabase (PostgreSQL و RLS)',
+  },
+  cloudSupabaseUrlLabel: {
+    fr: 'URL du projet Supabase',
+    en: 'Supabase Project URL',
+    ar: 'رابط مشروع Supabase',
+  },
+  cloudSupabaseKeyLabel: {
+    fr: 'Clé Publique (Publishable Key)',
+    en: 'Publishable Key (Client API Key)',
+    ar: 'المفتاح العام (Publishable Key)',
+  },
+  cloudSupabaseAnonLabel: {
+    fr: 'Legacy Anon Key (optionnel)',
+    en: 'Legacy Anon Key (optional)',
+    ar: 'مفتاح Anon القديم (اختياري)',
+  },
+  cloudSupabaseKeyHint: {
+    fr: 'Utilisez uniquement la clé publique cliente (RLS). Ne saisissez jamais de clé service_role.',
+    en: 'Use only the public client key (RLS). Never enter a service_role key.',
+    ar: 'استخدم المفتاح العام للعميل فقط (RLS). لا تدخل أبداً مفتاح service_role.',
+  },
+  cloudWorkspaceActiveLabel: {
+    fr: 'Espace de travail actif (Workspace)',
+    en: 'Active Workspace',
+    ar: 'مساحة العمل النشطة',
+  },
+  cloudWorkspaceSelectPrompt: {
+    fr: 'Sélectionner un workspace…',
+    en: 'Select a workspace…',
+    ar: 'اختر مساحة عمل…',
+  },
+  cloudTestConnection: {
+    fr: 'Tester la connexion',
+    en: 'Test connection',
+    ar: 'اختبار الاتصال',
+  },
+  cloudSaveAndRecover: {
+    fr: 'Enregistrer & récupérer',
+    en: 'Save & recover',
+    ar: 'حفظ واسترداد',
+  },
+  cloudResetDefault: {
+    fr: 'Rétablir défaut',
+    en: 'Reset default',
+    ar: 'استعادة الافتراضي',
+  },
+  cloudFirebaseTitle: {
+    fr: 'Firebase (Firestore & Realtime Database)',
+    en: 'Firebase (Firestore & Realtime Database)',
+    ar: 'Firebase (Firestore و Realtime Database)',
+  },
+  cloudFirebasePasteToggle: {
+    fr: 'Importer / coller un JSON firebaseConfig',
+    en: 'Import / paste firebaseConfig JSON',
+    ar: 'استيراد / لصق JSON لإعدادات Firebase',
+  },
+  cloudFirebasePasteApply: {
+    fr: 'Analyser et remplir',
+    en: 'Parse & fill',
+    ar: 'تحليل وتعبئة',
+  },
+  cloudFirebaseProjectIdLabel: {
+    fr: 'Project ID (Firestore)',
+    en: 'Project ID (Firestore)',
+    ar: 'معرّف المشروع Project ID (Firestore)',
+  },
+  cloudFirebaseDatabaseUrlLabel: {
+    fr: 'Database URL (Realtime Database)',
+    en: 'Database URL (Realtime Database)',
+    ar: 'رابط قاعدة البيانات Database URL (Realtime DB)',
+  },
+  cloudFirebaseApiKeyLabel: {
+    fr: 'Web API Key (optionnel)',
+    en: 'Web API Key (optional)',
+    ar: 'مفتاح Web API Key (اختياري)',
+  },
+  cloudFirebaseRootPathLabel: {
+    fr: 'Préfixe / Chemin racine (optionnel)',
+    en: 'Root path / prefix (optional)',
+    ar: 'المسار الجذري / البادئة (اختياري)',
+  },
+  cloudFirebaseClearBtn: {
+    fr: 'Effacer Firebase',
+    en: 'Clear Firebase',
+    ar: 'مسح إعدادات Firebase',
+  },
+  cloudNeonTitle: {
+    fr: 'Neon / PostgreSQL Serveur',
+    en: 'Neon / Server PostgreSQL',
+    ar: 'خادم Neon / PostgreSQL',
+  },
+  cloudNeonDesc: {
+    fr: 'Pour la sécurité des identifiants SQL, les connexions PostgreSQL directes (Neon / Cloud SQL) passent par le backend Node.js (DATABASE_URL) et ne sont jamais stockées en clair dans le navigateur.',
+    en: 'To protect SQL credentials, direct PostgreSQL connections (Neon / Cloud SQL) run through the Node.js backend (DATABASE_URL) and are never stored in browser storage.',
+    ar: 'لحماية بيانات اعتماد SQL، تمر اتصالات PostgreSQL المباشرة عبر خادم Node.js ولا تُخزّن أبداً في المتصفح.',
+  },
+  cloudShowSecret: {
+    fr: 'Afficher',
+    en: 'Show',
+    ar: 'إظهار',
+  },
+  cloudHideSecret: {
+    fr: 'Masquer',
+    en: 'Hide',
+    ar: 'إخفاء',
+  },
+  ganttSearchPlaceholder: {
+    fr: 'Rechercher client, n° réservation ou chambre...',
+    en: 'Search guest, reservation ID, or room...',
+    ar: 'ابحث باسم النزيل أو رقم الحجز أو الغرفة...',
+  },
+  ganttSearchLabel: {
+    fr: 'Rechercher une réservation dans le planning',
+    en: 'Search bookings in timeline',
+    ar: 'البحث عن الحجوزات في المخطط',
+  },
+  ganttSearchClear: {
+    fr: 'Effacer la recherche',
+    en: 'Clear search',
+    ar: 'مسح البحث',
+  },
+  ganttSearchPrevMatch: {
+    fr: 'Résultat précédent',
+    en: 'Previous match',
+    ar: 'النتيجة السابقة',
+  },
+  ganttSearchNextMatch: {
+    fr: 'Résultat suivant',
+    en: 'Next match',
+    ar: 'النتيجة التالية',
+  },
+  ganttSearchNoBookings: {
+    fr: 'Aucune réservation trouvée pour « {query} »',
+    en: 'No booking found for “{query}”',
+    ar: 'لم يتم العثور على حجز مطابق لـ «{query}»',
+  },
+  ganttSearchMatchesCount: {
+    fr: '{count} réservation(s)',
+    en: '{count} booking(s)',
+    ar: '{count} حجز',
+  },
+  ganttQuickCreateShort: {
+    fr: 'Créer',
+    en: 'Create',
+    ar: 'حجز',
+  },
+  ganttQuickCreateLabel: {
+    fr: 'Création rapide de réservation',
+    en: 'Quick create booking',
+    ar: 'إنشاء حجز سريع',
   },
 };
 

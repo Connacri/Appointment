@@ -57,6 +57,7 @@ into one establishment.
 - Offline mutations are durable and idempotent. Outbox pending is not synced; only a
   verified server ACK confirms synchronization.
 - Imports preserve source IDs/provenance and report orphan/ambiguous rows.
+- Automatic cloud recovery (`WorkspaceContext`, `src/context/AppContext.tsx`, `src/services/supabase/cloudRecovery.ts`, `src/services/cloud/firebaseRecovery.ts`, `indexedDb.getTombstones`) runs read-only when Supabase and/or optional Firebase Firestore / Realtime Database client config is configured (via runtime config in `EstablishmentSetupModal` / `localStorage` or `VITE_*` env vars) and online. It merges remote records safely without resurrecting locally tombstoned deletions, without overwriting pending local Outbox upserts, and without importing demo/bootstrap IDs; service-account private keys are rejected client-side. Verified by `tests/cloudRecovery.test.ts`.
 - CardLock MDB source locations are centralized per platform in `src/locks/database/mdbPaths.ts` (Windows: exact live VirtualStore path to use — `%LOCALAPPDATA%\VirtualStore\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb` — and `D:\proUSB_DBBak` backups; no separate Program Files copy path is kept. Android/web have no automatic exact local proUSB path). UI and import guidance must use these canonical exact paths; sandboxed runtimes cannot open arbitrary filesystem paths automatically and must rely on explicit user file/directory selection.
 
 ## 4. Mandatory change protocol

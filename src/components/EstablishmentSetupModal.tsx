@@ -32,8 +32,11 @@ import {
   Plus,
   Database,
   History,
+  Cloud,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { getTranslation } from '../i18n/translations';
+import { CloudConfigPanel } from './CloudConfigPanel';
 import {
   EstablishmentProfile,
   EstablishmentType,
@@ -61,8 +64,9 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   isFirstLaunch = false,
 }) => {
   const { establishmentProfile, setEstablishmentProfile, language, currency, setCurrency, resourceGroups, setResourceGroups, setBookings, setSelectedEstablishmentId, setHasOnboarded } = useApp();
+  const isRtl = language === 'ar';
 
-  const [activeTab, setActiveTab] = useState<'identity' | 'logo' | 'contact' | 'fiscal' | 'structure'>('identity');
+  const [activeTab, setActiveTab] = useState<'identity' | 'logo' | 'contact' | 'fiscal' | 'structure' | 'clouds'>('identity');
   const [formData, setFormData] = useState<EstablishmentProfile>(() => {
     return establishmentProfile || DEFAULT_ESTABLISHMENT_PROFILE;
   });
@@ -90,7 +94,40 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   const [isPickingBackups, setIsPickingBackups] = useState(false);
   const cardLockPaths = useMemo(() => getCardLockMdbPaths(), []);
 
+  React.useEffect(() => {
+    if (!isOpen || isFirstLaunch) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, isFirstLaunch, onClose]);
+
   if (!isOpen) return null;
+
+  const handleRecoveredCloudProfile = (recovered: Partial<EstablishmentProfile>) => {
+    setFormData((prev) => ({
+      ...prev,
+      name: prev.name.trim() ? prev.name : (recovered.name ?? prev.name),
+      address: prev.address.trim() ? prev.address : (recovered.address ?? prev.address),
+      city: prev.city.trim() ? prev.city : (recovered.city ?? prev.city),
+      country: prev.country.trim() ? prev.country : (recovered.country ?? prev.country),
+      phone: prev.phone.trim() ? prev.phone : (recovered.phone ?? prev.phone),
+      email: prev.email.trim() ? prev.email : (recovered.email ?? prev.email),
+      website: prev.website?.trim() ? prev.website : (recovered.website ?? prev.website),
+      stars: prev.stars > 0 ? prev.stars : (recovered.stars ?? prev.stars),
+      taxNumber: prev.taxNumber?.trim() ? prev.taxNumber : (recovered.taxNumber ?? prev.taxNumber),
+      tradeRegisterNumber: prev.tradeRegisterNumber?.trim() ? prev.tradeRegisterNumber : (recovered.tradeRegisterNumber ?? prev.tradeRegisterNumber),
+      bankName: prev.bankName?.trim() ? prev.bankName : (recovered.bankName ?? prev.bankName),
+      bankAccountRib: prev.bankAccountRib?.trim() ? prev.bankAccountRib : (recovered.bankAccountRib ?? prev.bankAccountRib),
+      defaultCurrency: prev.defaultCurrency || recovered.defaultCurrency || 'DA',
+      checkInTime: prev.checkInTime || recovered.checkInTime || '14:00',
+      checkOutTime: prev.checkOutTime || recovered.checkOutTime || '12:00',
+    }));
+    if (recovered.logoUrl && (!formData.logoUrl || formData.logoUrl === PRESET_HOTEL_LOGOS[0].svgDataUrl)) {
+      setCustomLogoPreview(recovered.logoUrl);
+    }
+  };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -247,12 +284,13 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
 
   return (
     <div
+      dir={isRtl ? 'rtl' : 'ltr'}
       className="fixed inset-0 z-[30000] flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm pms-modal-backdrop"
       role="dialog"
       aria-modal="true"
       aria-labelledby="establishment-modal-title"
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full shadow-2xl flex flex-col max-h-[94vh] overflow-hidden pms-modal">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full shadow-2xl flex flex-col max-h-[94dvh] overflow-hidden pms-modal">
         {/* Modal Header */}
         <div className="px-3.5 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-blue-50/60 via-indigo-50/40 to-transparent dark:from-blue-950/30 dark:via-slate-900 dark:to-transparent shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3">
@@ -297,6 +335,12 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
             { id: 'contact', label: '3. Contact', fullLabel: '3. Adresse & Contact', icon: MapPin },
             { id: 'fiscal', label: '4. Fiscalité', fullLabel: '4. Fiscalité & RIB Bancaire', icon: Landmark },
             { id: 'structure', label: '5. Chambres', fullLabel: '5. Bâtiments & Chambres', icon: Layers },
+            {
+              id: 'clouds',
+              label: getTranslation('setupTabCloudsShort', language),
+              fullLabel: getTranslation('setupTabCloudsFull', language),
+              icon: Cloud,
+            },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -1055,14 +1099,19 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
             </div>
           )}
 
+          {/* TAB 6: CLOUD DATABASES & AUTO-RECOVERY */}
+          {activeTab === 'clouds' && (
+            <CloudConfigPanel onRecoveredProfile={handleRecoveredCloudProfile} />
+          )}
+
           {/* Modal Footer */}
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-              <ShieldCheck size={14} className="text-emerald-500" />
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-400 min-w-0">
+              <ShieldCheck size={14} className="text-emerald-500 shrink-0" />
               <span>Données conservées en local et synchronisées avec vos factures</span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {isFirstLaunch && (
                 <button
                   type="button"
@@ -1070,7 +1119,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                     localStorage.setItem('omnibook_onboarding_completed', 'true');
                     onClose();
                   }}
-                  className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl font-semibold transition-colors cursor-pointer"
+                  className="min-h-10 px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl font-semibold transition-colors cursor-pointer"
                 >
                   Découvrir avec le profil démo
                 </button>
@@ -1079,7 +1128,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
               <button
                 type="button"
                 onClick={() => handleSave()}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-extrabold rounded-xl shadow-md shadow-blue-500/20 transition flex items-center gap-2 cursor-pointer"
+                className="min-h-10 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-extrabold rounded-xl shadow-md shadow-blue-500/20 transition flex items-center gap-2 cursor-pointer"
               >
                 <CheckCircle2 size={16} />
                 <span>Enregistrer & Appliquer à l'Établissement</span>

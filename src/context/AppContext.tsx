@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import {
   Language,
   Theme,
@@ -25,6 +25,21 @@ import {
 import { EstablishmentProfile, DEFAULT_ESTABLISHMENT_PROFILE } from '../types/establishment';
 import { indexedDb } from '../db/indexedDb';
 import { useWorkspace } from '../services/supabase/WorkspaceContext';
+import { isSupabaseConfigured, supabase } from '../services/supabase/supabaseClient';
+import {
+  listBookings,
+  listDynamicRates,
+  listEstablishments,
+  listResourceGroups,
+  listStockItems,
+  listTasks,
+} from '../services/supabase/pmsRepository';
+import { mergeCloudStateWithLocal } from '../services/supabase/cloudRecovery';
+import {
+  isAnyFirebaseCloudConfigured,
+  readFirebaseCloudConfig,
+  recoverFromFirebaseCloud,
+} from '../services/cloud/firebaseRecovery';
 import { isValidCalendarDate, shouldMarkPaymentAsPaid } from '../utils/bookingValidation';
 import { isRoomReadyForBooking } from '../utils/roomReadiness';
 import { lockManager } from '../locks/lockManager';
@@ -162,10 +177,23 @@ interface AppContextType {
   setIsEstablishmentModalOpen: (open: boolean) => void;
   hasOnboarded: boolean;
   setHasOnboarded: (done: boolean) => void;
+  triggerCloudRecovery: () => Promise<CloudRecoveryReport>;
+}
+
+export interface CloudRecoveryReport {
+  sources: Array<'supabase' | 'firestore' | 'realtime_database'>;
+  recoveredGroupsCount: number;
+  recoveredBookingsCount: number;
+  recoveredTasksCount: number;
+  recoveredStockCount: number;
+  recoveredProfile: Partial<EstablishmentProfile> | null;
+  warnings: string[];
+  skippedOffline?: boolean;
 }
 
 const DEMO_BOOKING_IDS = new Set(initialBookings.map((booking) => booking.id));
 const DEMO_RESOURCE_IDS = new Set(initialResourceGroups.flatMap((group) => group.resources.map((resource) => resource.id)));
+const DEMO_GROUP_IDS = new Set(initialResourceGroups.map((group) => group.id));
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -557,6 +585,220 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error('[AppContext] Failed to persist resource groups/resources to IndexedDB:', error);
     });
   }, [resourceGroups, isCoreDataHydrated]);
+
+  const latestBookingsRef = useRef(bookings);
+  const latestGroupsRef = useRef(resourceGroups);
+  const latestProfileRef = useRef(establishmentProfile);
+  latestBookingsRef.current = bookings;
+  latestGroupsRef.current = resourceGroups;
+  latestProfileRef.current = establishmentProfile;
+  const isRecoveringCloudRef = useRef(false);
+
+  // Automatic cloud database recovery (Supabase, Firestore, Firebase Realtime DB):
+  // detects any configured & reachable cloud store when online, recovers records
+  // into local state while preserving pending Outbox mutations and tombstones.
+  const recoverFromCloudDb = useCallback(async (): Promise<CloudRecoveryReport> => {
+    const emptyReport: CloudRecoveryReport = {
+      sources: [],
+      recoveredGroupsCount: 0,
+      recoveredBookingsCount: 0,
+      recoveredTasksCount: 0,
+      recoveredStockCount: 0,
+      recoveredProfile: null,
+      warnings: [],
+    };
+    if (!isCoreDataHydrated || isOffline) {
+      return { ...emptyReport, skippedOffline: isOffline };
+    }
+    if (isRecoveringCloudRef.current) return emptyReport;
+    isRecoveringCloudRef.current = true;
+
+    try {
+      const workspaceId = workspace.activeWorkspaceId;
+      const firebaseConfig = readFirebaseCloudConfig();
+      const hasFirebase = isAnyFirebaseCloudConfigured(firebaseConfig);
+
+      const allRemoteGroups: ResourceGroup[] = [];
+      const allRemoteBookings: TimelineBooking[] = [];
+      const allRemoteTasks: PmsTask[] = [];
+      const allRemoteStock: StockItem[] = [];
+      const mergedRemoteRates: Record<string, Record<string, number>> = {};
+      const sources: Array<'supabase' | 'firestore' | 'realtime_database'> = [];
+      const warnings: string[] = [];
+      let recoveredProfile: Partial<EstablishmentProfile> | null = null;
+
+      // 1. Supabase recovery (when configured, authenticated, and workspace selected)
+      if (isSupabaseConfigured && supabase && workspaceId) {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData.session) {
+            const [remoteGroups, remoteBookings, remoteEstablishments, remoteRates] = await Promise.all([
+              listResourceGroups(workspaceId),
+              listBookings(workspaceId),
+              listEstablishments(workspaceId).catch(() => []),
+              listDynamicRates(workspaceId).catch(() => ({} as Record<string, Record<string, number>>)),
+            ]);
+            sources.push('supabase');
+            allRemoteGroups.push(...remoteGroups);
+            allRemoteBookings.push(...remoteBookings);
+            for (const [roomType, dates] of Object.entries(remoteRates)) {
+              mergedRemoteRates[roomType] = { ...(mergedRemoteRates[roomType] || {}), ...dates };
+            }
+            if (remoteEstablishments.length > 0) {
+              const firstEst = remoteEstablishments[0];
+              if (firstEst.name) {
+                recoveredProfile = {
+                  name: firstEst.name,
+                  city: firstEst.city || undefined,
+                  stars: firstEst.stars,
+                  checkInTime: firstEst.checkInTime,
+                  checkOutTime: firstEst.checkOutTime,
+                };
+              }
+              const [taskLists, stockLists] = await Promise.all([
+                Promise.all(remoteEstablishments.map((est) => listTasks(workspaceId, est.id).catch(() => []))),
+                Promise.all(remoteEstablishments.map((est) => listStockItems(workspaceId, est.id).catch(() => []))),
+              ]);
+              allRemoteTasks.push(...taskLists.flat());
+              allRemoteStock.push(...stockLists.flat());
+            }
+          }
+        } catch (err) {
+          warnings.push(`Supabase : ${err instanceof Error ? err.message : 'échec récupération'}`);
+        }
+      }
+
+      // 2. Firebase Firestore / Realtime Database recovery (if configured)
+      if (hasFirebase) {
+        try {
+          const fb = await recoverFromFirebaseCloud(firebaseConfig);
+          sources.push(...fb.sources);
+          warnings.push(...fb.warnings);
+          allRemoteGroups.push(...fb.groups);
+          allRemoteBookings.push(...fb.bookings);
+          allRemoteTasks.push(...fb.tasks);
+          allRemoteStock.push(...fb.stockItems);
+          for (const [roomType, dates] of Object.entries(fb.dynamicRates)) {
+            mergedRemoteRates[roomType] = { ...(mergedRemoteRates[roomType] || {}), ...dates };
+          }
+          if (fb.establishmentProfile) {
+            recoveredProfile = { ...(recoveredProfile || {}), ...fb.establishmentProfile };
+          }
+        } catch (err) {
+          warnings.push(`Firebase : ${err instanceof Error ? err.message : 'échec récupération'}`);
+        }
+      }
+
+      let recoveredGroupsCount = 0;
+      let recoveredBookingsCount = 0;
+
+      if (allRemoteGroups.length > 0 || allRemoteBookings.length > 0) {
+        const outboxScope = workspaceId || 'firebase';
+        const [pendingOutbox, tombstones] = await Promise.all([
+          indexedDb.getPendingOutbox(outboxScope).catch(() => []),
+          indexedDb.getTombstones(outboxScope).catch(() => []),
+        ]);
+
+        const merged = mergeCloudStateWithLocal({
+          localGroups: latestGroupsRef.current,
+          localBookings: latestBookingsRef.current,
+          remoteGroups: allRemoteGroups,
+          remoteBookings: allRemoteBookings,
+          pendingOutbox,
+          tombstones,
+          demoGroupIds: DEMO_GROUP_IDS,
+          demoResourceIds: DEMO_RESOURCE_IDS,
+          demoBookingIds: DEMO_BOOKING_IDS,
+        });
+
+        recoveredGroupsCount = merged.recoveredGroupsCount;
+        recoveredBookingsCount = merged.recoveredBookingsCount;
+        setResourceGroups(merged.groups);
+        setBookings(merged.bookings);
+      }
+
+      if (allRemoteTasks.length > 0) {
+        setTasks((prev) => {
+          const byId = new Map(prev.map((t) => [t.id, t]));
+          for (const task of allRemoteTasks) byId.set(task.id, task);
+          const next = [...byId.values()];
+          localStorage.setItem('omnibook_pms_tasks', JSON.stringify(next));
+          return next;
+        });
+      }
+
+      if (allRemoteStock.length > 0) {
+        setStockItems((prev) => {
+          const byId = new Map(prev.map((s) => [s.id, s]));
+          for (const item of allRemoteStock) byId.set(item.id, item);
+          const next = [...byId.values()];
+          localStorage.setItem('omnibook_stock_items', JSON.stringify(next));
+          return next;
+        });
+      }
+
+      if (Object.keys(mergedRemoteRates).length > 0) {
+        setDynamicRates((prev) => {
+          const next = { ...prev };
+          for (const [roomType, dates] of Object.entries(mergedRemoteRates)) {
+            next[roomType] = { ...(next[roomType] || {}), ...dates };
+          }
+          localStorage.setItem('omnibook_dynamic_rates', JSON.stringify(next));
+          return next;
+        });
+      }
+
+      // If local profile is still an unnamed draft and cloud returned a real establishment
+      // profile, populate missing fields safely without overwriting user edits.
+      if (
+        recoveredProfile &&
+        !latestProfileRef.current.name.trim() &&
+        recoveredProfile.name?.trim()
+      ) {
+        const hydratedProfile: EstablishmentProfile = {
+          ...latestProfileRef.current,
+          ...recoveredProfile,
+          id: latestProfileRef.current.id === 'establishment-draft' ? 'establishment-cloud' : latestProfileRef.current.id,
+          updatedAt: new Date().toISOString(),
+        };
+        setEstablishmentProfile(hydratedProfile);
+      }
+
+      return {
+        sources: [...new Set(sources)],
+        recoveredGroupsCount,
+        recoveredBookingsCount,
+        recoveredTasksCount: allRemoteTasks.length,
+        recoveredStockCount: allRemoteStock.length,
+        recoveredProfile,
+        warnings,
+      };
+    } catch (error) {
+      console.warn('[AppContext] Automatic cloud DB recovery skipped:', error);
+      return {
+        ...emptyReport,
+        warnings: [error instanceof Error ? error.message : 'Erreur récupération cloud'],
+      };
+    } finally {
+      isRecoveringCloudRef.current = false;
+    }
+  }, [isCoreDataHydrated, workspace.activeWorkspaceId, isOffline]);
+
+  useEffect(() => {
+    void recoverFromCloudDb();
+  }, [recoverFromCloudDb]);
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      void recoverFromCloudDb();
+    };
+    window.addEventListener('appointment-refresh', handleRefresh);
+    window.addEventListener('appointment-cloud-config-updated', handleRefresh);
+    return () => {
+      window.removeEventListener('appointment-refresh', handleRefresh);
+      window.removeEventListener('appointment-cloud-config-updated', handleRefresh);
+    };
+  }, [recoverFromCloudDb]);
 
   // Housekeeping status updater
   const updateHousekeepingStatus = (
@@ -1245,6 +1487,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsEstablishmentModalOpen,
         hasOnboarded,
         setHasOnboarded,
+        triggerCloudRecovery: recoverFromCloudDb,
       }}
     >
       {children}

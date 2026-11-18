@@ -594,6 +594,21 @@ class IndexedDbStore {
     return records;
   }
 
+  public async getTombstones(workspaceId: string): Promise<TombstoneRecord[]> {
+    if (!workspaceId.trim()) return [];
+    await this.openStore();
+    if (!this.idb) return [];
+    const tx = this.idb.transaction('tombstones', 'readonly');
+    const records = await new Promise<TombstoneRecord[]>((resolve, reject) => {
+      const request = tx.objectStore('tombstones').getAll();
+      request.onsuccess = () =>
+        resolve((request.result as TombstoneRecord[]).filter((record) => record.workspaceId === workspaceId));
+      request.onerror = () => reject(request.error);
+    });
+    await waitForTransactionCompletion(tx, 'getTombstones');
+    return records;
+  }
+
   public async markOutboxSynced(id: string): Promise<void> {
     await this.openStore();
     if (!this.idb) throw new Error('Outbox is unavailable without IndexedDB.');

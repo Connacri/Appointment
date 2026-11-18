@@ -140,6 +140,21 @@ export async function addStockMovement(workspaceId: WorkspaceId, establishmentId
   return unwrap(await db.from('stock_movements').insert({id:m.id,workspace_id:workspaceId,establishment_id:establishmentId,item_id:m.itemId,timestamp:m.timestamp,delta:m.delta,reason:m.reason,room:m.room ?? null,actor_name:m.user,created_by:auth.user?.id ?? null}).select().single());
 }
 
+export async function listDynamicRates(workspaceId: WorkspaceId, establishmentId?: string): Promise<Record<string, Record<string, number>>> {
+  const db = requireSupabase();
+  let q = db.from('dynamic_rates').select('resource_type,rate_date,price').eq('workspace_id', workspaceId).is('deleted_at', null);
+  if (establishmentId) q = q.eq('establishment_id', establishmentId);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const matrix: Record<string, Record<string, number>> = {};
+  for (const row of data ?? []) {
+    if (!row.resource_type || !row.rate_date) continue;
+    if (!matrix[row.resource_type]) matrix[row.resource_type] = {};
+    matrix[row.resource_type][row.rate_date] = Number(row.price);
+  }
+  return matrix;
+}
+
 export async function syncCardLockMdbToSupabase(
   groups: ResourceGroup[],
   bookingsList: TimelineBooking[],

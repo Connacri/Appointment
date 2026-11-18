@@ -30,9 +30,14 @@ import {
   Check,
   Undo2,
   SearchX,
+  ZoomIn,
+  ZoomOut,
+  Search,
+  ChevronUp,
+  Plus,
+  Crosshair,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { normalizeBookingText } from '../utils/bookingText';
 import { ResourceGroup, ResourceItem, TimelineBooking, BookingStatus } from '../types/booking';
 import { statusConfig } from './LegendBar';
 import { getTranslation } from '../i18n/translations';
@@ -43,6 +48,24 @@ import {
   computeTimelineDragScroll,
   TimelineDragState,
 } from '../utils/timelineDragPan';
+import {
+  TimelineScaleView,
+  TIMELINE_ZOOM_STORAGE_KEY,
+  clampZoomLevel,
+  getColumnWidthFromZoomLevel,
+  getPresetZoomLevel,
+  getScaleViewFromZoomLevel,
+  readInitialZoomLevel,
+} from '../utils/timelineZoom';
+import {
+  TimelineBookingMatch,
+  computeQuickCreateCheckInTime,
+  doesResourceMatchQuery,
+  findMatchingTimelineBookings,
+  getResourceSubgroupMeta,
+  hasSameDayCheckout,
+  isTimelineCellAvailableForQuickCreate,
+} from '../utils/timelineSearch';
 
 export const PlanningTimeline: React.FC = () => {
   const {
@@ -50,6 +73,7 @@ export const PlanningTimeline: React.FC = () => {
     currentBaseDate,
     setCurrentBaseDate,
     dateRangeMode,
+    setDateRangeMode,
     bookings,
     setBookings,
     searchQuery,
@@ -260,12 +284,18 @@ export const PlanningTimeline: React.FC = () => {
   }, [cleanupDrag]);
 
 
-  // Persist the user's last selected density and day-column width.
-  const [columnZoomMode, setColumnZoomMode] = useState<'compact' | 'standard' | 'wide'>(() => {
-    if (typeof window === 'undefined') return 'standard';
-    const saved = window.localStorage.getItem('appointment.gantt.columnZoom');
-    return saved === 'compact' || saved === 'wide' || saved === 'standard' ? saved : window.innerWidth < 768 ? 'compact' : 'standard';
-  });
+  // Persist the user's last selected density and zoom level (Day / Week / Month).
+  const [zoomLevel, setZoomLevel] = useState<number>(() => readInitialZoomLevel());
+  const scaleView = getScaleViewFromZoomLevel(zoomLevel);
+
+  const selectScaleView = useCallback((view: TimelineScaleView) => {
+    setZoomLevel(getPresetZoomLevel(view));
+  }, []);
+
+  const adjustZoom = useCallback((delta: number) => {
+    setZoomLevel((prev) => clampZoomLevel(prev + delta));
+  }, []);
+
   const [leftBarMode, setLeftBarMode] = useState<'normal' | 'compact' | 'mini'>(() => {
     if (typeof window === 'undefined') return 'normal';
     const saved = window.localStorage.getItem('appointment.gantt.leftDensity');
@@ -274,7 +304,19 @@ export const PlanningTimeline: React.FC = () => {
   const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [isDayHeaderCollapsed, setIsDayHeaderCollapsed] = useState(false);
   const [scrollVisibleDate, setScrollVisibleDate] = useState<string>(() => currentBaseDate);
-  useEffect(() => { window.localStorage.setItem('appointment.gantt.columnZoom', columnZoomMode); }, [columnZoomMode]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(TIMELINE_ZOOM_STORAGE_KEY, String(zoomLevel));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [zoomLevel]);
+  useEffect(() => {
+    const desiredRange = scaleView === 'month' ? 'one_month' : 'two_weeks';
+    if (dateRangeMode !== desiredRange) {
+      setDateRangeMode(desiredRange);
+    }
+  }, [scaleView, dateRangeMode, setDateRangeMode]);
   useEffect(() => { window.localStorage.setItem('appointment.gantt.leftDensity', leftBarMode); }, [leftBarMode]);
   useEffect(() => {
     const media = window.matchMedia('(max-width: 767px)');
@@ -347,13 +389,11 @@ export const PlanningTimeline: React.FC = () => {
     }
   };
 
-  // Dynamic day column width adapted to viewport
-  const colWidth = useMemo(() => {
-    if (isMobileScreen) {
-      return columnZoomMode === 'compact' ? 34 : columnZoomMode === 'wide' ? 80 : 54;
-    }
-    return columnZoomMode === 'compact' ? 44 : columnZoomMode === 'wide' ? 144 : 100;
-  }, [columnZoomMode, isMobileScreen]);
+  // Dynamic day column width driven by continuous zoom slider + Day/Week/Month scale presets
+  const colWidth = useMemo(
+    () => getColumnWidthFromZoomLevel(zoomLevel, isMobileScreen),
+    [zoomLevel, isMobileScreen]
+  );
 
   // Stable day header height to prevent vertical jitter during scroll
   const dayHeaderHeightClass = isMobileScreen
@@ -467,14 +507,21 @@ export const PlanningTimeline: React.FC = () => {
 
   const timelineDays = useMemo(() => {
     const [y, m, d] = timelineWindowStart.split('-').map(Number);
-    const dates: { dateStr: string; dayNum: number; dayName: string; isWeekend: boolean; isToday: boolean }[] = [];
+    const dates: {
+      dateStr: string;
+      dayNum: number;
+      dayName: string;
+      monthShort: string;
+      isFirstOfMonth: boolean;
+      isWeekend: boolean;
+      isToday: boolean;
+    }[] = [];
 
     const realTodayStr = timelineSync.todayDateStr;
+    const locale = language === 'fr' ? 'fr-FR' : language === 'ar' ? 'ar-EG' : 'en-US';
 
-    const dayFormatter = new Intl.DateTimeFormat(
-      language === 'fr' ? 'fr-FR' : language === 'ar' ? 'ar-EG' : 'en-US',
-      { weekday: 'short' }
-    );
+    const dayFormatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
+    const monthFormatter = new Intl.DateTimeFormat(locale, { month: 'short' });
 
     for (let i = 0; i < timelineWindowDays; i++) {
       const cur = new Date(y, m - 1, d);
@@ -485,14 +532,17 @@ export const PlanningTimeline: React.FC = () => {
 
       const dayOfWeek = cur.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      const dayNum = cur.getDate();
 
       // Real check against actual current calendar day
       const isToday = iso === realTodayStr;
 
       dates.push({
         dateStr: iso,
-        dayNum: cur.getDate(),
+        dayNum,
         dayName: dayFormatter.format(cur),
+        monthShort: monthFormatter.format(cur),
+        isFirstOfMonth: dayNum === 1,
         isWeekend,
         isToday,
       });
@@ -500,23 +550,40 @@ export const PlanningTimeline: React.FC = () => {
     return dates;
   }, [timelineWindowStart, timelineWindowDays, language, timelineSync.todayDateStr]);
 
-  // Center timeline on currentBaseDate when it changes (or on mount).
-  // useLayoutEffect runs before paint so the first visible frame is already
-  // centered: without it, one frame shows scrollLeft=0 (oldest dates) where a
-  // past booking clamped to the left edge flashes as a full-width bar before
-  // scrolling out of view.
+  // Center timeline on currentBaseDate on initial mount or base date navigation,
+  // and preserve the currently centered viewport day when zooming via slider or presets.
   const hasCenteredInitialDateRef = useRef(false);
+  const prevColWidthRef = useRef(colWidth);
+  const prevBaseDateRef = useRef(currentBaseDate);
   useLayoutEffect(() => {
-    const idx = timelineDays.findIndex((day) => day.dateStr === currentBaseDate);
-    if (idx >= 0 && scrollContainerRef.current) {
-      const el = scrollContainerRef.current;
-      const target = Math.max(0, idx * colWidth - (isMobileScreen ? 20 : 60));
-      el.scrollTo({
-        left: target * (isRTL ? -1 : 1),
-        behavior: hasCenteredInitialDateRef.current ? 'smooth' : 'auto',
-      });
-      hasCenteredInitialDateRef.current = true;
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    const baseDateChanged = prevBaseDateRef.current !== currentBaseDate;
+    const prevColWidth = prevColWidthRef.current;
+    const colWidthChanged = prevColWidth !== colWidth;
+
+    if (!hasCenteredInitialDateRef.current || baseDateChanged) {
+      const idx = timelineDays.findIndex((day) => day.dateStr === currentBaseDate);
+      if (idx >= 0) {
+        const target = Math.max(0, idx * colWidth - (isMobileScreen ? 20 : 60));
+        el.scrollTo({
+          left: target * (isRTL ? -1 : 1),
+          behavior: hasCenteredInitialDateRef.current ? 'smooth' : 'auto',
+        });
+        hasCenteredInitialDateRef.current = true;
+      }
+    } else if (colWidthChanged && prevColWidth > 0) {
+      const resourceColEl = el.querySelector('[data-gantt-resource-column="true"]') as HTMLElement | null;
+      const resourceColWidth = resourceColEl?.offsetWidth ?? 0;
+      const gridViewportWidth = Math.max(0, el.clientWidth - resourceColWidth);
+      const centerDayFloat = (Math.abs(el.scrollLeft) + gridViewportWidth / 2) / prevColWidth;
+      const targetScroll = Math.max(0, centerDayFloat * colWidth - gridViewportWidth / 2);
+      el.scrollLeft = targetScroll * (isRTL ? -1 : 1);
     }
+
+    prevColWidthRef.current = colWidth;
+    prevBaseDateRef.current = currentBaseDate;
   }, [currentBaseDate, timelineDays, colWidth, isRTL, isMobileScreen]);
 
   // Derive the marker index from the exact date rendered in the day columns.
@@ -527,7 +594,70 @@ export const PlanningTimeline: React.FC = () => {
   const todayIndex = timelineDays.findIndex((day) => day.dateStr === realTodayStr);
   const isTodayInRange = todayIndex >= 0;
 
-  // Filter resource groups strictly by currentDomain (NEVER MIX) & searchQuery & establishment
+  // Dedicated timeline search & quick-locate state (combines seamlessly with global TopBar searchQuery)
+  const [timelineSearchQuery, setTimelineSearchQuery] = useState('');
+  const [isSearchResultsOpen, setIsSearchResultsOpen] = useState(false);
+  const [activeMatchIndex, setActiveMatchIndex] = useState(0);
+  const [locatedBookingId, setLocatedBookingId] = useState<string | null>(null);
+  const searchBoxRef = useRef<HTMLDivElement | null>(null);
+  const locateScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const effectiveSearchQuery = timelineSearchQuery.trim()
+    ? timelineSearchQuery
+    : searchQuery;
+
+  // Close search results popover on outside click / touch
+  useEffect(() => {
+    const handleOutside = (event: MouseEvent | TouchEvent) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(event.target as Node)) {
+        setIsSearchResultsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (locateScrollTimerRef.current) clearTimeout(locateScrollTimerRef.current);
+    };
+  }, []);
+
+  // Matching guest bookings across the active domain & establishment (by guest name, reservation ID, or room number)
+  const matchingBookingResults = useMemo(
+    () =>
+      findMatchingTimelineBookings({
+        bookings,
+        resourceGroups,
+        query: effectiveSearchQuery,
+        currentDomain,
+        selectedEstablishmentId,
+        groupingMode,
+        language,
+      }),
+    [
+      bookings,
+      resourceGroups,
+      effectiveSearchQuery,
+      currentDomain,
+      selectedEstablishmentId,
+      groupingMode,
+      language,
+    ]
+  );
+
+  useEffect(() => {
+    setActiveMatchIndex(0);
+    if (!effectiveSearchQuery.trim()) {
+      setLocatedBookingId(null);
+    }
+  }, [effectiveSearchQuery]);
+
+  // Filter resource groups strictly by currentDomain (NEVER MIX) & effectiveSearchQuery & establishment
   const filteredGroups = useMemo(() => {
     return resourceGroups
       .filter((grp) =>
@@ -536,20 +666,13 @@ export const PlanningTimeline: React.FC = () => {
       )
       .map((grp) => {
         let matchingResources = grp.resources;
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
-          // Imported inventory and legacy bookings may carry missing fields; a
-          // thrown exception here would unmount the whole view, so compare text safely.
-          const text = normalizeBookingText;
-          matchingResources = matchingResources.filter(
-            (r) =>
-              text(r.name).includes(q) ||
-              text(r.type).includes(q) ||
-              bookings.some(
-                (b) =>
-                  b.resourceId === r.id &&
-                  (text(b.guestName).includes(q) || text(b.guestEmail).includes(q))
-              )
+        if (effectiveSearchQuery.trim()) {
+          matchingResources = matchingResources.filter((r) =>
+            doesResourceMatchQuery(
+              r,
+              bookings.filter((b) => b.resourceId === r.id),
+              effectiveSearchQuery
+            )
           );
         }
         return {
@@ -557,8 +680,8 @@ export const PlanningTimeline: React.FC = () => {
           resources: matchingResources,
         };
       })
-      .filter((grp) => grp.resources.length > 0 || (currentDomain === 'hotel' && !searchQuery.trim()));
-  }, [currentDomain, resourceGroups, searchQuery, bookings, selectedEstablishmentId]);
+      .filter((grp) => grp.resources.length > 0 || (currentDomain === 'hotel' && !effectiveSearchQuery.trim()));
+  }, [currentDomain, resourceGroups, effectiveSearchQuery, bookings, selectedEstablishmentId]);
 
   // Gantt hierarchy: building (resource group) > floor / wing / floor_wing > room.
   // The room type remains visible on each room row.
@@ -571,41 +694,15 @@ export const PlanningTimeline: React.FC = () => {
       }
       const subgroups = new Map<string, { label: string; shortLabel: string; sortKey: string; resources: ResourceItem[] }>();
       for (const resource of group.resources) {
-        let floor = resource.floor?.trim() || '';
-        if (!floor) {
-          const pureDigits = resource.name.replace(/\D/g, '');
-          if (pureDigits.length >= 3) {
-            floor = pureDigits[0];
-          } else if (pureDigits.length > 0) {
-            floor = '1';
-          } else {
-            floor = '1';
-          }
-        }
-
-        const rawWing = resource.wing?.trim();
-        const wing = rawWing || (language === 'fr' ? 'Aile Principale' : language === 'ar' ? 'الجناح الرئيسي' : 'Main Wing');
-
-        let subKey = floor;
-        let subLabel = language === 'fr' ? `Étage ${floor}` : language === 'ar' ? `الطابق ${floor}` : `Floor ${floor}`;
-        let shortLabel = language === 'ar' ? `ط${floor}` : `É${floor}`;
-        let sortKey = floor.padStart(4, '0');
-
-        if (groupingMode === 'wing') {
-          subKey = wing;
-          subLabel = wing;
-          shortLabel = wing.substring(0, 4);
-          sortKey = wing;
-        } else if (groupingMode === 'floor_wing') {
-          subKey = `${floor}_${wing}`;
-          subLabel = `${language === 'fr' ? 'Étage' : language === 'ar' ? 'الطابق' : 'Floor'} ${floor} • ${wing}`;
-          shortLabel = `${language === 'ar' ? 'ط' : 'É'}${floor} • ${wing.substring(0, 4)}`;
-          sortKey = `${floor.padStart(4, '0')}_${wing}`;
-        }
-
-        const existing = subgroups.get(subKey) ?? { label: subLabel, shortLabel, sortKey, resources: [] };
+        const meta = getResourceSubgroupMeta(resource, groupingMode, language);
+        const existing = subgroups.get(meta.key) ?? {
+          label: meta.label,
+          shortLabel: meta.shortLabel,
+          sortKey: meta.sortKey,
+          resources: [],
+        };
         existing.resources.push(resource);
-        subgroups.set(subKey, existing);
+        subgroups.set(meta.key, existing);
       }
 
       result.set(
@@ -652,10 +749,89 @@ export const PlanningTimeline: React.FC = () => {
     setCollapsedFloors(next);
   };
 
+  // Scroll & focus onto a matched booking (auto-expands collapsed groups/floors, scrolls horizontally to startDate and vertically to the room row)
+  const locateBookingMatch = useCallback(
+    (match: TimelineBookingMatch, indexInResults?: number) => {
+      if (typeof indexInResults === 'number') {
+        setActiveMatchIndex(indexInResults);
+      }
+      setLocatedBookingId(match.booking.id);
+      setCollapsedGroups((prev) =>
+        prev[match.groupId] ? { ...prev, [match.groupId]: false } : prev
+      );
+      if (match.floorKey && match.floorKey !== 'all') {
+        const floorStateKey = `${match.groupId}:${match.floorKey}`;
+        setCollapsedFloors((prev) =>
+          prev[floorStateKey] ? { ...prev, [floorStateKey]: false } : prev
+        );
+      }
+
+      const prefersReducedMotion =
+        typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      const scrollBehavior: ScrollBehavior = prefersReducedMotion ? 'auto' : 'smooth';
+
+      const dayIndex = timelineDays.findIndex((d) => d.dateStr === match.booking.startDate);
+      if (dayIndex === -1) {
+        setCurrentBaseDate(match.booking.startDate);
+      }
+
+      if (locateScrollTimerRef.current) clearTimeout(locateScrollTimerRef.current);
+      locateScrollTimerRef.current = setTimeout(() => {
+        const el = scrollContainerRef.current;
+        if (!el) return;
+
+        if (dayIndex >= 0) {
+          const resourceColEl = el.querySelector('[data-gantt-resource-column="true"]') as HTMLElement | null;
+          const resourceColWidth = resourceColEl?.offsetWidth ?? 0;
+          const gridViewportWidth = Math.max(0, el.clientWidth - resourceColWidth);
+          const targetX = Math.max(0, dayIndex * colWidth - Math.min(gridViewportWidth * 0.25, 160));
+          el.scrollTo({ left: targetX * (isRTL ? -1 : 1), behavior: scrollBehavior });
+        }
+
+        const rowEl = el.querySelector(
+          `[data-gantt-resource-row="${match.booking.resourceId}"]`
+        ) as HTMLElement | null;
+        if (rowEl) {
+          rowEl.scrollIntoView({ block: 'nearest', behavior: scrollBehavior });
+        }
+      }, 40);
+    },
+    [timelineDays, colWidth, isRTL, setCurrentBaseDate]
+  );
+
+  const cycleBookingMatch = useCallback(
+    (direction: -1 | 1) => {
+      if (matchingBookingResults.length === 0) return;
+      const total = matchingBookingResults.length;
+      const nextIndex = (activeMatchIndex + direction + total) % total;
+      locateBookingMatch(matchingBookingResults[nextIndex], nextIndex);
+    },
+    [matchingBookingResults, activeMatchIndex, locateBookingMatch]
+  );
+
+  const openQuickCreateForCell = useCallback(
+    (res: ResourceItem, dateStr: string, resBookings: TimelineBooking[]) => {
+      const suggestedCheckIn = computeQuickCreateCheckInTime(dateStr, resBookings);
+      setActivePreviewBooking(null);
+      setSelectedBooking(null);
+      setNewBookingInitialSlot({
+        resourceId: res.id,
+        date: dateStr,
+        time: suggestedCheckIn,
+      });
+      setIsNewBookingModalOpen(true);
+    },
+    [setSelectedBooking, setNewBookingInitialSlot, setIsNewBookingModalOpen]
+  );
+
   // Recovery action when no room row can be rendered: the workspace must never stay
   // blank behind a dialog, and clearing the filters must not require a page reload.
   const resetTimelineFilters = () => {
+    setTimelineSearchQuery('');
     setSearchQuery('');
+    setLocatedBookingId(null);
+    setIsSearchResultsOpen(false);
     setSelectedEstablishmentId('all');
     setCollapsedGroups({});
     setCollapsedFloors({});
@@ -1127,20 +1303,81 @@ export const PlanningTimeline: React.FC = () => {
             </div>
           </div>
 
-          {/* Day column zoom */}
-          <div className="hidden sm:flex h-7 shrink-0 items-center rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-canvas))] p-0.5 text-[10px] font-semibold">
-            <button
-              onClick={() => setColumnZoomMode('compact')}
-              className={`h-6 rounded px-2 transition-colors cursor-pointer ${columnZoomMode === 'compact' ? 'bg-[rgb(var(--pms-surface))] text-[var(--theme-primary)] shadow-xs font-bold' : 'text-slate-600 dark:text-slate-400'}`}
-              title={getTranslation('ganttZoomNarrow', language)}
-              aria-pressed={columnZoomMode === 'compact'}
-            >{getTranslation('ganttZoomNarrow', language)}</button>
-            <button
-              onClick={() => setColumnZoomMode('standard')}
-              className={`h-6 rounded px-2 transition-colors cursor-pointer ${columnZoomMode === 'standard' ? 'bg-[rgb(var(--pms-surface))] text-[var(--theme-primary)] shadow-xs font-bold' : 'text-slate-600 dark:text-slate-400'}`}
-              title={getTranslation('ganttZoomNormal', language)}
-              aria-pressed={columnZoomMode === 'standard'}
-            >{getTranslation('ganttZoomNormal', language)}</button>
+          {/* Timeline Scale & Zoom Controls: Day / Week / Month + Zoom Slider */}
+          <div
+            className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] p-0.5 shadow-2xs"
+            role="group"
+            aria-label={getTranslation('ganttZoomGroupLabel', language)}
+          >
+            <div className="flex items-center gap-0.5">
+              {(['day', 'week', 'month'] as const).map((view) => {
+                const isActive = scaleView === view;
+                const label =
+                  view === 'day'
+                    ? getTranslation('ganttViewDay', language)
+                    : view === 'week'
+                    ? getTranslation('ganttViewWeek', language)
+                    : getTranslation('ganttViewMonth', language);
+                return (
+                  <button
+                    key={view}
+                    type="button"
+                    onClick={() => selectScaleView(view)}
+                    aria-pressed={isActive}
+                    title={label}
+                    className={`h-6 rounded px-2 text-[10px] font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)] ${
+                      isActive
+                        ? 'bg-[var(--theme-primary)] text-white shadow-xs font-bold'
+                        : 'text-slate-600 hover:bg-[rgb(var(--pms-accent)/0.1)] hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="h-4 w-px bg-[rgb(var(--pms-border))] mx-0.5 shrink-0" aria-hidden="true" />
+
+            <div className="flex items-center gap-1 px-0.5">
+              <button
+                type="button"
+                onClick={() => adjustZoom(-16)}
+                disabled={zoomLevel <= 0}
+                aria-label={getTranslation('ganttZoomOut', language)}
+                title={getTranslation('ganttZoomOut', language)}
+                className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-[rgb(var(--pms-accent)/0.1)] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed dark:text-slate-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]"
+              >
+                <ZoomOut size={12} />
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={2}
+                value={zoomLevel}
+                onChange={(e) => setZoomLevel(clampZoomLevel(Number(e.target.value)))}
+                aria-label={getTranslation('ganttZoomSliderLabel', language)}
+                aria-valuetext={`${
+                  scaleView === 'day'
+                    ? getTranslation('ganttViewDay', language)
+                    : scaleView === 'week'
+                    ? getTranslation('ganttViewWeek', language)
+                    : getTranslation('ganttViewMonth', language)
+                } (${colWidth}px)`}
+                className="w-16 sm:w-20 h-1.5 accent-[var(--theme-primary)] cursor-pointer rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]"
+              />
+              <button
+                type="button"
+                onClick={() => adjustZoom(16)}
+                disabled={zoomLevel >= 100}
+                aria-label={getTranslation('ganttZoomIn', language)}
+                title={getTranslation('ganttZoomIn', language)}
+                className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-[rgb(var(--pms-accent)/0.1)] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed dark:text-slate-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]"
+              >
+                <ZoomIn size={12} />
+              </button>
+            </div>
           </div>
 
           {/* Toggle all subgroups button (Hotel sector) */}
@@ -1205,6 +1442,168 @@ export const PlanningTimeline: React.FC = () => {
             <Undo2 size={13} className={lastBatchAction ? 'text-amber-600 dark:text-amber-400 shrink-0' : 'text-slate-400 dark:text-slate-600 shrink-0'} />
             <span className="whitespace-nowrap">{getTranslation('ganttBatchUndoAction', language)}</span>
           </button>
+        </div>
+
+        {/* Dedicated Timeline Search & Quick-Locate Row */}
+        <div
+          ref={searchBoxRef}
+          className="relative flex flex-wrap items-center gap-1.5 border-t border-[rgb(var(--pms-border)/0.7)] px-2 py-1.5 md:px-3"
+        >
+          <div className="relative flex min-w-0 flex-1 items-center sm:max-w-md">
+            <Search
+              size={14}
+              aria-hidden="true"
+              className="pointer-events-none absolute start-2.5 text-slate-400 dark:text-slate-500"
+            />
+            <input
+              type="search"
+              value={timelineSearchQuery}
+              onChange={(e) => {
+                setTimelineSearchQuery(e.target.value);
+                setIsSearchResultsOpen(true);
+              }}
+              onFocus={() => {
+                if (timelineSearchQuery.trim()) {
+                  setIsSearchResultsOpen(true);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && matchingBookingResults.length > 0) {
+                  e.preventDefault();
+                  const targetIdx = e.shiftKey
+                    ? (activeMatchIndex - 1 + matchingBookingResults.length) % matchingBookingResults.length
+                    : activeMatchIndex;
+                  locateBookingMatch(matchingBookingResults[targetIdx], targetIdx);
+                  setIsSearchResultsOpen(true);
+                } else if (e.key === 'Escape') {
+                  if (isSearchResultsOpen) {
+                    setIsSearchResultsOpen(false);
+                  } else if (timelineSearchQuery) {
+                    setTimelineSearchQuery('');
+                    setLocatedBookingId(null);
+                  }
+                }
+              }}
+              placeholder={getTranslation('ganttSearchPlaceholder', language)}
+              aria-label={getTranslation('ganttSearchLabel', language)}
+              aria-expanded={Boolean(timelineSearchQuery.trim() && isSearchResultsOpen)}
+              aria-controls="gantt-booking-search-results"
+              className="h-9 sm:h-8 w-full min-w-0 rounded-lg border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] ps-8 pe-8 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:border-[var(--theme-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)] dark:text-slate-100 dark:placeholder:text-slate-500"
+            />
+            {timelineSearchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTimelineSearchQuery('');
+                  setLocatedBookingId(null);
+                  setIsSearchResultsOpen(false);
+                }}
+                aria-label={getTranslation('ganttSearchClear', language)}
+                title={getTranslation('ganttSearchClear', language)}
+                className="absolute end-1.5 flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          {effectiveSearchQuery.trim() && (
+            <div className="flex items-center gap-1 shrink-0" role="status" aria-live="polite">
+              <span className="inline-flex h-8 sm:h-7 items-center gap-1 rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] px-2 text-[11px] font-semibold font-mono tabular-nums text-slate-700 dark:text-slate-200">
+                <Crosshair size={12} className="text-[var(--theme-primary)] shrink-0" />
+                {matchingBookingResults.length > 0
+                  ? `${Math.min(activeMatchIndex + 1, matchingBookingResults.length)} / ${matchingBookingResults.length}`
+                  : getTranslation('ganttSearchMatchesCount', language).replace('{count}', '0')}
+              </span>
+              {matchingBookingResults.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => cycleBookingMatch(-1)}
+                    aria-label={getTranslation('ganttSearchPrevMatch', language)}
+                    title={getTranslation('ganttSearchPrevMatch', language)}
+                    className="flex h-8 w-8 sm:h-7 sm:w-7 items-center justify-center rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] text-slate-700 hover:bg-[rgb(var(--pms-accent)/0.1)] dark:text-slate-200 cursor-pointer"
+                  >
+                    <ChevronUp size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => cycleBookingMatch(1)}
+                    aria-label={getTranslation('ganttSearchNextMatch', language)}
+                    title={getTranslation('ganttSearchNextMatch', language)}
+                    className="flex h-8 w-8 sm:h-7 sm:w-7 items-center justify-center rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] text-slate-700 hover:bg-[rgb(var(--pms-accent)/0.1)] dark:text-slate-200 cursor-pointer"
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Quick-Locate Booking Results Dropdown */}
+          {timelineSearchQuery.trim() && isSearchResultsOpen && (
+            <div
+              id="gantt-booking-search-results"
+              role="listbox"
+              aria-label={getTranslation('ganttSearchLabel', language)}
+              className="absolute start-2 end-2 sm:end-auto top-full z-[115] mt-1 sm:w-full sm:max-w-lg max-h-72 overflow-y-auto rounded-xl border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] p-1.5 shadow-2xl pms-dropdown"
+            >
+              {matchingBookingResults.length === 0 ? (
+                <div className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400">
+                  {getTranslation('ganttSearchNoBookings', language).replace('{query}', timelineSearchQuery.trim())}
+                </div>
+              ) : (
+                matchingBookingResults.slice(0, 12).map((match, idx) => {
+                  const isFocusedResult =
+                    locatedBookingId === match.booking.id || idx === activeMatchIndex;
+                  const pillStyle =
+                    statusConfig[match.booking.status]?.pillBg ||
+                    'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200';
+                  const statusLabel =
+                    statusConfig[match.booking.status]?.label[language] || match.booking.status;
+                  return (
+                    <button
+                      key={match.booking.id}
+                      type="button"
+                      role="option"
+                      aria-selected={isFocusedResult}
+                      onClick={() => {
+                        locateBookingMatch(match, idx);
+                        setIsSearchResultsOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-start text-xs transition-colors cursor-pointer ${
+                        isFocusedResult
+                          ? 'bg-[rgb(var(--pms-accent)/0.12)] text-slate-900 dark:text-white ring-1 ring-[var(--theme-primary)]'
+                          : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-bold truncate text-slate-900 dark:text-white">
+                            {match.booking.guestName}
+                          </span>
+                          <span className="shrink-0 rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 dark:text-slate-300">
+                            #{match.booking.id}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                          <span className="font-semibold text-[var(--theme-primary)]">
+                            {match.resource.name}
+                          </span>
+                          <span className="font-mono tabular-nums">
+                            {match.booking.startDate} → {match.booking.endDate}
+                          </span>
+                        </div>
+                      </div>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${pillStyle}`}>
+                        {statusLabel}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1287,12 +1686,13 @@ export const PlanningTimeline: React.FC = () => {
         </div>
       )}
 
+      <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Subtle 'Today' pill indicator anchored to the top of the scrollable timeline container, remains visible even when scrolling horizontally */}
       {isTodayInRange && (
         <button
           type="button"
           onClick={scrollToToday}
-          className="absolute top-[42px] sm:top-[42px] right-2 sm:right-6 z-[95] px-3 py-1 rounded-full text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/70 shadow-md backdrop-blur-md flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer select-none active:scale-95 group"
+          className="absolute top-12 right-2 sm:right-6 z-[95] px-3 py-1 rounded-full text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/70 shadow-md backdrop-blur-md flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer select-none active:scale-95 group"
           title={language === 'fr' ? 'Centrer la vue sur Aujourd’hui' : language === 'ar' ? 'الانتقال إلى اليوم' : 'Scroll to Today'}
         >
           <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
@@ -1444,6 +1844,7 @@ export const PlanningTimeline: React.FC = () => {
                         return (
                           <div
                             key={res.id}
+                            data-gantt-resource-row={res.id}
                             className={`h-10 sm:h-12 min-h-[40px] sm:min-h-[48px] max-h-[40px] sm:max-h-[48px] shrink-0 px-2 flex items-center justify-between border-b transition-colors overflow-hidden max-w-full ${
                               isOutOfOrder
                                 ? 'bg-slate-200/90 dark:bg-slate-800/90 border-[rgb(var(--pms-border))] text-slate-400 opacity-80'
@@ -1531,34 +1932,69 @@ export const PlanningTimeline: React.FC = () => {
             }`}
             title={getTranslation('ganttScrollDragTip', language)}
           >
-            {timelineDays.map((day) => (
-              <div
-                key={day.dateStr}
-                style={{ width: `${colWidth}px` }}
-                className={`shrink-0 border-r border-[rgb(var(--pms-border)/0.7)] flex flex-col items-center justify-center gap-0.5 px-1 transition-colors relative h-full overflow-hidden ${
-                  day.isToday
-                    ? "pms-gantt-today-col ring-1 ring-inset ring-[var(--theme-primary)]"
-                    : day.isWeekend
-                    ? "bg-slate-50/50 dark:bg-slate-900/40"
-                    : ""
-                }`}
-              >
-                {isDayHeaderCollapsed ? (
-                  <span className={`text-[11px] font-bold tabular-nums ${day.isToday ? "text-[var(--theme-primary)] font-extrabold" : "text-slate-700 dark:text-slate-200"}`}>
-                    {day.dayNum}
-                  </span>
-                ) : (
-                  <>
-                    <span className={`text-[10px] md:text-[11px] font-semibold uppercase tracking-wide ${day.isToday ? "text-[var(--theme-primary)] font-bold" : "text-slate-400"}`}>
-                      {day.dayName}
-                    </span>
-                    <span className={`text-sm md:text-base font-bold tabular-nums ${day.isToday ? "text-[var(--theme-primary)] font-extrabold" : "text-slate-800 dark:text-slate-100"}`}>
+            {timelineDays.map((day) => {
+              const isCompactCols = colWidth < 46;
+              const isDetailedCols = colWidth >= 115;
+              const monthStartBorder = day.isFirstOfMonth
+                ? isRTL
+                  ? 'border-r-2 border-r-[var(--theme-primary)]/50'
+                  : 'border-l-2 border-l-[var(--theme-primary)]/50'
+                : '';
+
+              return (
+                <div
+                  key={day.dateStr}
+                  style={{ width: `${colWidth}px` }}
+                  className={`shrink-0 border-r border-[rgb(var(--pms-border)/0.7)] ${monthStartBorder} flex flex-col items-center justify-center gap-0.5 px-0.5 transition-colors relative h-full overflow-hidden ${
+                    day.isToday
+                      ? "pms-gantt-today-col ring-1 ring-inset ring-[var(--theme-primary)]"
+                      : day.isWeekend
+                      ? "bg-slate-50/50 dark:bg-slate-900/40"
+                      : ""
+                  }`}
+                >
+                  {isDayHeaderCollapsed ? (
+                    <span className={`text-[11px] font-bold tabular-nums ${day.isToday ? "text-[var(--theme-primary)] font-extrabold" : "text-slate-700 dark:text-slate-200"}`}>
                       {day.dayNum}
                     </span>
-                  </>
-                )}
-              </div>
-            ))}
+                  ) : (
+                    <>
+                      <span
+                        className={`font-semibold uppercase tracking-wide truncate max-w-full ${
+                          isCompactCols ? 'text-[9px]' : 'text-[10px] md:text-[11px]'
+                        } ${day.isToday ? "text-[var(--theme-primary)] font-bold" : "text-slate-400"}`}
+                      >
+                        {day.isFirstOfMonth && isCompactCols
+                          ? day.monthShort
+                          : isCompactCols
+                          ? day.dayName.slice(0, isRTL ? 2 : 1)
+                          : day.dayName}
+                      </span>
+                      <div className="flex items-baseline gap-1">
+                        <span
+                          className={`font-bold tabular-nums leading-none ${
+                            isCompactCols ? 'text-xs' : 'text-sm md:text-base'
+                          } ${day.isToday ? "text-[var(--theme-primary)] font-extrabold" : "text-slate-800 dark:text-slate-100"}`}
+                        >
+                          {day.dayNum}
+                        </span>
+                        {(isDetailedCols || (day.isFirstOfMonth && !isCompactCols)) && (
+                          <span className="text-[9px] font-semibold uppercase text-slate-400 dark:text-slate-500">
+                            {day.monthShort}
+                          </span>
+                        )}
+                      </div>
+                      {isDetailedCols && (
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between px-1.5 text-[8px] font-mono text-slate-400/80 dark:text-slate-500/80 tabular-nums">
+                          <span>00h</span>
+                          <span>12h</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Resource Rows & Gantt Bars Matrix */}
@@ -1582,7 +2018,7 @@ export const PlanningTimeline: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setShowAvailabilityHelp(true)}
-                            className={`w-5 h-4.5 rounded text-[10px] font-bold font-mono flex items-center justify-center shadow-2xs tabular-nums cursor-pointer hover:scale-110 active:scale-95 transition-transform focus:outline-none focus:ring-1 focus:ring-white ${
+                            className={`${colWidth < 36 ? 'w-4 h-4 text-[9px]' : 'w-5 h-4.5 text-[10px]'} rounded font-bold font-mono flex items-center justify-center shadow-2xs tabular-nums cursor-pointer hover:scale-110 active:scale-95 transition-transform focus:outline-none focus:ring-1 focus:ring-white ${
                               isFree ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-rose-600 hover:bg-rose-500 text-white'
                             }`}
                             title={`${avail} ${getTranslation('kpiAvailableRooms', language)} (${day.dateStr}) - ${language === 'fr' ? 'Cliquer pour comprendre le calcul' : language === 'ar' ? 'انقر لفهم الحساب' : 'Click to understand calculation'}`}
@@ -1644,32 +2080,76 @@ export const PlanningTimeline: React.FC = () => {
                                 : 'pms-gantt-surface pms-gantt-row-hover'
                             }`}
                           >
-                            {/* Background Grid Cells for clicking to add booking */}
+                            {/* Background Grid Cells with Quick Create shortcut on empty bookable cells */}
                             {timelineDays.map((day) => {
                               const isPast = day.dateStr < realTodayStr;
-                              const isCellDisabled = isOutOfOrder || isPast;
+                              const isEmptyBookable = isTimelineCellAvailableForQuickCreate(
+                                res,
+                                day.dateStr,
+                                realTodayStr,
+                                resBookings
+                              );
+                              const checkoutOnDay = isEmptyBookable && hasSameDayCheckout(day.dateStr, resBookings);
 
-                              return (
-                                <button
-                                  key={day.dateStr}
-                                  type="button"
-                                  style={{ width: `${colWidth}px` }}
-                                  onClick={() => {
-                                    if (isOutOfOrder) {
-                                      setTimelineNotice({
-                                        title: language === 'fr' ? 'Chambre indisponible' : language === 'ar' ? 'الغرفة غير متاحة' : 'Room unavailable',
-                                        message: language === 'fr'
-                                          ? `La chambre ${res.name} est hors service. Aucune réservation ne peut être créée tant que son statut n’a pas été rétabli.`
-                                          : language === 'ar'
-                                          ? `الغرفة ${res.name} خارج الخدمة. لا يمكن إنشاء حجز قبل إعادة تفعيلها.`
-                                          : `Room ${res.name} is out of service. A booking cannot be created until its status is restored.`,
-                                        tone: 'danger',
-                                        roomName: res.name,
-                                        roomStatus: res.housekeepingStatus || 'out_of_order',
-                                      });
-                                      return;
-                                    }
-                                    if (isPast) {
+                              if (isEmptyBookable) {
+                                return (
+                                  <div
+                                    key={day.dateStr}
+                                    style={{ width: `${colWidth}px` }}
+                                    className={`relative shrink-0 border-r border-[rgb(var(--pms-border)/0.45)] h-full transition-colors ${
+                                      day.isWeekend ? 'bg-slate-50/30 dark:bg-slate-900/20' : ''
+                                    }`}
+                                  >
+                                    <button
+                                      type="button"
+                                      data-quick-create="true"
+                                      onClick={() => openQuickCreateForCell(res, day.dateStr, resBookings)}
+                                      aria-label={`${getTranslation('ganttQuickCreateLabel', language)} • ${res.name} • ${day.dateStr}`}
+                                      title={`${getTranslation('ganttQuickCreateLabel', language)} • ${res.name} • ${day.dateStr}`}
+                                      className={`group/cell w-full h-full flex items-center ${
+                                        checkoutOnDay ? 'justify-end pe-1' : 'justify-center'
+                                      } p-0.5 cursor-pointer pms-gantt-cell-hover pms-gantt-cell-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-primary)]`}
+                                    >
+                                      <span
+                                        className={`inline-flex items-center justify-center gap-1 rounded-md border border-dashed border-slate-300/60 dark:border-slate-700/60 bg-[rgb(var(--pms-surface)/0.55)] text-slate-500 dark:text-slate-400 opacity-55 transition-colors group-focus-visible/cell:opacity-100 group-focus-visible/cell:border-transparent group-focus-visible/cell:bg-[var(--theme-primary)] group-focus-visible/cell:text-white [@media(hover:hover)]:group-hover/cell:opacity-100 [@media(hover:hover)]:group-hover/cell:border-transparent [@media(hover:hover)]:group-hover/cell:bg-[var(--theme-primary)] [@media(hover:hover)]:group-hover/cell:text-white [@media(hover:hover)]:group-hover/cell:shadow-xs ${
+                                          colWidth >= 90 && !checkoutOnDay
+                                            ? 'h-6 px-2 text-[10px] font-semibold'
+                                            : colWidth < 34
+                                            ? 'size-5'
+                                            : 'size-6'
+                                        }`}
+                                      >
+                                        <Plus size={colWidth < 34 ? 10 : 12} strokeWidth={2.4} aria-hidden="true" />
+                                        {colWidth >= 90 && !checkoutOnDay && (
+                                          <span>{getTranslation('ganttQuickCreateShort', language)}</span>
+                                        )}
+                                      </span>
+                                    </button>
+                                  </div>
+                                );
+                              }
+
+                              if (isOutOfOrder || isPast) {
+                                return (
+                                  <button
+                                    key={day.dateStr}
+                                    type="button"
+                                    style={{ width: `${colWidth}px` }}
+                                    onClick={() => {
+                                      if (isOutOfOrder) {
+                                        setTimelineNotice({
+                                          title: language === 'fr' ? 'Chambre indisponible' : language === 'ar' ? 'الغرفة غير متاحة' : 'Room unavailable',
+                                          message: language === 'fr'
+                                            ? `La chambre ${res.name} est hors service. Aucune réservation ne peut être créée tant que son statut n’a pas été rétabli.`
+                                            : language === 'ar'
+                                            ? `الغرفة ${res.name} خارج الخدمة. لا يمكن إنشاء حجز قبل إعادة تفعيلها.`
+                                            : `Room ${res.name} is out of service. A booking cannot be created until its status is restored.`,
+                                          tone: 'danger',
+                                          roomName: res.name,
+                                          roomStatus: res.housekeepingStatus || 'out_of_order',
+                                        });
+                                        return;
+                                      }
                                       setTimelineNotice({
                                         title: language === 'fr' ? 'Date déjà passée' : language === 'ar' ? 'التاريخ منقضٍ' : 'Date is in the past',
                                         message: language === 'fr'
@@ -1679,54 +2159,32 @@ export const PlanningTimeline: React.FC = () => {
                                           : `${day.dateStr} is earlier than today. Choose today or a future date to create a booking.`,
                                         tone: 'info',
                                       });
-                                      return;
+                                    }}
+                                    aria-label={
+                                      isOutOfOrder
+                                        ? `${res.name} ${getTranslation('ganttStatusOutOfOrder', language)}`
+                                        : `${day.dateStr}`
                                     }
-                                    // If a previous guest checks out on this date, offer the
-                                    // first legal check-in slot after the 10-minute room turnover.
-                                    const sameDayCheckoutMinutes = resBookings
-                                      .filter((booking) =>
-                                        booking.status === 'checked_out' &&
-                                        booking.endDate === day.dateStr &&
-                                        Boolean(booking.actualCheckOutAt)
-                                      )
-                                      .map((booking) => {
-                                        const [hours, minutes] = (booking.checkOutTime || '12:00').split(':').map(Number);
-                                        return (hours * 60) + minutes + 10;
-                                      });
-                                    const earliestCheckIn = sameDayCheckoutMinutes.length > 0
-                                      ? Math.max(...sameDayCheckoutMinutes)
-                                      : 14 * 60;
-                                    const suggestedCheckIn = `${String(Math.floor(earliestCheckIn / 60) % 24).padStart(2, '0')}:${String(earliestCheckIn % 60).padStart(2, '0')}`;
-                                    setActivePreviewBooking(null);
-                                    setNewBookingInitialSlot({
-                                      resourceId: res.id,
-                                      date: day.dateStr,
-                                      time: suggestedCheckIn,
-                                    });
-                                    setIsNewBookingModalOpen(true);
-                                  }}
-                                  aria-label={
-                                    isOutOfOrder
-                                      ? `${res.name} ${getTranslation('ganttStatusOutOfOrder', language)}`
-                                      : isPast
-                                      ? `${day.dateStr}`
-                                      : `${getTranslation('bookRoom', language)} • ${res.name} • ${day.dateStr}`
-                                  }
-                                  title={
-                                    isOutOfOrder
-                                      ? `${res.name} ${getTranslation('ganttStatusOutOfOrder', language)}`
-                                      : isPast
-                                      ? `${day.dateStr}`
-                                      : `${getTranslation('bookRoom', language)} • ${res.name} • ${day.dateStr}`
-                                  }
-                                  className={`relative shrink-0 border-r border-[rgb(var(--pms-border)/0.45)] h-full p-0 transition-colors ${
-                                    isOutOfOrder
-                                      ? 'bg-slate-200/95 dark:bg-slate-800/90 cursor-not-allowed select-none opacity-80'
-                                      : isPast
-                                      ? 'bg-slate-100/90 dark:bg-slate-900/60 cursor-not-allowed opacity-40 select-none'
-                                      : `cursor-pointer pms-gantt-cell-hover pms-gantt-cell-active ${
-                                          day.isWeekend ? 'bg-slate-50/30 dark:bg-slate-900/20' : ''
-                                        }`
+                                    title={
+                                      isOutOfOrder
+                                        ? `${res.name} ${getTranslation('ganttStatusOutOfOrder', language)}`
+                                        : `${day.dateStr}`
+                                    }
+                                    className={`relative shrink-0 border-r border-[rgb(var(--pms-border)/0.45)] h-full p-0 transition-colors ${
+                                      isOutOfOrder
+                                        ? 'bg-slate-200/95 dark:bg-slate-800/90 cursor-not-allowed select-none opacity-80'
+                                        : 'bg-slate-100/90 dark:bg-slate-900/60 cursor-not-allowed opacity-40 select-none'
+                                    }`}
+                                  />
+                                );
+                              }
+
+                              return (
+                                <div
+                                  key={day.dateStr}
+                                  style={{ width: `${colWidth}px` }}
+                                  className={`relative shrink-0 border-r border-[rgb(var(--pms-border)/0.45)] h-full ${
+                                    day.isWeekend ? 'bg-slate-50/30 dark:bg-slate-900/20' : ''
                                   }`}
                                 />
                               );
@@ -1795,10 +2253,12 @@ export const PlanningTimeline: React.FC = () => {
 
                             const isConfirmed = bkg.status === 'confirmed';
                             const isSelected = selectedBookingIds.has(bkg.id);
+                            const isLocated = locatedBookingId === bkg.id;
 
                             return (
                               <div
                                 key={bkg.id}
+                                data-booking-card="true"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (isBatchSelectionMode) {
@@ -1828,6 +2288,8 @@ export const PlanningTimeline: React.FC = () => {
                                 className={`pms-booking-bar ${isConfirmed ? 'pms-booking-bar-confirmed ' : ''}absolute top-1 sm:top-1.5 h-8 sm:h-9 rounded-md px-1 sm:px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-xs hover:brightness-105 active:scale-[0.98] transition z-10 border ${statusStyle.bg} ${statusStyle.border} ${
                                   isSelected
                                     ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-900 shadow-md brightness-110 z-20 scale-[1.01]'
+                                    : isLocated
+                                    ? 'ring-2 ring-amber-400 ring-offset-2 dark:ring-offset-slate-900 shadow-lg brightness-110 z-20'
                                     : ''
                                 }`}
                               >
@@ -1851,8 +2313,8 @@ export const PlanningTimeline: React.FC = () => {
                                           )}
                                         </button>
                                       )}
-                                      {/* Person icons: if multiple occupants occupy the room, render stacked group of person icons */}
-                                      {hasMultipleOccupants ? (
+                                      {/* Person icons: collapse when monthly bar is very narrow to keep guest name legible */}
+                                      {barWidth >= 56 && (hasMultipleOccupants ? (
                                         <div
                                           className="flex items-center -space-x-1.5 rtl:space-x-reverse shrink-0 select-none py-0.5"
                                           title={`${occupantsCount} ${getTranslation('ganttOccupants', language)} (${adults} ${language === 'fr' ? 'adulte(s)' : language === 'ar' ? 'بالغ' : 'adult(s)'}${children > 0 ? `, ${children} ${language === 'fr' ? 'enfant(s)' : language === 'ar' ? 'طفل' : 'child(ren)'}` : ''})${
@@ -1887,22 +2349,27 @@ export const PlanningTimeline: React.FC = () => {
                                         >
                                           <User size={10} className="drop-shadow-2xs" />
                                         </div>
-                                      )}
+                                      ))}
 
                                       {/* Nationality indicator */}
-                                      {nationalityBadge && (
+                                      {nationalityBadge && barWidth >= 48 && (
                                         <span className="text-[10px] shrink-0" title={isAlgerian ? 'Algérien (DZ)' : 'International'}>
                                           {nationalityBadge}
                                         </span>
                                       )}
 
+                                      {isLocated && (
+                                        <Crosshair size={11} className="shrink-0 text-amber-200" aria-hidden="true" />
+                                      )}
                                       <span className="text-[10px] md:text-[11px] font-semibold truncate tracking-tight">
                                         {bkg.guestName}
                                       </span>
                                     </div>
-                                    <span className="text-[9px] md:text-[10px] opacity-90 font-mono shrink-0 ml-1 hidden sm:inline tabular-nums">
-                                      {displayPrice} {currencySymbol}
-                                    </span>
+                                    {barWidth >= 88 && (
+                                      <span className="text-[9px] md:text-[10px] opacity-90 font-mono shrink-0 ml-1 hidden sm:inline tabular-nums">
+                                        {displayPrice} {currencySymbol}
+                                      </span>
+                                    )}
                                   </div>
                                 );
                               })}
@@ -1916,6 +2383,7 @@ export const PlanningTimeline: React.FC = () => {
             })}
               </div>
             </div>
+          </div>
           </div>
 
           {selectedHousekeepingRoom && (

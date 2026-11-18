@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { createWorkspace as createRemoteWorkspace, listWorkspaces } from './pmsRepository';
-import { isSupabaseConfigured } from './supabaseClient';
+import { isSupabaseConfigured, onSupabaseConfigChange, supabase } from './supabaseClient';
 
 export interface WorkspaceOption {
   id: string;
@@ -28,9 +28,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   );
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [error, setError] = useState<string | null>(null);
+  const [configEpoch, setConfigEpoch] = useState(0);
+
+  useEffect(() => onSupabaseConfigChange(() => {
+    setConfigEpoch((prev) => prev + 1);
+  }), []);
 
   const refreshWorkspaces = useCallback(async () => {
-    if (!isSupabaseConfigured) {
+    if (!isSupabaseConfigured || !supabase) {
       setWorkspaces([]);
       setLoading(false);
       return;
@@ -38,6 +43,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setLoading(true);
     setError(null);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        setWorkspaces([]);
+        setLoading(false);
+        return;
+      }
       const rows = await listWorkspaces();
       const options = rows.map((row: { id: string; name: string; owner_id: string }) => ({
         id: row.id,
@@ -46,10 +57,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }));
       setWorkspaces(options);
       const storedWorkspaceId = localStorage.getItem(STORAGE_KEY) ?? '';
-      const validWorkspaceId = options.some((workspace) => workspace.id === storedWorkspaceId)
+      let validWorkspaceId = options.some((workspace) => workspace.id === storedWorkspaceId)
         ? storedWorkspaceId
         : '';
-      if (!validWorkspaceId) localStorage.removeItem(STORAGE_KEY);
+      // When the authenticated user belongs to exactly one workspace and none is
+      // persisted yet, select it automatically so cloud recovery runs without guessing.
+      if (!validWorkspaceId && options.length === 1) {
+        validWorkspaceId = options[0].id;
+        localStorage.setItem(STORAGE_KEY, validWorkspaceId);
+      } else if (!validWorkspaceId) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
       setActiveWorkspaceIdState(validWorkspaceId);
     } catch (cause) {
       console.error('[WorkspaceContext] Workspace load failed:', cause);
@@ -63,7 +81,18 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   useEffect(() => {
     void refreshWorkspaces();
-  }, [refreshWorkspaces]);
+    if (!isSupabaseConfigured || !supabase) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        void refreshWorkspaces();
+      } else {
+        setWorkspaces([]);
+        setActiveWorkspaceIdState('');
+        setLoading(false);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [refreshWorkspaces, configEpoch]);
 
   const setActiveWorkspaceId = useCallback((id: string) => {
     const exists = workspaces.some((workspace) => workspace.id === id);
