@@ -1,83 +1,117 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createWorkspace as createRemoteWorkspace, listWorkspaces } from './pmsRepository';
 import { isSupabaseConfigured, onSupabaseConfigChange, supabase } from './supabaseClient';
-
-export interface WorkspaceOption {
-  id: string;
-  name: string;
-  owner_id: string;
-}
+import {
+  findPersonalWorkspace,
+  PERSONAL_WORKSPACE_NAME,
+  personalWorkspaceIdForUser,
+} from './workspaceSelection';
 
 interface WorkspaceContextValue {
-  workspaces: WorkspaceOption[];
   activeWorkspaceId: string;
-  setActiveWorkspaceId: (id: string) => void;
   refreshWorkspaces: () => Promise<void>;
-  createWorkspace: (name: string) => Promise<void>;
-  loading: boolean;
-  error: string | null;
 }
 
 const STORAGE_KEY = 'appointment_active_workspace_id';
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
 
+function clearStoredWorkspace(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Storage may be unavailable; sync still stays gated by the in-memory id.
+  }
+}
+
+function storeWorkspace(id: string): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, id);
+  } catch {
+    // Storage may be unavailable; sync still uses the in-memory id.
+  }
+}
+
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([]);
   const [activeWorkspaceIdState, setActiveWorkspaceIdState] = useState(
     () => localStorage.getItem(STORAGE_KEY) ?? ''
   );
-  const [loading, setLoading] = useState(isSupabaseConfigured);
-  const [error, setError] = useState<string | null>(null);
   const [configEpoch, setConfigEpoch] = useState(0);
+  const creationByUserRef = useRef<Map<string, Promise<void>>>(new Map());
 
   useEffect(() => onSupabaseConfigChange(() => {
     setConfigEpoch((prev) => prev + 1);
   }), []);
 
-  const refreshWorkspaces = useCallback(async () => {
-    if (!isSupabaseConfigured || !supabase) {
-      setWorkspaces([]);
-      setLoading(false);
-      return;
+  const ensurePersonalWorkspace = useCallback(async (userId: string) => {
+    const workspaceId = personalWorkspaceIdForUser(userId);
+    if (!workspaceId) {
+      throw new Error('Authentification Supabase requise pour créer l’espace personnel.');
     }
-    setLoading(true);
-    setError(null);
+    const inFlight = creationByUserRef.current.get(workspaceId);
+    if (inFlight) return inFlight;
+
+    const creation = (async () => {
+      try {
+        await createRemoteWorkspace(PERSONAL_WORKSPACE_NAME, workspaceId);
+      } catch (cause) {
+        // A second tab/device may have inserted the same deterministic id.
+        // Reload before reporting failure so a benign primary-key collision is
+        // not shown as a broken workspace.
+        const rows = await listWorkspaces().catch(() => []);
+        if (!findPersonalWorkspace(rows, userId)) throw cause;
+      }
+    })();
+    creationByUserRef.current.set(workspaceId, creation);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        setWorkspaces([]);
-        setLoading(false);
-        return;
-      }
-      const rows = await listWorkspaces();
-      const options = rows.map((row: { id: string; name: string; owner_id: string }) => ({
-        id: row.id,
-        name: row.name,
-        owner_id: row.owner_id,
-      }));
-      setWorkspaces(options);
-      const storedWorkspaceId = localStorage.getItem(STORAGE_KEY) ?? '';
-      let validWorkspaceId = options.some((workspace) => workspace.id === storedWorkspaceId)
-        ? storedWorkspaceId
-        : '';
-      // When the authenticated user belongs to exactly one workspace and none is
-      // persisted yet, select it automatically so cloud recovery runs without guessing.
-      if (!validWorkspaceId && options.length === 1) {
-        validWorkspaceId = options[0].id;
-        localStorage.setItem(STORAGE_KEY, validWorkspaceId);
-      } else if (!validWorkspaceId) {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-      setActiveWorkspaceIdState(validWorkspaceId);
-    } catch (cause) {
-      console.error('[WorkspaceContext] Workspace load failed:', cause);
-      setWorkspaces([]);
-      setActiveWorkspaceIdState('');
-      setError(cause instanceof Error ? cause.message : 'Impossible de charger les workspaces Supabase.');
+      await creation;
     } finally {
-      setLoading(false);
+      if (creationByUserRef.current.get(workspaceId) === creation) {
+        creationByUserRef.current.delete(workspaceId);
+      }
     }
   }, []);
+
+  const refreshWorkspaces = useCallback(async () => {
+    if (!isSupabaseConfigured || !supabase) {
+      setActiveWorkspaceIdState('');
+      clearStoredWorkspace();
+      return;
+    }
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData.session?.user;
+      if (!user) {
+        // Signed out is a normal state, not a workspace error.
+        setActiveWorkspaceIdState('');
+        clearStoredWorkspace();
+        return;
+      }
+
+      let rows = await listWorkspaces();
+      let personalWorkspace = findPersonalWorkspace(rows, user.id);
+      if (!personalWorkspace) {
+        await ensurePersonalWorkspace(user.id);
+        rows = await listWorkspaces();
+        personalWorkspace = findPersonalWorkspace(rows, user.id);
+      }
+      if (!personalWorkspace) {
+        throw new Error('Espace de travail personnel inaccessible après création.');
+      }
+
+      // A personal workspace is selected automatically: there is no user-facing
+      // workspace selector or creation form.
+      storeWorkspace(personalWorkspace.id);
+      setActiveWorkspaceIdState(personalWorkspace.id);
+    } catch (cause) {
+      console.error(
+        '[WorkspaceContext] Personal workspace setup failed:',
+        cause instanceof Error ? cause.message : String(cause)
+      );
+      setActiveWorkspaceIdState('');
+      clearStoredWorkspace();
+    }
+  }, [ensurePersonalWorkspace]);
 
   useEffect(() => {
     void refreshWorkspaces();
@@ -86,65 +120,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (session) {
         void refreshWorkspaces();
       } else {
-        setWorkspaces([]);
         setActiveWorkspaceIdState('');
-        setLoading(false);
+        clearStoredWorkspace();
       }
     });
     return () => subscription.unsubscribe();
   }, [refreshWorkspaces, configEpoch]);
 
-  const setActiveWorkspaceId = useCallback((id: string) => {
-    const exists = workspaces.some((workspace) => workspace.id === id);
-    if (!exists) {
-      setError('Espace de travail non autorisé ou indisponible.');
-      return;
-    }
-    localStorage.setItem(STORAGE_KEY, id);
-    setActiveWorkspaceIdState(id);
-    setError(null);
-  }, [workspaces]);
-
-  const createWorkspace = useCallback(async (name: string) => {
-    const normalized = name.trim();
-    if (normalized.length < 2 || normalized.length > 80) {
-      throw new Error('Le nom de l’espace doit contenir entre 2 et 80 caractères.');
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const created = await createRemoteWorkspace(normalized);
-      const rows = await listWorkspaces();
-      const options = rows.map((row: { id: string; name: string; owner_id: string }) => ({
-        id: row.id,
-        name: row.name,
-        owner_id: row.owner_id,
-      }));
-      setWorkspaces(options);
-      if (options.some((workspace) => workspace.id === created.id)) {
-        localStorage.setItem(STORAGE_KEY, created.id);
-        setActiveWorkspaceIdState(created.id);
-      } else {
-        throw new Error('L’espace a été créé, mais son appartenance n’est pas visible. Rechargez la liste avant de continuer.');
-      }
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Échec de création de l’espace de travail.';
-      setError(message);
-      throw cause;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   const value = useMemo(() => ({
-    workspaces,
     activeWorkspaceId: activeWorkspaceIdState,
-    setActiveWorkspaceId,
     refreshWorkspaces,
-    createWorkspace,
-    loading,
-    error,
-  }), [workspaces, activeWorkspaceIdState, setActiveWorkspaceId, refreshWorkspaces, createWorkspace, loading, error]);
+  }), [activeWorkspaceIdState, refreshWorkspaces]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 };

@@ -30,7 +30,15 @@ proof of synchronization or referential integrity.
 - **Resource**: a real room/unit/asset belonging to one floor and establishment.
 - **Booking**: references a real resource and shares its hotel/establishment/tenant scope.
 - **Workspace**: technical access/collaboration boundary only; never a hotel, building,
-  establishment or other business record. Never create a fake workspace.
+  establishment or other business record. Never create a fake workspace. Each authenticated
+  Supabase account gets exactly one real personal workspace, owned by that account with an
+  `owner` membership row. `WorkspaceContext` creates it on first authenticated load using the
+  stable account id as the workspace id (`src/services/supabase/workspaceSelection.ts`) and
+  selects it automatically; there is no user-facing workspace selector or creation form. An
+  existing owned workspace named `Espace personnel` is reused. Shared workspaces remain
+  available to the account but are never selected automatically. If creation or RLS access
+  fails, sync stays in the evidence-based `no_workspace`/error state rather than inventing a
+  local tenant.
 - **ResourceGroup**: optional functional classification; never a substitute for a
   building, floor or establishment. The top-bar building selector and the Gantt filter
   use `ResourceGroup.id` from the local IndexedDB inventory (`selectedBuildingGroupId`).

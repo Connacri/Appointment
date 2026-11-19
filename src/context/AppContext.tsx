@@ -85,12 +85,7 @@ export type ActiveAppView =
 
 interface AppContextType {
   activeWorkspaceId: string;
-  workspaces: { id: string; name: string; owner_id: string }[];
-  setActiveWorkspaceId: (id: string) => void;
   refreshWorkspaces: () => Promise<void>;
-  createWorkspace: (name: string) => Promise<void>;
-  isWorkspaceLoading: boolean;
-  workspaceError: string | null;
   language: Language;
   setLanguage: (lang: Language) => void;
   theme: Theme;
@@ -1623,12 +1618,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         activeWorkspaceId: workspace.activeWorkspaceId,
-        workspaces: workspace.workspaces,
-        setActiveWorkspaceId: workspace.setActiveWorkspaceId,
         refreshWorkspaces: workspace.refreshWorkspaces,
-        createWorkspace: workspace.createWorkspace,
-        isWorkspaceLoading: workspace.loading,
-        workspaceError: workspace.error,
         language,
         setLanguage,
         theme,

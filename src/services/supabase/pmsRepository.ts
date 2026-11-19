@@ -8,7 +8,7 @@ function unwrap<T>(result: { data: T | null; error: { message: string } | null }
   return result.data;
 }
 
-export async function createWorkspace(name: string): Promise<{ id: string; name: string }> {
+export async function createWorkspace(name: string, requestedId?: string): Promise<{ id: string; name: string }> {
   const normalized = name.trim();
   if (normalized.length < 2 || normalized.length > 80) {
     throw new Error('Le nom de l’espace doit contenir entre 2 et 80 caractères.');
@@ -26,10 +26,14 @@ export async function createWorkspace(name: string): Promise<{ id: string; name:
   // only for a workspace that this same user owns. No service-role key or DDL is
   // required. Insert first, then create membership: `workspaces_select_member`
   // depends on that membership, so a RETURNING clause here would be filtered out.
-  const id =
+  // A caller-managed id makes personal workspace creation idempotent across
+  // tabs/devices; concurrent inserts then collide on the primary key instead of
+  // creating duplicate workspaces.
+  const id = requestedId?.trim() || (
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
-      : `ws-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      : `ws-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  );
   const { error: workspaceError } = await db
     .from('workspaces')
     .insert({ id, name: normalized, owner_id: user.id });

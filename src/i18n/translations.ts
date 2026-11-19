@@ -1010,151 +1010,6 @@ export const translations = {
     en: 'Active',
     ar: 'نشطة',
   },
-  ganttBatchMode: {
-    fr: 'S├⌐lection multiple',
-    en: 'Batch Selection',
-    ar: '╪º┘ä╪¬╪¡╪»┘è╪» ╪º┘ä┘à╪¬╪╣╪»╪»',
-  },
-  ganttBatchModeActive: {
-    fr: 'Mode lot activ├⌐',
-    en: 'Batch mode active',
-    ar: '┘ê╪╢╪╣ ╪º┘ä╪¬╪¡╪»┘è╪» ┘à┘ü╪╣┘æ┘ä',
-  },
-  ganttBatchSelectAll: {
-    fr: 'Tout s├⌐lectionner',
-    en: 'Select all',
-    ar: '╪¬╪¡╪»┘è╪» ╪º┘ä┘â┘ä',
-  },
-  ganttBatchDeselectAll: {
-    fr: 'Tout d├⌐s├⌐lectionner',
-    en: 'Deselect all',
-    ar: '╪Ñ┘ä╪║╪º╪í ╪¬╪¡╪»┘è╪» ╪º┘ä┘â┘ä',
-  },
-  ganttBatchSelectedCount: {
-    fr: '{count} s├⌐lectionn├⌐e(s)',
-    en: '{count} selected',
-    ar: '{count} ┘à╪¡╪»╪»╪⌐',
-  },
-  ganttBatchMovePrompt: {
-    fr: 'D├⌐placer de {days} jour(s)',
-    en: 'Shift by {days} day(s)',
-    ar: '╪Ñ╪▓╪º╪¡╪⌐ ╪¿┘à┘é╪»╪º╪▒ {days} ┘è┘ê┘à',
-  },
-  ganttBatchMoveAction: {
-    fr: 'D├⌐placer le lot',
-    en: 'Move batch',
-    ar: '┘å┘é┘ä ╪º┘ä┘à╪¼┘à┘ê╪╣╪⌐',
-  },
-  ganttBatchDeleteAction: {
-    fr: 'Supprimer le lot',
-    en: 'Delete batch',
-    ar: '╪¡╪░┘ü ╪º┘ä┘à╪¼┘à┘ê╪╣╪⌐',
-  },
-  ganttBatchStatusAction: {
-    fr: 'Changer le statut',
-    en: 'Change status',
-    ar: '╪¬╪╣╪»┘è┘ä ╪º┘ä╪¡╪º┘ä╪⌐',
-  },
-  ganttBatchExitAction: {
-    fr: 'Quitter',
-    en: 'Exit',
-    ar: '╪«╪▒┘ê╪¼',
-  },
-  ganttBatchShiftTitle: {
-    fr: 'D├⌐placer les r├⌐servations s├⌐lectionn├⌐es',
-    en: 'Shift selected bookings',
-    ar: '┘å┘é┘ä ╪º┘ä╪¡╪¼┘ê╪▓╪º╪¬ ╪º┘ä┘à╪¡╪»╪»╪⌐',
-  },
-  ganttBatchShiftDescription: {
-    fr: 'Choisissez le nombre de jours de d├⌐calage vers le pass├⌐ ou le futur.',
-    en: 'Choose the number of days to shift into the past or future.',
-    ar: '╪º╪«╪¬╪▒ ╪╣╪»╪» ╪ú┘è╪º┘à ╪º┘ä╪Ñ╪▓╪º╪¡╪⌐ ┘å╪¡┘ê ╪º┘ä┘à╪º╪╢┘è ╪ú┘ê ╪º┘ä┘à╪│╪¬┘é╪¿┘ä.',
-  },
-  ganttBatchConflictDetected: {
-    fr: 'Conflits d├⌐tect├⌐s sur {count} r├⌐servation(s). V├⌐rifiez la disponibilit├⌐ des chambres.',
-    en: 'Conflicts detected on {count} booking(s). Check room availability.',
-    ar: '╪¬┘à ╪º┘â╪¬╪┤╪º┘ü ╪¬╪╣╪º╪▒╪╢ ┘ü┘è {count} ╪¡╪¼╪▓. ┘è╪▒╪¼┘ë ╪º┘ä╪¬╪¡┘é┘é ┘à┘å ╪¬┘ê┘ü╪▒ ╪º┘ä╪║╪▒┘ü.',
-  },
-  ganttBatchConfirmDeleteTitle: {
-    fr: 'Supprimer {count} r├⌐servation(s) ?',
-    en: 'Delete {count} booking(s)?',
-    ar: '╪¡╪░┘ü {count} ╪¡╪¼╪▓╪ƒ',
-  },
-  ganttBatchConfirmDeleteMsg: {
-    fr: 'Attention : cette action supprimera d├⌐finitivement les r├⌐servations s├⌐lectionn├⌐es. Cette action est irr├⌐versible.',
-    en: 'Warning: this will permanently delete the selected bookings. This action cannot be undone.',
-    ar: '╪¬╪¡╪░┘è╪▒: ╪│┘è╪ñ╪»┘è ┘ç╪░╪º ╪º┘ä╪Ñ╪¼╪▒╪º╪í ╪Ñ┘ä┘ë ╪¡╪░┘ü ╪º┘ä╪¡╪¼┘ê╪▓╪º╪¬ ╪º┘ä┘à╪¡╪»╪»╪⌐ ┘å┘ç╪º╪ª┘è╪º┘ï ┘ê┘ä╪º ┘è┘à┘â┘å ╪º┘ä╪¬╪▒╪º╪¼╪╣ ╪╣┘å┘ç.',
-  },
-  ganttBatchMoveSuccess: {
-    fr: '{count} r├⌐servation(s) d├⌐plac├⌐e(s) avec succ├¿s ({days}j).',
-    en: '{count} booking(s) shifted successfully ({days}d).',
-    ar: '╪¬┘à ┘å┘é┘ä {count} ╪¡╪¼╪▓ ╪¿┘å╪¼╪º╪¡ ({days} ┘è┘ê┘à).',
-  },
-  ganttBatchDeleteSuccess: {
-    fr: '{count} r├⌐servation(s) supprim├⌐e(s) avec succ├¿s.',
-    en: '{count} booking(s) deleted successfully.',
-    ar: '╪¬┘à ╪¡╪░┘ü {count} ╪¡╪¼╪▓ ╪¿┘å╪¼╪º╪¡.',
-  },
-  ganttBatchStatusSuccess: {
-    fr: 'Statut mis ├á jour pour {count} r├⌐servation(s).',
-    en: 'Status updated for {count} booking(s).',
-    ar: '╪¬┘à ╪¬╪¡╪»┘è╪½ ╪¡╪º┘ä╪⌐ {count} ╪¡╪¼╪▓ ╪¿┘å╪¼╪º╪¡.',
-  },
-  ganttBatchUndoAction: {
-    fr: 'Annuler',
-    en: 'Undo',
-    ar: '╪¬╪▒╪º╪¼╪╣',
-  },
-  ganttBatchUndoSuccess: {
-    fr: 'Derni├¿re action par lot annul├⌐e avec succ├¿s.',
-    en: 'Last batch action reverted successfully.',
-    ar: '╪¬┘à ╪º┘ä╪¬╪▒╪º╪¼╪╣ ╪╣┘å ╪º┘ä╪Ñ╪¼╪▒╪º╪í ╪º┘ä╪¼┘à╪º╪╣┘è ╪º┘ä╪ú╪«┘è╪▒ ╪¿┘å╪¼╪º╪¡.',
-  },
-  ganttBatchStatusModalTitle: {
-    fr: 'Modifier le statut des r├⌐servations',
-    en: 'Update Booking Status',
-    ar: '╪¬╪╣╪»┘è┘ä ╪¡╪º┘ä╪⌐ ╪º┘ä╪¡╪¼┘ê╪▓╪º╪¬',
-  },
-  ganttBatchStatusModalSubtitle: {
-    fr: 'S├⌐lectionnez le nouveau statut ├á appliquer simultan├⌐ment aux {count} r├⌐servations s├⌐lectionn├⌐es.',
-    en: 'Select the new status to apply simultaneously to the {count} selected bookings.',
-    ar: '╪º╪«╪¬╪▒ ╪º┘ä╪¡╪º┘ä╪⌐ ╪º┘ä╪¼╪»┘è╪»╪⌐ ┘ä╪¬╪╖╪¿┘è┘é┘ç╪º ┘ü┘è ┘å┘ü╪│ ╪º┘ä┘ê┘é╪¬ ╪╣┘ä┘ë {count} ╪¡╪¼╪▓ ┘à╪¡╪»╪».',
-  },
-  ganttBatchStatusPending: {
-    fr: 'En attente / Nouveau',
-    en: 'Pending / New',
-    ar: '┘é┘è╪» ╪º┘ä╪º┘å╪¬╪╕╪º╪▒ / ╪¼╪»┘è╪»',
-  },
-  ganttBatchStatusConfirmed: {
-    fr: 'Confirm├⌐',
-    en: 'Confirmed',
-    ar: '┘à╪ñ┘â╪»',
-  },
-  ganttBatchStatusCheckedIn: {
-    fr: 'Arriv├⌐ / En s├⌐jour (Checked In)',
-    en: 'In-House (Checked In)',
-    ar: '┘à┘é┘è┘à / ╪¬┘à ╪º┘ä╪¬╪│╪¼┘è┘ä (Checked In)',
-  },
-  ganttBatchStatusCheckedOut: {
-    fr: 'D├⌐part effectu├⌐ (Checked Out)',
-    en: 'Checked Out',
-    ar: '╪¬┘à╪¬ ╪º┘ä┘à╪║╪º╪»╪▒╪⌐ (Checked Out)',
-  },
-  ganttBatchStatusDueIn: {
-    fr: 'Arriv├⌐e pr├⌐vue (Due In)',
-    en: 'Due In',
-    ar: '┘ê╪╡┘ê┘ä ┘à╪¬┘ê┘é╪╣ (Due In)',
-  },
-  ganttBatchStatusDueOut: {
-    fr: 'D├⌐part pr├⌐vu (Due Out)',
-    en: 'Due Out',
-    ar: '┘à╪║╪º╪»╪▒╪⌐ ┘à╪¬┘ê┘é╪╣╪⌐ (Due Out)',
-  },
-  ganttBatchStatusCancelled: {
-    fr: 'Annul├⌐',
-    en: 'Cancelled',
-    ar: '┘à┘ä╪║┘ë',
-  },
   // proUSB — onglets « USB Reader » et « USBPro »
   proUsbTabReader: {
     fr: '6. Lecteur USB',
@@ -1640,31 +1495,6 @@ export const translations = {
     en: 'Sync error: {detail}',
     ar: 'خطأ المزامنة: {detail}',
   },
-  cloudWorkspaceCreateTitle: {
-    fr: 'Créer un espace de travail',
-    en: 'Create a workspace',
-    ar: 'إنشاء مساحة عمل',
-  },
-  cloudWorkspaceCreateDesc: {
-    fr: 'Aucun espace de travail Supabase n’existe encore. Créez le vôtre pour activer la synchronisation.',
-    en: 'No Supabase workspace exists yet. Create your own to enable synchronization.',
-    ar: 'لا توجد مساحة عمل Supabase بعد. أنشئ مساحتك لتفعيل المزامنة.',
-  },
-  cloudWorkspaceNameLabel: {
-    fr: 'Nom de l’espace de travail',
-    en: 'Workspace name',
-    ar: 'اسم مساحة العمل',
-  },
-  cloudWorkspaceCreateBtn: {
-    fr: 'Créer l’espace',
-    en: 'Create workspace',
-    ar: 'إنشاء مساحة العمل',
-  },
-  cloudWorkspaceCreating: {
-    fr: 'Création…',
-    en: 'Creating…',
-    ar: 'جارٍ الإنشاء…',
-  },
   cloudStatusConfigured: {
     fr: 'Configuré',
     en: 'Configured',
@@ -1714,16 +1544,6 @@ export const translations = {
     fr: 'Utilisez uniquement la clé publique cliente (RLS). Ne saisissez jamais de clé service_role.',
     en: 'Use only the public client key (RLS). Never enter a service_role key.',
     ar: 'استخدم المفتاح العام للعميل فقط (RLS). لا تدخل أبداً مفتاح service_role.',
-  },
-  cloudWorkspaceActiveLabel: {
-    fr: 'Espace de travail actif (Workspace)',
-    en: 'Active Workspace',
-    ar: 'مساحة العمل النشطة',
-  },
-  cloudWorkspaceSelectPrompt: {
-    fr: 'Sélectionner un workspace…',
-    en: 'Select a workspace…',
-    ar: 'اختر مساحة عمل…',
   },
   cloudTestConnection: {
     fr: 'Tester la connexion',
