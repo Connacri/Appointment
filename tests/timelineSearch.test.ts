@@ -132,7 +132,7 @@ describe('timelineSearch utilities', () => {
       resourceGroups: sampleGroups,
       query: '101',
       currentDomain: 'hotel',
-      selectedEstablishmentId: 'all',
+      selectedBuildingGroupId: 'all',
       groupingMode: 'floor',
       language: 'fr',
     });
@@ -149,11 +149,46 @@ describe('timelineSearch utilities', () => {
       resourceGroups: sampleGroups,
       query: 'Karim',
       currentDomain: 'hotel',
-      selectedEstablishmentId: 'all',
+      selectedBuildingGroupId: 'all',
       groupingMode: 'floor',
       language: 'fr',
     });
     assert.equal(resortCross.length, 0);
+  });
+
+  it('honours the selected local building for both hotel and resort domains', () => {
+    const hotelMatches = findMatchingTimelineBookings({
+      bookings: sampleBookings,
+      resourceGroups: sampleGroups,
+      query: '101',
+      currentDomain: 'hotel',
+      selectedBuildingGroupId: 'bld_main',
+      groupingMode: 'floor',
+      language: 'fr',
+    });
+    assert.deepEqual(hotelMatches.map((m) => m.booking.id), ['bkg_checked_out', 'RES-2026-8841']);
+
+    const otherHotelBuilding = findMatchingTimelineBookings({
+      bookings: sampleBookings,
+      resourceGroups: sampleGroups,
+      query: '101',
+      currentDomain: 'hotel',
+      selectedBuildingGroupId: 'grp_resort',
+      groupingMode: 'floor',
+      language: 'fr',
+    });
+    assert.equal(otherHotelBuilding.length, 0);
+
+    const resortMatches = findMatchingTimelineBookings({
+      bookings: sampleBookings,
+      resourceGroups: sampleGroups,
+      query: 'Karim',
+      currentDomain: 'resort',
+      selectedBuildingGroupId: 'grp_resort',
+      groupingMode: 'floor',
+      language: 'fr',
+    });
+    assert.deepEqual(resortMatches.map((m) => m.booking.id), ['RES-RESORT-99']);
   });
 
   it('derives consistent floor/wing subgroup metadata', () => {

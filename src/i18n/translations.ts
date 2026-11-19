@@ -49,6 +49,26 @@ export const translations = {
     en: 'Resort & Villas',
     ar: 'المنتجعات والفيلات',
   },
+  sectorSelectBuilding: {
+    fr: 'Sélectionner un bâtiment',
+    en: 'Select a building',
+    ar: 'اختر مبنى',
+  },
+  topbarAllBuildings: {
+    fr: 'Tous les bâtiments',
+    en: 'All buildings',
+    ar: 'جميع المباني',
+  },
+  topbarNoLocalBuildings: {
+    fr: 'Aucun bâtiment dans la base locale.',
+    en: 'No building in the local database.',
+    ar: 'لا توجد مبانٍ في قاعدة البيانات المحلية.',
+  },
+  topbarAddBuilding: {
+    fr: 'Créer un établissement',
+    en: 'Create an establishment',
+    ar: 'إنشاء منشأة',
+  },
 
   // Search & Sorting
   searchPlaceholder: {
@@ -1521,6 +1541,129 @@ export const translations = {
     fr: 'Dernière sync vérifiée : {time}',
     en: 'Last verified sync: {time}',
     ar: 'آخر مزامنة مؤكدة: {time}',
+  },
+  syncLogTitle: {
+    fr: 'Journal de synchronisation',
+    en: 'Sync log',
+    ar: 'سجل المزامنة',
+  },
+  syncLogEmpty: {
+    fr: 'Aucune ligne. Lancez une synchronisation pour voir le déroulement.',
+    en: 'No lines yet. Start a sync to follow the progress.',
+    ar: 'لا توجد أسطر بعد. ابدأ المزامنة لمتابعة التقدم.',
+  },
+  syncLogLevelInfo: { fr: 'INFO', en: 'INFO', ar: 'معلومة' },
+  syncLogLevelSuccess: { fr: 'OK', en: 'OK', ar: 'تم' },
+  syncLogLevelWarn: { fr: 'ATTN', en: 'WARN', ar: 'تنبيه' },
+  syncLogLevelError: { fr: 'ERREUR', en: 'ERROR', ar: 'خطأ' },
+  syncLogClearBtn: { fr: 'Effacer', en: 'Clear', ar: 'مسح' },
+  syncLogRetryBtn: { fr: 'Relancer', en: 'Retry', ar: 'إعادة' },
+  syncLogHideBtn: { fr: 'Masquer', en: 'Hide', ar: 'إخفاء' },
+  syncLogShowBtn: { fr: 'Afficher le journal', en: 'Show log', ar: 'إظهار السجل' },
+  syncLogSummary: {
+    fr: '{pushed} envoyé(s) · {pulled} reçu(s) · {pending} en attente · {failed} en échec',
+    en: '{pushed} pushed · {pulled} received · {pending} pending · {failed} failed',
+    ar: '{pushed} تم إرسالها · {pulled} تم استلامها · {pending} قيد الانتظار · {failed} فشلت',
+  },
+  syncLogStarted: {
+    fr: 'Synchronisation lancée…',
+    en: 'Sync started…',
+    ar: 'بدء المزامنة…',
+  },
+  syncLogForceStarted: {
+    fr: 'Synchronisation forcée lancée…',
+    en: 'Force sync started…',
+    ar: 'بدء المزامنة الفورية…',
+  },
+  syncLogOutbox: {
+    fr: '{count} modification(s) en file Outbox.',
+    en: '{count} change(s) queued in Outbox.',
+    ar: '{count} تعديلات في قائمة Outbox.',
+  },
+  syncLogPushing: {
+    fr: 'Envoi de {entity} {id}…',
+    en: 'Pushing {entity} {id}…',
+    ar: 'إرسال {entity} {id}…',
+  },
+  syncLogPushed: {
+    fr: '{entity} {id} envoyé et confirmé par le serveur.',
+    en: '{entity} {id} pushed and acknowledged by the server.',
+    ar: 'تم إرسال {entity} {id} وتأكيده من الخادم.',
+  },
+  syncLogPushFailed: {
+    fr: 'Échec de l’envoi {entity} {id} : {detail}',
+    en: 'Push failed for {entity} {id}: {detail}',
+    ar: 'فشل إرسال {entity} {id}: {detail}',
+  },
+  syncLogPushDone: {
+    fr: 'Envoi terminé : {pushed} envoyé(s), {failed} échec(s).',
+    en: 'Push finished: {pushed} pushed, {failed} failed.',
+    ar: 'اكتمل الرفع: {pushed} تم إرسالها، {failed} فشلت.',
+  },
+  syncLogPulling: {
+    fr: 'Récupération de l’état Supabase…',
+    en: 'Fetching Supabase state…',
+    ar: 'جارٍ جلب حالة Supabase…',
+  },
+  syncLogPulled: {
+    fr: 'Données distantes lues : {groups} groupe(s), {bookings} réservation(s), {tasks} tâche(s), {stock} article(s).',
+    en: 'Remote data read: {groups} group(s), {bookings} booking(s), {tasks} task(s), {stock} stock item(s).',
+    ar: 'تمت قراءة البيانات البعيدة: {groups} مجموعة، {bookings} حجز، {tasks} مهمة، {stock} عنصر مخزون.',
+  },
+  syncLogPullFailed: {
+    fr: 'Récupération impossible : {detail}',
+    en: 'Fetch failed: {detail}',
+    ar: 'تعذّر الجلب: {detail}',
+  },
+  syncLogMerged: {
+    fr: 'Fusion locale : {groups} groupe(s), {bookings} réservation(s) récupéré(s).',
+    en: 'Local merge: {groups} group(s), {bookings} booking(s) recovered.',
+    ar: 'دمج محلي: تم استرداد {groups} مجموعة، {bookings} حجز.',
+  },
+  syncLogVerifying: {
+    fr: 'Vérification finale : {pending} en attente, {failed} en échec.',
+    en: 'Final verification: {pending} pending, {failed} failed.',
+    ar: 'تحقق أخير: {pending} قيد الانتظار، {failed} فشلت.',
+  },
+  syncLogSynced: {
+    fr: 'Synchronisation vérifiée avec Supabase : {pushed} envoyé(s), {pulled} reçu(s).',
+    en: 'Verified sync with Supabase: {pushed} pushed, {pulled} received.',
+    ar: 'مزامنة مؤكدة مع Supabase: {pushed} تم إرسالها، {pulled} تم استلامها.',
+  },
+  syncLogPending: {
+    fr: 'Pas encore synchronisé : {pending} en attente, {failed} en échec.',
+    en: 'Not synced yet: {pending} pending, {failed} failed.',
+    ar: 'لم تتم المزامنة بعد: {pending} قيد الانتظار، {failed} فشلت.',
+  },
+  syncLogError: {
+    fr: 'Erreur de synchronisation : {detail}',
+    en: 'Sync error: {detail}',
+    ar: 'خطأ المزامنة: {detail}',
+  },
+  cloudWorkspaceCreateTitle: {
+    fr: 'Créer un espace de travail',
+    en: 'Create a workspace',
+    ar: 'إنشاء مساحة عمل',
+  },
+  cloudWorkspaceCreateDesc: {
+    fr: 'Aucun espace de travail Supabase n’existe encore. Créez le vôtre pour activer la synchronisation.',
+    en: 'No Supabase workspace exists yet. Create your own to enable synchronization.',
+    ar: 'لا توجد مساحة عمل Supabase بعد. أنشئ مساحتك لتفعيل المزامنة.',
+  },
+  cloudWorkspaceNameLabel: {
+    fr: 'Nom de l’espace de travail',
+    en: 'Workspace name',
+    ar: 'اسم مساحة العمل',
+  },
+  cloudWorkspaceCreateBtn: {
+    fr: 'Créer l’espace',
+    en: 'Create workspace',
+    ar: 'إنشاء مساحة العمل',
+  },
+  cloudWorkspaceCreating: {
+    fr: 'Création…',
+    en: 'Creating…',
+    ar: 'جارٍ الإنشاء…',
   },
   cloudStatusConfigured: {
     fr: 'Configuré',

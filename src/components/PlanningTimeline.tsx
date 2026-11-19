@@ -30,8 +30,6 @@ import {
   Check,
   Undo2,
   SearchX,
-  ZoomIn,
-  ZoomOut,
   Search,
   ChevronUp,
   Crosshair,
@@ -41,6 +39,7 @@ import { ResourceGroup, ResourceItem, TimelineBooking, BookingStatus } from '../
 import { statusConfig } from './LegendBar';
 import { getTranslation } from '../i18n/translations';
 import { downloadICS } from '../utils/icsExport';
+import { computeTimelineBarGeometry } from '../utils/timelineBarGeometry';
 import { useTimelineSync } from '../hooks/useTimelineSync';
 import {
   shouldStartTimelineDrag,
@@ -50,7 +49,6 @@ import {
 import {
   TimelineScaleView,
   TIMELINE_ZOOM_STORAGE_KEY,
-  clampZoomLevel,
   getColumnWidthFromZoomLevel,
   getPresetZoomLevel,
   getScaleViewFromZoomLevel,
@@ -87,8 +85,8 @@ export const PlanningTimeline: React.FC = () => {
     deleteBooking,
     checkConflict,
     updateHousekeepingStatus,
-    selectedEstablishmentId,
-    setSelectedEstablishmentId,
+    selectedBuildingGroupId,
+    setSelectedBuildingGroupId,
     currency,
     establishmentProfile,
     setEstablishmentProfile,
@@ -138,21 +136,17 @@ export const PlanningTimeline: React.FC = () => {
   const [selectedHousekeepingRoom, setSelectedHousekeepingRoom] = useState<{ id: string; name: string; status: string } | null>(null);
   const [timelineNotice, setTimelineNotice] = useState<{ title: string; message: string; tone: 'danger' | 'warning' | 'info'; roomName?: string; roomStatus?: string } | null>(null);
 
-  // The Gantt filter must reflect actual inventory: imported CardLock buildings
-  // and buildings created locally in the establishment setup screen.
-  const hotelBuildingOptions = useMemo(
-    () => resourceGroups.filter((group) => group.sector === 'hotel'),
-    [resourceGroups]
-  );
-
+  // The Gantt filter must reflect actual local inventory: imported CardLock buildings
+  // and buildings created locally in the establishment setup screen. A stale selection
+  // is cleared when the local inventory changes.
   useEffect(() => {
     if (
-      selectedEstablishmentId !== 'all' &&
-      !hotelBuildingOptions.some((group) => group.id === selectedEstablishmentId)
+      selectedBuildingGroupId !== 'all' &&
+      !resourceGroups.some((group) => group.id === selectedBuildingGroupId && group.sector === currentDomain)
     ) {
-      setSelectedEstablishmentId('all');
+      setSelectedBuildingGroupId('all');
     }
-  }, [hotelBuildingOptions, selectedEstablishmentId, setSelectedEstablishmentId]);
+  }, [currentDomain, resourceGroups, selectedBuildingGroupId, setSelectedBuildingGroupId]);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const dragPanRef = useRef<TimelineDragState | null>(null);
@@ -288,10 +282,6 @@ export const PlanningTimeline: React.FC = () => {
 
   const selectScaleView = useCallback((view: TimelineScaleView) => {
     setZoomLevel(getPresetZoomLevel(view));
-  }, []);
-
-  const adjustZoom = useCallback((delta: number) => {
-    setZoomLevel((prev) => clampZoomLevel(prev + delta));
   }, []);
 
   const [leftBarMode, setLeftBarMode] = useState<'normal' | 'compact' | 'mini'>(() => {
@@ -633,7 +623,7 @@ export const PlanningTimeline: React.FC = () => {
         resourceGroups,
         query: effectiveSearchQuery,
         currentDomain,
-        selectedEstablishmentId,
+        selectedBuildingGroupId,
         groupingMode,
         language,
       }),
@@ -642,7 +632,7 @@ export const PlanningTimeline: React.FC = () => {
       resourceGroups,
       effectiveSearchQuery,
       currentDomain,
-      selectedEstablishmentId,
+      selectedBuildingGroupId,
       groupingMode,
       language,
     ]
@@ -660,7 +650,7 @@ export const PlanningTimeline: React.FC = () => {
     return resourceGroups
       .filter((grp) =>
         grp.sector === currentDomain &&
-        (currentDomain !== 'hotel' || selectedEstablishmentId === 'all' || grp.id === selectedEstablishmentId)
+        (selectedBuildingGroupId === 'all' || grp.id === selectedBuildingGroupId)
       )
       .map((grp) => {
         let matchingResources = grp.resources;
@@ -679,7 +669,7 @@ export const PlanningTimeline: React.FC = () => {
         };
       })
       .filter((grp) => grp.resources.length > 0 || (currentDomain === 'hotel' && !effectiveSearchQuery.trim()));
-  }, [currentDomain, resourceGroups, effectiveSearchQuery, bookings, selectedEstablishmentId]);
+  }, [currentDomain, resourceGroups, effectiveSearchQuery, bookings, selectedBuildingGroupId]);
 
   // Gantt hierarchy: building (resource group) > floor / wing / floor_wing > room.
   // The room type remains visible on each room row.
@@ -830,7 +820,7 @@ export const PlanningTimeline: React.FC = () => {
     setSearchQuery('');
     setLocatedBookingId(null);
     setIsSearchResultsOpen(false);
-    setSelectedEstablishmentId('all');
+    setSelectedBuildingGroupId('all');
     setCollapsedGroups({});
     setCollapsedFloors({});
   };
@@ -866,11 +856,6 @@ export const PlanningTimeline: React.FC = () => {
 
     return map;
   }, [filteredGroups, timelineDays, bookings]);
-
-  // Get index of date in timelineDays
-  const getDateIndex = (dateStr: string) => {
-    return timelineDays.findIndex((d) => d.dateStr === dateStr);
-  };
 
   // Batch selection mode state
   const [isBatchSelectionMode, setIsBatchSelectionMode] = useState<boolean>(false);
@@ -1301,7 +1286,7 @@ export const PlanningTimeline: React.FC = () => {
             </div>
           </div>
 
-          {/* Timeline Scale & Zoom Controls: Day / Week / Month + Zoom Slider */}
+          {/* Timeline Scale Controls: Day / Week / Month */}
           <div
             className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] p-0.5 shadow-2xs"
             role="group"
@@ -1335,47 +1320,6 @@ export const PlanningTimeline: React.FC = () => {
               })}
             </div>
 
-            <div className="h-4 w-px bg-[rgb(var(--pms-border))] mx-0.5 shrink-0" aria-hidden="true" />
-
-            <div className="flex items-center gap-1 px-0.5">
-              <button
-                type="button"
-                onClick={() => adjustZoom(-16)}
-                disabled={zoomLevel <= 0}
-                aria-label={getTranslation('ganttZoomOut', language)}
-                title={getTranslation('ganttZoomOut', language)}
-                className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-[rgb(var(--pms-accent)/0.1)] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed dark:text-slate-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]"
-              >
-                <ZoomOut size={12} />
-              </button>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={2}
-                value={zoomLevel}
-                onChange={(e) => setZoomLevel(clampZoomLevel(Number(e.target.value)))}
-                aria-label={getTranslation('ganttZoomSliderLabel', language)}
-                aria-valuetext={`${
-                  scaleView === 'day'
-                    ? getTranslation('ganttViewDay', language)
-                    : scaleView === 'week'
-                    ? getTranslation('ganttViewWeek', language)
-                    : getTranslation('ganttViewMonth', language)
-                } (${colWidth}px)`}
-                className="w-16 sm:w-20 h-1.5 accent-[var(--theme-primary)] cursor-pointer rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]"
-              />
-              <button
-                type="button"
-                onClick={() => adjustZoom(16)}
-                disabled={zoomLevel >= 100}
-                aria-label={getTranslation('ganttZoomIn', language)}
-                title={getTranslation('ganttZoomIn', language)}
-                className="flex h-6 w-6 items-center justify-center rounded text-slate-600 transition-colors hover:bg-[rgb(var(--pms-accent)/0.1)] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed dark:text-slate-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]"
-              >
-                <ZoomIn size={12} />
-              </button>
-            </div>
           </div>
 
           {/* Toggle all subgroups button (Hotel sector) */}
@@ -2168,30 +2112,19 @@ export const PlanningTimeline: React.FC = () => {
 
                           {/* Render Booking Gantt Bars overlaying the grid */}
                           {resBookings.map((bkg) => {
-                            const firstVisibleDate = timelineDays[0]?.dateStr;
-                            const lastVisibleDate = timelineDays[timelineDays.length - 1]?.dateStr;
+                            const geometry = computeTimelineBarGeometry({
+                              startDate: bkg.startDate,
+                              endDate: bkg.endDate,
+                              windowStartDate: timelineWindowStart,
+                              windowDays: timelineWindowDays,
+                              colWidth,
+                              checkInTime: bkg.checkInTime,
+                              checkOutTime: bkg.checkOutTime,
+                              isTimedStay: bkg.sector === 'hotel',
+                            });
+                            if (!geometry.visible) return null;
 
-                            // Skip if timeline not yet initialized or booking outside visible range
-                            if (!firstVisibleDate || !lastVisibleDate) return null;
-                            if (bkg.endDate <= firstVisibleDate || bkg.startDate > lastVisibleDate) return null;
-
-                            const startIndex = getDateIndex(bkg.startDate);
-                            const endIndex = getDateIndex(bkg.endDate);
-
-                            const visibleStart = startIndex === -1 ? 0 : startIndex;
-                            const visibleEnd = endIndex === -1 ? timelineDays.length : endIndex;
-
-                            if (visibleEnd <= visibleStart) return null;
-
-                            const daysSpan = visibleEnd - visibleStart;
-                            const isTimedHotelStay = bkg.sector === 'hotel';
-                            const startTimeParts = (bkg.checkInTime || '14:00').split(':').map(Number);
-                            const endTimeParts = (bkg.checkOutTime || '12:00').split(':').map(Number);
-                            const startDayFraction = isTimedHotelStay && startIndex >= 0 ? ((startTimeParts[0] * 60 + startTimeParts[1]) / 1440) : 0;
-                            const endDayFraction = isTimedHotelStay && endIndex >= 0 ? ((endTimeParts[0] * 60 + endTimeParts[1]) / 1440) : 0;
-                            const leftOffset = visibleStart * colWidth + startDayFraction * colWidth;
-                            const rightOffset = visibleEnd * colWidth + endDayFraction * colWidth;
-                            const barWidth = Math.max(rightOffset - leftOffset - 6, 12);
+                            const { leftOffset, barWidth } = geometry;
 
                             const statusStyle = statusConfig[bkg.status] || statusConfig.confirmed;
 

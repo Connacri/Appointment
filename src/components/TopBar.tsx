@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Menu,
   Search,
@@ -7,6 +7,7 @@ import {
   MoreVertical,
   X,
   Hotel,
+  Building2,
   Palmtree,
   Crown,
   Shield,
@@ -59,6 +60,9 @@ export const TopBar: React.FC = () => {
     cloudSyncStatus,
     forceSupabaseSync,
     isOffline,
+    resourceGroups,
+    selectedBuildingGroupId,
+    setSelectedBuildingGroupId,
   } = useApp();
 
   const [usbStatus, setUsbStatus] = useState<UsbConnectionStatus>(lockManager.getStatus());
@@ -191,6 +195,14 @@ export const TopBar: React.FC = () => {
 
   const isRtl = language === 'ar';
 
+  // Only buildings that really exist in the local IndexedDB inventory are offered.
+  // ResourceGroup ids are local building ids, never Supabase establishment ids.
+  const localBuildings = useMemo(
+    () => resourceGroups.filter((group) => group.sector === 'hotel' || group.sector === 'resort'),
+    [resourceGroups]
+  );
+  const selectedBuilding = localBuildings.find((group) => group.id === selectedBuildingGroupId);
+
   return (
     <header className="pms-app-topbar pms-material-bar pms-material-edge w-full border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 px-2 sm:px-3 py-1.5 flex flex-col gap-1.5 shrink-0 select-none z-50 relative transition-colors duration-200 overflow-visible">
       {/* Dynamic theme accent strip along top edge */}
@@ -223,67 +235,122 @@ export const TopBar: React.FC = () => {
             {language === 'fr' ? 'SECTEUR :' : language === 'ar' ? 'القطاع :' : 'SECTOR :'}
           </span>
 
-          {/* Sector Dropdown Menu (Hôtel / Resort) */}
+          {/* Sector dropdown seeded only from the real local building inventory */}
           <div className="relative shrink-0 overflow-visible" ref={sectorMenuRef}>
             <button
               type="button"
               onClick={toggleSectorMenu}
-              className="h-9 px-2.5 sm:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors shrink-0"
-              title={language === 'fr' ? 'Secteur d’activité (Hôtel / Resort)' : language === 'ar' ? 'قطاع النشاط (فندق / منتجع)' : 'Business Sector'}
+              aria-haspopup="menu"
+              aria-expanded={isSectorMenuOpen}
+              className="h-9 px-2.5 sm:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              title={selectedBuilding
+                ? `${getTranslation('sectorSelectBuilding', language)} : ${selectedBuilding.name[language] || selectedBuilding.name.fr}`
+                : getTranslation('sectorSelectBuilding', language)}
             >
-              {currentDomain === 'hotel' ? (
+              {selectedBuilding ? (
+                <Building2 size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+              ) : currentDomain === 'hotel' ? (
                 <Hotel size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
               ) : (
                 <Palmtree size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
               )}
-              <span className="truncate max-w-[85px] sm:max-w-none">
-                {currentDomain === 'hotel'
-                  ? (language === 'fr' ? 'Hôtel' : language === 'ar' ? 'فندق' : 'Hotel')
-                  : (language === 'fr' ? 'Resort' : language === 'ar' ? 'منتجع' : 'Resort')}
+              <span className="truncate max-w-[85px] sm:max-w-[150px]">
+                {selectedBuilding
+                  ? (selectedBuilding.name[language] || selectedBuilding.name.fr)
+                  : currentDomain === 'hotel'
+                    ? (language === 'fr' ? 'Hôtel' : language === 'ar' ? 'فندق' : 'Hotel')
+                    : (language === 'fr' ? 'Resort' : language === 'ar' ? 'منتجع' : 'Resort')}
               </span>
               <ChevronDown size={13} className={`text-slate-400 shrink-0 transition-transform ${isSectorMenuOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isSectorMenuOpen && (
               <div
+                role="menu"
                 dir={isRtl ? 'rtl' : 'ltr'}
-                className="absolute top-full mt-1.5 left-0 rtl:left-auto rtl:right-0 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-1.5 z-[100] text-xs pms-dropdown"
+                className="absolute top-full mt-1.5 left-0 rtl:left-auto rtl:right-0 w-56 max-h-[70vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-1.5 z-[100] text-xs pms-dropdown"
               >
                 <div className="px-2 py-1 text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 mb-1">
-                  {language === 'fr' ? 'Sélectionnez un secteur' : language === 'ar' ? 'اختر القطاع' : 'Select sector'}
+                  {getTranslation('sectorSelectBuilding', language)}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentDomain('hotel');
-                    setIsSectorMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left rtl:text-right transition-colors cursor-pointer ${
-                    currentDomain === 'hotel'
-                      ? 'bg-blue-600 text-white font-bold'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <Hotel size={14} className={currentDomain === 'hotel' ? 'text-white' : 'text-blue-500'} />
-                  <span className="flex-1">{language === 'fr' ? 'Hôtel & Chambres' : language === 'ar' ? 'فندق وغرف' : 'Hotel & Rooms'}</span>
-                  {currentDomain === 'hotel' && <CheckCircle2 size={13} className="text-white ml-auto rtl:ml-0 rtl:mr-auto" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentDomain('resort');
-                    setIsSectorMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left rtl:text-right transition-colors cursor-pointer ${
-                    currentDomain === 'resort'
-                      ? 'bg-blue-600 text-white font-bold'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <Palmtree size={14} className={currentDomain === 'resort' ? 'text-white' : 'text-emerald-500'} />
-                  <span className="flex-1">{language === 'fr' ? 'Resort & Complexe' : language === 'ar' ? 'منتجع ومجمع' : 'Resort & Complex'}</span>
-                  {currentDomain === 'resort' && <CheckCircle2 size={13} className="text-white ml-auto rtl:ml-0 rtl:mr-auto" />}
-                </button>
+                {localBuildings.length === 0 ? (
+                  <div className="px-2.5 py-3 space-y-2">
+                    <p className="text-slate-600 dark:text-slate-300">
+                      {getTranslation('topbarNoLocalBuildings', language)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEstablishmentModalOpen(true);
+                        setIsSectorMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg bg-blue-600 text-white font-semibold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    >
+                      <Building2 size={14} className="shrink-0" />
+                      <span>{getTranslation('topbarAddBuilding', language)}</span>
+                    </button>
+                  </div>
+                ) : (
+                  (['hotel', 'resort'] as const).map((sector) => {
+                    const options = localBuildings.filter((group) => group.sector === sector);
+                    if (options.length === 0) return null;
+                    const SectorIcon = sector === 'hotel' ? Hotel : Palmtree;
+                    const allSelected = currentDomain === sector && selectedBuildingGroupId === 'all';
+                    return (
+                      <div key={sector} className="mb-1 last:mb-0">
+                        <div className="px-2.5 py-1 text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                          <SectorIcon size={12} />
+                          <span>{getTranslation(sector === 'hotel' ? 'sectorHotel' : 'sectorResort', language)}</span>
+                        </div>
+                        <button
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={allSelected}
+                          onClick={() => {
+                            setCurrentDomain(sector);
+                            setSelectedBuildingGroupId('all');
+                            setIsSectorMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left rtl:text-right transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                            allSelected
+                              ? 'bg-blue-600 text-white font-bold'
+                              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          <span className="flex-1 truncate">{getTranslation('topbarAllBuildings', language)}</span>
+                          {allSelected && <CheckCircle2 size={13} className="text-white ml-auto rtl:ml-0 rtl:mr-auto" />}
+                        </button>
+                        {options.map((group) => {
+                          const isSelected = selectedBuildingGroupId === group.id;
+                          const buildingName = group.name[language] || group.name.fr;
+                          return (
+                            <button
+                              key={group.id}
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={isSelected}
+                              onClick={() => {
+                                setCurrentDomain(sector);
+                                setSelectedBuildingGroupId(group.id);
+                                setIsSectorMenuOpen(false);
+                              }}
+                              title={buildingName}
+                              className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left rtl:text-right transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                                isSelected
+                                  ? 'bg-blue-600 text-white font-bold'
+                                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              <Building2 size={13} className={isSelected ? 'text-white' : 'text-slate-500 dark:text-slate-400'} />
+                              <span className="flex-1 truncate">{buildingName}</span>
+                              {isSelected && <CheckCircle2 size={13} className="text-white ml-auto rtl:ml-0 rtl:mr-auto" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             )}
           </div>

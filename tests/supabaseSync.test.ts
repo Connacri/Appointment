@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { OutboxRecord, OutboxSummary, TombstoneRecord } from '../src/db/indexedDb';
 import type { HotelEstablishment, ResourceGroup, ResourceItem, TimelineBooking } from '../src/types/booking';
+import type { SyncProgressEvent } from '../src/services/supabase/syncLog';
 import {
   computeBackoffIso,
   deriveIdleSyncPhase,
@@ -42,6 +43,22 @@ const makeGroup = (id: string, resources: ResourceItem[]): ResourceGroup => ({
   name: { fr: 'Bâtiment A', en: 'Building A', ar: 'المبنى أ' },
   sector: 'hotel',
   resources,
+});
+
+const makeBookingOutboxRecord = (booking: TimelineBooking): OutboxRecord => ({
+  id: `ob-${booking.id}`,
+  idempotencyKey: `ws-1:booking:${booking.id}:1`,
+  workspaceId: 'ws-1',
+  establishmentId: 'est-1',
+  entity: 'booking',
+  entityId: booking.id,
+  operation: 'upsert',
+  version: 1,
+  payload: booking as unknown as Record<string, unknown>,
+  status: 'pending',
+  attempts: 0,
+  createdAt: '2026-11-18T11:00:00.000Z',
+  nextAttemptAt: '2026-11-18T11:00:00.000Z',
 });
 
 function createMemoryAdapter(seed?: {
@@ -440,4 +457,157 @@ test('deriveIdleSyncPhase and computeBackoffIso enforce evidence-based status in
   assert.equal(computeBackoffIso(0, baseMs), '2026-11-18T12:00:05.000Z');
   assert.equal(computeBackoffIso(1, baseMs), '2026-11-18T12:00:10.000Z');
   assert.equal(computeBackoffIso(10, baseMs), '2026-11-18T12:05:00.000Z');
+});
+
+test('force sync telemetry reports verified success only after push ACK and pull verification', async () => {
+  const booking = makeBooking('bkg-telemetry');
+  const { adapter, fixedNow } = createMemoryAdapter({
+    outbox: [makeBookingOutboxRecord(booking)],
+    remote: { bookings: [makeBooking('bkg-remote', { resourceId: 'room-101' })] },
+  });
+  const events: SyncProgressEvent[] = [];
+
+  const result = await runSupabaseSync({
+    force: true,
+    isOffline: false,
+    isConfigured: true,
+    workspaceId: 'ws-1',
+    selectedEstablishmentId: 'est-1',
+    localGroups: [],
+    localBookings: [booking],
+    adapter,
+    now: () => fixedNow,
+    onEvent: (event) => events.push(event),
+  });
+
+  const keys = events.map((event) => event.key);
+  assert.equal(result.status.phase, 'synced');
+  assert.equal(keys.at(-1), 'syncLogSynced');
+  for (const key of [
+    'syncLogForceStarted',
+    'syncLogOutbox',
+    'syncLogPushed',
+    'syncLogPushDone',
+    'syncLogPulling',
+    'syncLogPulled',
+    'syncLogMerged',
+    'syncLogVerifying',
+    'syncLogSynced',
+  ] as const) {
+    assert.ok(keys.includes(key), `missing telemetry event: ${key}`);
+  }
+  assert.equal(keys.includes('syncLogPending'), false);
+  assert.equal(keys.includes('syncLogError'), false);
+});
+
+test('sync telemetry names every skipped state without claiming success', async () => {
+  const states = [
+    {
+      label: 'offline',
+      isOffline: true,
+      isConfigured: true,
+      workspaceId: 'ws-1',
+      hasSession: true,
+      eventKey: 'cloudStatusOffline' as const,
+      skippedReason: 'offline' as const,
+    },
+    {
+      label: 'unconfigured',
+      isOffline: false,
+      isConfigured: false,
+      workspaceId: 'ws-1',
+      hasSession: true,
+      eventKey: 'cloudStatusNotConfigured' as const,
+      skippedReason: 'unconfigured' as const,
+    },
+    {
+      label: 'unauthenticated',
+      isOffline: false,
+      isConfigured: true,
+      workspaceId: 'ws-1',
+      hasSession: false,
+      eventKey: 'supabaseStatusAuthRequired' as const,
+      skippedReason: 'unauthenticated' as const,
+    },
+    {
+      label: 'no workspace',
+      isOffline: false,
+      isConfigured: true,
+      workspaceId: '',
+      hasSession: true,
+      eventKey: 'supabaseStatusNoWorkspace' as const,
+      skippedReason: 'no_workspace' as const,
+    },
+  ];
+
+  for (const state of states) {
+    const { adapter } = createMemoryAdapter({ hasSession: state.hasSession });
+    const events: SyncProgressEvent[] = [];
+    const result = await runSupabaseSync({
+      force: false,
+      isOffline: state.isOffline,
+      isConfigured: state.isConfigured,
+      workspaceId: state.workspaceId,
+      selectedEstablishmentId: 'est-1',
+      localGroups: [],
+      localBookings: [],
+      adapter,
+      onEvent: (event) => events.push(event),
+    });
+
+    assert.deepEqual(events.map((event) => event.key), ['syncLogStarted', state.eventKey], state.label);
+    assert.equal(result.skippedReason, state.skippedReason, state.label);
+    assert.equal(events.some((event) => event.key === 'syncLogSynced'), false, state.label);
+  }
+});
+
+test('sync telemetry exposes the real push error and never reports synced', async () => {
+  const booking = makeBooking('bkg-push-error');
+  const { adapter, fixedNow } = createMemoryAdapter({
+    outbox: [makeBookingOutboxRecord(booking)],
+    failBookingUpsertIds: new Set([booking.id]),
+  });
+  const events: SyncProgressEvent[] = [];
+
+  const result = await runSupabaseSync({
+    force: true,
+    isOffline: false,
+    isConfigured: true,
+    workspaceId: 'ws-1',
+    selectedEstablishmentId: 'est-1',
+    localGroups: [],
+    localBookings: [booking],
+    adapter,
+    now: () => fixedNow,
+    onEvent: (event) => events.push(event),
+  });
+
+  const pushFailure = events.find((event) => event.key === 'syncLogPushFailed');
+  assert.ok(pushFailure);
+  assert.equal(pushFailure.level, 'error');
+  assert.equal(pushFailure.params?.entity, 'booking');
+  assert.equal(pushFailure.detail, 'Server rejected booking');
+  assert.equal(events.at(-1)?.key, 'syncLogError');
+  assert.equal(events.at(-1)?.detail, 'Server rejected booking');
+  assert.equal(result.status.phase, 'error');
+  assert.equal(events.some((event) => event.key === 'syncLogSynced'), false);
+});
+
+test('a failing telemetry listener cannot change the sync result', async () => {
+  const { adapter } = createMemoryAdapter();
+  const result = await runSupabaseSync({
+    force: false,
+    isOffline: false,
+    isConfigured: true,
+    workspaceId: 'ws-1',
+    selectedEstablishmentId: 'est-1',
+    localGroups: [],
+    localBookings: [],
+    adapter,
+    onEvent: () => {
+      throw new Error('Observer failure');
+    },
+  });
+
+  assert.equal(result.status.phase, 'synced');
 });

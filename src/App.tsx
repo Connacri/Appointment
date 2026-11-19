@@ -11,6 +11,7 @@ import { PlanningTimeline } from './components/PlanningTimeline';
 import { LegendBar } from './components/LegendBar';
 import { BookingModal } from './components/BookingModal';
 import { OfflineBanner } from './components/OfflineBanner';
+import { SyncTerminal } from './components/SyncTerminal';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { SupabaseAuthGate } from './services/supabase/SupabaseAuthGate';
 import { WorkspaceProvider } from './services/supabase/WorkspaceContext';
@@ -345,6 +346,9 @@ const MainLayout: React.FC = () => {
           </Suspense>
         </div>
       </div>
+
+      {/* Bottom-docked evidence-based Supabase sync terminal */}
+      <SyncTerminal />
 
       {/* Global Interactive Modals — mounted on demand */}
       <BookingModal />

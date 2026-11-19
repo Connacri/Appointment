@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { isSupabaseConfigured, onSupabaseConfigChange, supabase } from './supabaseClient';
+import {
+  isSupabaseConfigured,
+  onSupabaseConfigChange,
+  resetSupabaseRuntimeConfig,
+  supabase,
+} from './supabaseClient';
 
 type Props = { children: React.ReactNode };
 
@@ -11,6 +16,7 @@ export function SupabaseAuthGate({ children }: Props) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [authKeyError, setAuthKeyError] = useState(false);
   const [configEpoch, setConfigEpoch] = useState(0);
 
   useEffect(() => onSupabaseConfigChange(() => {
@@ -42,6 +48,7 @@ export function SupabaseAuthGate({ children }: Props) {
     if (!supabase) return;
     setBusy(true);
     setMessage('');
+    setAuthKeyError(false);
     try {
       const result = mode === 'signin'
         ? await supabase.auth.signInWithPassword({email: email.trim(), password})
@@ -54,10 +61,18 @@ export function SupabaseAuthGate({ children }: Props) {
         setMessage('Authentification réussie.');
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Échec de l’authentification.');
+      const text = error instanceof Error ? error.message : 'Échec de l’authentification.';
+      setMessage(text);
+      setAuthKeyError(/api key|apikey|invalid key/i.test(text));
     } finally {
       setBusy(false);
     }
+  }
+
+  function resetProjectConfig() {
+    resetSupabaseRuntimeConfig();
+    setMessage('Configuration Supabase par défaut rétablie. Réessayez de vous connecter.');
+    setAuthKeyError(false);
   }
 
   if (!isSupabaseConfigured) return <>{children}</>;
@@ -79,6 +94,15 @@ export function SupabaseAuthGate({ children }: Props) {
       <label className="mb-1 block text-sm font-medium">Mot de passe</label>
       <input className="mb-4 w-full rounded-lg border border-slate-300 bg-transparent px-3 py-2 text-slate-900 dark:border-slate-700 dark:text-white" type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} minLength={8} required value={password} onChange={e=>setPassword(e.target.value)} />
       {message && <p role="status" className="mb-4 rounded-lg bg-slate-100 p-3 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200">{message}</p>}
+      {authKeyError && (
+        <button
+          type="button"
+          onClick={resetProjectConfig}
+          className="mb-4 w-full rounded-lg border border-blue-300 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-950/40"
+        >
+          Rétablir la configuration Supabase par défaut
+        </button>
+      )}
       <button disabled={busy} className="w-full rounded-lg bg-blue-600 px-4 py-2.5 font-semibold text-white disabled:opacity-60">{busy ? 'Veuillez patienter…' : mode === 'signin' ? 'Se connecter' : 'Créer le compte'}</button>
       <button type="button" className="mt-4 w-full text-sm text-blue-600" onClick={()=>{setMode(mode==='signin'?'signup':'signin');setMessage('');}}>
         {mode === 'signin' ? 'Créer un nouveau compte' : 'J’ai déjà un compte'}

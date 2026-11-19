@@ -9,6 +9,7 @@ import type {
 } from '../../types/booking';
 import type { EstablishmentProfile } from '../../types/establishment';
 import { mergeCloudStateWithLocal } from './cloudRecovery';
+import type { SyncProgressEvent } from './syncLog';
 
 export type CloudSyncPhase =
   | 'idle'
@@ -89,6 +90,7 @@ export interface RunSupabaseSyncParams {
   demoBookingIds?: Set<string>;
   adapter: SupabaseSyncAdapter;
   now?: () => Date;
+  onEvent?: (event: SyncProgressEvent) => void;
 }
 
 export interface RunSupabaseSyncResult {
@@ -236,8 +238,22 @@ export async function runSupabaseSync({
   demoBookingIds = new Set(),
   adapter,
   now = () => new Date(),
+  onEvent,
 }: RunSupabaseSyncParams): Promise<RunSupabaseSyncResult> {
   const attemptAt = now().toISOString();
+  // Telemetry must never change sync behaviour: a broken listener cannot abort a run.
+  const emit = (event: SyncProgressEvent): void => {
+    if (!onEvent) return;
+    try {
+      onEvent(event);
+    } catch {
+      // Ignore observer failures; the sync result remains authoritative.
+    }
+  };
+  emit({
+    key: force ? 'syncLogForceStarted' : 'syncLogStarted',
+    level: 'info',
+  });
   const baseEmpty: Omit<RunSupabaseSyncResult, 'status' | 'warnings' | 'skippedReason'> = {
     pushedCount: 0,
     pushFailedCount: 0,
@@ -264,6 +280,7 @@ export async function runSupabaseSync({
   };
 
   if (isOffline) {
+    emit({ key: 'cloudStatusOffline', level: 'warn' });
     const summary = await readSafeSummary();
     return {
       ...baseEmpty,
@@ -282,6 +299,7 @@ export async function runSupabaseSync({
   }
 
   if (!isConfigured) {
+    emit({ key: 'cloudStatusNotConfigured', level: 'warn' });
     return {
       ...baseEmpty,
       warnings: [],
@@ -303,6 +321,7 @@ export async function runSupabaseSync({
     hasSession = await adapter.hasSession();
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Erreur session Supabase';
+    emit({ key: 'syncLogError', level: 'error', detail: msg });
     const summary = await readSafeSummary();
     return {
       ...baseEmpty,
@@ -321,6 +340,7 @@ export async function runSupabaseSync({
   }
 
   if (!hasSession) {
+    emit({ key: 'supabaseStatusAuthRequired', level: 'warn' });
     const summary = await readSafeSummary();
     return {
       ...baseEmpty,
@@ -339,6 +359,7 @@ export async function runSupabaseSync({
   }
 
   if (!workspaceId.trim()) {
+    emit({ key: 'supabaseStatusNoWorkspace', level: 'warn' });
     return {
       ...baseEmpty,
       warnings: [],
@@ -361,15 +382,27 @@ export async function runSupabaseSync({
   let firstPushError: string | null = null;
   let prefetchedRemote: PulledSupabaseSnapshot | null = null;
 
+  const acknowledgePush = async (record: OutboxRecord): Promise<void> => {
+    await adapter.markOutboxSynced(record.id);
+    pushedCount += 1;
+    emit({
+      key: 'syncLogPushed',
+      level: 'success',
+      params: { entity: record.entity, id: record.entityId },
+    });
+  };
+
   // Step 1: Push pending Outbox events
   let dueRecords: OutboxRecord[] = [];
   try {
     dueRecords = sortOutboxForPush(await adapter.getPendingOutbox(workspaceId, 200, force));
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Lecture Outbox impossible';
+    emit({ key: 'syncLogError', level: 'error', detail: msg });
     warnings.push(msg);
     firstPushError = msg;
   }
+  emit({ key: 'syncLogOutbox', level: 'info', params: { count: dueRecords.length } });
 
   if (dueRecords.length > 0) {
     // If any upsert lacks an explicit establishmentId locally, fetch remote establishments/resources
@@ -390,9 +423,9 @@ export async function runSupabaseSync({
       try {
         prefetchedRemote = await adapter.pullRemoteState(workspaceId);
       } catch (err) {
-        warnings.push(
-          `Résolution établissement impossible avant push : ${err instanceof Error ? err.message : 'erreur réseau'}`,
-        );
+        const detail = err instanceof Error ? err.message : 'erreur réseau';
+        emit({ key: 'syncLogPullFailed', level: 'warn', detail });
+        warnings.push(`Résolution établissement impossible avant push : ${detail}`);
       }
     }
 
@@ -404,12 +437,16 @@ export async function runSupabaseSync({
         continue;
       }
 
+      emit({
+        key: 'syncLogPushing',
+        level: 'info',
+        params: { entity: record.entity, id: record.entityId },
+      });
       try {
         if (record.entity === 'booking') {
           if (record.operation === 'delete') {
             await adapter.pushBookingDelete(workspaceId, record.entityId);
-            await adapter.markOutboxSynced(record.id);
-            pushedCount += 1;
+            await acknowledgePush(record);
             continue;
           }
           const payload = record.payload as unknown as TimelineBooking | null;
@@ -429,16 +466,14 @@ export async function runSupabaseSync({
             );
           }
           await adapter.pushBookingUpsert(workspaceId, establishmentId, payload);
-          await adapter.markOutboxSynced(record.id);
-          pushedCount += 1;
+          await acknowledgePush(record);
         } else if (record.entity === 'resource') {
           if (record.operation === 'delete') {
             if (!adapter.pushResourceDelete) {
               throw new Error('Suppression de ressource cloud non configurée.');
             }
             await adapter.pushResourceDelete(workspaceId, record.entityId);
-            await adapter.markOutboxSynced(record.id);
-            pushedCount += 1;
+            await acknowledgePush(record);
             continue;
           }
           if (!adapter.pushResourceUpsert) {
@@ -461,8 +496,7 @@ export async function runSupabaseSync({
             );
           }
           await adapter.pushResourceUpsert(workspaceId, establishmentId, payload);
-          await adapter.markOutboxSynced(record.id);
-          pushedCount += 1;
+          await acknowledgePush(record);
         } else if (record.entity === 'task' && record.operation === 'upsert' && adapter.pushTaskUpsert) {
           const payload = record.payload as unknown as PmsTask | null;
           const establishmentId = resolveEstablishmentId({
@@ -476,8 +510,7 @@ export async function runSupabaseSync({
             throw new Error('Tâche ou établissement cible manquant pour la synchronisation.');
           }
           await adapter.pushTaskUpsert(workspaceId, establishmentId, payload);
-          await adapter.markOutboxSynced(record.id);
-          pushedCount += 1;
+          await acknowledgePush(record);
         } else if (
           record.entity === 'stock_item' &&
           record.operation === 'upsert' &&
@@ -495,8 +528,7 @@ export async function runSupabaseSync({
             throw new Error('Article de stock ou établissement cible manquant pour la synchronisation.');
           }
           await adapter.pushStockItemUpsert(workspaceId, establishmentId, payload);
-          await adapter.markOutboxSynced(record.id);
-          pushedCount += 1;
+          await acknowledgePush(record);
         } else {
           throw new Error(`Type d’opération Outbox non pris en charge : ${record.entity}/${record.operation}`);
         }
@@ -504,20 +536,43 @@ export async function runSupabaseSync({
         const errMsg = err instanceof Error ? err.message : 'Échec d’envoi vers Supabase';
         pushFailedCount += 1;
         if (!firstPushError) firstPushError = errMsg;
+        emit({
+          key: 'syncLogPushFailed',
+          level: 'error',
+          params: { entity: record.entity, id: record.entityId },
+          detail: errMsg,
+        });
         warnings.push(`Push ${record.entity}/${record.entityId} : ${errMsg}`);
         const nextAttempt = computeBackoffIso(record.attempts, now().getTime());
         await adapter.markOutboxFailed(record.id, errMsg, nextAttempt).catch(() => undefined);
       }
     }
   }
+  emit({
+    key: 'syncLogPushDone',
+    level: pushFailedCount > 0 ? 'warn' : 'success',
+    params: { pushed: pushedCount, failed: pushFailedCount },
+  });
 
   // Step 2: Pull latest remote Supabase snapshot & merge safely
   let pullError: string | null = null;
   let pulledSnapshot: PulledSupabaseSnapshot | null = null;
+  emit({ key: 'syncLogPulling', level: 'info' });
   try {
     pulledSnapshot = await adapter.pullRemoteState(workspaceId);
+    emit({
+      key: 'syncLogPulled',
+      level: 'success',
+      params: {
+        groups: pulledSnapshot.groups.length,
+        bookings: pulledSnapshot.bookings.length,
+        tasks: pulledSnapshot.tasks.length,
+        stock: pulledSnapshot.stockItems.length,
+      },
+    });
   } catch (err) {
     pullError = err instanceof Error ? err.message : 'Échec de récupération Supabase';
+    emit({ key: 'syncLogPullFailed', level: 'error', detail: pullError });
     warnings.push(`Pull Supabase : ${pullError}`);
   }
 
@@ -549,6 +604,11 @@ export async function runSupabaseSync({
     recoveredBookingsCount = merged.recoveredBookingsCount;
     mergedGroups = merged.groups;
     mergedBookings = merged.bookings;
+    emit({
+      key: 'syncLogMerged',
+      level: 'info',
+      params: { groups: recoveredGroupsCount, bookings: recoveredBookingsCount },
+    });
 
     if (pulledSnapshot.establishments.length > 0) {
       const firstEst = pulledSnapshot.establishments[0];
@@ -566,6 +626,11 @@ export async function runSupabaseSync({
 
   // Step 3: Compute evidence-based sync status after push + pull
   const finalSummary = await readSafeSummary();
+  emit({
+    key: 'syncLogVerifying',
+    level: 'info',
+    params: { pending: finalSummary.pendingCount, failed: finalSummary.failedCount },
+  });
   const pullCount = pulledSnapshot
     ? recoveredGroupsCount +
       recoveredBookingsCount +
@@ -602,6 +667,27 @@ export async function runSupabaseSync({
     lastPullCount: pullCount,
     workspaceId,
   };
+
+  if (fullyVerifiedSynced) {
+    emit({
+      key: 'syncLogSynced',
+      level: 'success',
+      params: { pushed: pushedCount, pulled: pullCount },
+    });
+  } else if (combinedError) {
+    emit({
+      key: 'syncLogError',
+      level: 'error',
+      params: { pending: finalSummary.pendingCount, failed: finalSummary.failedCount },
+      detail: combinedError,
+    });
+  } else {
+    emit({
+      key: 'syncLogPending',
+      level: 'warn',
+      params: { pending: finalSummary.pendingCount, failed: finalSummary.failedCount },
+    });
+  }
 
   return {
     status,

@@ -19,6 +19,44 @@ export interface SupabaseRuntimeConfig {
   isDefault: boolean;
 }
 
+export interface SupabaseConfigInput {
+  storedUrl: string;
+  storedPublishableKey: string;
+  storedAnonKey: string;
+  envUrl: string;
+  envKey: string;
+}
+
+/**
+ * Pure resolver shared by runtime config and regression tests.
+ *
+ * A legacy anon key can be rotated in the Supabase dashboard. When the app points
+ * at its bundled project, always use the key shipped with this build so a stale
+ * key saved earlier in localStorage cannot make auth fail with "Invalid API key".
+ * A genuinely different project keeps using the key explicitly paired with it.
+ */
+export function resolveSupabaseConfig(input: SupabaseConfigInput): SupabaseRuntimeConfig {
+  const storedUrlValue = input.storedUrl.trim();
+  const envUrl = input.envUrl.trim();
+  const envKey = input.envKey.trim();
+  const url = storedUrlValue || envUrl || DEFAULT_SUPABASE_URL;
+  const storedKey = input.storedPublishableKey.trim() || input.storedAnonKey.trim();
+  const activeKey =
+    url === DEFAULT_SUPABASE_URL
+      ? envKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY
+      : storedUrlValue
+        ? storedKey
+        : envKey;
+
+  return {
+    url,
+    publishableKey: input.storedPublishableKey.trim(),
+    anonKey: input.storedAnonKey.trim(),
+    activeKey,
+    isDefault: !storedUrlValue && url === DEFAULT_SUPABASE_URL,
+  };
+}
+
 export function readSupabaseRuntimeConfig(): SupabaseRuntimeConfig {
   let storedUrl = '';
   let storedPublishableKey = '';
@@ -33,22 +71,14 @@ export function readSupabaseRuntimeConfig(): SupabaseRuntimeConfig {
     }
   }
 
-  const envUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || '';
-  const envKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() || '';
-
-  const url = storedUrl.trim() || envUrl || DEFAULT_SUPABASE_URL;
-  // Never pair a user-supplied project URL with another project's default public key.
-  const activeKey = storedUrl.trim()
-    ? storedPublishableKey.trim() || storedAnonKey.trim()
-    : envKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
-
-  return {
-    url,
-    publishableKey: storedPublishableKey.trim(),
-    anonKey: storedAnonKey.trim(),
-    activeKey,
-    isDefault: !storedUrl.trim() && url === DEFAULT_SUPABASE_URL,
-  };
+  const env = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
+  return resolveSupabaseConfig({
+    storedUrl,
+    storedPublishableKey,
+    storedAnonKey,
+    envUrl: env.VITE_SUPABASE_URL ?? '',
+    envKey: env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '',
+  });
 }
 
 function buildSupabaseClient(): { configured: boolean; client: SupabaseClient<Database> | null } {

@@ -13,12 +13,38 @@ export async function createWorkspace(name: string): Promise<{ id: string; name:
   if (normalized.length < 2 || normalized.length > 80) {
     throw new Error('Le nom de l’espace doit contenir entre 2 et 80 caractères.');
   }
+  const db = requireSupabase();
+  const { data: authData, error: authError } = await db.auth.getUser();
+  if (authError) throw new Error(authError.message);
+  const user = authData.user;
+  if (!user) {
+    throw new Error('Connectez-vous à Supabase avant de créer un espace de travail.');
+  }
 
-  // Do not fabricate a workspace ID. Creation needs a server-side operation
-  // whose INSERT policy and workspace_members bootstrap are verified first.
-  throw new Error(
-    'La création de workspace côté serveur n’est pas encore implémentée. Aucun espace fictif n’a été créé.'
-  );
+  // The existing RLS policies are sufficient: a workspace may be inserted only
+  // with the authenticated user as owner, and the owner membership may be added
+  // only for a workspace that this same user owns. No service-role key or DDL is
+  // required. Insert first, then create membership: `workspaces_select_member`
+  // depends on that membership, so a RETURNING clause here would be filtered out.
+  const id =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `ws-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const { error: workspaceError } = await db
+    .from('workspaces')
+    .insert({ id, name: normalized, owner_id: user.id });
+  if (workspaceError) throw new Error(workspaceError.message);
+
+  const { error: membershipError } = await db
+    .from('workspace_members')
+    .insert({ workspace_id: id, user_id: user.id, role: 'owner' });
+  if (membershipError) {
+    throw new Error(
+      `Espace créé mais appartenance non enregistrée : ${membershipError.message}`,
+    );
+  }
+
+  return { id, name: normalized };
 }
 
 export async function listWorkspaces() {

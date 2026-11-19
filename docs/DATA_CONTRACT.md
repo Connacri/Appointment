@@ -32,7 +32,11 @@ proof of synchronization or referential integrity.
 - **Workspace**: technical access/collaboration boundary only; never a hotel, building,
   establishment or other business record. Never create a fake workspace.
 - **ResourceGroup**: optional functional classification; never a substitute for a
-  building, floor or establishment.
+  building, floor or establishment. The top-bar building selector and the Gantt filter
+  use `ResourceGroup.id` from the local IndexedDB inventory (`selectedBuildingGroupId`).
+  That local building id is **not** an establishment id and must never be used as
+  `establishmentId` in Supabase writes, RLS scopes or the Outbox. `selectedEstablishmentId`
+  remains the verified remote establishment scope used by synchronization.
 
 Never invent a hotel, establishment, building, floor, room, workspace, guest or booking to
 satisfy a UI default, import fallback or migration. Never silently merge several buildings
@@ -57,7 +61,11 @@ into one establishment.
 - Offline mutations are durable and idempotent. Outbox pending is not synced; only a
   verified server ACK confirms synchronization.
 - Imports preserve source IDs/provenance and report orphan/ambiguous rows.
-- Automatic bidirectional Supabase sync (`WorkspaceContext`, `src/context/AppContext.tsx`, `src/services/supabase/supabaseSync.ts`, `src/services/supabase/cloudRecovery.ts`, `src/db/indexedDb.ts`) runs when online, configured, authenticated, and scoped to a real workspace (on startup/hydration, online reconnect, focus/visibility, periodic interval, debounced Outbox writes, or explicit **Force sync**). It pushes pending Outbox mutations sequentially in causal order (`resource` before `booking`, marking synced only after verified server ACK and applying exponential backoff on failures), pulls remote workspace rows, merges without resurrecting locally tombstoned deletions or overwriting pending local Outbox upserts (including backed-off retries), and exposes strictly evidence-based sync status (never reporting `synced` while any Outbox event remains pending or failed). Verified by `tests/cloudRecovery.test.ts` and `tests/supabaseSync.test.ts`.
+- Automatic bidirectional Supabase sync (`WorkspaceContext`, `src/context/AppContext.tsx`, `src/services/supabase/supabaseSync.ts`, `src/services/supabase/cloudRecovery.ts`, `src/db/indexedDb.ts`) runs when online, configured, authenticated, and scoped to a real workspace (on startup/hydration, online reconnect, focus/visibility, periodic interval, debounced Outbox writes, or explicit **Force sync**). It pushes pending Outbox mutations sequentially in causal order (`resource` before `booking`, marking synced only after verified server ACK and applying exponential backoff on failures), pulls remote workspace rows, merges without resurrecting locally tombstoned deletions or overwriting pending local Outbox upserts (including backed-off retries), and exposes strictly evidence-based sync status (never reporting `synced` while any Outbox event remains pending or failed). Force sync also emits structured `onEvent` telemetry
+(`src/services/supabase/syncLog.ts`) consumed by the bottom terminal: `syncLogSynced` is
+emitted only when `fullyVerifiedSynced` is true, while offline, unconfigured,
+unauthenticated, no-workspace, pending and failed states each emit their own event.
+Verified by `tests/cloudRecovery.test.ts` and `tests/supabaseSync.test.ts`.
 - CardLock MDB source locations are centralized per platform in `src/locks/database/mdbPaths.ts` (Windows: exact live VirtualStore path to use — `%LOCALAPPDATA%\VirtualStore\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb` — and `D:\proUSB_DBBak` backups; no separate Program Files copy path is kept. Android/web have no automatic exact local proUSB path). UI and import guidance must use these canonical exact paths; sandboxed runtimes cannot open arbitrary filesystem paths automatically and must rely on explicit user file/directory selection.
 
 ## 4. Mandatory change protocol
@@ -130,6 +138,9 @@ reproducible fresh deployment. Do not apply speculative production DDL.
 Cloud CardLock import of multiple buildings remains blocked until each building can be
 mapped to its own real establishment under an explicitly selected hotel. This is a safety
 guard, not completed multi-building support.
+
+The local building selector, Gantt bar geometry fix and sync terminal do not change this
+alignment status; they only read existing local inventory and report observed sync events.
 
 Update this section only after verifying local schema, migrations, live remote schema,
 generated types, repositories, RLS and tests together.

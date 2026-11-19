@@ -46,6 +46,11 @@ import {
   runSupabaseSync,
   type CloudSyncStatus,
 } from '../services/supabase/supabaseSync';
+import {
+  SYNC_LOG_MAX_ENTRIES,
+  type SyncLogEntry,
+  type SyncProgressEvent,
+} from '../services/supabase/syncLog';
 import { isValidCalendarDate, shouldMarkPaymentAsPaid } from '../utils/bookingValidation';
 import { isRoomReadyForBooking } from '../utils/roomReadiness';
 import { lockManager } from '../locks/lockManager';
@@ -156,8 +161,12 @@ interface AppContextType {
 
   // PMS Hotel Complex & Multi-Currency State
   establishments: HotelEstablishment[];
+  /** Remote establishment scope used by Supabase writes. Never a ResourceGroup id. */
   selectedEstablishmentId: string | 'all';
   setSelectedEstablishmentId: (id: string | 'all') => void;
+  /** Local ResourceGroup (building) used by the top selector and the Gantt filter. */
+  selectedBuildingGroupId: string | 'all';
+  setSelectedBuildingGroupId: (id: string | 'all') => void;
   currency: 'DA' | 'DZD' | 'EUR' | 'USD' | 'RMB' | 'GBP' | 'SAR' | string;
   setCurrency: (c: string) => void;
   tasks: PmsTask[];
@@ -186,6 +195,10 @@ interface AppContextType {
   triggerCloudRecovery: () => Promise<CloudRecoveryReport>;
   cloudSyncStatus: CloudSyncStatus;
   forceSupabaseSync: () => Promise<CloudRecoveryReport>;
+  syncLog: SyncLogEntry[];
+  syncTerminalOpen: boolean;
+  setSyncTerminalOpen: (open: boolean) => void;
+  clearSyncLog: () => void;
 }
 
 export interface CloudRecoveryReport {
@@ -281,6 +294,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Populated only from verified remote Supabase establishments (never fabricated locally).
   const [establishments, setEstablishments] = useState<HotelEstablishment[]>([]);
   const [selectedEstablishmentId, setSelectedEstablishmentId] = useState<string | 'all'>('all');
+  const [selectedBuildingGroupId, setSelectedBuildingGroupId] = useState<string | 'all'>('all');
   const [currency, setCurrencyState] = useState<string>(() => {
     return localStorage.getItem('omnibook_currency') || 'DA';
   });
@@ -393,6 +407,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isCoreDataHydrated, setIsCoreDataHydrated] = useState(false);
 
   const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>(INITIAL_CLOUD_SYNC_STATUS);
+  const [syncLog, setSyncLog] = useState<SyncLogEntry[]>([]);
+  const [syncTerminalOpen, setSyncTerminalOpen] = useState(false);
+  const syncLogSeqRef = useRef(0);
   const autoSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const triggerSyncFnRef = useRef<((options?: { force?: boolean }) => Promise<CloudRecoveryReport>) | null>(null);
 
@@ -695,6 +712,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [workspace.activeWorkspaceId, isOffline]);
 
+  const appendSyncLog = useCallback((event: SyncProgressEvent) => {
+    syncLogSeqRef.current += 1;
+    const entry: SyncLogEntry = {
+      ...event,
+      id: `sync-${syncLogSeqRef.current}`,
+      at: new Date().toISOString(),
+    };
+    setSyncLog((prev) => [...prev, entry].slice(-SYNC_LOG_MAX_ENTRIES));
+  }, []);
+
+  const clearSyncLog = useCallback(() => setSyncLog([]), []);
+
   // Bidirectional automatic Supabase synchronization:
   // pushes Outbox mutations sequentially (ACK before dequeue), pulls latest remote state,
   // and merges safely without overwriting pending local edits or tombstones.
@@ -793,6 +822,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             };
           },
         },
+        onEvent: appendSyncLog,
       });
 
       setCloudSyncStatus(result.status);
@@ -866,6 +896,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Erreur synchronisation Supabase';
+      appendSyncLog({ key: 'syncLogError', level: 'error', detail: msg });
       console.warn('[AppContext] Supabase sync failed:', error);
       setCloudSyncStatus((prev) => ({
         ...prev,
@@ -880,7 +911,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         warnings: [msg],
       };
     }
-  }, []);
+  }, [appendSyncLog]);
 
   const syncWithSupabase = useCallback(async (options?: { force?: boolean }): Promise<CloudRecoveryReport> => {
     const force = options?.force === true;
@@ -912,6 +943,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   triggerSyncFnRef.current = syncWithSupabase;
 
   const forceSupabaseSync = useCallback(async (): Promise<CloudRecoveryReport> => {
+    clearSyncLog();
+    setSyncTerminalOpen(true);
     if (autoSyncTimerRef.current) {
       clearTimeout(autoSyncTimerRef.current);
       autoSyncTimerRef.current = null;
@@ -920,7 +953,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await workspace.refreshWorkspaces().catch(() => undefined);
     }
     return syncWithSupabase({ force: true });
-  }, [syncWithSupabase, workspace.refreshWorkspaces]);
+  }, [syncWithSupabase, workspace.refreshWorkspaces, clearSyncLog]);
 
   // Automatic initial & reconnect sync
   useEffect(() => {
@@ -1553,6 +1586,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       loyaltyPoints: 0,
     });
     setSelectedEstablishmentId('all');
+    setSelectedBuildingGroupId('all');
     setHasOnboardedState(false);
     setIsEstablishmentModalOpen(false);
     setActiveSector('all');
@@ -1661,6 +1695,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         establishments,
         selectedEstablishmentId,
         setSelectedEstablishmentId,
+        selectedBuildingGroupId,
+        setSelectedBuildingGroupId,
         currency,
         setCurrency,
         tasks,
@@ -1689,6 +1725,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         triggerCloudRecovery: forceSupabaseSync,
         cloudSyncStatus,
         forceSupabaseSync,
+        syncLog,
+        syncTerminalOpen,
+        setSyncTerminalOpen,
+        clearSyncLog,
       }}
     >
       {children}

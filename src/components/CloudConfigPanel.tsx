@@ -40,6 +40,9 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
     refreshWorkspaces,
     cloudSyncStatus,
     forceSupabaseSync,
+    createWorkspace,
+    isWorkspaceLoading,
+    workspaceError,
   } = useApp();
 
   const initialSupabase = useMemo(() => readSupabaseRuntimeConfig(), []);
@@ -51,6 +54,8 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
   );
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(initialSupabase.anonKey);
   const [showSupabaseKey, setShowSupabaseKey] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [workspaceBusy, setWorkspaceBusy] = useState(false);
   const [supabaseStatus, setSupabaseStatus] = useState<{
     tone: 'idle' | 'busy' | 'success' | 'error';
     text: string;
@@ -116,6 +121,19 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
       });
     } finally {
       setIsRecovering(false);
+    }
+  };
+
+  const handleCreateWorkspace = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (workspaceBusy || workspaceName.trim().length < 2) return;
+    setWorkspaceBusy(true);
+    try {
+      await createWorkspace(workspaceName);
+      setWorkspaceName('');
+      await refreshWorkspaces();
+    } finally {
+      setWorkspaceBusy(false);
     }
   };
 
@@ -423,6 +441,48 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
               ))}
             </select>
           </div>
+        )}
+
+        {!isWorkspaceLoading && workspaces.length === 0 && (
+          <form
+            onSubmit={(event) => void handleCreateWorkspace(event)}
+            className="space-y-2 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/20 p-3"
+          >
+            <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">
+              {getTranslation('cloudWorkspaceCreateTitle', language)}
+            </h4>
+            <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+              {getTranslation('cloudWorkspaceCreateDesc', language)}
+            </p>
+            <label htmlFor="setup-supabase-new-workspace" className="block font-semibold text-slate-700 dark:text-slate-300">
+              {getTranslation('cloudWorkspaceNameLabel', language)}
+            </label>
+            <input
+              id="setup-supabase-new-workspace"
+              type="text"
+              minLength={2}
+              maxLength={80}
+              required
+              autoComplete="off"
+              value={workspaceName}
+              onChange={(event) => setWorkspaceName(event.target.value)}
+              className="h-11 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-xs text-slate-900 dark:text-white"
+            />
+            <button
+              type="submit"
+              disabled={workspaceBusy || workspaceName.trim().length < 2}
+              className="min-h-11 w-full rounded-xl bg-blue-600 px-4 text-xs font-bold text-white hover:bg-blue-700 active:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              {workspaceBusy
+                ? getTranslation('cloudWorkspaceCreating', language)
+                : getTranslation('cloudWorkspaceCreateBtn', language)}
+            </button>
+            {workspaceError && (
+              <p role="alert" className="break-words text-[11px] text-rose-700 dark:text-rose-300">
+                {workspaceError}
+              </p>
+            )}
+          </form>
         )}
 
         <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-1.5">

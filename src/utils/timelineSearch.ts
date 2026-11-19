@@ -143,7 +143,7 @@ export function findMatchingTimelineBookings(params: {
   resourceGroups: ResourceGroup[];
   query: string;
   currentDomain: DomainType;
-  selectedEstablishmentId: string;
+  selectedBuildingGroupId: string;
   groupingMode: RoomGroupingMode;
   language: Language;
 }): TimelineBookingMatch[] {
@@ -152,7 +152,7 @@ export function findMatchingTimelineBookings(params: {
     resourceGroups,
     query,
     currentDomain,
-    selectedEstablishmentId,
+    selectedBuildingGroupId,
     groupingMode,
     language,
   } = params;
@@ -167,7 +167,7 @@ export function findMatchingTimelineBookings(params: {
 
   for (const group of resourceGroups) {
     if (group.sector !== currentDomain) continue;
-    if (currentDomain === 'hotel' && selectedEstablishmentId !== 'all' && group.id !== selectedEstablishmentId) {
+    if (selectedBuildingGroupId !== 'all' && group.id !== selectedBuildingGroupId) {
       continue;
     }
     for (const resource of group.resources) {
