@@ -34,11 +34,15 @@ proof of synchronization or referential integrity.
   Supabase account gets exactly one real personal workspace, owned by that account with an
   `owner` membership row. `WorkspaceContext` creates it on first authenticated load using the
   stable account id as the workspace id (`src/services/supabase/workspaceSelection.ts`) and
-  selects it automatically; there is no user-facing workspace selector or creation form. An
-  existing owned workspace named `Espace personnel` is reused. Shared workspaces remain
-  available to the account but are never selected automatically. If creation or RLS access
-  fails, sync stays in the evidence-based `no_workspace`/error state rather than inventing a
-  local tenant.
+  selects it automatically; there is no user-facing workspace selector or creation form. The
+  stable id and owner identity (not the display name) identify the personal workspace.
+  `createWorkspace` is idempotent: it reuses an existing owned row, self-heals a missing
+  `owner` membership with `ON CONFLICT DO NOTHING`, and tolerates a concurrent primary-key
+  insert. The `workspaces_select_member` RLS policy lets an owner read its own workspace
+  before the membership exists (migration `20261119122428`), breaking the circular dependency
+  that previously blocked new accounts. Shared workspaces remain available to the account but
+  are never selected automatically. If creation or RLS access still fails, sync stays in the
+  evidence-based `no_workspace`/error state rather than inventing a local tenant.
 - **ResourceGroup**: optional functional classification; never a substitute for a
   building, floor or establishment. The top-bar building selector and the Gantt filter
   use `ResourceGroup.id` from the local IndexedDB inventory (`selectedBuildingGroupId`).
@@ -127,9 +131,12 @@ or SQL migrations, the same change set must include:
 - an update to this document describing the changed invariant/alignment status;
 - a versioned SQL migration whenever remote schema or constraints change.
 
-The CI gate enforces this change-set discipline. Typecheck, regression tests and production
-build remain separate gates. A passing static gate does not replace a live schema diff or
-RLS integration test.
+The CI gate enforces this change-set discipline. A migration that changes only RLS policies
+or grants and therefore cannot alter generated types must declare that explicitly with
+`-- data-contract: policy-only` as its first line; the gate then skips the generated-types
+requirement for that migration but still requires tests and this document. Typecheck,
+regression tests and production build remain separate gates. A passing static gate does not
+replace a live schema diff or RLS integration test.
 
 ## 7. Known alignment gaps — NOT resolved
 

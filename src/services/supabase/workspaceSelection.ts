@@ -9,8 +9,9 @@ export interface WorkspaceCandidate {
 /**
  * A personal workspace uses the authenticated account id as its stable id.
  * Concurrent first logins from several tabs/devices therefore target the same
- * row; the workspace primary key makes the second insert fail harmlessly and
- * the caller can reload the existing workspace instead of creating a duplicate.
+ * row, which can be reused and self-healed instead of being duplicated. The id
+ * and owner identity are authoritative; the display name is not used for
+ * selection so a renamed personal workspace stays selected.
  */
 export function personalWorkspaceIdForUser(userId: string): string {
   return userId.trim();
@@ -24,8 +25,8 @@ export function findPersonalWorkspace(
   if (!ownerId) return undefined;
   return workspaces.find(
     (workspace) =>
-      personalWorkspaceIdForUser(workspace.owner_id) === ownerId &&
-      workspace.name === PERSONAL_WORKSPACE_NAME
+      personalWorkspaceIdForUser(workspace.id) === ownerId &&
+      personalWorkspaceIdForUser(workspace.owner_id) === ownerId
   );
 }
 

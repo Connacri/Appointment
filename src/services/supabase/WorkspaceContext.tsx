@@ -50,17 +50,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const inFlight = creationByUserRef.current.get(workspaceId);
     if (inFlight) return inFlight;
 
-    const creation = (async () => {
-      try {
-        await createRemoteWorkspace(PERSONAL_WORKSPACE_NAME, workspaceId);
-      } catch (cause) {
-        // A second tab/device may have inserted the same deterministic id.
-        // Reload before reporting failure so a benign primary-key collision is
-        // not shown as a broken workspace.
-        const rows = await listWorkspaces().catch(() => []);
-        if (!findPersonalWorkspace(rows, userId)) throw cause;
-      }
-    })();
+    // Creation is idempotent and self-healing: an existing personal workspace
+    // is reused and a missing owner membership is repaired by the repository.
+    const creation = createRemoteWorkspace(PERSONAL_WORKSPACE_NAME, workspaceId).then(
+      () => undefined
+    );
     creationByUserRef.current.set(workspaceId, creation);
     try {
       await creation;

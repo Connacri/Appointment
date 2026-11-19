@@ -21,33 +21,58 @@ export async function createWorkspace(name: string, requestedId?: string): Promi
     throw new Error('Connectez-vous à Supabase avant de créer un espace de travail.');
   }
 
-  // The existing RLS policies are sufficient: a workspace may be inserted only
-  // with the authenticated user as owner, and the owner membership may be added
-  // only for a workspace that this same user owns. No service-role key or DDL is
-  // required. Insert first, then create membership: `workspaces_select_member`
-  // depends on that membership, so a RETURNING clause here would be filtered out.
-  // A caller-managed id makes personal workspace creation idempotent across
-  // tabs/devices; concurrent inserts then collide on the primary key instead of
-  // creating duplicate workspaces.
+  // A caller-managed id (the authenticated account id for a personal workspace)
+  // makes this operation idempotent across tabs/devices. The RLS policy now lets
+  // an owner read its own workspace before the owner membership exists, so a
+  // missing membership can be repaired instead of blocking every later login.
   const id = requestedId?.trim() || (
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
       : `ws-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
   );
+
+  const readOwnedWorkspace = async () => {
+    const { data, error } = await db
+      .from('workspaces')
+      .select('id,name,owner_id')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data;
+  };
+
+  const ensureOwnerMembership = async (): Promise<void> => {
+    const { error } = await db
+      .from('workspace_members')
+      .upsert(
+        { workspace_id: id, user_id: user.id, role: 'owner' },
+        { onConflict: 'workspace_id,user_id', ignoreDuplicates: true },
+      );
+    if (error) throw new Error(error.message);
+  };
+
+  const existing = await readOwnedWorkspace();
+  if (existing) {
+    if (existing.owner_id !== user.id) {
+      throw new Error('Cet espace de travail appartient à un autre compte.');
+    }
+    await ensureOwnerMembership();
+    return { id: existing.id, name: existing.name || normalized };
+  }
+
   const { error: workspaceError } = await db
     .from('workspaces')
     .insert({ id, name: normalized, owner_id: user.id });
-  if (workspaceError) throw new Error(workspaceError.message);
-
-  const { error: membershipError } = await db
-    .from('workspace_members')
-    .insert({ workspace_id: id, user_id: user.id, role: 'owner' });
-  if (membershipError) {
-    throw new Error(
-      `Espace créé mais appartenance non enregistrée : ${membershipError.message}`,
-    );
+  if (workspaceError) {
+    // A concurrent tab/device may have inserted the same deterministic id.
+    // Reload it before reporting failure, then repair the owner membership.
+    const raced = await readOwnedWorkspace();
+    if (!raced || raced.owner_id !== user.id) throw new Error(workspaceError.message);
+    await ensureOwnerMembership();
+    return { id: raced.id, name: raced.name || normalized };
   }
 
+  await ensureOwnerMembership();
   return { id, name: normalized };
 }
 

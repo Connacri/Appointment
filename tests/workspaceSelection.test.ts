@@ -45,6 +45,21 @@ test('personal workspace selection returns the owned personal workspace', () => 
   assert.equal(selectPersonalWorkspaceId(workspaces, userId), personalWorkspace.id);
 });
 
+test('personal workspace selection ignores a renamed shared workspace', () => {
+  const workspaces: WorkspaceCandidate[] = [
+    { ...personalWorkspace, id: 'shared', name: PERSONAL_WORKSPACE_NAME },
+    { ...personalWorkspace, name: 'Mon espace renommé' },
+  ];
+  assert.equal(selectPersonalWorkspaceId(workspaces, userId), personalWorkspace.id);
+});
+
+test('personal workspace selection requires the stable account id as workspace id', () => {
+  const workspaces: WorkspaceCandidate[] = [
+    { ...personalWorkspace, id: otherUserId, owner_id: otherUserId },
+  ];
+  assert.equal(selectPersonalWorkspaceId(workspaces, userId), '');
+});
+
 test('personal workspace selection requires an authenticated user', () => {
   assert.equal(selectPersonalWorkspaceId([personalWorkspace], ''), '');
 });
