@@ -57,7 +57,7 @@ page.
 ## 3. Data flow
 
 1. **Local first** — `src/db/indexedDb.ts` owns the object stores. `AppContext` hydrates from IndexedDB on mount and persists snapshots transactionally after mutations.
-2. **Remote (partial)** — `WorkspaceContext` + `pmsRepository` write to Supabase and enqueue Outbox events. The push/pull worker is not shipped yet; see `docs/SUPABASE_SYNC_PLAN.md`. A present client or network indicator does **not** mean data is synchronised.
+2. **Remote sync** — `WorkspaceContext` resolves the automatic personal workspace; `AppContext` + `src/services/supabase/supabaseSync.ts` push the Outbox in causal order, pull paginated remote state through `pmsRepository`, and merge it without overwriting pending local edits or tombstones. The backfill planner seeds a new personal workspace from the real local establishment/inventory. Status is evidence-based: a present client or network indicator does **not** mean data is synchronised; see `docs/DATA_CONTRACT.md`.
 3. **Hardware** — `lockManager` builds frames (`protocol/commands`), writes them through `WebHidTransport`, drains stale input reports, then re-reads the card to verify the write. `MockLockTransport` exists for tests only; the product has no simulator. Encoder identity comes from `readerInfo`.
 4. **Legacy import** — `locks/database/mdbImport.ts` parses `CardLock.mdb` read-only; `cardInfoSync.ts` generates the synchronisation script for the live (VirtualStore) database.
 

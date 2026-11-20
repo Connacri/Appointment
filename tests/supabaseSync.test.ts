@@ -143,6 +143,12 @@ function createMemoryAdapter(seed?: {
         };
       }
     },
+    pushEstablishmentUpsert: async (_ws, establishment) => {
+      pushLog.push(`push:establishment:upsert:${establishment.id}`);
+    },
+    pushResourceGroupUpsert: async (_ws, estId, group) => {
+      pushLog.push(`push:resource_group:upsert:${estId}:${group.id}`);
+    },
     pushBookingUpsert: async (_ws, estId, booking) => {
       pushLog.push(`push:booking:upsert:${estId}:${booking.id}`);
       if (seed?.failBookingUpsertIds?.has(booking.id)) {
@@ -236,6 +242,131 @@ test('runSupabaseSync pushes resources before bookings, waits for ACK before mar
     'pull',
   ]);
   assert.equal(result.mergedBookings?.length, 2);
+});
+
+test('runSupabaseSync pushes the hierarchy in causal order regardless of Outbox insertion order', async () => {
+  const establishment = {
+    id: 'est-oasis',
+    code: 'EST-OASIS',
+    name: 'Hotel Oasis',
+    city: 'Oran',
+    stars: 4,
+    taxRate: 0,
+    checkInTime: '14:00',
+    checkOutTime: '12:00',
+    facilities: [],
+    domain: 'hotel' as const,
+    currency: 'DA',
+    country: 'Algérie',
+    address: '14 boulevard',
+    establishmentType: 'hotel' as const,
+  };
+  const group = {
+    id: 'grp-1',
+    name: { fr: 'Bâtiment A', en: 'Building A', ar: 'المبنى أ' },
+    sector: 'hotel' as const,
+    establishmentId: 'est-oasis',
+  };
+  const resource = { ...makeResource('room-101', 'est-oasis') };
+  const booking = makeBooking('bkg-1', { resourceId: 'room-101' });
+
+  // Deliberately inserted in the reverse of the required causal order.
+  const outbox: OutboxRecord[] = [
+    {
+      id: 'ob-bkg',
+      idempotencyKey: 'ws-1:booking:bkg-1:1',
+      workspaceId: 'ws-1',
+      establishmentId: 'est-oasis',
+      entity: 'booking',
+      entityId: 'bkg-1',
+      operation: 'upsert',
+      version: 1,
+      payload: booking as unknown as Record<string, unknown>,
+      status: 'pending',
+      attempts: 0,
+      createdAt: '2026-11-18T11:00:00.000Z',
+      nextAttemptAt: '2026-11-18T11:00:00.000Z',
+    },
+    {
+      id: 'ob-res',
+      idempotencyKey: 'ws-1:resource:room-101:1',
+      workspaceId: 'ws-1',
+      establishmentId: 'est-oasis',
+      entity: 'resource',
+      entityId: 'room-101',
+      operation: 'upsert',
+      version: 1,
+      payload: resource as unknown as Record<string, unknown>,
+      status: 'pending',
+      attempts: 0,
+      createdAt: '2026-11-18T11:01:00.000Z',
+      nextAttemptAt: '2026-11-18T11:01:00.000Z',
+    },
+    {
+      id: 'ob-grp',
+      idempotencyKey: 'ws-1:resource_group:grp-1:1',
+      workspaceId: 'ws-1',
+      establishmentId: 'est-oasis',
+      entity: 'resource_group',
+      entityId: 'grp-1',
+      operation: 'upsert',
+      version: 1,
+      payload: group as unknown as Record<string, unknown>,
+      status: 'pending',
+      attempts: 0,
+      createdAt: '2026-11-18T11:02:00.000Z',
+      nextAttemptAt: '2026-11-18T11:02:00.000Z',
+    },
+    {
+      id: 'ob-est',
+      idempotencyKey: 'ws-1:establishment:est-oasis:1',
+      workspaceId: 'ws-1',
+      establishmentId: 'est-oasis',
+      entity: 'establishment',
+      entityId: 'est-oasis',
+      operation: 'upsert',
+      version: 1,
+      payload: establishment as unknown as Record<string, unknown>,
+      status: 'pending',
+      attempts: 0,
+      createdAt: '2026-11-18T11:03:00.000Z',
+      nextAttemptAt: '2026-11-18T11:03:00.000Z',
+    },
+  ];
+
+  const { adapter, pushLog, fixedNow } = createMemoryAdapter({
+    outbox,
+    remote: {
+      establishments: [establishment],
+      groups: [makeGroup('grp-1', [resource])],
+    },
+  });
+
+  const result = await runSupabaseSync({
+    force: true,
+    isOffline: false,
+    isConfigured: true,
+    workspaceId: 'ws-1',
+    selectedEstablishmentId: 'est-oasis',
+    localGroups: [makeGroup('grp-1', [resource])],
+    localBookings: [booking],
+    adapter,
+    now: () => fixedNow,
+  });
+
+  assert.equal(result.status.phase, 'synced');
+  assert.equal(result.pushedCount, 4);
+  assert.deepEqual(pushLog, [
+    'push:establishment:upsert:est-oasis',
+    'ack:ob-est',
+    'push:resource_group:upsert:est-oasis:grp-1',
+    'ack:ob-grp',
+    'push:resource:upsert:est-oasis:room-101',
+    'ack:ob-res',
+    'push:booking:upsert:est-oasis:bkg-1',
+    'ack:ob-bkg',
+    'pull',
+  ]);
 });
 
 test('runSupabaseSync never marks failed Outbox mutations as synced and protects local draft during merge', async () => {

@@ -36,10 +36,13 @@ import {
   listStockItems,
   listTasks,
   saveBooking as remoteSaveBooking,
+  saveEstablishment as remoteSaveEstablishment,
   saveResource as remoteSaveResource,
+  saveResourceGroupRow as remoteSaveResourceGroupRow,
   saveStockItem as remoteSaveStockItem,
   saveTask as remoteSaveTask,
 } from '../services/supabase/pmsRepository';
+import { planBackfill } from '../services/supabase/backfillPlanner';
 import {
   deriveIdleSyncPhase,
   INITIAL_CLOUD_SYNC_STATUS,
@@ -288,6 +291,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // PMS Hotel Complex & Multi-Currency (DZD, EUR, USD, RMB, GBP, SAR)
   // Populated only from verified remote Supabase establishments (never fabricated locally).
   const [establishments, setEstablishments] = useState<HotelEstablishment[]>([]);
+  const [hasLoadedRemoteSnapshot, setHasLoadedRemoteSnapshot] = useState(false);
   const [selectedEstablishmentId, setSelectedEstablishmentId] = useState<string | 'all'>('all');
   const [selectedBuildingGroupId, setSelectedBuildingGroupId] = useState<string | 'all'>('all');
   const [currency, setCurrencyState] = useState<string>(() => {
@@ -654,6 +658,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   isOfflineRef.current = isOffline;
   const isHydratedRef = useRef(isCoreDataHydrated);
   isHydratedRef.current = isCoreDataHydrated;
+  const backfillRunRef = useRef(false);
+
+  // A workspace/account change must never reuse another tenant's cached remote
+  // roots, loaded-snapshot flag or one-shot backfill latch.
+  useEffect(() => {
+    setEstablishments([]);
+    setHasLoadedRemoteSnapshot(false);
+    backfillRunRef.current = false;
+  }, [workspace.activeWorkspaceId]);
 
   // Keep cloudSyncStatus evidence-based whenever Outbox records change locally
   useEffect(() => {
@@ -772,6 +785,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           markOutboxSynced: (id) => indexedDb.markOutboxSynced(id),
           markOutboxFailed: (id, error, nextAttemptAt) =>
             indexedDb.markOutboxFailed(id, error, nextAttemptAt),
+          pushEstablishmentUpsert: async (targetWsId, establishment) => {
+            await remoteSaveEstablishment(targetWsId, establishment);
+          },
+          pushResourceGroupUpsert: async (targetWsId, estId, group) => {
+            await remoteSaveResourceGroupRow(targetWsId, estId, group);
+          },
           pushBookingUpsert: async (targetWsId, estId, booking) => {
             await remoteSaveBooking(targetWsId, estId, booking);
           },
@@ -820,10 +839,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         onEvent: appendSyncLog,
       });
 
+      // Never apply a completed sync from a previous workspace/account.
+      if (activeWorkspaceIdRef.current !== wsId) {
+        return emptyReport;
+      }
+
       setCloudSyncStatus(result.status);
 
       if (result.remoteEstablishments) {
         setEstablishments(result.remoteEstablishments);
+        setHasLoadedRemoteSnapshot(true);
       }
       if (result.mergedGroups) {
         setResourceGroups(result.mergedGroups);
@@ -871,7 +896,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const hydratedProfile: EstablishmentProfile = {
           ...latestProfileRef.current,
           ...result.recoveredProfile,
-          id: latestProfileRef.current.id === 'establishment-draft' ? 'establishment-cloud' : latestProfileRef.current.id,
+          id: latestProfileRef.current.id === 'establishment-draft'
+            ? (result.remoteEstablishments?.[0]?.id ?? 'establishment-cloud')
+            : latestProfileRef.current.id,
           updatedAt: new Date().toISOString(),
         };
         setEstablishmentProfile(hydratedProfile);
@@ -949,6 +976,144 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return syncWithSupabase({ force: true });
   }, [syncWithSupabase, workspace.refreshWorkspaces, clearSyncLog]);
+
+  // Backfill existing local inventory into the automatic personal workspace once
+  // hydrated, the personal workspace is selected, and a real remote snapshot has
+  // been loaded. Waiting for that snapshot prevents creating a second establishment
+  // when the workspace already owns one. Runs after syncWithSupabase is declared
+  // (dependency array evaluation would otherwise hit the TDZ).
+  // Idempotent: re-runs never duplicate Outbox records thanks to stable
+  // `backfill:` idempotency keys.
+  useEffect(() => {
+    if (
+      !isCoreDataHydrated ||
+      !workspace.activeWorkspaceId ||
+      !hasLoadedRemoteSnapshot ||
+      backfillRunRef.current
+    ) {
+      return;
+    }
+    const profile = establishmentProfile;
+    if (!profile.name.trim()) return;
+
+    const plan = planBackfill({
+      profile,
+      workspaceId: workspace.activeWorkspaceId,
+      groups: latestGroupsRef.current,
+      bookings: latestBookingsRef.current,
+      remoteEstablishments: establishments,
+      selectedEstablishmentId,
+    });
+
+    if (!plan.ok || !plan.establishmentId) {
+      plan.warnings.forEach((warning) => console.warn('[Backfill]', warning));
+      appendSyncLog({
+        key: 'syncLogBackfillSkipped',
+        level: 'warn',
+        detail: plan.warnings.join(' ; '),
+      });
+      return;
+    }
+
+    backfillRunRef.current = true;
+    const establishmentId = plan.establishmentId;
+
+    // Persist the real establishment id (derived once, or the existing remote id)
+    // so a later rename updates the same remote establishment instead of
+    // deriving a new id and creating a duplicate.
+    if (profile.id !== establishmentId) {
+      setEstablishmentProfile({ ...profile, id: establishmentId });
+    }
+
+    (async () => {
+      try {
+        // 1. Establishment (root, pushed first by Outbox priority).
+        for (const operation of plan.operations) {
+          if (operation.kind === 'establishment') {
+            await indexedDb.enqueueOutboxOnly(
+              {
+                workspaceId: workspace.activeWorkspaceId,
+                establishmentId,
+              },
+              'establishment',
+              establishmentId,
+              'upsert',
+              1,
+              operation.payload as unknown as Record<string, unknown>,
+              operation.idempotencyKey,
+            );
+          } else if (operation.kind === 'resourceGroup') {
+            // 2. Building row before its resources (`resources.group_id` FK).
+            await indexedDb.enqueueOutboxOnly(
+              {
+                workspaceId: workspace.activeWorkspaceId,
+                establishmentId: operation.establishmentId,
+              },
+              'resource_group',
+              operation.entityId,
+              'upsert',
+              1,
+              operation.payload as unknown as Record<string, unknown>,
+              operation.idempotencyKey,
+            );
+          } else if (operation.kind === 'resource') {
+            // 3. Resource after its group.
+            await indexedDb.putWithOutboxByKey(
+              'resources',
+              operation.payload,
+              {
+                workspaceId: workspace.activeWorkspaceId,
+                establishmentId: operation.establishmentId,
+              },
+              'resource',
+              operation.idempotencyKey,
+              1,
+            );
+          } else if (operation.kind === 'booking') {
+            // 4. Booking after its resource.
+            await indexedDb.putWithOutboxByKey(
+              'bookings',
+              operation.payload,
+              {
+                workspaceId: workspace.activeWorkspaceId,
+                establishmentId: operation.establishmentId,
+              },
+              'booking',
+              operation.idempotencyKey,
+              1,
+            );
+          }
+        }
+
+        plan.warnings.forEach((warning) => console.warn('[Backfill]', warning));
+        appendSyncLog({
+          key: 'syncLogBackfillDone',
+          level: 'info',
+          detail: `${plan.operations.length} opération(s) de backfill en file d’attente`,
+        });
+
+        // Push immediately so the backfill reaches Supabase without waiting for the next tick.
+        if (plan.operations.length > 0) {
+          void syncWithSupabase({ force: false });
+        }
+      } catch (error) {
+        // Allow a later data/profile change to retry a failed local backfill.
+        backfillRunRef.current = false;
+        const message = error instanceof Error ? error.message : 'Échec du backfill';
+        appendSyncLog({ key: 'syncLogBackfillFailed', level: 'error', detail: message });
+        console.warn('[Backfill]', message);
+      }
+    })();
+  }, [
+    isCoreDataHydrated,
+    workspace.activeWorkspaceId,
+    hasLoadedRemoteSnapshot,
+    establishments,
+    selectedEstablishmentId,
+    establishmentProfile,
+    appendSyncLog,
+    syncWithSupabase,
+  ]);
 
   // Automatic initial & reconnect sync
   useEffect(() => {
@@ -1582,6 +1747,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     setSelectedEstablishmentId('all');
     setSelectedBuildingGroupId('all');
+    setEstablishments([]);
+    setHasLoadedRemoteSnapshot(false);
+    backfillRunRef.current = false;
+    setCloudSyncStatus(INITIAL_CLOUD_SYNC_STATUS);
+    setSyncLog([]);
     setHasOnboardedState(false);
     setIsEstablishmentModalOpen(false);
     setActiveSector('all');

@@ -1435,6 +1435,21 @@ export const translations = {
     en: '{count} change(s) queued in Outbox.',
     ar: '{count} تعديلات في قائمة Outbox.',
   },
+  syncLogBackfillSkipped: {
+    fr: 'Backfill local différé : {detail}',
+    en: 'Local backfill deferred: {detail}',
+    ar: 'تم تأجيل التعبئة المحلية: {detail}',
+  },
+  syncLogBackfillDone: {
+    fr: 'Backfill local mis en file : {detail}',
+    en: 'Local backfill queued: {detail}',
+    ar: 'تمت إضافة التعبئة المحلية إلى القائمة: {detail}',
+  },
+  syncLogBackfillFailed: {
+    fr: 'Échec du backfill local : {detail}',
+    en: 'Local backfill failed: {detail}',
+    ar: 'فشلت التعبئة المحلية: {detail}',
+  },
   syncLogPushing: {
     fr: 'Envoi de {entity} {id}…',
     en: 'Pushing {entity} {id}…',

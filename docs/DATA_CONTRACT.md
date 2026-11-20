@@ -49,6 +49,8 @@ proof of synchronization or referential integrity.
   That local building id is **not** an establishment id and must never be used as
   `establishmentId` in Supabase writes, RLS scopes or the Outbox. `selectedEstablishmentId`
   remains the verified remote establishment scope used by synchronization.
+  Display labels for buildings are capitalized on their first Latin letter only
+  (`src/utils/text.ts`); Arabic labels are preserved unchanged.
 
 Never invent a hotel, establishment, building, floor, room, workspace, guest or booking to
 satisfy a UI default, import fallback or migration. Never silently merge several buildings
@@ -77,11 +79,33 @@ into one establishment.
 - Offline mutations are durable and idempotent. Outbox pending is not synced; only a
   verified server ACK confirms synchronization.
 - Imports preserve source IDs/provenance and report orphan/ambiguous rows.
-- Automatic bidirectional Supabase sync (`WorkspaceContext`, `src/context/AppContext.tsx`, `src/services/supabase/supabaseSync.ts`, `src/services/supabase/cloudRecovery.ts`, `src/db/indexedDb.ts`) runs when online, configured, authenticated, and scoped to a real workspace (on startup/hydration, online reconnect, focus/visibility, periodic interval, debounced Outbox writes, or explicit **Force sync**). It pushes pending Outbox mutations sequentially in causal order (`resource` before `booking`, marking synced only after verified server ACK and applying exponential backoff on failures), pulls remote workspace rows, merges without resurrecting locally tombstoned deletions or overwriting pending local Outbox upserts (including backed-off retries), and exposes strictly evidence-based sync status (never reporting `synced` while any Outbox event remains pending or failed). Force sync also emits structured `onEvent` telemetry
+- Automatic bidirectional Supabase sync (`WorkspaceContext`, `src/context/AppContext.tsx`, `src/services/supabase/supabaseSync.ts`, `src/services/supabase/cloudRecovery.ts`, `src/db/indexedDb.ts`) runs when online, configured, authenticated, and scoped to a real workspace (on startup/hydration, online reconnect, focus/visibility, periodic interval, debounced Outbox writes, or explicit **Force sync**). It pushes pending Outbox mutations sequentially in causal order (`establishment` → `resource_group` → `resource` → `booking`; a group exists before its resources and a resource before its bookings), marking synced only after verified server ACK and applying exponential backoff on failures, pulls remote workspace rows, merges without resurrecting locally tombstoned deletions or overwriting pending local Outbox upserts (including backed-off retries), and exposes strictly evidence-based sync status (never reporting `synced` while any Outbox event remains pending or failed). Force sync also emits structured `onEvent` telemetry
 (`src/services/supabase/syncLog.ts`) consumed by the bottom terminal: `syncLogSynced` is
 emitted only when `fullyVerifiedSynced` is true, while offline, unconfigured,
 unauthenticated, no-workspace, pending and failed states each emit their own event.
 Verified by `tests/cloudRecovery.test.ts` and `tests/supabaseSync.test.ts`.
+- Personal-workspace backfill (`src/services/supabase/backfillPlanner.ts`) seeds the remote
+  workspace from the real local `EstablishmentProfile` and inventory only. It emits
+  establishment → resource group (building) → resource → booking operations with stable,
+  workspace-scoped idempotency keys, so re-running it never creates duplicates. A blank
+  profile name aborts the plan without inventing an establishment. When the workspace
+  already owns exactly one establishment, the plan attaches inventory to it and never
+  creates a second root; with several remote roots and no matching local profile id or
+  explicit selection, it aborts as ambiguous. The derived (or existing remote) establishment
+  id is persisted in the local profile so a later rename updates the same root.
+  Demo/bootstrap records are
+  excluded and counted as skipped; bookings without a local resource are skipped and reported;
+  a resource tagged with another establishment is reported and attached to the real
+  backfilled establishment, never silently merged. Payloads stay in the domain camelCase
+  shape; the snake_case mapping remains in `pmsRepository`. Verified by
+  `tests/backfillPlanner.test.ts`.
+- Remote booking reads are paginated: `listBookings` pages through
+  `listBookingsWindow` (`idx_bookings_calendar`, overlap-safe `start_date`/`end_date`
+  bounds, narrow projection, deterministic `start_date,id` ordering, `.range()`) so a
+  large history is never truncated by the PostgREST max-row limit. Local IndexedDB remains
+  the instant render source; remote pages merge in the background. Timeline availability uses
+  a difference array merged per resource so overlapping bookings are counted once.
+  Verified by `tests/pmsRepositorySelect.test.ts` and `tests/availability.test.ts`.
 - CardLock MDB source locations are centralized per platform in `src/locks/database/mdbPaths.ts` (Windows: exact live VirtualStore path to use — `%LOCALAPPDATA%\VirtualStore\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb` — and `D:\proUSB_DBBak` backups; no separate Program Files copy path is kept. Android/web have no automatic exact local proUSB path). UI and import guidance must use these canonical exact paths; sandboxed runtimes cannot open arbitrary filesystem paths automatically and must rely on explicit user file/directory selection.
 
 ## 4. Mandatory change protocol

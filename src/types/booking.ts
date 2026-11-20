@@ -248,6 +248,15 @@ export interface HotelEstablishment {
   facilities: string[];
 }
 
+/** Establishment payload exchanged with Supabase (domain shape, camelCase). */
+export interface EstablishmentSyncRecord extends HotelEstablishment {
+  domain?: 'hotel' | 'resort';
+  currency?: string;
+  country?: string;
+  address?: string;
+  establishmentType?: string;
+}
+
 export interface ExtraCatalogItem {
   id: string;
   category: string;

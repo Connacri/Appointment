@@ -1,5 +1,5 @@
 import { requireSupabase } from './supabaseClient';
-import type { TimelineBooking, ResourceGroup, ResourceItem, HotelEstablishment, PmsTask, StockItem, StockMovement } from '../../types/booking';
+import type { TimelineBooking, ResourceGroup, ResourceItem, HotelEstablishment, EstablishmentSyncRecord, PmsTask, StockItem, StockMovement } from '../../types/booking';
 
 type WorkspaceId = string;
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
@@ -94,9 +94,28 @@ export async function listEstablishments(workspaceId: WorkspaceId): Promise<Hote
   return (data ?? []).map((r: any) => ({ id:r.id, code:r.code, name:r.name, city:r.city ?? '', stars:r.stars, taxRate:Number(r.tax_rate), checkInTime:r.check_in_time.slice(0,5), checkOutTime:r.check_out_time.slice(0,5), facilities:r.facilities ?? [] }));
 }
 
-export async function saveEstablishment(workspaceId: WorkspaceId, item: HotelEstablishment & { domain?: 'hotel'|'resort'; currency?: string }) {
+export async function saveEstablishment(workspaceId: WorkspaceId, item: EstablishmentSyncRecord) {
+  if (!workspaceId.trim() || !item.id.trim()) {
+    throw new Error('Un workspace et un établissement réels sont obligatoires.');
+  }
   const db = requireSupabase();
-  return unwrap(await db.from('establishments').upsert({ id:item.id, workspace_id:workspaceId, code:item.code, name:item.name, city:item.city, stars:item.stars, tax_rate:item.taxRate, check_in_time:item.checkInTime, check_out_time:item.checkOutTime, facilities:item.facilities, domain:item.domain ?? 'hotel', currency:item.currency ?? 'DZD' }).select().single());
+  return unwrap(await db.from('establishments').upsert({
+    id: item.id,
+    workspace_id: workspaceId,
+    code: item.code,
+    name: item.name,
+    city: item.city,
+    stars: item.stars,
+    tax_rate: item.taxRate,
+    check_in_time: item.checkInTime,
+    check_out_time: item.checkOutTime,
+    facilities: item.facilities,
+    domain: item.domain ?? 'hotel',
+    currency: item.currency ?? 'DZD',
+    country: item.country ?? '',
+    address: item.address ?? null,
+    establishment_type: item.establishmentType ?? 'hotel',
+  }).select().single());
 }
 
 // Two foreign keys link resources to resource_groups. The composite tenant FK
@@ -126,6 +145,30 @@ export async function saveResourceGroup(workspaceId: WorkspaceId, establishmentI
   for (const r of group.resources) await saveResource(workspaceId,establishmentId,group.id,r);
 }
 
+/**
+ * Upsert only the resource-group metadata row. The outbox pushes a group before
+ * its resources so the `resources.group_id` foreign key is always satisfiable.
+ * Unlike `saveResourceGroup`, this never cascades resource writes.
+ */
+export async function saveResourceGroupRow(
+  workspaceId: WorkspaceId,
+  establishmentId: string,
+  group: Pick<ResourceGroup, 'id' | 'name' | 'sector' | 'icon'>,
+) {
+  if (!workspaceId.trim() || !establishmentId.trim() || establishmentId === 'all') {
+    throw new Error('Un workspace et un établissement réels sont obligatoires.');
+  }
+  const db = requireSupabase();
+  return unwrap(await db.from('resource_groups').upsert({
+    id: group.id,
+    workspace_id: workspaceId,
+    establishment_id: establishmentId,
+    name: group.name,
+    domain: group.sector,
+    icon: group.icon ?? null,
+  }).select().single());
+}
+
 export async function saveResource(workspaceId: WorkspaceId, establishmentId: string, groupId: string|null, item: ResourceItem) {
   if (!workspaceId.trim() || !establishmentId.trim() || establishmentId === 'all') {
     throw new Error('Un workspace et un établissement réels sont obligatoires.');
@@ -137,13 +180,124 @@ export async function saveResource(workspaceId: WorkspaceId, establishmentId: st
   return unwrap(await db.from('resources').upsert({id:item.id,workspace_id:workspaceId,establishment_id:establishmentId,group_id:groupId,name:item.name,resource_type:item.type,domain:item.sector,price_per_day:item.pricePerDay,capacity:item.capacity ?? null,housekeeping_status:item.housekeepingStatus ?? 'clean',building:item.building ?? null,floor:item.floor ?? null,view:item.view ?? null,beds:item.beds ?? null,size_m2:item.sizeM2 ?? null,amenities:item.amenities ?? []}).select().single());
 }
 
+function mapBookingRow(r: any): TimelineBooking {
+  return {
+    id: r.id,
+    resourceId: r.resource_id,
+    resourceName: r.resource_name,
+    sector: r.domain,
+    guestName: r.guest_name,
+    guestEmail: r.guest_email ?? '',
+    guestPhone: r.guest_phone ?? '',
+    startDate: r.start_date,
+    endDate: r.end_date,
+    status: r.status,
+    totalPrice: Number(r.total_price),
+    paymentStatus: r.payment_status,
+    notes: r.notes ?? undefined,
+    adults: r.adults,
+    children: r.children,
+    mealPlan: r.meal_plan ?? undefined,
+    originChannel: r.origin_channel ?? undefined,
+    extras: r.extras ?? [],
+    occupantsList: r.occupants ?? [],
+    customMetadata: r.guest_metadata ?? {},
+  };
+}
+
 export async function listBookings(workspaceId: WorkspaceId, establishmentId?: string): Promise<TimelineBooking[]> {
+  // PostgREST caps a single response (Supabase default max rows). Pull the whole
+  // workspace page by page through the calendar index instead of silently
+  // truncating history at the first page.
+  const pageSize = 500;
+  const first = await listBookingsWindow(workspaceId, '0001-01-01', '9999-12-31', {
+    establishmentId,
+    offset: 0,
+    limit: pageSize,
+  });
+  const bookings = [...first.data];
+  let offset = first.data.length;
+
+  // `count` can be unavailable under some RLS/PostgREST configurations, so use
+  // page fullness as the termination signal instead of trusting `total` alone.
+  while (first.data.length === pageSize) {
+    const page = await listBookingsWindow(workspaceId, '0001-01-01', '9999-12-31', {
+      establishmentId,
+      offset,
+      limit: pageSize,
+      withCount: false,
+    });
+    if (page.data.length === 0) break;
+    bookings.push(...page.data);
+    offset += page.data.length;
+    if (page.data.length < pageSize) break;
+  }
+
+  return bookings;
+}
+
+/**
+ * Windowed, overlap-safe booking load for the timeline.
+ *
+ * Uses the existing remote index `idx_bookings_calendar` on
+ * (workspace_id, establishment_id, start_date, end_date) WHERE deleted_at IS NULL,
+ * a narrow column projection, deterministic ordering and PostgREST `.range()` so
+ * only the visible slice travels over the network. No new DDL is required.
+ *
+ * A booking is included when it overlaps [startDate, endDate]:
+ *   start_date <= endDate AND end_date >= startDate
+ * PostgREST cannot express the overlap directly, so we fetch the calendar window
+ * [startDate, endDate] (every booking starting inside the window) plus, to stay
+ * overlap-safe, bookings that started before the window but end inside or after it.
+ * The caller may re-filter strictly if needed.
+ *
+ * `listBookings` reuses this function page by page for whole-workspace pulls so a
+ * large history is never silently truncated by the PostgREST max-row limit.
+ */
+export interface BookingsWindowResult {
+  data: TimelineBooking[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export async function listBookingsWindow(
+  workspaceId: WorkspaceId,
+  startDate: string,
+  endDate: string,
+  options: {
+    establishmentId?: string;
+    offset?: number;
+    limit?: number;
+    /** Disable the exact count for follow-up pages; the first page already knows the total. */
+    withCount?: boolean;
+  } = {},
+): Promise<BookingsWindowResult> {
+  const { establishmentId, offset = 0, limit = 200, withCount = true } = options;
   const db = requireSupabase();
-  let q = db.from('bookings').select('*').eq('workspace_id',workspaceId).is('deleted_at',null).order('start_date');
-  if (establishmentId) q = q.eq('establishment_id',establishmentId);
-  const {data,error} = await q;
+  // Narrow projection: only columns the timeline renders.
+  const selectCols = 'id,resource_id,resource_name,domain,guest_name,guest_email,guest_phone,start_date,end_date,status,total_price,payment_status,notes,adults,children,meal_plan,origin_channel,extras,occupants,guest_metadata,establishment_id,workspace_id,deleted_at,updated_at,version';
+  let q = db
+    .from('bookings')
+    .select(selectCols, withCount ? { count: 'exact' } : undefined)
+    .eq('workspace_id', workspaceId)
+    .is('deleted_at', null)
+    // Overlap-safe lower bound: bookings starting on/before the window end.
+    .lte('start_date', endDate)
+    // Overlap-safe upper bound: bookings ending on/after the window start.
+    .gte('end_date', startDate)
+    .order('start_date', { ascending: true })
+    .order('id', { ascending: true })
+    .range(offset, Math.max(offset, offset + limit - 1));
+  if (establishmentId) q = q.eq('establishment_id', establishmentId);
+  const { data, error, count } = await q;
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r:any)=>({id:r.id,resourceId:r.resource_id,resourceName:r.resource_name,sector:r.domain,guestName:r.guest_name,guestEmail:r.guest_email ?? '',guestPhone:r.guest_phone ?? '',startDate:r.start_date,endDate:r.end_date,status:r.status,totalPrice:Number(r.total_price),paymentStatus:r.payment_status,notes:r.notes ?? undefined,adults:r.adults,children:r.children,mealPlan:r.meal_plan ?? undefined,originChannel:r.origin_channel ?? undefined,extras:r.extras ?? [],occupantsList:r.occupants ?? [],customMetadata:r.guest_metadata ?? {}}));
+  return {
+    data: (data ?? []).map(mapBookingRow),
+    total: count ?? 0,
+    offset,
+    limit,
+  };
 }
 
 export async function saveBooking(workspaceId: WorkspaceId, establishmentId: string, b: TimelineBooking) {

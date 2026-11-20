@@ -36,7 +36,14 @@ export interface IndexedDbStoreStats {
 
 export type IndexedDbSyncState = 'synced' | 'syncing' | 'offline';
 
-export type OutboxEntity = 'booking' | 'resource' | 'establishment' | 'task' | 'stock_item' | 'invoice';
+export type OutboxEntity =
+  | 'booking'
+  | 'resource'
+  | 'resource_group'
+  | 'establishment'
+  | 'task'
+  | 'stock_item'
+  | 'invoice';
 export type OutboxOperation = 'upsert' | 'delete';
 export type OutboxStatus = 'pending' | 'synced' | 'failed';
 export interface OutboxRecord {
@@ -511,11 +518,12 @@ class IndexedDbStore {
   }
 
   private createOutboxRecord(context: OutboxMutationContext, entity: OutboxEntity, entityId: string,
-    operation: OutboxOperation, version: number, payload: Record<string, unknown> | null, now: string): OutboxRecord {
+    operation: OutboxOperation, version: number, payload: Record<string, unknown> | null, now: string,
+    idempotencyKey?: string): OutboxRecord {
     if (!context.workspaceId.trim()) throw new Error('A workspace is required before queuing a cloud mutation.');
     return {
       id: this.createId(),
-      idempotencyKey: `${context.workspaceId}:${entity}:${entityId}:${version}`,
+      idempotencyKey: idempotencyKey ?? `${context.workspaceId}:${entity}:${entityId}:${version}`,
       workspaceId: context.workspaceId,
       establishmentId: context.establishmentId,
       entity, entityId, operation, version, payload,
@@ -561,6 +569,142 @@ class IndexedDbStore {
     request.onerror = () => tx.abort();
     tombstoneRequest.onerror = () => tx.abort();
     await waitForTransactionCompletion(tx, `putWithOutbox ${entity}/${item.id}`);
+    this.emitOutboxChange();
+  }
+
+  /**
+   * Read a single outbox record by its unique idempotency key within a workspace.
+   * Used by backfill to avoid seeding duplicate Outbox records on re-runs.
+   */
+  public async getOutboxRecordByIdempotencyKey(
+    workspaceId: string,
+    idempotencyKey: string,
+  ): Promise<OutboxRecord | undefined> {
+    if (!workspaceId.trim() || !idempotencyKey) return undefined;
+    await this.openStore();
+    if (!this.idb) return undefined;
+    const tx = this.idb.transaction('outbox', 'readonly');
+    const record = await new Promise<OutboxRecord | undefined>((resolve, reject) => {
+      const request = tx.objectStore('outbox').index('idempotencyKey').get(idempotencyKey);
+      request.onsuccess = () => resolve(request.result as OutboxRecord | undefined);
+      request.onerror = () => reject(request.error);
+    });
+    await waitForTransactionCompletion(tx, 'getOutboxRecordByIdempotencyKey');
+    return record?.workspaceId === workspaceId ? record : undefined;
+  }
+
+  /**
+   * Put an operational record and enqueue exactly one Outbox mutation guarded by
+   * an explicit idempotency key. If a record with the same key already exists
+   * (pending, failed or synced), no duplicate Outbox row is created; a failed
+   * record keeps retrying through the normal backoff instead of multiplying.
+   * Opt-in only: demo/bootstrap data must never call this method.
+   */
+  public async putWithOutboxByKey<T extends { id: string }>(
+    storeName: 'bookings' | 'invoices' | 'resources',
+    item: T,
+    context: OutboxMutationContext,
+    entity: OutboxEntity,
+    idempotencyKey: string,
+    version?: number,
+  ): Promise<void> {
+    if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox writes.');
+    await this.openStore();
+    if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
+
+    const existing = await this.getOutboxRecordByIdempotencyKey(context.workspaceId, idempotencyKey);
+    if (existing) {
+      // Idempotent backfill: keep the existing Outbox intent and only restore a
+      // missing operational row. Never overwrite newer local state with the
+      // snapshot the plan was built from.
+      const storeTx = this.idb.transaction(storeName, 'readwrite');
+      const store = storeTx.objectStore(storeName);
+      const current = await new Promise<T | undefined>((resolve) => {
+        const req = store.get(item.id);
+        req.onsuccess = () => resolve(req.result as T | undefined);
+        req.onerror = () => resolve(undefined);
+      });
+      if (!current) {
+        const persisted = { ...item, workspaceId: context.workspaceId, establishmentId: context.establishmentId, deletedAt: null };
+        store.put(persisted);
+      }
+      await waitForTransactionCompletion(storeTx, `putWithOutboxByKey-idempotent ${entity}/${item.id}`);
+      this.emitOutboxChange();
+      return;
+    }
+
+    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities'], 'readwrite');
+    const store = tx.objectStore(storeName);
+    const workspaceEntities = tx.objectStore('workspaceEntities');
+    const tombstones = tx.objectStore('tombstones');
+    const tombstoneId = `${context.workspaceId}:${entity}:${item.id}`;
+    const request = workspaceEntities.get([context.workspaceId, entity, item.id]);
+    const tombstoneRequest = tombstones.get(tombstoneId);
+    let current: { version?: number } | undefined;
+    let previousTombstone: TombstoneRecord | undefined;
+    let entityReady = false;
+    let tombstoneReady = false;
+    const commitMutation = () => {
+      if (!entityReady || !tombstoneReady) return;
+      const resolvedVersion = Math.max(
+        version ?? current?.version ?? 0,
+        previousTombstone?.version ?? 0,
+      ) + 1;
+      const now = new Date().toISOString();
+      const persisted = { ...item, workspaceId: context.workspaceId, establishmentId: context.establishmentId, syncVersion: resolvedVersion, deletedAt: null };
+      const entityRecord = {
+        workspaceId: context.workspaceId, establishmentId: context.establishmentId,
+        entity, entityId: item.id, version: resolvedVersion, updatedAt: now, payload: persisted,
+      };
+      workspaceEntities.put(entityRecord);
+      store.put(persisted);
+      tx.objectStore('outbox').add(this.createOutboxRecord(context, entity, item.id, 'upsert', resolvedVersion, persisted as Record<string, unknown>, now, idempotencyKey));
+    };
+    request.onsuccess = () => { current = request.result as { version?: number } | undefined; entityReady = true; commitMutation(); };
+    tombstoneRequest.onsuccess = () => { previousTombstone = tombstoneRequest.result as TombstoneRecord | undefined; tombstoneReady = true; commitMutation(); };
+    request.onerror = () => tx.abort();
+    tombstoneRequest.onerror = () => tx.abort();
+    await waitForTransactionCompletion(tx, `putWithOutboxByKey ${entity}/${item.id}`);
+    this.emitOutboxChange();
+  }
+
+  /**
+   * Enqueue exactly one Outbox mutation guarded by an explicit idempotency key,
+   * without touching any operational store. Used for entities that have no local
+   * IndexedDB store (e.g. establishments) where the remote row is the source of
+   * truth after the push ACK. Idempotent: any record with the same key for this
+   * workspace/entity is not duplicated (failed records keep retrying in place).
+   */
+  public async enqueueOutboxOnly(
+    context: OutboxMutationContext,
+    entity: OutboxEntity,
+    entityId: string,
+    operation: OutboxOperation,
+    version: number,
+    payload: Record<string, unknown> | null,
+    idempotencyKey: string,
+  ): Promise<void> {
+    if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox writes.');
+    await this.openStore();
+    if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
+
+    const existing = await this.getOutboxRecordByIdempotencyKey(context.workspaceId, idempotencyKey);
+    if (existing) {
+      this.emitOutboxChange();
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const tx = this.idb.transaction(['outbox', 'workspaceEntities'], 'readwrite');
+    const outbox = tx.objectStore('outbox');
+    const workspaceEntities = tx.objectStore('workspaceEntities');
+    const entityRecord = {
+      workspaceId: context.workspaceId, establishmentId: context.establishmentId,
+      entity, entityId, version, updatedAt: now, payload: payload ?? {},
+    };
+    workspaceEntities.put(entityRecord);
+    outbox.add(this.createOutboxRecord(context, entity, entityId, operation, version, payload, now, idempotencyKey));
+    await waitForTransactionCompletion(tx, `enqueueOutboxOnly ${entity}/${entityId}`);
     this.emitOutboxChange();
   }
 

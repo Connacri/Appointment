@@ -1,5 +1,6 @@
 import type { OutboxEntity, OutboxRecord, OutboxSummary, TombstoneRecord } from '../../db/indexedDb';
 import type {
+  EstablishmentSyncRecord,
   HotelEstablishment,
   PmsTask,
   ResourceGroup,
@@ -55,6 +56,15 @@ export interface SupabaseSyncAdapter {
   getTombstones: (workspaceId: string) => Promise<TombstoneRecord[]>;
   markOutboxSynced: (id: string) => Promise<void>;
   markOutboxFailed: (id: string, error: string, nextAttemptAt: string) => Promise<void>;
+  pushEstablishmentUpsert?: (
+    workspaceId: string,
+    establishment: EstablishmentSyncRecord,
+  ) => Promise<void>;
+  pushResourceGroupUpsert?: (
+    workspaceId: string,
+    establishmentId: string,
+    group: Pick<ResourceGroup, 'id' | 'name' | 'sector' | 'icon'>,
+  ) => Promise<void>;
   pushBookingUpsert: (
     workspaceId: string,
     establishmentId: string,
@@ -127,11 +137,12 @@ export const INITIAL_CLOUD_SYNC_STATUS: CloudSyncStatus = {
 
 const ENTITY_PUSH_PRIORITY: Record<OutboxEntity, number> = {
   establishment: 0,
-  resource: 1,
-  booking: 2,
-  task: 3,
-  stock_item: 4,
-  invoice: 5,
+  resource_group: 1,
+  resource: 2,
+  booking: 3,
+  task: 4,
+  stock_item: 5,
+  invoice: 6,
 };
 
 export function computeBackoffIso(attempts: number, nowMs = Date.now()): string {
@@ -443,7 +454,60 @@ export async function runSupabaseSync({
         params: { entity: record.entity, id: record.entityId },
       });
       try {
-        if (record.entity === 'booking') {
+        if (record.entity === 'establishment') {
+          if (record.operation !== 'upsert') {
+            throw new Error(`Opération établissement non prise en charge : ${record.operation}`);
+          }
+          if (!adapter.pushEstablishmentUpsert) {
+            throw new Error('Synchronisation de l’établissement cloud non configurée.');
+          }
+          const payload = record.payload as unknown as EstablishmentSyncRecord | null;
+          if (
+            !payload ||
+            typeof payload.id !== 'string' ||
+            !payload.id.trim() ||
+            typeof payload.name !== 'string' ||
+            !payload.name.trim()
+          ) {
+            throw new Error(`Payload établissement invalide dans Outbox (${record.entityId}).`);
+          }
+          await adapter.pushEstablishmentUpsert(workspaceId, payload);
+          await acknowledgePush(record);
+        } else if (record.entity === 'resource_group') {
+          if (record.operation !== 'upsert') {
+            throw new Error(`Opération groupe non prise en charge : ${record.operation}`);
+          }
+          if (!adapter.pushResourceGroupUpsert) {
+            throw new Error('Synchronisation des bâtiments cloud non configurée.');
+          }
+          const payload = record.payload as unknown as Pick<
+            ResourceGroup,
+            'id' | 'name' | 'sector' | 'icon'
+          > | null;
+          if (
+            !payload ||
+            typeof payload.id !== 'string' ||
+            !payload.id.trim() ||
+            !payload.name ||
+            typeof payload.name !== 'object'
+          ) {
+            throw new Error(`Payload groupe invalide dans Outbox (${record.entityId}).`);
+          }
+          const establishmentId = resolveEstablishmentId({
+            record,
+            selectedEstablishmentId,
+            localGroups,
+            remoteGroups: prefetchedRemote?.groups ?? [],
+            remoteEstablishments: prefetchedRemote?.establishments ?? [],
+          });
+          if (!establishmentId) {
+            throw new Error(
+              'Établissement réel introuvable pour synchroniser ce bâtiment.',
+            );
+          }
+          await adapter.pushResourceGroupUpsert(workspaceId, establishmentId, payload);
+          await acknowledgePush(record);
+        } else if (record.entity === 'booking') {
           if (record.operation === 'delete') {
             await adapter.pushBookingDelete(workspaceId, record.entityId);
             await acknowledgePush(record);
