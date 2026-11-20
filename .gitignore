@@ -20,6 +20,9 @@ tools/re-proUSB/local.env
 /heretic/
 /freellmapi/
 
+# Supabase CLI local state
+supabase/.temp/
+
 # Agent skills installed locally with `npx skills add` (third-party content, not project source)
 .agents/
 skills-lock.json
