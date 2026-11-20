@@ -104,6 +104,8 @@ export const BookingModal: React.FC = () => {
 
   // Core Booking States (unconditionally initialized)
   const [resourceId, setResourceId] = useState<string>('');
+  const [editingRoomId, setEditingRoomId] = useState<string>('');
+  const [editingRoomPriceDiff, setEditingRoomPriceDiff] = useState<number | null>(null);
   const [guestName, setGuestName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
@@ -442,6 +444,14 @@ export const BookingModal: React.FC = () => {
   const currentResource = useMemo(() => {
     return domainResources.find((r) => r.id === resourceId) || domainResources[0] || null;
   }, [domainResources, resourceId]);
+
+  // Room price difference when editing (new resource daily price - old resource daily price)
+  const priceDiffDaily = useMemo(() => {
+    if (!editingRoomId || !currentResource) return 0;
+    const newResource = domainResources.find((r) => r.id === editingRoomId);
+    if (!newResource) return 0;
+    return (newResource.pricePerDay || 0) - (currentResource?.pricePerDay || 0);
+  }, [editingRoomId, currentResource, domainResources]);
 
   /**
    * Émet la carte client proUSB directement depuis la fiche de réservation :
@@ -872,9 +882,9 @@ export const BookingModal: React.FC = () => {
         };
       default:
         return {
-          fr: 'Fiche de Réservation',
-          en: 'Reservation Sheet',
-          ar: 'استمارة الحجز',
+          fr: 'Fiche de Réservation Hôtelière',
+          en: 'Hotel Reservation Sheet',
+          ar: 'استمارة حجز فندق',
         };
     }
   };
