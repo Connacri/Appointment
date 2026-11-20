@@ -107,6 +107,32 @@ function stableEstablishmentId(profile: EstablishmentProfile): string {
   return `est-${stableSlug(source || 'establishment')}`;
 }
 
+/**
+ * The remote `establishments.establishment_type` check constraint accepts
+ * hotel|resort|residence|boutique|business|motel|other. The local product also
+ * offers `spa_clinic`, which has no remote equivalent yet, so it is stored as
+ * `other` instead of rejecting the whole backfill on a check violation.
+ */
+function remoteEstablishmentType(type: EstablishmentType): EstablishmentType {
+  return type === 'spa_clinic' ? 'other' : type;
+}
+
+/**
+ * `establishments.check_in_time` / `check_out_time` are PostgreSQL `time` columns,
+ * while the profile form is free text. Normalize common human formats and fall
+ * back to the documented default instead of sending an invalid time that would
+ * make every retry of the establishment push fail.
+ */
+function normalizeTime(value: string | undefined, fallback: string): string {
+  const raw = (value ?? '').trim();
+  const match = /^(\d{1,2})\s*[:hH.]\s*(\d{2})(?::\d{2})?$/.exec(raw);
+  if (!match) return fallback;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return fallback;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
 function establishmentCode(profile: EstablishmentProfile): string {
   const source =
     profile.id && profile.id !== 'establishment-draft' && profile.id !== 'establishment-cloud'
@@ -262,14 +288,14 @@ export function planBackfill({
     // The local profile does not collect a tax rate or facilities list.
     // Zero/empty are neutral schema defaults, not invented business facts.
     taxRate: 0,
-    checkInTime: profile.checkInTime || '14:00',
-    checkOutTime: profile.checkOutTime || '12:00',
+    checkInTime: normalizeTime(profile.checkInTime, '14:00'),
+    checkOutTime: normalizeTime(profile.checkOutTime, '12:00'),
     facilities: [],
     domain: profile.type === 'resort' ? 'resort' : 'hotel',
     currency: profile.defaultCurrency || 'DA',
     country: profile.country.trim(),
     address: profile.address.trim(),
-    establishmentType: profile.type,
+    establishmentType: remoteEstablishmentType(profile.type),
   };
 
   const operations: BackfillOperation[] = [];

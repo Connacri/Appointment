@@ -348,3 +348,40 @@ test('backfill derives a deterministic id for a non-Latin establishment name', (
   assert.match(plan.establishmentId ?? '', /^est-x[a-z0-9]+$/);
   assert.equal(plan.establishment?.name, 'فندق الواحة');
 });
+
+test('backfill maps a spa clinic to the remote establishment types the check constraint accepts', () => {
+  const plan = planBackfill({
+    profile: makeProfile({ type: 'spa_clinic' }),
+    workspaceId,
+    groups: [],
+    bookings: [],
+  });
+
+  assert.equal(plan.ok, true);
+  assert.equal(plan.establishment?.establishmentType, 'other');
+  assert.equal(plan.establishment?.domain, 'hotel');
+});
+
+test('backfill normalizes free-text check-in times to PostgreSQL time values', () => {
+  const plan = planBackfill({
+    profile: makeProfile({ checkInTime: '14h00', checkOutTime: '11:30' }),
+    workspaceId,
+    groups: [],
+    bookings: [],
+  });
+
+  assert.equal(plan.establishment?.checkInTime, '14:00');
+  assert.equal(plan.establishment?.checkOutTime, '11:30');
+});
+
+test('backfill falls back to the default times when the profile value is not a time', () => {
+  const plan = planBackfill({
+    profile: makeProfile({ checkInTime: 'arrivée tardive', checkOutTime: '25:00' }),
+    workspaceId,
+    groups: [],
+    bookings: [],
+  });
+
+  assert.equal(plan.establishment?.checkInTime, '14:00');
+  assert.equal(plan.establishment?.checkOutTime, '12:00');
+});

@@ -97,8 +97,10 @@ Verified by `tests/cloudRecovery.test.ts` and `tests/supabaseSync.test.ts`.
   excluded and counted as skipped; bookings without a local resource are skipped and reported;
   a resource tagged with another establishment is reported and attached to the real
   backfilled establishment, never silently merged. Payloads stay in the domain camelCase
-  shape; the snake_case mapping remains in `pmsRepository`. Verified by
-  `tests/backfillPlanner.test.ts`.
+  shape; the snake_case mapping remains in `pmsRepository`. Values are kept inside the
+  remote check constraints: `spa_clinic` (no remote equivalent) is stored as `other`, and
+  free-text check-in/out times are normalized to `HH:MM` with a safe default instead of
+  failing every retry. Verified by `tests/backfillPlanner.test.ts`.
 - Remote booking reads are paginated: `listBookings` pages through
   `listBookingsWindow` (`idx_bookings_calendar`, overlap-safe `start_date`/`end_date`
   bounds, narrow projection, deterministic `start_date,id` ordering, `.range()`) so a
