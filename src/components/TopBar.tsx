@@ -27,6 +27,7 @@ import {
   Cloud,
   CloudOff,
   AlertTriangle,
+  CalendarSearch,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -34,6 +35,7 @@ import { capitalizeFirstLetter } from '../utils/text';
 import { lockManager, UsbConnectionStatus, UsbDeviceInfo } from '../locks/lockManager';
 import { indexedDb, IndexedDbSyncState } from '../db/indexedDb';
 import { UserRole } from '../types/booking';
+import { BookingFinderModal } from './BookingFinderModal';
 
 export const TopBar: React.FC = () => {
   const {
@@ -75,6 +77,7 @@ export const TopBar: React.FC = () => {
   const [isSectorMenuOpen, setIsSectorMenuOpen] = useState(false);
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isBookingFinderOpen, setIsBookingFinderOpen] = useState(false);
 
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const roleMenuRef = useRef<HTMLDivElement>(null);
@@ -438,6 +441,19 @@ export const TopBar: React.FC = () => {
 
         {/* RIGHT SECTION: Force Sync Supabase, Refresh, Local Storage, USB, Currency, + Nouveau, Options [⋮] */}
         <div className="pms-app-topbar-actions flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-visible">
+          {/* Global reservation finder: filter + elastic search across guest and room details */}
+          <button
+            type="button"
+            data-testid="open-booking-finder"
+            onClick={() => setIsBookingFinderOpen(true)}
+            className="flex h-9 w-9 items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto sm:px-2.5 cursor-pointer"
+            title={getTranslation('bookingFinderOpen', language)}
+            aria-label={getTranslation('bookingFinderOpen', language)}
+          >
+            <CalendarSearch size={14} className="shrink-0" />
+            <span className="hidden xl:inline">{getTranslation('bookingFinderOpen', language)}</span>
+          </button>
+
           {/* Bidirectional Supabase Auto-Sync + Force Sync Button */}
           {(() => {
             const syncBusy = cloudSyncStatus.isSyncing;
@@ -803,6 +819,11 @@ export const TopBar: React.FC = () => {
           )}
         </div>
       </div>
+
+      <BookingFinderModal
+        isOpen={isBookingFinderOpen}
+        onClose={() => setIsBookingFinderOpen(false)}
+      />
     </header>
   );
 };

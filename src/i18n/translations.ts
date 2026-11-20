@@ -1640,6 +1640,133 @@ export const translations = {
     en: 'Quick create booking',
     ar: 'إنشاء حجز سريع',
   },
+
+  // Booking finder (global searchable reservation list)
+  bookingFinderOpen: {
+    fr: 'Rechercher une réservation',
+    en: 'Find a booking',
+    ar: 'البحث عن حجز',
+  },
+  bookingFinderTitle: {
+    fr: 'Liste des réservations',
+    en: 'Booking list',
+    ar: 'قائمة الحجوزات',
+  },
+  bookingFinderSubtitle: {
+    fr: 'Recherche instantanée dans tous les détails du locataire et de la chambre.',
+    en: 'Instant search across every guest and room detail.',
+    ar: 'بحث فوري في جميع بيانات النزيل والغرفة.',
+  },
+  bookingFinderSearchLabel: {
+    fr: 'Rechercher (nom, téléphone, chambre, étage, identifiant…)',
+    en: 'Search (name, phone, room, floor, ID…)',
+    ar: 'بحث (الاسم، الهاتف، الغرفة، الطابق، المعرّف…)',
+  },
+  bookingFinderSearchPlaceholder: {
+    fr: 'Ex. Amélie · 0550 · 101 · étage 2 · passeport',
+    en: 'E.g. Amelie · 0550 · 101 · floor 2 · passport',
+    ar: 'مثال: أميلي · 0550 · 101 · الطابق 2 · جواز السفر',
+  },
+  bookingFinderClearSearch: {
+    fr: 'Effacer la recherche',
+    en: 'Clear search',
+    ar: 'مسح البحث',
+  },
+  bookingFinderStatus: {
+    fr: 'Statut',
+    en: 'Status',
+    ar: 'الحالة',
+  },
+  bookingFinderPayment: {
+    fr: 'Paiement',
+    en: 'Payment',
+    ar: 'الدفع',
+  },
+  bookingFinderPeriod: {
+    fr: 'Période',
+    en: 'Period',
+    ar: 'الفترة',
+  },
+  bookingFinderSector: {
+    fr: 'Secteur',
+    en: 'Sector',
+    ar: 'القطاع',
+  },
+  bookingFinderAll: {
+    fr: 'Tous',
+    en: 'All',
+    ar: 'الكل',
+  },
+  bookingFinderPaid: {
+    fr: 'Payé',
+    en: 'Paid',
+    ar: 'مدفوع',
+  },
+  bookingFinderPending: {
+    fr: 'En attente',
+    en: 'Pending',
+    ar: 'قيد الانتظار',
+  },
+  bookingFinderPartial: {
+    fr: 'Partiel',
+    en: 'Partial',
+    ar: 'جزئي',
+  },
+  bookingFinderCurrent: {
+    fr: 'En cours',
+    en: 'Current',
+    ar: 'حالي',
+  },
+  bookingFinderUpcoming: {
+    fr: 'À venir',
+    en: 'Upcoming',
+    ar: 'قادم',
+  },
+  bookingFinderPast: {
+    fr: 'Passé',
+    en: 'Past',
+    ar: 'سابق',
+  },
+  bookingFinderResults: {
+    fr: '{count} réservation(s) trouvée(s)',
+    en: '{count} booking(s) found',
+    ar: 'تم العثور على {count} حجز',
+  },
+  bookingFinderEmptyAll: {
+    fr: 'Aucune réservation enregistrée pour le moment.',
+    en: 'No booking has been recorded yet.',
+    ar: 'لا توجد حجوزات مسجلة بعد.',
+  },
+  bookingFinderEmptyFiltered: {
+    fr: 'Aucune réservation ne correspond à votre recherche ou à ces filtres.',
+    en: 'No booking matches your search or these filters.',
+    ar: 'لا يوجد حجز يطابق بحثك أو هذه المعايير.',
+  },
+  bookingFinderReset: {
+    fr: 'Réinitialiser les filtres',
+    en: 'Reset filters',
+    ar: 'إعادة ضبط عوامل التصفية',
+  },
+  bookingFinderOpenBooking: {
+    fr: 'Ouvrir cette réservation',
+    en: 'Open this booking',
+    ar: 'فتح هذا الحجز',
+  },
+  bookingFinderOffline: {
+    fr: 'Mode hors ligne — recherche dans les données locales.',
+    en: 'Offline — searching local data.',
+    ar: 'وضع غير متصل — البحث في البيانات المحلية.',
+  },
+  bookingFinderTotal: {
+    fr: 'Total',
+    en: 'Total',
+    ar: 'المجموع',
+  },
+  bookingInvalidDateRange: {
+    fr: 'La date de fin doit être égale ou postérieure à la date de début.',
+    en: 'The end date must be the same as or after the start date.',
+    ar: 'يجب أن يكون تاريخ النهاية مساويًا أو لاحقًا لتاريخ البداية.',
+  },
 };
 
 export function getTranslation(key: keyof typeof translations, lang: Language): string {
