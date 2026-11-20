@@ -216,41 +216,59 @@ export const BookingAnalyticsView: React.FC = () => {
   const toExclusiveDate = new Date();
   toExclusiveDate.setDate(toExclusiveDate.getDate() + 1);
   const toExclusive = dateKey(toExclusiveDate);
-  const activeGroups = resourceGroups.filter(group => group.sector === currentDomain);
-  const rooms = activeGroups.flatMap(group => group.resources.map(resource => ({
-    ...resource,
-    groupId: group.id,
-    groupName: typeof group.name === 'string' ? group.name : group.name[language] || group.name.fr,
-  })));
-  const activeBookings = bookings.filter(booking =>
-    booking.sector === currentDomain &&
-    booking.status !== 'cancelled' &&
-    booking.status !== 'out_of_order' &&
-    booking.startDate < toExclusive &&
-    booking.endDate > from
+  const { activeGroups, rooms } = useMemo(() => {
+    const groups = resourceGroups.filter(group => group.sector === currentDomain);
+    const groupRooms = groups.flatMap(group => group.resources.map(resource => ({
+      ...resource,
+      groupId: group.id,
+      groupName: typeof group.name === 'string' ? group.name : group.name[language] || group.name.fr,
+    })));
+    return { activeGroups: groups, rooms: groupRooms };
+  }, [resourceGroups, currentDomain, language]);
+
+  const activeBookings = useMemo(
+    () => bookings.filter(booking =>
+      booking.sector === currentDomain &&
+      booking.status !== 'cancelled' &&
+      booking.status !== 'out_of_order' &&
+      booking.startDate < toExclusive &&
+      booking.endDate > from
+    ),
+    [bookings, currentDomain, from, toExclusive],
   );
-  const validRooms = rooms.filter(room => room.housekeepingStatus !== 'out_of_order');
-  const validRoomIds = new Set(validRooms.map(room => room.id));
-  const occupiedTodayIds = new Set(bookings.filter(booking =>
-    booking.sector === currentDomain &&
-    booking.status !== 'cancelled' &&
-    booking.status !== 'out_of_order' &&
-    booking.startDate <= today &&
-    booking.endDate > today
-  ).map(booking => booking.resourceId));
+
+  const { validRooms, validRoomIds } = useMemo(() => {
+    const available = rooms.filter(room => room.housekeepingStatus !== 'out_of_order');
+    return { validRooms: available, validRoomIds: new Set(available.map(room => room.id)) };
+  }, [rooms]);
+
+  const occupiedTodayIds = useMemo(
+    () => new Set(bookings.filter(booking =>
+      booking.sector === currentDomain &&
+      booking.status !== 'cancelled' &&
+      booking.status !== 'out_of_order' &&
+      booking.startDate <= today &&
+      booking.endDate > today
+    ).map(booking => booking.resourceId)),
+    [bookings, currentDomain, today],
+  );
+
   const occupiedToday = validRooms.filter(room => occupiedTodayIds.has(room.id)).length;
   const occupancyToday = validRooms.length ? Math.round(occupiedToday / validRooms.length * 100) : 0;
   const roomNightsAvailable = validRooms.length * periodDays;
-  const occupiedRoomNights = activeBookings.reduce((sum, booking) =>
-    sum + overlapNights(booking.startDate, booking.endDate, from, toExclusive), 0);
+  const { occupiedRoomNights, periodRevenueByCurrency } = useMemo(() => {
+    let nights = 0;
+    const revenue = activeBookings.reduce((totals, booking) => {
+      const nightsInPeriod = overlapNights(booking.startDate, booking.endDate, from, toExclusive);
+      nights += nightsInPeriod;
+      const totalNights = Math.max(1, dayDiff(booking.startDate, booking.endDate));
+      const code = booking.paymentCurrency || currency;
+      totals[code] = (totals[code] || 0) + (booking.totalPrice * nightsInPeriod / totalNights);
+      return totals;
+    }, {} as Record<string, number>);
+    return { occupiedRoomNights: nights, periodRevenueByCurrency: revenue };
+  }, [activeBookings, from, toExclusive, currency]);
   const periodOccupancy = roomNightsAvailable ? Math.min(100, Math.round(occupiedRoomNights / roomNightsAvailable * 100)) : 0;
-  const periodRevenueByCurrency = activeBookings.reduce((totals, booking) => {
-    const totalNights = Math.max(1, dayDiff(booking.startDate, booking.endDate));
-    const nightsInPeriod = overlapNights(booking.startDate, booking.endDate, from, toExclusive);
-    const code = booking.paymentCurrency || currency;
-    totals[code] = (totals[code] || 0) + (booking.totalPrice * nightsInPeriod / totalNights);
-    return totals;
-  }, {} as Record<string, number>);
   const fmtMoney = (amount: number, code = currency) => {
     const normalized = code === 'DA' ? 'DZD' : code;
     try {
@@ -267,158 +285,316 @@ export const BookingAnalyticsView: React.FC = () => {
   };
   const periodRevenue = formatBreakdown(periodRevenueByCurrency);
 
-  const buildingStats = activeGroups.map(group => {
-    const groupRooms = group.resources.filter(room => room.housekeepingStatus !== 'out_of_order');
-    const groupRoomIds = new Set(group.resources.map(room => room.id));
-    const occupiedNow = groupRooms.filter(room => occupiedTodayIds.has(room.id)).length;
-    const nights = activeBookings.filter(booking => groupRoomIds.has(booking.resourceId))
-      .reduce((sum, booking) => sum + overlapNights(booking.startDate, booking.endDate, from, toExclusive), 0);
-    const capacity = groupRooms.length * periodDays;
-    return {
-      id: group.id,
-      name: typeof group.name === 'string' ? group.name : group.name[language] || group.name.fr,
-      total: group.resources.length,
-      available: groupRooms.length,
-      outOfOrder: group.resources.length - groupRooms.length,
-      occupiedNow,
-      occupancy: capacity ? Math.min(100, Math.round(nights / capacity * 100)) : 0,
-      roomNights: nights,
-      bookingCount: activeBookings.filter(booking => groupRoomIds.has(booking.resourceId)).length,
-    };
-  });
+  const buildingStats = useMemo(() => {
+    const bookingsByResource = new Map<string, typeof activeBookings>();
+    for (const booking of activeBookings) {
+      const bucket = bookingsByResource.get(booking.resourceId);
+      if (bucket) bucket.push(booking);
+      else bookingsByResource.set(booking.resourceId, [booking]);
+    }
 
-  const lowStock = stockItems.filter(item => item.quantity <= item.minThreshold);
-  const stockValue = stockItems.reduce((sum, item) => sum + item.quantity * item.unitCost, 0);
-  const periodMovements = stockMovements.filter(movement => movement.timestamp.slice(0, 10) >= from && movement.timestamp.slice(0, 10) < toExclusive);
-  const consumption = periodMovements.filter(movement => movement.delta < 0);
-  const received = periodMovements.filter(movement => movement.delta > 0);
-  const consumedUnits = consumption.reduce((sum, movement) => sum + Math.abs(movement.delta), 0);
-  const consumedValue = consumption.reduce((sum, movement) => {
-    const item = stockItems.find(stock => stock.id === movement.itemId);
-    return sum + Math.abs(movement.delta) * (item?.unitCost || 0);
-  }, 0);
-  const taskConsumptions = tasks.filter(task => task.date >= from && task.date < toExclusive)
-    .flatMap(task => task.consumedItems || []);
-  const taskConsumedUnits = taskConsumptions.reduce((sum, item) => sum + item.quantity, 0);
-
-  const periodInvoices = invoiceDocs.filter(invoice =>
-    invoice.domain === currentDomain && invoice.issueDate >= from && invoice.issueDate < toExclusive
-  );
-  const issuedInvoices = periodInvoices.filter(invoice => invoice.docType === 'invoice');
-  const quotes = periodInvoices.filter(invoice => invoice.docType === 'quote');
-  const paidInvoices = issuedInvoices.filter(invoice => invoice.status === 'paid');
-  const outstanding = issuedInvoices.filter(invoice => ['sent', 'overdue', 'accepted'].includes(invoice.status));
-  const sumInvoiceCurrencies = (field: 'totalTTC' | 'depositPaid' | 'balanceDue') =>
-    issuedInvoices.reduce((totals, invoice) => {
-      const code = invoice.currency || currency;
-      totals[code] = (totals[code] || 0) + invoice[field];
-      return totals;
-    }, {} as Record<string, number>);
-  const invoicedTotal = formatBreakdown(sumInvoiceCurrencies('totalTTC'));
-  const collectedTotal = formatBreakdown(sumInvoiceCurrencies('depositPaid'));
-  const dueTotal = formatBreakdown(sumInvoiceCurrencies('balanceDue'));
-  const unpaidCount = outstanding.length;
-  const housekeepingCounts = rooms.reduce((counts, room) => {
-    const status = room.housekeepingStatus || 'clean';
-    counts[status] = (counts[status] || 0) + 1;
-    return counts;
-  }, {} as Record<string, number>);
-  const roomTypes = Array.from(new Set(rooms.map(room => room.type))).map(type => ({
-    type,
-    count: rooms.filter(room => room.type === type).length,
-    occupied: rooms.filter(room => room.type === type && occupiedTodayIds.has(room.id)).length,
-  }));
-
-  const periodBookings = bookings.filter(booking =>
-    booking.sector === currentDomain &&
-    booking.startDate < toExclusive &&
-    booking.endDate > from
-  );
-  const bookingStatusStats = [
-    { key: 'new', label: t('Nouvelles', 'New', 'جديدة') },
-    { key: 'confirmed', label: t('Confirmées', 'Confirmed', 'مؤكدة') },
-    { key: 'due_in', label: t('Arrivées prévues', 'Due in', 'وصول متوقع') },
-    { key: 'checked_in', label: t('En séjour', 'Checked in', 'تم تسجيل الوصول') },
-    { key: 'due_out', label: t('Départs prévus', 'Due out', 'مغادرة متوقعة') },
-    { key: 'checked_out', label: t('Clôturées', 'Checked out', 'تم تسجيل المغادرة') },
-    { key: 'booking_offer', label: t('Offres', 'Offers', 'عروض') },
-    { key: 'cancelled', label: t('Annulées', 'Cancelled', 'ملغاة') },
-    { key: 'out_of_order', label: t('Hors service', 'Out of order', 'خارج الخدمة') },
-  ].map(status => ({
-    ...status,
-    count: periodBookings.filter(booking => booking.status === status.key).length,
-  })).filter(status => status.count > 0);
-
-  const floorStats = rooms.reduce((stats, room) => {
-    const building = room.building?.trim() || room.groupName;
-    const floor = room.floor?.trim() || t('Étage non renseigné', 'Floor not specified', 'الطابق غير محدد');
-    const key = `${building}::${floor}`;
-    if (!stats[key]) stats[key] = { key, building, floor, total: 0, occupied: 0, outOfOrder: 0 };
-    stats[key].total += 1;
-    if (occupiedTodayIds.has(room.id)) stats[key].occupied += 1;
-    if (room.housekeepingStatus === 'out_of_order') stats[key].outOfOrder += 1;
-    return stats;
-  }, {} as Record<string, { key: string; building: string; floor: string; total: number; occupied: number; outOfOrder: number }>);
-
-  const trendPoints = (() => {
-    const bucketCount = range === '30d' ? 15 : range === '90d' ? 13 : 12;
-    return Array.from({ length: bucketCount }, (_, index) => {
-      const start = new Date(fromDate);
-      start.setDate(start.getDate() + Math.floor(index * periodDays / bucketCount));
-      const end = new Date(fromDate);
-      end.setDate(end.getDate() + Math.floor((index + 1) * periodDays / bucketCount));
-      const startKey = dateKey(start);
-      const endKey = index === bucketCount - 1 ? toExclusive : dateKey(end);
-      let occupiedPercentTotal = 0;
-      let measuredDays = 0;
-      const cursor = new Date(start);
-      while (dateKey(cursor) < endKey) {
-        const key = dateKey(cursor);
-        const occupiedIds = new Set(bookings.filter(booking =>
-          booking.sector === currentDomain &&
-          !['cancelled', 'out_of_order', 'booking_offer'].includes(booking.status) &&
-          booking.startDate <= key && booking.endDate > key && validRoomIds.has(booking.resourceId)
-        ).map(booking => booking.resourceId));
-        occupiedPercentTotal += validRooms.length ? Math.min(100, occupiedIds.size / validRooms.length * 100) : 0;
-        measuredDays += 1;
-        cursor.setDate(cursor.getDate() + 1);
+    return activeGroups.map(group => {
+      const groupRooms = group.resources.filter(room => room.housekeepingStatus !== 'out_of_order');
+      const occupiedNow = groupRooms.filter(room => occupiedTodayIds.has(room.id)).length;
+      let nights = 0;
+      let bookingCount = 0;
+      for (const room of group.resources) {
+        const roomBookings = bookingsByResource.get(room.id);
+        if (!roomBookings) continue;
+        bookingCount += roomBookings.length;
+        for (const booking of roomBookings) {
+          nights += overlapNights(booking.startDate, booking.endDate, from, toExclusive);
+        }
       }
-      const arrivals = activeBookings.filter(booking => booking.startDate >= startKey && booking.startDate < endKey).length;
-      const labelDate = new Date(`${startKey}T00:00:00`);
+      const capacity = groupRooms.length * periodDays;
       return {
-        label: new Intl.DateTimeFormat(language === 'fr' ? 'fr-DZ' : language === 'ar' ? 'ar-DZ' : 'en', {
-          day: range === '365d' ? undefined : '2-digit',
-          month: 'short',
-        }).format(labelDate),
-        occupancy: measuredDays ? Math.round(occupiedPercentTotal / measuredDays) : 0,
+        id: group.id,
+        name: typeof group.name === 'string' ? group.name : group.name[language] || group.name.fr,
+        total: group.resources.length,
+        available: groupRooms.length,
+        outOfOrder: group.resources.length - groupRooms.length,
+        occupiedNow,
+        occupancy: capacity ? Math.min(100, Math.round(nights / capacity * 100)) : 0,
+        roomNights: nights,
+        bookingCount,
+      };
+    });
+  }, [activeGroups, activeBookings, occupiedTodayIds, from, toExclusive, periodDays, language]);
+
+  const {
+    lowStock,
+    stockValue,
+    periodMovements,
+    consumption,
+    received,
+    consumedUnits,
+    consumedValue,
+    taskConsumedUnits,
+  } = useMemo(() => {
+    const low = stockItems.filter(item => item.quantity <= item.minThreshold);
+    const value = stockItems.reduce((sum, item) => sum + item.quantity * item.unitCost, 0);
+    const movements = stockMovements.filter(movement =>
+      movement.timestamp.slice(0, 10) >= from && movement.timestamp.slice(0, 10) < toExclusive
+    );
+    const issues = movements.filter(movement => movement.delta < 0);
+    const receipts = movements.filter(movement => movement.delta > 0);
+    const units = issues.reduce((sum, movement) => sum + Math.abs(movement.delta), 0);
+    const unitCostById = new Map(stockItems.map(item => [item.id, item.unitCost]));
+    const issueValue = issues.reduce((sum, movement) => {
+      return sum + Math.abs(movement.delta) * (unitCostById.get(movement.itemId) || 0);
+    }, 0);
+    const taskUnits = tasks
+      .filter(task => task.date >= from && task.date < toExclusive)
+      .reduce(
+        (total, task) =>
+          total + (task.consumedItems ?? []).reduce((sum, item) => sum + item.quantity, 0),
+        0,
+      );
+    return {
+      lowStock: low,
+      stockValue: value,
+      periodMovements: movements,
+      consumption: issues,
+      received: receipts,
+      consumedUnits: units,
+      consumedValue: issueValue,
+      taskConsumedUnits: taskUnits,
+    };
+  }, [stockItems, stockMovements, tasks, from, toExclusive]);
+
+  const {
+    periodInvoices,
+    issuedInvoices,
+    quotes,
+    paidInvoices,
+    outstanding,
+    invoicedTotal,
+    collectedTotal,
+    dueTotal,
+    unpaidCount,
+  } = useMemo(() => {
+    const invoices = invoiceDocs.filter(invoice =>
+      invoice.domain === currentDomain && invoice.issueDate >= from && invoice.issueDate < toExclusive
+    );
+    const issued = invoices.filter(invoice => invoice.docType === 'invoice');
+    const quoteDocs = invoices.filter(invoice => invoice.docType === 'quote');
+    const paid = issued.filter(invoice => invoice.status === 'paid');
+    const pending = issued.filter(invoice => ['sent', 'overdue', 'accepted'].includes(invoice.status));
+    const sumCurrencies = (field: 'totalTTC' | 'depositPaid' | 'balanceDue') =>
+      issued.reduce((totals, invoice) => {
+        const code = invoice.currency || currency;
+        totals[code] = (totals[code] || 0) + invoice[field];
+        return totals;
+      }, {} as Record<string, number>);
+    return {
+      periodInvoices: invoices,
+      issuedInvoices: issued,
+      quotes: quoteDocs,
+      paidInvoices: paid,
+      outstanding: pending,
+      invoicedTotal: formatBreakdown(sumCurrencies('totalTTC')),
+      collectedTotal: formatBreakdown(sumCurrencies('depositPaid')),
+      dueTotal: formatBreakdown(sumCurrencies('balanceDue')),
+      unpaidCount: pending.length,
+    };
+  }, [invoiceDocs, currentDomain, from, toExclusive, currency, language]);
+
+  const { housekeepingCounts, roomTypes } = useMemo(() => {
+    const counts = rooms.reduce((result, room) => {
+      const status = room.housekeepingStatus || 'clean';
+      result[status] = (result[status] || 0) + 1;
+      return result;
+    }, {} as Record<string, number>);
+    const byType = new Map<string, { count: number; occupied: number }>();
+    for (const room of rooms) {
+      const entry = byType.get(room.type) ?? { count: 0, occupied: 0 };
+      entry.count += 1;
+      if (occupiedTodayIds.has(room.id)) entry.occupied += 1;
+      byType.set(room.type, entry);
+    }
+    return {
+      housekeepingCounts: counts,
+      roomTypes: [...byType.entries()].map(([type, entry]) => ({ type, ...entry })),
+    };
+  }, [rooms, occupiedTodayIds]);
+
+  const { periodBookings, bookingStatusStats } = useMemo(() => {
+    const scoped = bookings.filter(booking =>
+      booking.sector === currentDomain &&
+      booking.startDate < toExclusive &&
+      booking.endDate > from
+    );
+    const counts = new Map<string, number>();
+    for (const booking of scoped) {
+      counts.set(booking.status, (counts.get(booking.status) || 0) + 1);
+    }
+    const stats = [
+      { key: 'new', label: t('Nouvelles', 'New', 'جديدة') },
+      { key: 'confirmed', label: t('Confirmées', 'Confirmed', 'مؤكدة') },
+      { key: 'due_in', label: t('Arrivées prévues', 'Due in', 'وصول متوقع') },
+      { key: 'checked_in', label: t('En séjour', 'Checked in', 'تم تسجيل الوصول') },
+      { key: 'due_out', label: t('Départs prévus', 'Due out', 'مغادرة متوقعة') },
+      { key: 'checked_out', label: t('Clôturées', 'Checked out', 'تم تسجيل المغادرة') },
+      { key: 'booking_offer', label: t('Offres', 'Offers', 'عروض') },
+      { key: 'cancelled', label: t('Annulées', 'Cancelled', 'ملغاة') },
+      { key: 'out_of_order', label: t('Hors service', 'Out of order', 'خارج الخدمة') },
+    ]
+      .map(status => ({ ...status, count: counts.get(status.key) || 0 }))
+      .filter(status => status.count > 0);
+    return { periodBookings: scoped, bookingStatusStats: stats };
+  }, [bookings, currentDomain, from, toExclusive, language]);
+
+  const floorStats = useMemo(() => {
+    return rooms.reduce((stats, room) => {
+      const building = room.building?.trim() || room.groupName;
+      const floor = room.floor?.trim() || t('Étage non renseigné', 'Floor not specified', 'الطابق غير محدد');
+      const key = `${building}::${floor}`;
+      if (!stats[key]) stats[key] = { key, building, floor, total: 0, occupied: 0, outOfOrder: 0 };
+      stats[key].total += 1;
+      if (occupiedTodayIds.has(room.id)) stats[key].occupied += 1;
+      if (room.housekeepingStatus === 'out_of_order') stats[key].outOfOrder += 1;
+      return stats;
+    }, {} as Record<string, { key: string; building: string; floor: string; total: number; occupied: number; outOfOrder: number }>);
+  }, [rooms, occupiedTodayIds, language]);
+
+  const trendPoints = useMemo(() => {
+    const bucketCount = range === '30d' ? 15 : range === '90d' ? 13 : 12;
+
+    // Daily occupancy with a difference array: O(bookings + days) instead of
+    // re-scanning every booking for each of the 365 days of the widest range.
+    const dayKeys: string[] = [];
+    const cursor = new Date(`${from}T00:00:00`);
+    while (dateKey(cursor) < toExclusive) {
+      dayKeys.push(dateKey(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    const dayIndex = new Map(dayKeys.map((key, index) => [key, index]));
+    const diff = new Int32Array(dayKeys.length + 1);
+    const firstDay = dayKeys[0];
+    const lastDay = dayKeys[dayKeys.length - 1];
+
+    if (firstDay && lastDay) {
+      // Group intervals per resource so two overlapping bookings of the same
+      // resource cannot inflate occupancy above the real room count.
+      const intervalsByResource = new Map<
+        string,
+        Array<{ start: number; end: number }>
+      >();
+
+      for (const booking of activeBookings) {
+        if (!validRoomIds.has(booking.resourceId)) continue;
+        if (['cancelled', 'out_of_order', 'booking_offer'].includes(booking.status)) continue;
+        if (booking.endDate <= firstDay || booking.startDate > lastDay) continue;
+
+        let start = dayIndex.get(booking.startDate);
+        if (start === undefined) start = booking.startDate < firstDay ? 0 : -1;
+        let end = dayIndex.get(booking.endDate);
+        if (end === undefined) end = booking.endDate > lastDay ? dayKeys.length : -1;
+        if (start < 0 || end < 0 || end <= start) continue;
+
+        const list = intervalsByResource.get(booking.resourceId);
+        if (list) list.push({ start, end });
+        else intervalsByResource.set(booking.resourceId, [{ start, end }]);
+      }
+
+      for (const intervals of intervalsByResource.values()) {
+        intervals.sort((a, b) => a.start - b.start);
+        let currentStart = -1;
+        let currentEnd = -1;
+        for (const interval of intervals) {
+          if (currentStart < 0) {
+            currentStart = interval.start;
+            currentEnd = interval.end;
+            continue;
+          }
+          if (interval.start <= currentEnd) {
+            if (interval.end > currentEnd) currentEnd = interval.end;
+            continue;
+          }
+          diff[currentStart] += 1;
+          diff[Math.min(currentEnd, dayKeys.length)] -= 1;
+          currentStart = interval.start;
+          currentEnd = interval.end;
+        }
+        if (currentStart >= 0) {
+          diff[currentStart] += 1;
+          diff[Math.min(currentEnd, dayKeys.length)] -= 1;
+        }
+      }
+    }
+
+    const occupiedByDay = new Int32Array(dayKeys.length);
+    let occupied = 0;
+    for (let index = 0; index < dayKeys.length; index += 1) {
+      occupied += diff[index];
+      occupiedByDay[index] = occupied;
+    }
+
+    const arrivalsByDay = new Map<string, number>();
+    for (const booking of activeBookings) {
+      if (booking.startDate >= from && booking.startDate < toExclusive) {
+        arrivalsByDay.set(booking.startDate, (arrivalsByDay.get(booking.startDate) || 0) + 1);
+      }
+    }
+
+    return Array.from({ length: bucketCount }, (_, index) => {
+      const startOffset = Math.floor(index * dayKeys.length / bucketCount);
+      const endOffset =
+        index === bucketCount - 1
+          ? dayKeys.length
+          : Math.floor((index + 1) * dayKeys.length / bucketCount);
+      let occupancyPercentTotal = 0;
+      let arrivals = 0;
+      for (let day = startOffset; day < endOffset; day += 1) {
+        occupancyPercentTotal += validRooms.length
+          ? Math.min(100, occupiedByDay[day] / validRooms.length * 100)
+          : 0;
+        arrivals += arrivalsByDay.get(dayKeys[day]) || 0;
+      }
+      const measuredDays = Math.max(0, endOffset - startOffset);
+      const labelDate = new Date(`${dayKeys[startOffset] ?? from}T00:00:00`);
+      return {
+        label: new Intl.DateTimeFormat(
+          language === 'fr' ? 'fr-DZ' : language === 'ar' ? 'ar-DZ' : 'en',
+          {
+            day: range === '365d' ? undefined : '2-digit',
+            month: 'short',
+          },
+        ).format(labelDate),
+        occupancy: measuredDays ? Math.round(occupancyPercentTotal / measuredDays) : 0,
         arrivals,
       };
     });
-  })();
+  }, [range, from, toExclusive, activeBookings, validRoomIds, validRooms.length, language]);
 
-  const stockCategoryStats = Array.from(new Set(stockItems.map(item => item.category))).map(category => ({
-    category,
-    quantity: stockItems.filter(item => item.category === category).reduce((sum, item) => sum + item.quantity, 0),
-    low: stockItems.filter(item => item.category === category && item.quantity <= item.minThreshold).length,
-  })).sort((a, b) => b.quantity - a.quantity);
+  const stockCategoryStats = useMemo(() => {
+    const byCategory = new Map<string, { quantity: number; low: number }>();
+    for (const item of stockItems) {
+      const entry = byCategory.get(item.category) ?? { quantity: 0, low: 0 };
+      entry.quantity += item.quantity;
+      if (item.quantity <= item.minThreshold) entry.low += 1;
+      byCategory.set(item.category, entry);
+    }
+    return [...byCategory.entries()]
+      .map(([category, entry]) => ({ category, ...entry }))
+      .sort((a, b) => b.quantity - a.quantity);
+  }, [stockItems]);
 
-  const stockMovementTrend = trendPoints.map((point, index) => {
+  const stockMovementTrend = useMemo(() => {
     const bucketCount = trendPoints.length;
-    const start = new Date(fromDate);
-    start.setDate(start.getDate() + Math.floor(index * periodDays / bucketCount));
-    const end = new Date(fromDate);
-    end.setDate(end.getDate() + Math.floor((index + 1) * periodDays / bucketCount));
-    const startKey = dateKey(start);
-    const endKey = index === bucketCount - 1 ? toExclusive : dateKey(end);
-    const movements = periodMovements.filter(movement => {
+    const values = new Array<number>(bucketCount).fill(0);
+    for (const movement of periodMovements) {
+      if (movement.delta >= 0) continue;
       const day = movement.timestamp.slice(0, 10);
-      return day >= startKey && day < endKey;
-    });
-    return {
-      label: point.label,
-      value: movements.filter(movement => movement.delta < 0).reduce((sum, movement) => sum + Math.abs(movement.delta), 0),
-    };
-  });
+      if (day < from || day >= toExclusive) continue;
+      const bucketIndex = Math.min(
+        bucketCount - 1,
+        Math.max(0, Math.floor(dayDiff(from, day) * bucketCount / Math.max(1, periodDays))),
+      );
+      values[bucketIndex] += Math.abs(movement.delta);
+    }
+    return trendPoints.map((point, index) => ({ label: point.label, value: values[index] }));
+  }, [trendPoints, periodMovements, from, toExclusive, periodDays]);
 
   const Card = ({ icon: Icon, label, value, detail, tone = 'blue' }: {
     icon: React.ElementType; label: string; value: string | number; detail: string; tone?: string;

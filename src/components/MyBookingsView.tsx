@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Calendar,
   Clock,
@@ -83,16 +83,21 @@ export const MyBookingsView: React.FC = () => {
     setIsEditingProfile(false);
   };
 
-  const filtered = bookings.filter((b) => {
-    if (activeSector !== 'all' && b.sector !== activeSector) return false;
-    if (filterTab === 'all') return true;
-    if (filterTab === 'confirmed') return b.status === 'confirmed';
-    if (filterTab === 'checked_in') return b.status === 'checked_in';
-    if (filterTab === 'cash_pending') return b.paymentStatus === 'pending' && b.totalPrice > 0;
-    return true;
-  });
+  const filtered = useMemo(
+    () =>
+      bookings.filter((b) => {
+        if (activeSector !== 'all' && b.sector !== activeSector) return false;
+        if (filterTab === 'all') return true;
+        if (filterTab === 'confirmed') return b.status === 'confirmed';
+        if (filterTab === 'checked_in') return b.status === 'checked_in';
+        if (filterTab === 'cash_pending') return b.paymentStatus === 'pending' && b.totalPrice > 0;
+        return true;
+      }),
+    [bookings, activeSector, filterTab],
+  );
 
-  const isAllSelected = filtered.length > 0 && filtered.every((b) => selectedIds.includes(b.id));
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const isAllSelected = filtered.length > 0 && filtered.every((b) => selectedIdSet.has(b.id));
 
   const handleToggleSelectAll = () => {
     if (isAllSelected) {
@@ -130,7 +135,7 @@ export const MyBookingsView: React.FC = () => {
   // Batch 2: Export selected bookings to PDF
   const handleBatchExportPdf = () => {
     if (selectedIds.length === 0) return;
-    const selectedBookings = bookings.filter((b) => selectedIds.includes(b.id));
+    const selectedBookings = bookings.filter((b) => selectedIdSet.has(b.id));
 
     const doc = new jsPDF();
     doc.setFontSize(16);
@@ -539,7 +544,7 @@ export const MyBookingsView: React.FC = () => {
             const isCashPending = bkg.paymentStatus === 'pending' && bkg.totalPrice > 0;
             const isCheckedIn = bkg.status === 'checked_in';
 
-            const isSelected = selectedIds.includes(bkg.id);
+            const isSelected = selectedIdSet.has(bkg.id);
 
             return (
               <div

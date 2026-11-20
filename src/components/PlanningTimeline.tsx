@@ -55,7 +55,11 @@ import {
   getResourceSubgroupMeta,
   isTimelineCellAvailableForQuickCreate,
 } from '../utils/timelineSearch';
+import { computeAvailabilityByDay } from '../utils/availability';
 
+/**
+ * Gantt timeline with day-by-day availability and quick-create booking cells.
+ */
 export const PlanningTimeline: React.FC = () => {
   const {
     language,
@@ -528,6 +532,18 @@ export const PlanningTimeline: React.FC = () => {
     return dates;
   }, [timelineWindowStart, timelineWindowDays, language, timelineSync.todayDateStr]);
 
+  // O(1) per-resource booking index: replaces O(bookings) .filter/.some scans
+  // inside every day cell and floor/row availability calculation.
+  const bookingsByResource = useMemo(() => {
+    const map = new Map<string, TimelineBooking[]>();
+    for (const b of bookings) {
+      const bucket = map.get(b.resourceId) ?? [];
+      bucket.push(b);
+      map.set(b.resourceId, bucket);
+    }
+    return map;
+  }, [bookings]);
+
   // Center timeline on currentBaseDate on initial mount or base date navigation,
   // and preserve the currently centered viewport day when zooming via slider or presets.
   const hasCenteredInitialDateRef = useRef(false);
@@ -648,7 +664,7 @@ export const PlanningTimeline: React.FC = () => {
           matchingResources = matchingResources.filter((r) =>
             doesResourceMatchQuery(
               r,
-              bookings.filter((b) => b.resourceId === r.id),
+              bookingsByResource.get(r.id) ?? [],
               effectiveSearchQuery
             )
           );
@@ -659,7 +675,7 @@ export const PlanningTimeline: React.FC = () => {
         };
       })
       .filter((grp) => grp.resources.length > 0 || (currentDomain === 'hotel' && !effectiveSearchQuery.trim()));
-  }, [currentDomain, resourceGroups, effectiveSearchQuery, bookings, selectedBuildingGroupId]);
+  }, [currentDomain, resourceGroups, effectiveSearchQuery, bookingsByResource, selectedBuildingGroupId]);
 
   // Gantt hierarchy: building (resource group) > floor / wing / floor_wing > room.
   // The room type remains visible on each room row.
@@ -820,32 +836,33 @@ export const PlanningTimeline: React.FC = () => {
     [resourceGroups, currentDomain]
   );
 
-  // Calculate day-by-day availability per group
+  // Day-by-day availability per building and per floor. The difference-array
+  // helper keeps this O(bookings + days) instead of scanning every booking for
+  // every resource on every day of the 24-month window.
   const groupAvailability = useMemo(() => {
     const map: Record<string, Record<string, number>> = {};
-
-    filteredGroups.forEach((grp) => {
-      map[grp.id] = {};
-      const totalInGrp = grp.resources.length;
-
-      timelineDays.forEach((day) => {
-        // Count bookings on this day in this group
-        const occupied = grp.resources.filter((res) => {
-          return bookings.some(
-            (b) =>
-              b.resourceId === res.id &&
-              b.status !== 'cancelled' &&
-              b.startDate <= day.dateStr &&
-              b.endDate > day.dateStr
-          );
-        }).length;
-
-        map[grp.id][day.dateStr] = Math.max(0, totalInGrp - occupied);
-      });
-    });
-
+    for (const group of filteredGroups) {
+      map[group.id] = computeAvailabilityByDay(
+        group.resources,
+        bookingsByResource,
+        timelineDays,
+      );
+    }
     return map;
-  }, [filteredGroups, timelineDays, bookings]);
+  }, [filteredGroups, timelineDays, bookingsByResource]);
+
+  const floorAvailability = useMemo(() => {
+    const map = new Map<string, Record<string, number>>();
+    for (const [groupId, floors] of floorGroupsByGroup) {
+      for (const floor of floors) {
+        map.set(
+          `${groupId}:${floor.key}`,
+          computeAvailabilityByDay(floor.resources, bookingsByResource, timelineDays),
+        );
+      }
+    }
+    return map;
+  }, [floorGroupsByGroup, timelineDays, bookingsByResource]);
 
   // Open an explicit status selector instead of silently cycling through statuses.
   const renderHousekeepingTag = (status?: string, resourceId?: string, resourceName?: string) => {
@@ -1664,15 +1681,9 @@ export const PlanningTimeline: React.FC = () => {
                       {floorGroup.label && (
                         <div className="h-7 min-h-[28px] max-h-[28px] shrink-0 flex pms-gantt-subsurface border-b border-[rgb(var(--pms-border))]">
                           {timelineDays.map((day) => {
-                            const occupied = floorGroup.resources.filter((resource) =>
-                              bookings.some((booking) =>
-                                booking.resourceId === resource.id &&
-                                booking.status !== 'cancelled' &&
-                                booking.startDate <= day.dateStr &&
-                                booking.endDate > day.dateStr
-                              )
-                            ).length;
-                            const available = Math.max(0, floorGroup.resources.length - occupied);
+                            const available =
+                              floorAvailability.get(`${grp.id}:${floorGroup.key}`)?.[day.dateStr] ??
+                              floorGroup.resources.length;
                             return (
                               <div
                                 key={day.dateStr}
@@ -1695,8 +1706,8 @@ export const PlanningTimeline: React.FC = () => {
                       )}
                       {!collapsedFloors[`${grp.id}:${floorGroup.key}`] && floorGroup.resources.map((res) => {
                         const isOutOfOrder = res.housekeepingStatus === 'out_of_order';
-                        // Find bookings on this specific resource
-                        const resBookings = bookings.filter((b) => b.resourceId === res.id);
+                        // Find bookings on this specific resource (O(1) via precomputed index)
+                        const resBookings = bookingsByResource.get(res.id) ?? [];
 
                         return (
                           <div
@@ -1706,6 +1717,10 @@ export const PlanningTimeline: React.FC = () => {
                                 ? 'bg-slate-200 dark:bg-slate-800/90 select-none cursor-not-allowed opacity-90'
                                 : 'pms-gantt-surface pms-gantt-row-hover'
                             }`}
+                            style={{
+                              contentVisibility: 'auto',
+                              containIntrinsicSize: `1000px ${isMobileScreen ? 48 : 40}px`,
+                            }}
                           >
                             {/* Background Grid Cells (clicking an empty bookable cell opens pre-filled booking modal) */}
                             {timelineDays.map((day) => {
