@@ -94,6 +94,9 @@ export interface RunSupabaseSyncParams {
   selectedEstablishmentId: string | 'all';
   localGroups: ResourceGroup[];
   localBookings: TimelineBooking[];
+  /** Last-resort fallback derived from the local establishment profile,
+   * used when no remote establishment exists yet and the UI selection is 'all'. */
+  defaultEstablishmentId?: string;
   previousStatus?: CloudSyncStatus;
   demoGroupIds?: Set<string>;
   demoResourceIds?: Set<string>;
@@ -185,6 +188,11 @@ function resolveEstablishmentId(params: {
   localGroups: ResourceGroup[];
   remoteGroups: ResourceGroup[];
   remoteEstablishments: HotelEstablishment[];
+  /** Last-resort fallback derived from the local establishment profile
+   * (used when no remote establishment exists yet and the UI has no
+   * explicit selection). Allows seeding the personal workspace from local
+   * inventory without forcing the user to pick a remote establishment first. */
+  defaultEstablishmentId?: string;
 }): string | undefined {
   const explicit = params.record.establishmentId?.trim();
   if (explicit && explicit !== 'all') return explicit;
@@ -215,6 +223,13 @@ function resolveEstablishmentId(params: {
     return params.selectedEstablishmentId;
   }
 
+  // Last-resort fallback: derive the establishment id from the local profile.
+  // This lets the first backfill seed the personal workspace even when the
+  // remote workspace owns no establishment yet and the UI selection is 'all'.
+  if (params.defaultEstablishmentId) {
+    return params.defaultEstablishmentId;
+  }
+
   // Only unambiguous single-establishment fallback when remote workspace owns exactly 1 establishment
   // and local data does not hold multiple distinct physical buildings without establishment IDs.
   if (params.remoteEstablishments.length === 1 && params.localGroups.length <= 1) {
@@ -243,6 +258,7 @@ export async function runSupabaseSync({
   selectedEstablishmentId,
   localGroups,
   localBookings,
+  defaultEstablishmentId,
   previousStatus = INITIAL_CLOUD_SYNC_STATUS,
   demoGroupIds = new Set(),
   demoResourceIds = new Set(),
@@ -427,6 +443,7 @@ export async function runSupabaseSync({
           localGroups,
           remoteGroups: [],
           remoteEstablishments: [],
+          defaultEstablishmentId,
         }),
     );
 
@@ -499,6 +516,7 @@ export async function runSupabaseSync({
             localGroups,
             remoteGroups: prefetchedRemote?.groups ?? [],
             remoteEstablishments: prefetchedRemote?.establishments ?? [],
+            defaultEstablishmentId,
           });
           if (!establishmentId) {
             throw new Error(
@@ -523,6 +541,7 @@ export async function runSupabaseSync({
             localGroups,
             remoteGroups: prefetchedRemote?.groups ?? [],
             remoteEstablishments: prefetchedRemote?.establishments ?? [],
+            defaultEstablishmentId,
           });
           if (!establishmentId) {
             throw new Error(
@@ -553,6 +572,7 @@ export async function runSupabaseSync({
             localGroups,
             remoteGroups: prefetchedRemote?.groups ?? [],
             remoteEstablishments: prefetchedRemote?.establishments ?? [],
+            defaultEstablishmentId,
           });
           if (!establishmentId) {
             throw new Error(
@@ -569,6 +589,7 @@ export async function runSupabaseSync({
             localGroups,
             remoteGroups: prefetchedRemote?.groups ?? [],
             remoteEstablishments: prefetchedRemote?.establishments ?? [],
+            defaultEstablishmentId,
           });
           if (!payload || !establishmentId) {
             throw new Error('Tâche ou établissement cible manquant pour la synchronisation.');
@@ -587,6 +608,7 @@ export async function runSupabaseSync({
             localGroups,
             remoteGroups: prefetchedRemote?.groups ?? [],
             remoteEstablishments: prefetchedRemote?.establishments ?? [],
+            defaultEstablishmentId,
           });
           if (!payload || !establishmentId) {
             throw new Error('Article de stock ou établissement cible manquant pour la synchronisation.');

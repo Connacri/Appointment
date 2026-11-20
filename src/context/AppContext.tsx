@@ -42,7 +42,7 @@ import {
   saveStockItem as remoteSaveStockItem,
   saveTask as remoteSaveTask,
 } from '../services/supabase/pmsRepository';
-import { planBackfill } from '../services/supabase/backfillPlanner';
+import { planBackfill, stableEstablishmentId } from '../services/supabase/backfillPlanner';
 import {
   deriveIdleSyncPhase,
   INITIAL_CLOUD_SYNC_STATUS,
@@ -433,7 +433,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const resolvedEstablishmentId =
       selectedEstablishmentId !== 'all'
         ? selectedEstablishmentId
-        : bookedResource?.establishmentId;
+        : bookedResource?.establishmentId || stableEstablishmentId(establishmentProfile);
     void indexedDb.putWithOutbox(
       'bookings',
       booking,
@@ -766,6 +766,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isConfigured: isSupabaseConfigured,
         workspaceId: wsId,
         selectedEstablishmentId: selectedEstablishmentIdRef.current,
+        defaultEstablishmentId: stableEstablishmentId(establishmentProfile),
         localGroups: latestGroupsRef.current,
         localBookings: latestBookingsRef.current,
         previousStatus: cloudSyncStatusRef.current,

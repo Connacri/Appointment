@@ -82,7 +82,7 @@ export interface BackfillPlan {
 }
 
 /** Deterministic slug; Arabic/non-Latin names fall back to a stable hash. */
-function stableSlug(value: string): string {
+export function stableSlug(value: string): string {
   const ascii = value
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -99,7 +99,7 @@ function stableSlug(value: string): string {
   return `x${(hash >>> 0).toString(36)}`;
 }
 
-function stableEstablishmentId(profile: EstablishmentProfile): string {
+export function stableEstablishmentId(profile: EstablishmentProfile): string {
   const source =
     profile.id && profile.id !== 'establishment-draft' && profile.id !== 'establishment-cloud'
       ? profile.id

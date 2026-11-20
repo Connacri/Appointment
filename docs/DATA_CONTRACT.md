@@ -51,6 +51,10 @@ proof of synchronization or referential integrity.
   remains the verified remote establishment scope used by synchronization.
   Display labels for buildings are capitalized on their first Latin letter only
   (`src/utils/text.ts`); Arabic labels are preserved unchanged.
+  When no remote establishment exists yet and the UI selection is `'all'`, sync falls back
+  to an establishment id derived from the local `EstablishmentProfile` (`stableEstablishmentId`)
+  so the personal workspace can be seeded from local inventory without blocking on a remote
+  root or an explicit UI selection. Verified by `tests/supabaseSync.test.ts`.
 
 Never invent a hotel, establishment, building, floor, room, workspace, guest or booking to
 satisfy a UI default, import fallback or migration. Never silently merge several buildings

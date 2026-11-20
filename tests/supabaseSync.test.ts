@@ -520,6 +520,48 @@ test('runSupabaseSync resolves establishmentId from remote resource when selecte
   assert.ok(pushLog.includes('push:booking:upsert:est-2:bkg-all-filter'));
 });
 
+test('runSupabaseSync uses defaultEstablishmentId when no remote establishment exists and selection is all', async () => {
+  const booking = makeBooking('bkg-default-est', { resourceId: 'room-101' });
+  const { adapter, pushLog } = createMemoryAdapter({
+    outbox: [
+      {
+        id: 'ob-default-est',
+        idempotencyKey: 'ws-1:booking:bkg-default-est:1',
+        workspaceId: 'ws-1',
+        establishmentId: undefined,
+        entity: 'booking',
+        entityId: 'bkg-default-est',
+        operation: 'upsert',
+        version: 1,
+        payload: booking as unknown as Record<string, unknown>,
+        status: 'pending',
+        attempts: 0,
+        createdAt: '2026-11-18T11:55:00.000Z',
+        nextAttemptAt: '2026-11-18T11:55:00.000Z',
+      },
+    ],
+    remote: {
+      establishments: [],
+      groups: [],
+    },
+  });
+
+  const res = await runSupabaseSync({
+    force: true,
+    isOffline: false,
+    isConfigured: true,
+    workspaceId: 'ws-1',
+    selectedEstablishmentId: 'all',
+    defaultEstablishmentId: 'est-local-1',
+    localGroups: [],
+    localBookings: [booking],
+    adapter,
+  });
+
+  assert.equal(res.status.phase, 'synced');
+  assert.ok(pushLog.includes('push:booking:upsert:est-local-1:bkg-default-est'));
+});
+
 test('runSupabaseSync skips network calls cleanly when offline and keeps pending count accurate', async () => {
   const { adapter, pushLog } = createMemoryAdapter({
     outbox: [
