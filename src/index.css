@@ -1308,3 +1308,25 @@ body {
     padding-bottom: max(0.75rem, var(--pms-safe-area-bottom));
   }
 }
+
+@media print {
+  body:has(.pms-police-print-portal) > *:not(.pms-police-print-portal) {
+    display: none !important;
+  }
+
+  body:has(.pms-police-print-portal) .pms-police-print-portal {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  body:has(.pms-police-print-portal) #printable-police-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+}
+

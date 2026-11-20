@@ -24,7 +24,6 @@ import {
   Users,
   Info,
   Globe,
-  Printer,
   Coins,
   Package,
   History,
@@ -41,6 +40,7 @@ import { lockManager } from '../locks/lockManager';
 import { CardResultDialog, CardResult } from './CardResultDialog';
 import { CardCreationProgressModal } from './CardCreationProgressModal';
 import { InvoicePreviewModal } from './InvoicePreviewModal';
+import { PoliceSheetModal } from './PoliceSheetModal';
 import { ALGERIA_69_WILAYAS } from '../data/algeriaWilayas';
 import { HOSPITALITY_MEAL_PLANS, DIETARY_PREFERENCES } from '../data/mealPlans';
 import { KeyRound, Loader2, Utensils, UtensilsCrossed, ShieldAlert, Award, FileSpreadsheet } from 'lucide-react';
@@ -75,6 +75,7 @@ export const BookingModal: React.FC = () => {
     bookings,
     generateTurnoverTasksForCheckout,
     currency,
+    establishmentProfile,
     lastCreatedInvoice,
     setLastCreatedInvoice,
     createInvoiceFromBooking,
@@ -1077,13 +1078,31 @@ export const BookingModal: React.FC = () => {
                   {(bookingConfirmation.originalCurrencyAmount ?? priceInPaymentCurrency).toLocaleString()} {currencySymbols[paymentCurrency] || paymentCurrency}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="min-h-11 w-full sm:w-auto sm:min-w-44 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 font-bold text-sm cursor-pointer transition-colors"
-              >
-                {language === 'fr' ? 'Terminer' : language === 'ar' ? 'إنهاء' : 'Done'}
-              </button>
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+                {(activeDomain === 'hotel' || activeDomain === 'resort') && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPoliceSheetModal(true)}
+                    className="min-h-11 px-4 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <ShieldCheck size={16} className="shrink-0" />
+                    <span>
+                      {language === 'fr'
+                        ? 'Fiche de Police'
+                        : language === 'ar'
+                        ? 'بطاقة الشرطة'
+                        : 'Police Sheet'}
+                    </span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="min-h-11 w-full sm:w-auto sm:min-w-44 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 font-bold text-sm cursor-pointer transition-colors"
+                >
+                  {language === 'fr' ? 'Terminer' : language === 'ar' ? 'إنهاء' : 'Done'}
+                </button>
+              </div>
             </footer>
           </div>
         ) : (
@@ -1479,25 +1498,54 @@ export const BookingModal: React.FC = () => {
 
           {/* 2.b TENANT NATIONALITY & POLICE REGULATION (Algérien vs Étranger) */}
           {(activeDomain === 'hotel' || activeDomain === 'resort') && (
-            <div className="relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-white via-emerald-50/50 to-sky-50/60 dark:from-slate-900 dark:via-emerald-950/20 dark:to-slate-900 rounded-[1.5rem] border border-emerald-200/80 dark:border-emerald-900/70 shadow-sm space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-start gap-2">
-                  <ShieldCheck size={17} className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                  <div>
-                    <span className="block font-extrabold text-slate-900 dark:text-white text-sm">
-                      {language === 'fr'
-                        ? 'Nationalité & Fiche de Police (Réglementation DGSN)'
-                        : language === 'ar'
-                        ? 'جنسية النزيل وبطاقة الشرطة التنظيمية'
-                        : 'Tenant Nationality & Police Declaration Form'}
-                    </span>
-                    <p className="mt-1 text-[11px] font-normal text-slate-500 dark:text-slate-400">Identification du voyageur et préparation de la déclaration individuelle.</p>
+            <div className="overflow-hidden rounded-[1.5rem] border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 px-4 sm:px-5 py-4">
+                <div className="flex items-start gap-3 min-w-0">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-800 text-white shadow-xs shrink-0">
+                    <ShieldCheck size={19} />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-extrabold text-slate-900 dark:text-white text-sm">
+                        {language === 'fr'
+                          ? 'Nationalité & Fiche de Police (DGSN)'
+                          : language === 'ar'
+                          ? 'جنسية النزيل وبطاقة الشرطة التنظيمية'
+                          : 'Tenant Nationality & Police Form'}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide ${
+                          idPieceNumber.trim()
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                            : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                        }`}
+                      >
+                        {idPieceNumber.trim()
+                          ? language === 'ar'
+                            ? 'جاهزة'
+                            : language === 'en'
+                            ? 'Ready'
+                            : 'Prête'
+                          : language === 'ar'
+                          ? 'رقم الوثيقة مطلوب'
+                          : language === 'en'
+                          ? 'ID required'
+                          : 'Pièce à saisir'}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[11px] font-normal text-slate-500 dark:text-slate-400">
+                      {language === 'ar'
+                        ? 'التحقق من هوية المسافر وتجهيز بطاقة الشرطة الفردية.'
+                        : language === 'en'
+                        ? 'Traveler identification and DGSN individual registration sheet.'
+                        : 'Identification du voyageur et préparation de la fiche individuelle officielle.'}
+                    </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowPoliceSheetModal(true)}
-                  className="w-full sm:w-auto min-h-11 px-3.5 py-2 text-xs font-bold bg-white hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer shrink-0"
+                  className="w-full sm:w-auto min-h-11 px-4 py-2 text-xs font-bold bg-emerald-800 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white rounded-xl flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer shrink-0"
                 >
                   <FileText size={14} />
                   <span>
@@ -1505,10 +1553,11 @@ export const BookingModal: React.FC = () => {
                       ? 'Aperçu Fiche de Police'
                       : language === 'ar'
                       ? 'معاينة بطاقة الشرطة'
-                      : 'Police Form'}
+                      : 'Police Form Preview'}
                   </span>
                 </button>
               </div>
+              <div className="p-4 sm:p-5 space-y-4">
 
               {/* Guest Type Selector Tabs */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-100/90 dark:bg-slate-800/90 p-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-700">
@@ -1680,6 +1729,7 @@ export const BookingModal: React.FC = () => {
                     </div>
                   </div>
                 )}
+              </div>
               </div>
             </div>
           )}
@@ -2363,198 +2413,45 @@ export const BookingModal: React.FC = () => {
       </div>
 
       {/* ALGERIAN POLICE REGISTRATION SHEET MODAL (Fiche Individuelle de Police) */}
-      {showPoliceSheetModal && (
-        <div
-          className="fixed inset-0 z-[10000] flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-xs pms-modal-backdrop overflow-y-auto"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowPoliceSheetModal(false);
-          }}
-        >
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] my-auto pms-modal">
-            {/* Header */}
-            <div className="px-4 py-3 bg-emerald-700 text-white flex items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <ShieldCheck size={20} className="text-emerald-200 shrink-0" />
-                <div className="min-w-0">
-                  <h4 className="font-bold text-sm leading-tight truncate">
-                    Fiche Individuelle de Police • بطاقة الشرطة الفردية
-                  </h4>
-                  <p className="text-[11px] text-emerald-100 truncate">
-                    Réglementation Hôtelière Algérienne — Déclaration DGSN / Tourisme
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowPoliceSheetModal(false)}
-                className="min-w-11 min-h-11 inline-flex items-center justify-center text-white/80 hover:text-white hover:bg-emerald-600 rounded-xl transition-colors cursor-pointer shrink-0"
-                aria-label={language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Document Content */}
-            <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 text-xs font-sans bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
-              <div className="text-center border-b border-slate-200 dark:border-slate-700 pb-3">
-                <p className="font-bold text-[13px] tracking-wide">الجمهورية الجزائرية الديمقراطية الشعبية</p>
-                <p className="font-bold text-[12px] tracking-wide text-slate-700 dark:text-slate-300">
-                  RÉPUBLIQUE ALGÉRIENNE DÉMOCRATIQUE ET POPULAIRE
-                </p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  وزارة السياحة والصناعة التقليدية • المديرية العامة للأمن الوطني (DGSN)
-                </p>
-                <h3 className="font-extrabold text-sm uppercase mt-2 tracking-widest text-emerald-800 dark:text-emerald-300">
-                  FICHE DE DÉCLARATION DU SÉJOURNANT EN ÉTABLISSEMENT D'HÉBERGEMENT
-                </h3>
-              </div>
-
-              {/* Grid Details */}
-              <div className="space-y-3">
-                <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
-                  <div className="font-bold uppercase tracking-wider text-[11px] text-emerald-700 dark:text-emerald-400">
-                    1. Renseignements Personnels du Locataire / هوية النزيل
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block">Nom & Prénom :</span>
-                      <span className="font-bold text-slate-900 dark:text-white break-words">{guestName || '—'}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block">Statut / Nationalité :</span>
-                      <span className="font-bold text-slate-900 dark:text-white break-words">
-                        {guestType === 'algerian' ? '🇩🇿 Algérienne (Citoyen National)' : `🌐 ${foreignNationality}`}
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block">Pièce d'Identité :</span>
-                      <span className="font-mono font-bold text-slate-900 dark:text-white break-all">
-                        {guestType === 'algerian'
-                          ? `${algerianIdType.toUpperCase()}: ${algerianIdNumber || 'Non renseigné'}`
-                          : `Passeport: ${passportNumber || 'Non renseigné'}`}
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block">
-                        {guestType === 'algerian' ? 'Wilaya d\'origine / Résidence :' : 'Visa / Entrée :'}
-                      </span>
-                      <span className="font-medium text-slate-900 dark:text-white break-words">
-                        {guestType === 'algerian'
-                          ? wilayaOfOrigin
-                          : `Visa N°: ${visaNumber || '—'} (Entrée: ${entryDateInCountry || '—'})`}
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block">Contact Téléphonique :</span>
-                      <span className="font-medium text-slate-900 dark:text-white break-all">{guestPhone || '—'}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block">Email :</span>
-                      <span className="font-medium text-slate-900 dark:text-white break-all">{guestEmail || '—'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
-                  <div className="font-bold uppercase tracking-wider text-[11px] text-blue-700 dark:text-blue-400">
-                    2. Modalités du Séjour Hôtelier / تفاصيل الإقامة
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block">Chambre / Hébergement :</span>
-                      <span className="font-bold text-slate-900 dark:text-white break-words">
-                        {currentResource?.name || 'Chambre'} ({currentResource?.type || 'Hébergement'})
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block">Nombre d'Occupants dans la Chambre :</span>
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {activeDomain === 'hotel'
-                          ? `${hotelAdults} adulte(s) ${hotelChildren > 0 ? `+ ${hotelChildren} enfant(s)` : ''}`
-                          : `${resortOccupants} occupant(s)`}
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block">Date d'Arrivée (Check-in) :</span>
-                      <span className="font-medium text-slate-900 dark:text-white tabular-nums">{startDate}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block">Date de Départ Prévue (Check-out) :</span>
-                      <span className="font-medium text-slate-900 dark:text-white tabular-nums">{endDate || startDate}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
-                  <div className="font-bold uppercase tracking-wider text-[11px] text-amber-700 dark:text-amber-400">
-                    3. Règlement & Devises / الدفع والعملة
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block">Devise Facturée :</span>
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {paymentCurrency} ({currencySymbols[paymentCurrency] || paymentCurrency})
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block">Montant Facturé :</span>
-                      <span className="font-extrabold text-slate-900 dark:text-white tabular-nums">
-                        {priceInPaymentCurrency.toLocaleString()} {currencySymbols[paymentCurrency] || paymentCurrency}
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block">Contre-valeur DZD (DA) :</span>
-                      <span className="font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                        {priceInDzd.toLocaleString()} DA
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Signatures */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-dashed border-slate-300 dark:border-slate-700">
-                  <div className="h-20 border border-slate-300 dark:border-slate-700 rounded-lg p-2 flex flex-col justify-between">
-                    <span className="text-[10px] text-slate-500 uppercase font-bold">
-                      Signature du Séjournant / تأشيرة النزيل
-                    </span>
-                    <span className="text-[10px] text-slate-400 italic">Mention "Lu et approuvé"</span>
-                  </div>
-                  <div className="h-20 border border-slate-300 dark:border-slate-700 rounded-lg p-2 flex flex-col justify-between">
-                    <span className="text-[10px] text-slate-500 uppercase font-bold">
-                      Cachet & Visa de l'Hôtel / خاتم المؤسسة الفندقية
-                    </span>
-                    <span className="text-[10px] text-slate-400 italic">Réceptionniste de service</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-3 sm:px-5 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                Formulaire conforme au Décret exécutif n° 08-364 relatif aux établissements hôteliers.
-              </span>
-              <div className="flex flex-col-reverse min-[360px]:flex-row items-stretch min-[360px]:items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowPoliceSheetModal(false)}
-                  className="min-h-11 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 text-xs font-semibold cursor-pointer"
-                >
-                  Fermer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="min-h-11 px-4 py-2 bg-slate-800 dark:bg-slate-200 hover:bg-slate-700 dark:hover:bg-slate-300 text-white dark:text-slate-900 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Printer size={14} />
-                  <span>Imprimer la Fiche</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <PoliceSheetModal
+        isOpen={showPoliceSheetModal}
+        onClose={() => setShowPoliceSheetModal(false)}
+        language={language}
+        establishmentProfile={establishmentProfile}
+        bookingId={bookingConfirmation?.id ?? selectedBooking?.id}
+        activeDomain={activeDomain}
+        currentResource={currentResource}
+        guestName={guestName}
+        guestPhone={guestPhone}
+        guestEmail={guestEmail}
+        guestType={guestType}
+        foreignNationality={foreignNationality}
+        idPieceType={idPieceType}
+        idPieceNumber={idPieceNumber}
+        algerianIdType={algerianIdType}
+        algerianIdNumber={algerianIdNumber}
+        passportNumber={passportNumber}
+        idDocumentExpiryDate={idDocumentExpiryDate}
+        specialAuthorizationDesc={specialAuthorizationDesc}
+        wilayaOfOrigin={wilayaOfOrigin}
+        visaNumber={visaNumber}
+        visaExpiryDate={visaExpiryDate}
+        entryDateInCountry={entryDateInCountry}
+        startDate={startDate}
+        endDate={endDate || startDate}
+        checkInTime={checkInTime}
+        checkOutTime={checkOutTime}
+        calculatedDays={calculatedDays}
+        hotelAdults={hotelAdults}
+        hotelChildren={hotelChildren}
+        resortOccupants={resortOccupants}
+        adultGuests={adultGuests}
+        paymentCurrency={paymentCurrency}
+        currencySymbol={currencySymbols[paymentCurrency] || paymentCurrency}
+        priceInPaymentCurrency={priceInPaymentCurrency}
+        priceInDzd={priceInDzd}
+        paymentMethodType={paymentMethodType}
+      />
 
       {roomStatusAlert && (
         <div className="fixed inset-0 z-[12000] flex items-center justify-center p-4 bg-black/70 pms-modal-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="room-status-alert-title">

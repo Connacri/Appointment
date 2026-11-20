@@ -221,14 +221,14 @@ export const TopBar: React.FC = () => {
       )}
 
       {/* ROW 1: Main Toolbar (Left tools, Tablet/Desktop search, Right actions) */}
-      <div className="w-full flex items-center justify-between gap-1 sm:gap-2 min-w-0 overflow-visible">
+      <div className="w-full flex items-center justify-between gap-1.5 sm:gap-2 min-w-0 overflow-visible">
         {/* LEFT SECTION: Hamburger (mobile), Secteur dropdown, Role dropdown */}
-        <div className="pms-app-topbar-left flex items-center gap-1.5 min-w-0 shrink-0 overflow-visible">
+        <div className="pms-app-topbar-left flex items-center gap-1 sm:gap-1.5 flex-1 min-w-0 overflow-visible">
           {/* Mobile Sidebar Hamburger Toggle */}
           <button
             type="button"
             onClick={() => setIsSidebarMobileOpen(!isSidebarMobileOpen)}
-            className="md:hidden w-9 h-9 flex items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors shadow-2xs shrink-0"
+            className="md:hidden w-9 h-9 flex items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors shadow-2xs shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             aria-label={language === 'fr' ? 'Menu' : language === 'ar' ? 'القائمة' : 'Menu'}
           >
             <Menu size={16} />
@@ -240,13 +240,13 @@ export const TopBar: React.FC = () => {
           </span>
 
           {/* Sector dropdown seeded only from the real local building inventory */}
-          <div className="relative shrink-0 overflow-visible" ref={sectorMenuRef}>
+          <div className="relative min-w-0 shrink overflow-visible" ref={sectorMenuRef}>
             <button
               type="button"
               onClick={toggleSectorMenu}
               aria-haspopup="menu"
               aria-expanded={isSectorMenuOpen}
-              className="h-9 px-2.5 sm:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="h-9 max-w-full min-w-0 px-2 sm:px-2.5 md:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1 sm:gap-1.5 cursor-pointer shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               title={selectedBuilding
                 ? `${getTranslation('sectorSelectBuilding', language)} : ${capitalizeFirstLetter(selectedBuilding.name[language] || selectedBuilding.name.fr)}`
                 : getTranslation('sectorSelectBuilding', language)}
@@ -258,7 +258,7 @@ export const TopBar: React.FC = () => {
               ) : (
                 <Palmtree size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
               )}
-              <span className="truncate max-w-[85px] sm:max-w-[150px]">
+              <span className="truncate min-w-0 max-w-[115px] sm:max-w-[140px] lg:max-w-[165px]">
                 {selectedBuilding
                   ? capitalizeFirstLetter(selectedBuilding.name[language] || selectedBuilding.name.fr)
                   : currentDomain === 'hotel'
@@ -272,7 +272,7 @@ export const TopBar: React.FC = () => {
               <div
                 role="menu"
                 dir={isRtl ? 'rtl' : 'ltr'}
-                className="absolute top-full mt-1.5 left-0 rtl:left-auto rtl:right-0 w-56 max-h-[70vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-1.5 z-[100] text-xs pms-dropdown"
+                className="absolute top-full mt-1.5 left-0 rtl:left-auto rtl:right-0 w-56 max-w-[calc(100vw-1rem)] max-h-[70vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-1.5 z-[100] text-xs pms-dropdown"
               >
                 <div className="px-2 py-1 text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 mb-1">
                   {getTranslation('sectorSelectBuilding', language)}
@@ -360,20 +360,22 @@ export const TopBar: React.FC = () => {
           </div>
 
           {/* RÔLE ACTIF label (Desktop) */}
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 shrink-0 ml-1 hidden xl:inline">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 shrink-0 ms-1 hidden xl:inline">
             {language === 'fr' ? 'RÔLE ACTIF :' : language === 'ar' ? 'الدور النشط :' : 'ACTIVE ROLE :'}
           </span>
 
           {/* Role Dropdown Menu */}
-          <div className="relative shrink-0 overflow-visible" ref={roleMenuRef}>
+          <div className="relative min-w-0 shrink overflow-visible" ref={roleMenuRef}>
             <button
               type="button"
               onClick={toggleRoleMenu}
-              className="h-9 px-2.5 sm:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors shrink-0"
+              aria-haspopup="menu"
+              aria-expanded={isRoleMenuOpen}
+              className="h-9 max-w-full min-w-0 px-2 sm:px-2.5 md:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1 sm:gap-1.5 cursor-pointer shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               title={language === 'fr' ? 'Changer de rôle actif' : language === 'ar' ? 'تغيير الدور النشط' : 'Change active role'}
             >
               <CurrentRoleIcon size={14} className="text-amber-500 shrink-0" />
-              <span className="truncate max-w-[85px] sm:max-w-none">
+              <span className="truncate min-w-0 max-w-[115px] sm:max-w-[140px] lg:max-w-none">
                 {currentRoleObj.label[language] || currentRoleObj.label.fr}
               </span>
               <ChevronDown size={13} className={`text-slate-400 shrink-0 transition-transform ${isRoleMenuOpen ? 'rotate-180' : ''}`} />
@@ -381,8 +383,9 @@ export const TopBar: React.FC = () => {
 
             {isRoleMenuOpen && (
               <div
+                role="menu"
                 dir={isRtl ? 'rtl' : 'ltr'}
-                className="absolute top-full mt-1.5 left-0 rtl:left-auto rtl:right-0 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-1.5 z-[100] text-xs pms-dropdown"
+                className="absolute top-full mt-1.5 right-0 sm:right-auto sm:left-0 rtl:right-auto rtl:left-0 sm:rtl:left-auto sm:rtl:right-0 w-52 max-w-[calc(100vw-1rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-1.5 z-[100] text-xs pms-dropdown"
               >
                 <div className="px-2 py-1 text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 mb-1">
                   {language === 'fr' ? 'Sélectionnez un rôle' : language === 'ar' ? 'اختر الدور' : 'Select a role'}
@@ -394,18 +397,20 @@ export const TopBar: React.FC = () => {
                     <button
                       key={role.id}
                       type="button"
+                      role="menuitemradio"
+                      aria-checked={isSelected}
                       onClick={() => {
                         setCurrentRole(role.id);
                         setIsRoleMenuOpen(false);
                       }}
-                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left rtl:text-right transition-colors cursor-pointer ${
+                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left rtl:text-right transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                         isSelected
                           ? 'bg-blue-600 text-white font-bold'
                           : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       <IconComponent size={14} className={isSelected ? 'text-white' : 'text-slate-500 dark:text-slate-400'} />
-                      <span className="flex-1">{role.label[language] || role.label.fr}</span>
+                      <span className="flex-1 truncate">{role.label[language] || role.label.fr}</span>
                       {isSelected && <CheckCircle2 size={13} className="text-white ml-auto rtl:ml-0 rtl:mr-auto" />}
                     </button>
                   );
@@ -416,7 +421,7 @@ export const TopBar: React.FC = () => {
         </div>
 
         {/* CENTER SECTION: Tablet & Desktop Global Search */}
-        <div className="pms-app-topbar-search hidden md:flex relative items-center h-9 md:w-[88px] md:max-w-[88px] lg:w-36 lg:max-w-[160px] xl:w-44 xl:max-w-[190px] 2xl:w-56 2xl:max-w-[240px] shrink-0">
+        <div className="pms-app-topbar-search hidden md:flex relative items-center h-9 min-w-[90px] flex-1 max-w-[130px] lg:max-w-[170px] xl:max-w-[200px] 2xl:max-w-[240px]">
           <div className="relative flex min-w-0 flex-1 items-center h-9">
             <Search size={14} className="absolute left-2.5 rtl:left-auto rtl:right-2.5 text-slate-400 pointer-events-none" />
             <input
@@ -439,22 +444,22 @@ export const TopBar: React.FC = () => {
           </div>
         </div>
 
-        {/* RIGHT SECTION: Force Sync Supabase, Refresh, Local Storage, USB, Currency, + Nouveau, Options [⋮] */}
+        {/* RIGHT SECTION: Primary actions & More menu (streamlined per breakpoint to prevent overflow) */}
         <div className="pms-app-topbar-actions flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-visible">
-          {/* Global reservation finder: filter + elastic search across guest and room details */}
+          {/* Global reservation finder: shown in Row 1 from sm+ and in Row 2 beside Search on <sm */}
           <button
             type="button"
             data-testid="open-booking-finder"
             onClick={() => setIsBookingFinderOpen(true)}
-            className="flex h-9 w-9 items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto sm:px-2.5 cursor-pointer"
+            className="hidden sm:flex h-9 w-9 2xl:w-auto 2xl:px-2.5 items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer shrink-0"
             title={getTranslation('bookingFinderOpen', language)}
             aria-label={getTranslation('bookingFinderOpen', language)}
           >
             <CalendarSearch size={14} className="shrink-0" />
-            <span className="hidden xl:inline">{getTranslation('bookingFinderOpen', language)}</span>
+            <span className="hidden 2xl:inline text-xs font-semibold whitespace-nowrap">{getTranslation('bookingFinderOpen', language)}</span>
           </button>
 
-          {/* Bidirectional Supabase Auto-Sync + Force Sync Button */}
+          {/* Bidirectional Supabase Auto-Sync + Force Sync Button (Row 1 from sm+, Row 2 on <sm) */}
           {(() => {
             const syncBusy = cloudSyncStatus.isSyncing;
             const pendingCount = cloudSyncStatus.pendingCount;
@@ -493,7 +498,7 @@ export const TopBar: React.FC = () => {
                 data-testid="force-supabase-sync-btn"
                 disabled={syncBusy || isOffline}
                 onClick={() => void forceSupabaseSync()}
-                className={`h-9 w-9 sm:w-auto sm:px-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-2xs shrink-0 whitespace-nowrap relative ${toneClass}`}
+                className={`hidden sm:flex h-9 w-9 xl:w-auto xl:px-2.5 rounded-xl border text-xs font-semibold items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-2xs shrink-0 whitespace-nowrap relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${toneClass}`}
                 title={titleText}
                 aria-label={`${getTranslation('supabaseForceSyncBtn', language)} (${statusText})`}
               >
@@ -506,7 +511,7 @@ export const TopBar: React.FC = () => {
                 ) : (
                   <Cloud size={14} className="shrink-0" />
                 )}
-                <span className="hidden lg:inline">
+                <span className="hidden xl:inline">
                   {syncBusy
                     ? getTranslation('supabaseSyncing', language)
                     : getTranslation('supabaseForceSyncBtn', language)}
@@ -520,14 +525,14 @@ export const TopBar: React.FC = () => {
             );
           })()}
 
-          <button type="button" disabled={isRefreshing} onClick={() => { setIsRefreshing(true); window.dispatchEvent(new CustomEvent('appointment-refresh-request', { detail: { onComplete: () => setIsRefreshing(false) } })); }} className="hidden sm:flex h-9 w-9 2xl:w-auto 2xl:px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 text-slate-700 dark:text-slate-200 text-xs font-semibold items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0" title={language === 'fr' ? 'Actualiser toutes les pages' : language === 'ar' ? 'تحديث جميع الصفحات' : 'Refresh all pages'} aria-label={language === 'fr' ? 'Actualiser' : language === 'ar' ? 'تحديث' : 'Refresh'}>
+          <button type="button" disabled={isRefreshing} onClick={() => { setIsRefreshing(true); window.dispatchEvent(new CustomEvent('appointment-refresh-request', { detail: { onComplete: () => setIsRefreshing(false) } })); }} className="hidden lg:flex h-9 w-9 2xl:w-auto 2xl:px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 text-slate-700 dark:text-slate-200 text-xs font-semibold items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" title={language === 'fr' ? 'Actualiser toutes les pages' : language === 'ar' ? 'تحديث جميع الصفحات' : 'Refresh all pages'} aria-label={language === 'fr' ? 'Actualiser' : language === 'ar' ? 'تحديث' : 'Refresh'}>
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''}/><span className="hidden 2xl:inline">{language === 'fr' ? 'Actualiser' : language === 'ar' ? 'تحديث' : 'Refresh'}</span>
           </button>
           {/* Local database sync indicator */}
           <button
             type="button"
             onClick={() => setIsIndexedDBOpen(true)}
-            className="hidden sm:flex h-9 px-2 2xl:px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0"
+            className="hidden lg:flex h-9 px-2 2xl:px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             title={`${
               language === 'fr' ? 'Stockage local' : language === 'ar' ? 'التخزين المحلي' : 'Local storage'
             }: ${
@@ -547,7 +552,7 @@ export const TopBar: React.FC = () => {
           <button
             type="button"
             onClick={handlePhysicalUsbClick}
-            className={`hidden md:flex h-9 px-2 xl:px-2.5 rounded-xl border text-xs font-semibold items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 ${
+            className={`hidden lg:flex h-9 px-2 xl:px-2.5 rounded-xl border text-xs font-semibold items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               usbStatus === 'connected'
                 ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
                 : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
@@ -577,7 +582,7 @@ export const TopBar: React.FC = () => {
               />
             </span>
             <Usb size={14} />
-            <span className="whitespace-nowrap hidden lg:inline">
+            <span className="whitespace-nowrap hidden xl:inline">
               USB
               <span className="hidden 2xl:inline">
                 {' '}• {usbStatus === 'connected' ? (usbDevice?.readerLabel ?? (language === 'fr' ? 'Prêt' : language === 'ar' ? 'جاهز' : 'Ready')) : (language === 'fr' ? 'Connecter' : language === 'ar' ? 'اتصال' : 'Connect')}
@@ -593,6 +598,7 @@ export const TopBar: React.FC = () => {
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
+              aria-label={language === 'fr' ? 'Devise globale' : language === 'ar' ? 'العملة العامة' : 'Global currency'}
               className="bg-transparent text-amber-600 dark:text-amber-400 font-bold focus:outline-none cursor-pointer"
               title={language === 'fr' ? "Changer la devise globale de l'établissement" : language === 'ar' ? 'تغيير العملة العامة للمنشأة' : 'Change establishment global currency'}
             >
@@ -614,8 +620,9 @@ export const TopBar: React.FC = () => {
               setNewBookingInitialSlot(null);
               setIsNewBookingModalOpen(true);
             }}
-            className="h-9 px-2.5 sm:px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap shrink-0"
+            className="h-9 w-9 lg:w-auto lg:px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             title={language === 'fr' ? 'Créer une nouvelle réservation' : language === 'ar' ? 'إنشاء حجز جديد' : 'Create new booking'}
+            aria-label={language === 'fr' ? 'Nouvelle réservation' : language === 'ar' ? 'حجز جديد' : 'New booking'}
           >
             <Plus size={15} strokeWidth={2.5} />
             <span className="hidden lg:inline">{language === 'fr' ? 'Nouveau' : language === 'ar' ? 'حجز جديد' : 'New'}</span>
@@ -626,17 +633,27 @@ export const TopBar: React.FC = () => {
             <button
               type="button"
               onClick={toggleMoreMenu}
-              className="w-9 h-9 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition-colors shadow-2xs shrink-0"
+              aria-haspopup="menu"
+              aria-expanded={isMoreMenuOpen}
+              className="w-9 h-9 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition-colors shadow-2xs shrink-0 relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               title={language === 'fr' ? 'Options supplémentaires' : language === 'ar' ? 'خيارات إضافية' : 'More options'}
               aria-label={language === 'fr' ? 'Options' : language === 'ar' ? 'خيارات' : 'Options'}
             >
               <MoreVertical size={16} />
+              {(cloudSyncStatus.phase === 'error' || cloudSyncStatus.pendingCount > 0) && (
+                <span
+                  className={`sm:hidden absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${
+                    cloudSyncStatus.phase === 'error' ? 'bg-rose-500' : 'bg-amber-500'
+                  }`}
+                />
+              )}
             </button>
 
             {isMoreMenuOpen && (
               <div
+                role="menu"
                 dir={isRtl ? 'rtl' : 'ltr'}
-                className="absolute top-full mt-1.5 right-0 rtl:right-auto rtl:left-0 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-2 z-[100] text-xs space-y-1 pms-dropdown pms-dropdown-end text-slate-700 dark:text-slate-200"
+                className="absolute top-full mt-1.5 right-0 rtl:right-auto rtl:left-0 w-64 max-w-[calc(100vw-1rem)] max-h-[75vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-2 z-[100] text-xs space-y-1 pms-dropdown pms-dropdown-end text-slate-700 dark:text-slate-200"
               >
                 {/* Audio feedback toggle */}
                 <button
@@ -675,7 +692,7 @@ export const TopBar: React.FC = () => {
                   )}
                 </button>
 
-                {/* Mobile-only quick tools (hidden in Row 1 on <640px to prevent clipping) */}
+                {/* Tablet & Mobile quick tools (hidden in Row 1 below lg to prevent clipping) */}
                 <button
                   type="button"
                   onClick={() => {
@@ -683,10 +700,28 @@ export const TopBar: React.FC = () => {
                     window.dispatchEvent(new CustomEvent('appointment-refresh-request', { detail: { onComplete: () => setIsRefreshing(false) } }));
                     setIsMoreMenuOpen(false);
                   }}
-                  className="sm:hidden w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left rtl:text-right"
+                  className="lg:hidden w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left rtl:text-right"
                 >
                   <RefreshCw size={14} className="text-slate-500 shrink-0" />
                   <span>{language === 'fr' ? 'Actualiser toutes les pages' : language === 'ar' ? 'تحديث جميع الصفحات' : 'Refresh all pages'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handlePhysicalUsbClick();
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="lg:hidden w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left rtl:text-right"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <Usb size={14} className={usbStatus === 'connected' ? 'text-emerald-500 shrink-0' : 'text-slate-500 shrink-0'} />
+                    <span className="truncate">
+                      {usbStatus === 'connected'
+                        ? (language === 'fr' ? 'Encodeur proUSB (Connecté)' : language === 'ar' ? 'مبرمج proUSB (متصل)' : 'proUSB Encoder (Connected)')
+                        : (language === 'fr' ? 'Connecter Encodeur USB' : language === 'ar' ? 'توصيل مبرمج USB' : 'Connect USB Encoder')}
+                    </span>
+                  </span>
                 </button>
 
                 <div className="sm:hidden flex items-center justify-between gap-2 px-2.5 py-1.5">
@@ -796,9 +831,9 @@ export const TopBar: React.FC = () => {
         </div>
       </div>
 
-      {/* ROW 2: Mobile Dedicated Search Row ("dans mobile design la barre de recherche sera dans une ligne seule") */}
-      <div className="w-full flex md:hidden items-center min-w-0 pt-0.5">
-        <div className="relative flex min-w-0 w-full items-center">
+      {/* ROW 2: Mobile Dedicated Search & Quick Utility Row */}
+      <div className="w-full flex md:hidden items-center gap-1.5 min-w-0 pt-0.5">
+        <div className="relative flex min-w-0 flex-1 items-center">
           <Search size={14} className="absolute left-2.5 rtl:left-auto rtl:right-2.5 text-slate-400 pointer-events-none" />
           <input
             type="text"
@@ -818,6 +853,58 @@ export const TopBar: React.FC = () => {
             </button>
           )}
         </div>
+
+        {/* Mobile Booking Finder shortcut (<sm only; sm+ uses Row 1 button) */}
+        <button
+          type="button"
+          onClick={() => setIsBookingFinderOpen(true)}
+          className="sm:hidden flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer shrink-0"
+          title={getTranslation('bookingFinderOpen', language)}
+          aria-label={getTranslation('bookingFinderOpen', language)}
+        >
+          <CalendarSearch size={14} className="shrink-0" />
+        </button>
+
+        {/* Mobile Cloud Sync shortcut (<sm only; sm+ uses Row 1 button) */}
+        {(() => {
+          const syncBusy = cloudSyncStatus.isSyncing;
+          const pendingCount = cloudSyncStatus.pendingCount;
+          const phase = cloudSyncStatus.phase;
+          const toneClass = syncBusy
+            ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+            : phase === 'synced'
+            ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300'
+            : phase === 'error'
+            ? 'border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300'
+            : phase === 'pending'
+            ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
+            : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200';
+          return (
+            <button
+              type="button"
+              disabled={syncBusy || isOffline}
+              onClick={() => void forceSupabaseSync()}
+              className={`sm:hidden flex h-9 min-w-9 px-2 items-center justify-center gap-1 rounded-xl border text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${toneClass}`}
+              title={getTranslation('supabaseForceSyncFullBtn', language)}
+              aria-label={getTranslation('supabaseForceSyncFullBtn', language)}
+            >
+              {syncBusy ? (
+                <RefreshCw size={14} className="animate-spin shrink-0" />
+              ) : phase === 'offline' ? (
+                <CloudOff size={14} className="shrink-0" />
+              ) : phase === 'error' || phase === 'pending' ? (
+                <AlertTriangle size={14} className="shrink-0" />
+              ) : (
+                <Cloud size={14} className="shrink-0" />
+              )}
+              {pendingCount > 0 && (
+                <span className="px-1 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-extrabold leading-none">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          );
+        })()}
       </div>
 
       <BookingFinderModal
