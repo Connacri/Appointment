@@ -1147,9 +1147,49 @@ class LockManager {
     booking: { id: string; guestName: string; unitName?: string; resourceName?: string; startDate: string; endDate: string; buildingNo?: number; floorNo?: number },
     operator: string = 'Admin'
   ): Promise<IssuedCardRecord> {
+    // Déduit la source de la chambre : unitName > resourceName > fallback
     const roomSource = booking.unitName || booking.resourceName || '101';
-    const roomSegments = roomSource.split('-').filter(Boolean);
-    const roomNumber = (roomSegments.length > 1 ? roomSegments[roomSegments.length - 1] : roomSource).replace(/\D/g, '') || '101';
+
+    // Extraction robuste du numéro de chambre — gère plusieurs formats sans dépendre de l'import MDB :
+    // - "101" → 101
+    // - "Building-101" ou "101-Block" → 101
+    // - "Chambre 101" / "Room 101" / "Chb 101" → 101
+    // - "A-101" / "Bloc 3 - 101" → 101
+    // - "Ressource 205" → 205
+    let roomNumber: string = '101';
+
+    const numericOnly = roomSource.replace(/\D/g, '');
+    if (numericOnly && numericOnly !== roomSource) {
+      // Il y a des chiffres mélangés avec texte — extraire le plus grand nombre consécutif
+      const numbers = roomSource.match(/\d+/g) || [];
+      if (numbers.length > 0) {
+        roomNumber = Math.max(...numbers.map(n => parseInt(n, 10))).toString();
+      }
+    } else if (roomSource !== '101') {
+      // Format "X-Y" ou texte avec numéro de chambre
+      const roomSegments = roomSource.split('-').filter(Boolean);
+      if (roomSegments.length > 0) {
+        // Essaye le dernier segment d'abord
+        const lastSeg = roomSegments[roomSegments.length - 1];
+        const lastNum = lastSeg.replace(/\D/g, '');
+        if (lastNum) {
+          roomNumber = lastNum;
+        } else {
+          // Essaye de trouver un nombre dans le dernier segment
+          const nums = lastSeg.match(/\d+/g);
+          if (nums && nums.length > 0) {
+            roomNumber = Math.max(...nums.map(n => parseInt(n, 10))).toString();
+          }
+        }
+      }
+      // Si toujours pas de numéro, cherche un nombre quelconque dans la ressource
+      if (roomNumber === '101') {
+        const nums = roomSource.match(/\d+/g);
+        if (nums && nums.length > 0) {
+          roomNumber = Math.max(...nums.map(n => parseInt(n, 10))).toString();
+        }
+      }
+    }
     const startParts = booking.startDate.split('-').map(Number);
     const endParts = booking.endDate.split('-').map(Number);
 
