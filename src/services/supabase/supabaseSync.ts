@@ -173,6 +173,43 @@ export function deriveIdleSyncPhase(params: {
   return 'idle';
 }
 
+/**
+ * Decide whether a sync attempt is redundant and can be skipped without
+ * losing data.
+ *
+ * - Any local work (pending/failed/due Outbox record) always requires a sync,
+ *   regardless of `force`.
+ * - With no local work, a recent verified successful pull means the remote
+ *   snapshot is still fresh: automatic triggers (focus, visibility, periodic
+ *   timer) and rapid repeated manual refreshes can be skipped.
+ * - A stale (or missing) `lastSyncedAt` always allows a pull so that changes
+ *   made in Supabase by another device are still detected.
+ *
+ * Remote change detection necessarily requires a query, so the periodic poll
+ * remains the mechanism that discovers Supabase-side edits (at most one poll
+ * interval late). This helper only removes duplicate work inside that window.
+ */
+export function shouldSkipRedundantSync(params: {
+  force: boolean;
+  summary: OutboxSummary;
+  lastSyncedAt: string | null;
+  nowMs?: number;
+}): boolean {
+  const summary = params.summary;
+  const hasLocalWork =
+    summary.pendingCount > 0 || summary.failedCount > 0 || summary.dueCount > 0;
+  if (hasLocalWork) return false;
+
+  const lastSyncedMs = params.lastSyncedAt ? Date.parse(params.lastSyncedAt) : Number.NaN;
+  if (!Number.isFinite(lastSyncedMs)) return false;
+
+  // Manual refresh is debounced tightly (rapid double clicks / stacked events),
+  // automatic triggers use the full poll interval.
+  const freshnessWindowMs = params.force ? 5_000 : 45_000;
+  const nowMs = params.nowMs ?? Date.now();
+  return nowMs - lastSyncedMs >= 0 && nowMs - lastSyncedMs < freshnessWindowMs;
+}
+
 function sortOutboxForPush(records: OutboxRecord[]): OutboxRecord[] {
   return [...records].sort((a, b) => {
     const pA = ENTITY_PUSH_PRIORITY[a.entity] ?? 99;

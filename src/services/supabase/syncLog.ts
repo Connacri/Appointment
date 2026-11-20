@@ -30,6 +30,7 @@ export type SyncLogKey =
   | 'syncLogVerifying'
   | 'syncLogSynced'
   | 'syncLogPending'
+  | 'syncLogNothingToSync'
   | 'syncLogError';
 
 export interface SyncProgressEvent {

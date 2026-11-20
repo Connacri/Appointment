@@ -87,7 +87,13 @@ into one establishment.
 (`src/services/supabase/syncLog.ts`) consumed by the bottom terminal: `syncLogSynced` is
 emitted only when `fullyVerifiedSynced` is true, while offline, unconfigured,
 unauthenticated, no-workspace, pending and failed states each emit their own event.
-Verified by `tests/cloudRecovery.test.ts` and `tests/supabaseSync.test.ts`.
+Redundant trigger de-duplication is allowed only when the Outbox is empty **and** a verified
+successful sync is still fresh (`shouldSkipRedundantSync`): any pending, failed or due local
+record always forces a push, and a stale or missing `lastSyncedAt` always performs the pull
+so Supabase-side edits from another device remain detectable within one poll interval. A
+skipped attempt keeps `phase: 'synced'` only because both sides were already verified, never
+for an unverified operation. Verified by `tests/cloudRecovery.test.ts` and
+`tests/supabaseSync.test.ts`.
 - Personal-workspace backfill (`src/services/supabase/backfillPlanner.ts`) seeds the remote
   workspace from the real local `EstablishmentProfile` and inventory only. It emits
   establishment → resource group (building) → resource → booking operations with stable,

@@ -50,6 +50,7 @@ import {
   deriveIdleSyncPhase,
   INITIAL_CLOUD_SYNC_STATUS,
   runSupabaseSync,
+  shouldSkipRedundantSync,
   type CloudSyncStatus,
 } from '../services/supabase/supabaseSync';
 import {
@@ -816,6 +817,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const wsId = activeWorkspaceIdRef.current;
     if (!isHydratedRef.current) {
       return emptyReport;
+    }
+
+    // Skip duplicate sync work. Local changes always push; a stale snapshot
+    // always pulls (so remote edits are still discovered). Only a verified
+    // recent successful sync with an empty Outbox is considered redundant.
+    if (!isOfflineRef.current) {
+      try {
+        const summary = await indexedDb.getOutboxSummary(wsId);
+        if (
+          shouldSkipRedundantSync({
+            force,
+            summary,
+            lastSyncedAt: cloudSyncStatusRef.current.lastSyncedAt,
+          })
+        ) {
+          appendSyncLog({ key: 'syncLogNothingToSync', level: 'info' });
+          setCloudSyncStatus((prev) => ({
+            ...prev,
+            phase: 'synced',
+            isSyncing: false,
+            workspaceId: wsId,
+            lastAttemptAt: new Date().toISOString(),
+          }));
+          return { ...emptyReport, sources: [] };
+        }
+      } catch {
+        // En cas d'erreur de lecture Outbox, on tente quand même le sync.
+      }
     }
 
     setCloudSyncStatus((prev) => ({

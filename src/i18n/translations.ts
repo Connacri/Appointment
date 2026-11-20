@@ -1505,6 +1505,11 @@ export const translations = {
     en: 'Not synced yet: {pending} pending, {failed} failed.',
     ar: 'لم تتم المزامنة بعد: {pending} قيد الانتظار، {failed} فشلت.',
   },
+  syncLogNothingToSync: {
+    fr: 'Aucune modification locale ou distante : synchronisation ignorée.',
+    en: 'No local or remote changes: sync skipped.',
+    ar: 'لا توجد تغييرات محلية أو عن بُعد: تم تخطي المزامنة.',
+  },
   syncLogError: {
     fr: 'Erreur de synchronisation : {detail}',
     en: 'Sync error: {detail}',

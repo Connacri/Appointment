@@ -7,6 +7,7 @@ import {
   computeBackoffIso,
   deriveIdleSyncPhase,
   runSupabaseSync,
+  shouldSkipRedundantSync,
   type PulledSupabaseSnapshot,
   type SupabaseSyncAdapter,
 } from '../src/services/supabase/supabaseSync';
@@ -783,4 +784,67 @@ test('a failing telemetry listener cannot change the sync result', async () => {
   });
 
   assert.equal(result.status.phase, 'synced');
+});
+
+test('shouldSkipRedundantSync always syncs when local Outbox has work', () => {
+  const nowMs = Date.parse('2026-11-20T12:00:00.000Z');
+  const base = { nowMs, lastSyncedAt: '2026-11-20T11:59:59.000Z' };
+  for (const summary of [
+    { pendingCount: 1, failedCount: 0, dueCount: 0 },
+    { pendingCount: 0, failedCount: 1, dueCount: 0 },
+    { pendingCount: 0, failedCount: 0, dueCount: 1 },
+  ]) {
+    assert.equal(shouldSkipRedundantSync({ ...base, force: false, summary }), false);
+    assert.equal(shouldSkipRedundantSync({ ...base, force: true, summary }), false);
+  }
+});
+
+test('shouldSkipRedundantSync skips recent clean syncs but never skips a stale snapshot', () => {
+  const nowMs = Date.parse('2026-11-20T12:00:00.000Z');
+  const clean = { pendingCount: 0, failedCount: 0, dueCount: 0 };
+
+  // Automatic triggers are deduped inside the 45s poll window.
+  assert.equal(
+    shouldSkipRedundantSync({
+      force: false,
+      summary: clean,
+      lastSyncedAt: '2026-11-20T11:59:30.000Z',
+      nowMs,
+    }),
+    true,
+  );
+  // A stale snapshot must pull again to discover Supabase-side changes.
+  assert.equal(
+    shouldSkipRedundantSync({
+      force: false,
+      summary: clean,
+      lastSyncedAt: '2026-11-20T11:58:00.000Z',
+      nowMs,
+    }),
+    false,
+  );
+  // No successful sync yet -> always pull.
+  assert.equal(
+    shouldSkipRedundantSync({ force: false, summary: clean, lastSyncedAt: null, nowMs }),
+    false,
+  );
+  // Manual refresh has a tighter dedupe window but still polls on demand.
+  assert.equal(
+    shouldSkipRedundantSync({
+      force: true,
+      summary: clean,
+      lastSyncedAt: '2026-11-20T11:59:59.000Z',
+      nowMs,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldSkipRedundantSync({
+      force: true,
+      summary: clean,
+      lastSyncedAt: '2026-11-20T11:59:30.000Z',
+      nowMs,
+    }),
+    false,
+  );
 });
