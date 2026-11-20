@@ -988,44 +988,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (
       !isCoreDataHydrated ||
       !workspace.activeWorkspaceId ||
-      !hasLoadedRemoteSnapshot ||
       backfillRunRef.current
     ) {
       return;
     }
     const profile = establishmentProfile;
-    if (!profile.name.trim()) return;
-
-    const plan = planBackfill({
-      profile,
-      workspaceId: workspace.activeWorkspaceId,
-      groups: latestGroupsRef.current,
-      bookings: latestBookingsRef.current,
-      remoteEstablishments: establishments,
-      selectedEstablishmentId,
-    });
-
-    if (!plan.ok || !plan.establishmentId) {
-      plan.warnings.forEach((warning) => console.warn('[Backfill]', warning));
-      appendSyncLog({
-        key: 'syncLogBackfillSkipped',
-        level: 'warn',
-        detail: plan.warnings.join(' ; '),
-      });
-      return;
-    }
-
-    backfillRunRef.current = true;
-    const establishmentId = plan.establishmentId;
-
-    // Persist the real establishment id (derived once, or the existing remote id)
-    // so a later rename updates the same remote establishment instead of
-    // deriving a new id and creating a duplicate.
-    if (profile.id !== establishmentId) {
-      setEstablishmentProfile({ ...profile, id: establishmentId });
-    }
+    // Les champs non renseignés sont comblés par défaut en attendant que
+    // l'utilisateur modifie le profil dans le modal d'établissement.
+    const profileName = profile.name.trim() || 'Établissement';
 
     (async () => {
+      // Résoudre les établissements distants existants pour éviter d'en créer un
+      // second. On tente une lecture légère même sans snapshot complet préalable.
+      let remoteEstablishments: HotelEstablishment[] = establishments;
+      if (!hasLoadedRemoteSnapshot) {
+        try {
+          remoteEstablishments =
+            (await listEstablishments(workspace.activeWorkspaceId).catch(() => [])) ??
+            [];
+        } catch {
+          remoteEstablishments = [];
+        }
+      }
+
+      const plan = planBackfill({
+        profile: { ...profile, name: profileName },
+        workspaceId: workspace.activeWorkspaceId,
+        groups: latestGroupsRef.current,
+        bookings: latestBookingsRef.current,
+        remoteEstablishments,
+        selectedEstablishmentId,
+      });
+
+      if (!plan.ok || !plan.establishmentId) {
+        plan.warnings.forEach((warning) => console.warn('[Backfill]', warning));
+        appendSyncLog({
+          key: 'syncLogBackfillSkipped',
+          level: 'warn',
+          detail: plan.warnings.join(' ; '),
+        });
+        return;
+      }
+
+      backfillRunRef.current = true;
+      const establishmentId = plan.establishmentId;
+
+      // Persist the real establishment id (derived once, or the existing remote id)
+      // so a later rename updates the same remote establishment instead of
+      // deriving a new id and creating a duplicate.
+      if (profile.id !== establishmentId) {
+        setEstablishmentProfile({ ...profile, id: establishmentId });
+      }
+
       try {
         // 1. Establishment (root, pushed first by Outbox priority).
         for (const operation of plan.operations) {
