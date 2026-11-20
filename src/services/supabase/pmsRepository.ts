@@ -99,9 +99,13 @@ export async function saveEstablishment(workspaceId: WorkspaceId, item: HotelEst
   return unwrap(await db.from('establishments').upsert({ id:item.id, workspace_id:workspaceId, code:item.code, name:item.name, city:item.city, stars:item.stars, tax_rate:item.taxRate, check_in_time:item.checkInTime, check_out_time:item.checkOutTime, facilities:item.facilities, domain:item.domain ?? 'hotel', currency:item.currency ?? 'DZD' }).select().single());
 }
 
+// Two foreign keys link resources to resource_groups. The composite tenant FK
+// also matches workspace_id, so it is the only relationship safe for scoped pulls.
+export const RESOURCE_GROUPS_WITH_RESOURCES_SELECT = '*,resources!resources_group_tenant_fk(*)';
+
 export async function listResourceGroups(workspaceId: WorkspaceId, establishmentId?: string): Promise<ResourceGroup[]> {
   const db = requireSupabase();
-  let q = db.from('resource_groups').select('*,resources(*)').eq('workspace_id',workspaceId).is('deleted_at',null).order('sort_order');
+  let q = db.from('resource_groups').select(RESOURCE_GROUPS_WITH_RESOURCES_SELECT).eq('workspace_id',workspaceId).is('deleted_at',null).order('sort_order');
   if (establishmentId) q = q.eq('establishment_id',establishmentId);
   const {data,error} = await q;
   if (error) throw new Error(error.message);

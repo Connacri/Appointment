@@ -70,6 +70,10 @@ into one establishment.
 - Deletion follows explicit retention/tombstone rules; never cascade-delete history by
   accident.
 - Every exposed Supabase table has RLS. Client-side filtering is not security.
+- `resource_groups` and `resources` have two foreign keys. Repository reads that embed
+  resources must name `resources!resources_group_tenant_fk(*)` so PostgREST joins on the
+  composite `(group_id, workspace_id)` relationship and cannot cross a workspace boundary.
+  An unqualified `resources(*)` embed is ambiguous (`PGRST201`) and is not aligned.
 - Offline mutations are durable and idempotent. Outbox pending is not synced; only a
   verified server ACK confirms synchronization.
 - Imports preserve source IDs/provenance and report orphan/ambiguous rows.
