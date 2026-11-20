@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
+import { capitalizeFirstLetter } from '../utils/text';
 import { lockManager, UsbConnectionStatus, UsbDeviceInfo } from '../locks/lockManager';
 import { indexedDb, IndexedDbSyncState } from '../db/indexedDb';
 import { UserRole } from '../types/booking';
@@ -244,7 +245,7 @@ export const TopBar: React.FC = () => {
               aria-expanded={isSectorMenuOpen}
               className="h-9 px-2.5 sm:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               title={selectedBuilding
-                ? `${getTranslation('sectorSelectBuilding', language)} : ${selectedBuilding.name[language] || selectedBuilding.name.fr}`
+                ? `${getTranslation('sectorSelectBuilding', language)} : ${capitalizeFirstLetter(selectedBuilding.name[language] || selectedBuilding.name.fr)}`
                 : getTranslation('sectorSelectBuilding', language)}
             >
               {selectedBuilding ? (
@@ -256,7 +257,7 @@ export const TopBar: React.FC = () => {
               )}
               <span className="truncate max-w-[85px] sm:max-w-[150px]">
                 {selectedBuilding
-                  ? (selectedBuilding.name[language] || selectedBuilding.name.fr)
+                  ? capitalizeFirstLetter(selectedBuilding.name[language] || selectedBuilding.name.fr)
                   : currentDomain === 'hotel'
                     ? (language === 'fr' ? 'Hôtel' : language === 'ar' ? 'فندق' : 'Hotel')
                     : (language === 'fr' ? 'Resort' : language === 'ar' ? 'منتجع' : 'Resort')}
@@ -322,7 +323,7 @@ export const TopBar: React.FC = () => {
                         </button>
                         {options.map((group) => {
                           const isSelected = selectedBuildingGroupId === group.id;
-                          const buildingName = group.name[language] || group.name.fr;
+                          const buildingName = capitalizeFirstLetter(group.name[language] || group.name.fr);
                           return (
                             <button
                               key={group.id}
