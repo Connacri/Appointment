@@ -53,7 +53,7 @@ The repository configuration does not automatically register a connector in a Ch
 3. Add a custom connector using this URL:
 
 ```text
-https://mcp.supabase.com/mcp?project_ref=vkmgakmujipnpjlawjqm&read_only=false&features=database%2Cdebugging%2Cdevelopment%2Cdocs%2Cfunctions
+https://mcp.supabase.com/mcp?project_ref=vkmgakmujipnpjlawjqm&read_only=true&features=database%2Cdebugging%2Cdevelopment%2Cdocs%2Cfunctions
 ```
 
 4. Complete Supabase's browser-based OAuth flow and authorize access to the organization containing the Appointment project.
