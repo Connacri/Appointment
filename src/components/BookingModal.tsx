@@ -30,6 +30,8 @@ import {
   History,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { getTranslation } from '../i18n/translations';
+import { isValidBookingDateRange } from '../utils/bookingValidation';
 import { BookingStatus, DomainType, TimelineBooking, ResourceItem } from '../types/booking';
 import { domainConfigs } from '../data/mockData';
 import { statusConfig } from './LegendBar';
@@ -634,15 +636,20 @@ export const BookingModal: React.FC = () => {
       return;
     }
     if (!guestName.trim()) return;
+    const effectiveEndDate = endDate || startDate;
+    if (!isValidBookingDateRange(startDate, effectiveEndDate)) {
+      setConflictError(getTranslation('bookingInvalidDateRange', language));
+      return;
+    }
     if (activeDomain === 'hotel') {
       const startAt = new Date(`${startDate}T${checkInTime}:00`).getTime();
-      const endAt = new Date(`${endDate || startDate}T${checkOutTime}:00`).getTime();
+      const endAt = new Date(`${effectiveEndDate}T${checkOutTime}:00`).getTime();
       if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || endAt <= startAt) {
         setConflictError('L’heure de départ doit être postérieure à l’heure d’arrivée.');
         return;
       }
     }
-    if (activeDomain === 'hotel' && checkConflict(resourceId, startDate, endDate || startDate, selectedBooking?.id, checkInTime, checkOutTime)) {
+    if (activeDomain === 'hotel' && checkConflict(resourceId, startDate, effectiveEndDate, selectedBooking?.id, checkInTime, checkOutTime)) {
       setConflictError('Cette chambre n’est pas disponible sur ce créneau. Vérifiez les heures ou choisissez une autre chambre.');
       return;
     }
@@ -696,7 +703,7 @@ export const BookingModal: React.FC = () => {
         guestEmail,
         guestPhone,
         startDate,
-        endDate: endDate || startDate,
+        endDate: effectiveEndDate,
         checkInTime,
         checkOutTime,
         status,
@@ -741,7 +748,7 @@ export const BookingModal: React.FC = () => {
         {
           timestamp: nowIso,
           modifiedBy: currentUserName,
-          changes: `Création du dossier de réservation (${startDate} au ${endDate || startDate})`,
+          changes: `Création du dossier de réservation (${startDate} au ${effectiveEndDate})`,
         },
       ];
 
@@ -754,7 +761,7 @@ export const BookingModal: React.FC = () => {
         guestPhone:
           guestPhone || (guestType === 'algerian' ? '+213 550 12 34 56' : '+33 6 00 00 00 00'),
         startDate,
-        endDate: endDate || startDate,
+        endDate: effectiveEndDate,
         checkInTime,
         checkOutTime,
         status,

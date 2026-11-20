@@ -110,7 +110,13 @@ for an unverified operation. Verified by `tests/cloudRecovery.test.ts` and
   shape; the snake_case mapping remains in `pmsRepository`. Values are kept inside the
   remote check constraints: `spa_clinic` (no remote equivalent) is stored as `other`, and
   free-text check-in/out times are normalized to `HH:MM` with a safe default instead of
-  failing every retry. Verified by `tests/backfillPlanner.test.ts`.
+  failing every retry. Same-day stays are valid when check-out time follows check-in time,
+  so migration `20261120122449` replaces the remote `bookings_check` constraint with
+  `end_date >= start_date`; an end date before the start date is rejected by
+  `isValidBookingDateRange` in the booking form and skipped with a warning by the backfill
+  planner. The generated types were regenerated and are unchanged because a CHECK
+  constraint does not alter table or column types. Verified by
+  `tests/bookingValidation.test.ts` and `tests/backfillPlanner.test.ts`.
 - Remote booking reads are paginated: `listBookings` pages through
   `listBookingsWindow` (`idx_bookings_calendar`, overlap-safe `start_date`/`end_date`
   bounds, narrow projection, deterministic `start_date,id` ordering, `.range()`) so a
@@ -172,8 +178,9 @@ or SQL migrations, the same change set must include:
 - a versioned SQL migration whenever remote schema or constraints change.
 
 The CI gate enforces this change-set discipline. A migration that changes only RLS policies
-or grants and therefore cannot alter generated types must declare that explicitly with
-`-- data-contract: policy-only` as its first line; the gate then skips the generated-types
+or grants must declare `-- data-contract: policy-only` as its first line. A migration that
+changes only a CHECK constraint and therefore cannot alter generated types must declare
+`-- data-contract: constraint-only` as its first line. Either marker skips the generated-types
 requirement for that migration but still requires tests and this document. Typecheck,
 regression tests and production build remain separate gates. A passing static gate does not
 replace a live schema diff or RLS integration test.
@@ -196,6 +203,13 @@ guard, not completed multi-building support.
 
 The local building selector, Gantt bar geometry fix and sync terminal do not change this
 alignment status; they only read existing local inventory and report observed sync events.
+
+At the last live audit the remote `bookings_check` constraint was still
+`CHECK ((end_date > start_date))`, so same-day bookings were rejected by Supabase. Migration
+`20261120122449` is versioned locally and the client now validates the same rule, but the
+migration had not been applied remotely because the project-scoped MCP connection is
+read-only and the Supabase CLI is not linked in this environment. Same-day Force sync will
+keep failing until that migration is applied with a write-enabled, owner-reviewed path.
 
 Update this section only after verifying local schema, migrations, live remote schema,
 generated types, repositories, RLS and tests together.

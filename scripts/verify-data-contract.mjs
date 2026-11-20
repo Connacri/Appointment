@@ -41,12 +41,12 @@ if (has(sourceDataPaths) && !has(/^tests\/.*\.(test|spec)\.[cm]?[jt]sx?$/)) {
 }
 const changedMigrations = changed.filter((file) => /^supabase\/migrations\/\d+.*\.sql$/.test(file));
 const generatedTypesChanged = changed.includes('src/services/supabase/database.types.ts');
-// A policy-only migration changes RLS/grants, not the table or column shape
-// represented by generated types. It must declare that explicitly; every
-// schema-affecting migration still requires regenerated types in the same set.
-const isPolicyOnlyMigration = (file) =>
-  /^--\s*data-contract:\s*policy-only\b/m.test(readFileSync(file, 'utf8'));
-const schemaMigrations = changedMigrations.filter((file) => !isPolicyOnlyMigration(file));
+// Policy-only and constraint-only migrations cannot alter the table or column
+// shape represented by generated types. They must declare that explicitly; every
+// other schema-affecting migration still requires regenerated types in the same set.
+const isNoTypeChangeMigration = (file) =>
+  /^--\s*data-contract:\s*(policy-only|constraint-only)\b/m.test(readFileSync(file, 'utf8'));
+const schemaMigrations = changedMigrations.filter((file) => !isNoTypeChangeMigration(file));
 if (schemaMigrations.length > 0 && !generatedTypesChanged) {
   errors.push('A remote SQL migration changed the schema: regenerate and commit src/services/supabase/database.types.ts.');
 }
@@ -63,4 +63,4 @@ if (errors.length) {
 console.log('Data-contract change-set validation passed.');
 console.log('Changed files:');
 for (const file of changed.filter((file) => dataPaths.test(file))) console.log(' - ' + file);
-console.log('Note: this gate enforces tests, migration/type generation and contract documentation; a policy-only migration must declare "-- data-contract: policy-only". It does not replace live PostgreSQL schema-diff or RLS integration tests.');
+console.log('Note: this gate enforces tests, migration/type generation and contract documentation; migrations that cannot change generated types must declare "-- data-contract: policy-only" or "-- data-contract: constraint-only". It does not replace live PostgreSQL schema-diff or RLS integration tests.');

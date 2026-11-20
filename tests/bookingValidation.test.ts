@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  isValidBookingDateRange,
   isValidCalendarDate,
   shouldMarkPaymentAsPaid,
 } from '../src/utils/bookingValidation';
@@ -15,6 +16,13 @@ test('rejects impossible or non-ISO calendar dates', () => {
   assert.equal(isValidCalendarDate('2025-02-29'), false);
   assert.equal(isValidCalendarDate('02/11/2026'), false);
   assert.equal(isValidCalendarDate('2026-13-01'), false);
+});
+
+test('allows same-day bookings but rejects an end date before the start date', () => {
+  assert.equal(isValidBookingDateRange('2026-11-20', '2026-11-20'), true);
+  assert.equal(isValidBookingDateRange('2026-11-20', '2026-11-21'), true);
+  assert.equal(isValidBookingDateRange('2026-11-21', '2026-11-20'), false);
+  assert.equal(isValidBookingDateRange('2026-11-20', 'invalid'), false);
 });
 
 test('pending payment stays pending when cash was not received', () => {

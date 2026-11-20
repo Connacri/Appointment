@@ -27,6 +27,7 @@ import type {
   TimelineBooking,
 } from '../../types/booking';
 import { capitalizeFirstLetter } from '../../utils/text';
+import { isValidBookingDateRange } from '../../utils/bookingValidation';
 
 const DEMO_GROUP_IDS = new Set(['demo-group-1', 'demo-group-2', 'demo-group-3']);
 const DEMO_RESOURCE_IDS = new Set(['demo-room-101', 'demo-room-102', 'demo-room-103']);
@@ -386,6 +387,13 @@ export function planBackfill({
   for (const booking of bookings) {
     if (isDemoBooking(booking)) {
       skippedBookings += 1;
+      continue;
+    }
+    if (!isValidBookingDateRange(booking.startDate, booking.endDate || booking.startDate)) {
+      skippedBookings += 1;
+      warnings.push(
+        `Réservation ${booking.id} ignorée : dates invalides (${booking.startDate} → ${booking.endDate || booking.startDate}).`,
+      );
       continue;
     }
     if (!booking.resourceId || !localResourceIds.has(booking.resourceId)) {

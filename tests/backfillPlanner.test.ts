@@ -258,6 +258,25 @@ test('backfill skips demo records and bookings without a local resource', () => 
   assert.ok(plan.warnings.some((warning) => warning.includes('missing-room')));
 });
 
+test('backfill keeps same-day bookings but skips reversed date ranges', () => {
+  const plan = planBackfill({
+    profile: makeProfile(),
+    workspaceId,
+    groups: [makeGroup()],
+    bookings: [
+      { ...makeBooking('bkg-same-day'), endDate: '2026-11-20' },
+      { ...makeBooking('bkg-reversed'), startDate: '2026-11-21', endDate: '2026-11-20' },
+    ],
+  });
+
+  assert.equal(plan.ok, true);
+  const bookingOperations = plan.operations.filter((operation) => operation.kind === 'booking');
+  assert.deepEqual(bookingOperations.map((operation) => operation.entityId), ['bkg-same-day']);
+  assert.equal(bookingOperations[0]?.kind === 'booking' && bookingOperations[0].payload.endDate, '2026-11-20');
+  assert.deepEqual(plan.skipped, { groups: 0, resources: 0, bookings: 1 });
+  assert.ok(plan.warnings.some((warning) => warning.includes('bkg-reversed')));
+});
+
 test('backfill attaches local inventory to the single existing remote establishment without duplicating it', () => {
   const plan = planBackfill({
     profile: makeProfile(),

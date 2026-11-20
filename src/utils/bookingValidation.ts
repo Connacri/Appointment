@@ -18,6 +18,15 @@ export const isValidCalendarDate = (value: string): boolean => {
 };
 
 /**
+ * Same-day stays are valid when check-out time is after check-in time; the
+ * remote `bookings_check` constraint only requires end_date >= start_date.
+ * An end date before the start date is never valid and must be rejected before
+ * it reaches the offline Outbox.
+ */
+export const isValidBookingDateRange = (startDate: string, endDate: string): boolean =>
+  isValidCalendarDate(startDate) && isValidCalendarDate(endDate) && endDate >= startDate;
+
+/**
  * A pending payment is settled only when cash receipt was explicitly confirmed.
  * A payment already marked as paid remains paid when check-in is confirmed.
  */
