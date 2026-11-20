@@ -100,11 +100,15 @@ export function stableSlug(value: string): string {
   return `x${(hash >>> 0).toString(36)}`;
 }
 
-export function stableEstablishmentId(profile: EstablishmentProfile): string {
+function safeTrim(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+export function stableEstablishmentId(profile: Partial<EstablishmentProfile> | null | undefined): string {
   const source =
-    profile.id && profile.id !== 'establishment-draft' && profile.id !== 'establishment-cloud'
-      ? profile.id
-      : profile.name.trim();
+    profile?.id && profile.id !== 'establishment-draft' && profile.id !== 'establishment-cloud'
+      ? safeTrim(profile.id)
+      : safeTrim(profile?.name);
   return `est-${stableSlug(source || 'establishment')}`;
 }
 
@@ -114,7 +118,8 @@ export function stableEstablishmentId(profile: EstablishmentProfile): string {
  * offers `spa_clinic`, which has no remote equivalent yet, so it is stored as
  * `other` instead of rejecting the whole backfill on a check violation.
  */
-function remoteEstablishmentType(type: EstablishmentType): EstablishmentType {
+function remoteEstablishmentType(type: EstablishmentType | undefined): EstablishmentType {
+  if (!type) return 'hotel';
   return type === 'spa_clinic' ? 'other' : type;
 }
 
@@ -125,7 +130,7 @@ function remoteEstablishmentType(type: EstablishmentType): EstablishmentType {
  * make every retry of the establishment push fail.
  */
 function normalizeTime(value: string | undefined, fallback: string): string {
-  const raw = (value ?? '').trim();
+  const raw = safeTrim(value);
   const match = /^(\d{1,2})\s*[:hH.]\s*(\d{2})(?::\d{2})?$/.exec(raw);
   if (!match) return fallback;
   const hours = Number(match[1]);
@@ -134,11 +139,11 @@ function normalizeTime(value: string | undefined, fallback: string): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
-function establishmentCode(profile: EstablishmentProfile): string {
+function establishmentCode(profile: Partial<EstablishmentProfile> | null | undefined): string {
   const source =
-    profile.id && profile.id !== 'establishment-draft' && profile.id !== 'establishment-cloud'
-      ? profile.id
-      : profile.name.trim();
+    profile?.id && profile.id !== 'establishment-draft' && profile.id !== 'establishment-cloud'
+      ? safeTrim(profile.id)
+      : safeTrim(profile?.name);
   return (
     source
       .normalize('NFKD')
@@ -206,7 +211,7 @@ export function planBackfill({
     bookings: realBookings.length,
   };
 
-  if (!workspaceId.trim()) {
+  if (!safeTrim(workspaceId)) {
     return {
       ok: false,
       establishment: null,
@@ -218,7 +223,8 @@ export function planBackfill({
     };
   }
 
-  if (!profile.name || !profile.name.trim()) {
+  const trimmedProfileName = safeTrim(profile?.name);
+  if (!trimmedProfileName) {
     return {
       ok: false,
       establishment: null,
@@ -232,10 +238,10 @@ export function planBackfill({
     };
   }
 
-  const remote = remoteEstablishments.filter((item) => item?.id?.trim());
+  const remote = remoteEstablishments.filter((item) => Boolean(safeTrim(item?.id)));
   const profileId =
-    profile.id && profile.id !== 'establishment-draft' && profile.id !== 'establishment-cloud'
-      ? profile.id
+    profile?.id && profile.id !== 'establishment-draft' && profile.id !== 'establishment-cloud'
+      ? safeTrim(profile.id) || null
       : null;
   const selected =
     selectedEstablishmentId && selectedEstablishmentId !== 'all' ? selectedEstablishmentId : null;
@@ -283,20 +289,20 @@ export function planBackfill({
   const establishment: BackfillEstablishment = {
     id: establishmentId,
     code: remoteRoot?.code || establishmentCode(profile),
-    name: capitalizeFirstLetter(profile.name.trim()),
-    city: profile.city.trim(),
-    stars: Math.max(0, Math.min(5, profile.stars ?? 0)),
+    name: capitalizeFirstLetter(trimmedProfileName),
+    city: safeTrim(profile?.city),
+    stars: Math.max(0, Math.min(5, profile?.stars ?? 0)),
     // The local profile does not collect a tax rate or facilities list.
     // Zero/empty are neutral schema defaults, not invented business facts.
     taxRate: 0,
-    checkInTime: normalizeTime(profile.checkInTime, '14:00'),
-    checkOutTime: normalizeTime(profile.checkOutTime, '12:00'),
+    checkInTime: normalizeTime(profile?.checkInTime, '14:00'),
+    checkOutTime: normalizeTime(profile?.checkOutTime, '12:00'),
     facilities: [],
-    domain: profile.type === 'resort' ? 'resort' : 'hotel',
-    currency: profile.defaultCurrency || 'DA',
-    country: profile.country.trim(),
-    address: profile.address.trim(),
-    establishmentType: remoteEstablishmentType(profile.type),
+    domain: profile?.type === 'resort' ? 'resort' : 'hotel',
+    currency: safeTrim(profile?.defaultCurrency) || 'DA',
+    country: safeTrim(profile?.country),
+    address: safeTrim(profile?.address),
+    establishmentType: remoteEstablishmentType(profile?.type),
   };
 
   const operations: BackfillOperation[] = [];

@@ -3,6 +3,7 @@ import { createWorkspace as createRemoteWorkspace, listWorkspaces } from './pmsR
 import { isSupabaseConfigured, onSupabaseConfigChange, supabase } from './supabaseClient';
 import {
   findPersonalWorkspace,
+  isWorkspaceNetworkError,
   PERSONAL_WORKSPACE_NAME,
   personalWorkspaceIdForUser,
 } from './workspaceSelection';
@@ -14,6 +15,14 @@ interface WorkspaceContextValue {
 
 const STORAGE_KEY = 'appointment_active_workspace_id';
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
+
+function readStoredWorkspace(): string {
+  try {
+    return localStorage.getItem(STORAGE_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
 
 function clearStoredWorkspace(): void {
   try {
@@ -33,7 +42,7 @@ function storeWorkspace(id: string): void {
 
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeWorkspaceIdState, setActiveWorkspaceIdState] = useState(
-    () => localStorage.getItem(STORAGE_KEY) ?? ''
+    () => readStoredWorkspace()
   );
   const [configEpoch, setConfigEpoch] = useState(0);
   const creationByUserRef = useRef<Map<string, Promise<void>>>(new Map());
@@ -72,13 +81,30 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return;
     }
 
+    let expectedPersonalId = '';
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
       const user = sessionData.session?.user;
       if (!user) {
         // Signed out is a normal state, not a workspace error.
         setActiveWorkspaceIdState('');
         clearStoredWorkspace();
+        return;
+      }
+
+      expectedPersonalId = personalWorkspaceIdForUser(user.id);
+      const cachedId = readStoredWorkspace();
+
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        // Offline: avoid issuing a doomed fetch request; retain an already-verified
+        // personal workspace id so offline Outbox queueing remains scoped.
+        if (cachedId && cachedId === expectedPersonalId) {
+          setActiveWorkspaceIdState(expectedPersonalId);
+        } else {
+          setActiveWorkspaceIdState('');
+          if (cachedId) clearStoredWorkspace();
+        }
         return;
       }
 
@@ -98,10 +124,25 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       storeWorkspace(personalWorkspace.id);
       setActiveWorkspaceIdState(personalWorkspace.id);
     } catch (cause) {
-      console.error(
-        '[WorkspaceContext] Personal workspace setup failed:',
-        cause instanceof Error ? cause.message : String(cause)
-      );
+      const isOfflineOrNetwork =
+        (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+        isWorkspaceNetworkError(cause);
+      const detail = cause instanceof Error ? cause.message : String(cause);
+
+      if (isOfflineOrNetwork) {
+        console.warn(
+          '[WorkspaceContext] Personal workspace verification deferred (network unavailable):',
+          detail
+        );
+        const cachedId = readStoredWorkspace();
+        if (expectedPersonalId && cachedId === expectedPersonalId) {
+          setActiveWorkspaceIdState(expectedPersonalId);
+          return;
+        }
+      } else {
+        console.error('[WorkspaceContext] Personal workspace setup failed:', detail);
+      }
+
       setActiveWorkspaceIdState('');
       clearStoredWorkspace();
     }
@@ -109,7 +150,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   useEffect(() => {
     void refreshWorkspaces();
-    if (!isSupabaseConfigured || !supabase) return;
+    const handleOnline = () => {
+      void refreshWorkspaces();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', handleOnline);
+    }
+    if (!isSupabaseConfigured || !supabase) {
+      return () => {
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('online', handleOnline);
+        }
+      };
+    }
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         void refreshWorkspaces();
@@ -118,7 +171,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         clearStoredWorkspace();
       }
     });
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', handleOnline);
+      }
+    };
   }, [refreshWorkspaces, configEpoch]);
 
   const value = useMemo(() => ({

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   findPersonalWorkspace,
+  isWorkspaceNetworkError,
   PERSONAL_WORKSPACE_NAME,
   personalWorkspaceIdForUser,
   selectPersonalWorkspaceId,
@@ -62,4 +63,12 @@ test('personal workspace selection requires the stable account id as workspace i
 
 test('personal workspace selection requires an authenticated user', () => {
   assert.equal(selectPersonalWorkspaceId([personalWorkspace], ''), '');
+});
+
+test('isWorkspaceNetworkError identifies fetch/network errors without masking RLS/auth errors', () => {
+  assert.equal(isWorkspaceNetworkError(new TypeError('Failed to fetch')), true);
+  assert.equal(isWorkspaceNetworkError(new Error('NetworkError when attempting to fetch resource.')), true);
+  assert.equal(isWorkspaceNetworkError(new Error('new row violates row-level security policy')), false);
+  assert.equal(isWorkspaceNetworkError(new Error('Invalid API key')), false);
+  assert.equal(isWorkspaceNetworkError(null), false);
 });

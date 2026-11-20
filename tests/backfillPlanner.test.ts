@@ -404,3 +404,26 @@ test('backfill falls back to the default times when the profile value is not a t
   assert.equal(plan.establishment?.checkInTime, '14:00');
   assert.equal(plan.establishment?.checkOutTime, '12:00');
 });
+
+test('backfill handles legacy/partial profiles with missing city, country, or address fields safely', () => {
+  const partialProfile = {
+    ...makeProfile(),
+    city: undefined as unknown as string,
+    country: undefined as unknown as string,
+    address: undefined as unknown as string,
+    defaultCurrency: undefined as unknown as string,
+  };
+
+  const plan = planBackfill({
+    profile: partialProfile,
+    workspaceId,
+    groups: [makeGroup()],
+    bookings: [makeBooking()],
+  });
+
+  assert.equal(plan.ok, true);
+  assert.equal(plan.establishment?.city, '');
+  assert.equal(plan.establishment?.country, '');
+  assert.equal(plan.establishment?.address, '');
+  assert.equal(plan.establishment?.currency, 'DA');
+});

@@ -36,3 +36,21 @@ export function selectPersonalWorkspaceId(
 ): string {
   return findPersonalWorkspace(workspaces, userId)?.id ?? '';
 }
+
+const NETWORK_ERROR_PATTERN =
+  /failed to fetch|networkerror|load failed|network request failed|fetch failed|internet disconnected|err_network|aborterror|the operation was aborted/i;
+
+/**
+ * Distinguishes transient/offline fetch failures (e.g. `TypeError: Failed to fetch`
+ * when offline or unreachable) from genuine Supabase auth or RLS errors.
+ */
+export function isWorkspaceNetworkError(error: unknown): boolean {
+  if (!error) return false;
+  const message =
+    error instanceof Error
+      ? `${error.name} ${error.message}`
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message: unknown }).message)
+        : String(error);
+  return NETWORK_ERROR_PATTERN.test(message);
+}

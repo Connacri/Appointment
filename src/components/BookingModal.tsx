@@ -233,6 +233,7 @@ export const BookingModal: React.FC = () => {
   const [cardResult, setCardResult] = useState<CardResult | null>(null);
   const [usbConnected, setUsbConnected] = useState<boolean>(lockManager.getStatus() === 'connected');
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false);
+  const [confirmDeleteBooking, setConfirmDeleteBooking] = useState(false);
 
   // A confirmed booking must never leak into the next sheet: reopening the dialog
   // used to show the previous confirmation (and its step indicator) instead of a
@@ -246,6 +247,7 @@ export const BookingModal: React.FC = () => {
       setRequestedCardCount(2);
       setCardResult(null);
       setConflictError(null);
+      setConfirmDeleteBooking(false);
     }
     wasOpenRef.current = isOpen;
   }, [isOpen]);
@@ -833,6 +835,7 @@ export const BookingModal: React.FC = () => {
     setSelectedBooking(null);
     setCardsCreatedCount(0);
     setRequestedCardCount(2);
+    setConfirmDeleteBooking(false);
   };
 
   // Keyboard accessibility hook called unconditionally BEFORE any early exit
@@ -898,20 +901,25 @@ export const BookingModal: React.FC = () => {
         if (e.target === e.currentTarget) closeModal();
       }}
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="booking-dialog-title" className="pms-dialog-panel pms-modal pms-sheet w-full max-w-4xl flex flex-col max-h-[98dvh] sm:max-h-[94dvh] h-[98dvh] sm:h-auto my-0 sm:my-auto rounded-t-[1.75rem] sm:rounded-3xl overflow-hidden shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="booking-dialog-title"
+        className="pms-dialog-panel pms-modal pms-sheet w-full sm:max-w-4xl flex flex-col min-h-0 max-h-[94dvh] sm:max-h-[92dvh] my-0 sm:my-auto rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl"
+      >
         {/* Modal Dedicated Domain Header */}
-        <div className="border-b border-slate-200 dark:border-slate-800 px-4 sm:px-7 pt-4 sm:pt-5 pb-4 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0 gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400">
+        <div className="border-b border-slate-200 dark:border-slate-800 px-3.5 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0 gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="p-2 rounded-xl bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0">
               <DomainHeaderIcon size={20} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <h3
                   id="booking-dialog-title"
                   className={isRoomCellBooking
-                    ? 'font-extrabold text-slate-900 dark:text-white text-lg leading-tight'
-                    : 'font-bold text-slate-900 dark:text-white text-base leading-tight'}
+                    ? 'font-extrabold text-slate-900 dark:text-white text-base sm:text-lg leading-tight truncate'
+                    : 'font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-tight truncate'}
                 >
                   {isRoomCellBooking
                     ? (currentResource?.name || resourceNameFallback || domainResources.find((r) => r.id === resourceId)?.name || '')
@@ -919,7 +927,7 @@ export const BookingModal: React.FC = () => {
                 </h3>
                 {isEditing && selectedBooking && (
                   <span
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                    className={`px-2 py-0.5 rounded text-[11px] font-semibold shrink-0 ${
                       statusConfig[selectedBooking.status]?.pillBg || 'bg-slate-100 text-slate-800'
                     }`}
                   >
@@ -927,8 +935,8 @@ export const BookingModal: React.FC = () => {
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                {domainCfg.label[language] || domainCfg.label.en} • {domainCfg.bookingTerm[language]}
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
+                {domainCfg.label[language] || domainCfg.label.en} · {domainCfg.bookingTerm[language]}
               </p>
             </div>
           </div>
@@ -936,21 +944,190 @@ export const BookingModal: React.FC = () => {
           <button
             type="button"
             onClick={closeModal}
-            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-blue-500"
-            title="Fermer la boîte de dialogue"
-            aria-label="Fermer"
+            className="min-w-11 min-h-11 flex items-center justify-center text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-blue-500"
+            title={language === 'fr' ? 'Fermer la boîte de dialogue' : language === 'ar' ? 'إغلاق النافذة' : 'Close dialog'}
+            aria-label={language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}
           >
             <X size={20} />
           </button>
         </div>
 
         {/* Modal Body */}
-        {bookingConfirmation ? <section className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 dark:bg-slate-950"><div className="mx-auto max-w-xl rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-7 shadow-xl space-y-5"><div className="text-center"><div className="mx-auto mb-4 h-16 w-16 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 flex items-center justify-center ring-8 ring-indigo-50 dark:ring-indigo-950/50"><CheckCircle2 size={32}/></div><p className="text-xs font-bold uppercase tracking-[.16em] text-emerald-700 dark:text-emerald-300">Réservation enregistrée</p><h4 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white">Confirmation du séjour</h4><p className="mt-1 text-sm text-slate-500">Le dossier est créé. Vous pouvez maintenant encoder les cartes de chambre.</p></div><div className="rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Référence de réservation</p><p className="font-mono text-xl font-bold">{bookingConfirmation.id}</p></div><div className="grid grid-cols-2 gap-3 text-left">{[['Client',bookingConfirmation.guestName],['Chambre',bookingConfirmation.resourceName],['Arrivée',bookingConfirmation.startDate + ' • ' + (bookingConfirmation.checkInTime || '14:00')],['Départ',bookingConfirmation.endDate + ' • ' + (bookingConfirmation.checkOutTime || '12:00')],['Occupants',(bookingConfirmation.adults || 1) + ' adulte(s) • ' + (bookingConfirmation.children || 0) + ' enfant(s)'],['Montant',String(bookingConfirmation.totalPrice ?? totalPrice) + ' ' + paymentCurrency]].map(([label,value])=><div key={label} className="rounded-xl border border-slate-100 dark:border-slate-800 p-3"><p className="text-[10px] text-slate-500">{label}</p><p className="text-xs font-bold break-words">{value}</p></div>)}</div><div className="rounded-2xl border border-violet-200 dark:border-violet-900 bg-violet-50 dark:bg-violet-950/30 p-4 space-y-3"><div className="flex items-center justify-between gap-3"><div><p className="font-bold text-violet-950 dark:text-violet-200">Cartes de chambre RFID</p><p className="text-xs mt-1 text-violet-800/80 dark:text-violet-300">Quantité demandée : {bookingConfirmation.cardCountRequested}</p></div><div className="text-right"><p className="text-2xl font-black text-violet-700 dark:text-violet-300">{cardsCreatedCount}</p><p className="text-[10px] text-violet-700 dark:text-violet-300">carte(s) encodée(s)</p></div></div><div className="h-2 rounded-full bg-violet-100 dark:bg-violet-900 overflow-hidden"><div className="h-full rounded-full bg-violet-600 transition-all" style={{width:`${Math.min(100, (cardsCreatedCount / Math.max(1, bookingConfirmation.cardCountRequested)) * 100)}%`}} /></div><div className="flex flex-col sm:flex-row gap-2"><button type="button" onClick={() => void handleCreateRoomCard()} disabled={isCreatingCard || !usbConnected || cardsCreatedCount >= bookingConfirmation.cardCountRequested} className="flex-1 min-h-11 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold text-sm flex items-center justify-center gap-2"><KeyRound size={16}/>{isCreatingCard ? `Encodage… ${Math.round(cardProgress)}%` : cardsCreatedCount >= bookingConfirmation.cardCountRequested ? 'Cartes demandées encodées' : 'Encoder les cartes'}</button><div className="flex items-center gap-2 rounded-xl border border-violet-200 dark:border-violet-800 px-3"><label htmlFor="room-card-count-confirm" className="text-xs font-semibold text-violet-900 dark:text-violet-200">Nombre</label><input id="room-card-count-confirm" type="number" min={1} max={20} value={requestedCardCount} onChange={(e) => { const value=Math.max(1,Math.min(20,Number(e.target.value)||1)); setRequestedCardCount(value); setBookingConfirmation((current:any) => current ? {...current,cardCountRequested:value} : current); }} className="w-14 h-11 rounded-lg border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 px-1 text-center text-sm font-bold" aria-label="Nombre de cartes à encoder"/></div></div><p className="text-[11px] text-violet-800 dark:text-violet-300">{usbConnected ? 'Encodeur proUSB connecté : prêt à encoder.' : 'Connectez l’encodeur proUSB dans Serrures pour créer les cartes.'} Les cartes ne sont comptabilisées qu’après un retour positif de l’encodeur.</p></div><div className="sticky bottom-0 z-10 -mx-1 mt-1 rounded-xl bg-white/95 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur dark:bg-slate-900/95"><button type="button" onClick={closeModal} className="w-full rounded-xl bg-slate-950 dark:bg-white text-white dark:text-slate-950 font-bold py-3.5">Terminer</button></div></div></section> : (
-        <form onSubmit={handleSubmit} className="flex-1 min-h-0 p-3 sm:p-7 overflow-y-auto overscroll-contain space-y-6 text-sm pb-8 bg-[#f5f7fb] dark:bg-slate-950">
-          <div className="rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between gap-2"><div><p className="text-sm font-bold text-slate-900 dark:text-white">Parcours de réservation</p><p className="text-[11px] text-slate-500">Progression du dossier</p></div><span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">{bookingStep + 1}/3</span></div>
-            <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${((bookingStep + 1) / 3) * 100}%` }} /></div>
-            <div className="grid grid-cols-3 gap-2">{[{ label: 'Client', target: 'booking-step-guest' }, { label: 'S?jour', target: 'booking-step-stay' }, { label: 'Paiement', target: 'booking-step-confirm' }].map((step, index) => <button key={step.label} type="button" onClick={() => { setBookingStep(index); document.getElementById(step.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className={`rounded-xl min-h-12 px-2 py-2 text-xs font-bold transition ${bookingStep === index ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}><span className="block text-[10px] opacity-75">0{index + 1}</span>{step.label}</button>)}</div>
+        {bookingConfirmation ? (
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">
+            <section className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3.5 sm:p-6">
+              <div className="mx-auto max-w-xl rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-7 shadow-sm space-y-5">
+                <div className="text-center">
+                  <div className="mx-auto mb-3 h-14 w-14 sm:h-16 sm:w-16 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-300 flex items-center justify-center ring-8 ring-emerald-50 dark:ring-emerald-950/40">
+                    <CheckCircle2 size={30} />
+                  </div>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-300">
+                    {language === 'fr' ? 'Réservation enregistrée' : language === 'ar' ? 'تم تسجيل الحجز' : 'Booking saved'}
+                  </p>
+                  <h4 className="mt-1 text-xl sm:text-2xl font-black tracking-tight text-slate-950 dark:text-white">
+                    {language === 'fr' ? 'Confirmation du séjour' : language === 'ar' ? 'تأكيد الإقامة' : 'Stay Confirmation'}
+                  </h4>
+                  <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+                    {language === 'fr'
+                      ? 'Le dossier est créé. Vous pouvez maintenant encoder les cartes de chambre.'
+                      : language === 'ar'
+                      ? 'تم إنشاء الملف. يمكنك الآن برمجة بطاقات الغرفة.'
+                      : 'The reservation is saved. You can now encode room key cards.'}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700 p-3.5">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    {language === 'fr' ? 'Référence de réservation' : language === 'ar' ? 'مرجع الحجز' : 'Booking Reference'}
+                  </p>
+                  <p className="font-mono text-base sm:text-lg font-bold text-slate-900 dark:text-white break-all">{bookingConfirmation.id}</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-start">
+                  {[
+                    [language === 'fr' ? 'Client' : language === 'ar' ? 'النزيل' : 'Guest', bookingConfirmation.guestName],
+                    [language === 'fr' ? 'Chambre' : language === 'ar' ? 'الغرفة' : 'Room', bookingConfirmation.resourceName],
+                    [language === 'fr' ? 'Arrivée' : language === 'ar' ? 'الوصول' : 'Check-in', `${bookingConfirmation.startDate} · ${bookingConfirmation.checkInTime || '14:00'}`],
+                    [language === 'fr' ? 'Départ' : language === 'ar' ? 'المغادرة' : 'Check-out', `${bookingConfirmation.endDate} · ${bookingConfirmation.checkOutTime || '12:00'}`],
+                    [language === 'fr' ? 'Occupants' : language === 'ar' ? 'النزلاء' : 'Guests', `${bookingConfirmation.adults || 1} ${language === 'ar' ? 'بالغ' : 'adult(s)'} · ${bookingConfirmation.children || 0} ${language === 'ar' ? 'طفل' : 'child(ren)'}`],
+                    [language === 'fr' ? 'Montant' : language === 'ar' ? 'المبلغ' : 'Amount', `${(bookingConfirmation.originalCurrencyAmount ?? bookingConfirmation.totalPrice ?? totalPrice).toLocaleString()} ${paymentCurrency}`],
+                  ].map(([label, value]) => (
+                    <div key={label} className="min-w-0 rounded-xl border border-slate-200/80 dark:border-slate-800 p-3">
+                      <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">{label}</p>
+                      <p className="text-xs font-bold text-slate-900 dark:text-slate-100 break-words tabular-nums mt-0.5">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-2xl border border-violet-200 dark:border-violet-900 bg-violet-50/70 dark:bg-violet-950/30 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-sm text-violet-950 dark:text-violet-200">
+                        {language === 'fr' ? 'Cartes de chambre RFID' : language === 'ar' ? 'بطاقات الغرفة RFID' : 'RFID Room Cards'}
+                      </p>
+                      <p className="text-xs mt-0.5 text-violet-800/80 dark:text-violet-300">
+                        {language === 'fr' ? 'Quantité demandée' : language === 'ar' ? 'الكمية المطلوبة' : 'Requested'}: {bookingConfirmation.cardCountRequested}
+                      </p>
+                    </div>
+                    <div className="text-end shrink-0">
+                      <p className="text-2xl font-black text-violet-700 dark:text-violet-300 tabular-nums">{cardsCreatedCount}</p>
+                      <p className="text-[10px] text-violet-700 dark:text-violet-300">
+                        {language === 'fr' ? 'encodée(s)' : language === 'ar' ? 'مُبرمجة' : 'encoded'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="h-2 rounded-full bg-violet-100 dark:bg-violet-900 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-violet-600 transition-all"
+                      style={{ width: `${Math.min(100, (cardsCreatedCount / Math.max(1, bookingConfirmation.cardCountRequested)) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleCreateRoomCard()}
+                      disabled={isCreatingCard || !usbConnected || cardsCreatedCount >= bookingConfirmation.cardCountRequested}
+                      className="flex-1 min-h-11 px-4 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <KeyRound size={16} className="shrink-0" />
+                      <span>
+                        {isCreatingCard
+                          ? `Encodage… ${Math.round(cardProgress)}%`
+                          : cardsCreatedCount >= bookingConfirmation.cardCountRequested
+                          ? (language === 'fr' ? 'Cartes encodées' : language === 'ar' ? 'تمت البرمجة' : 'Cards encoded')
+                          : (language === 'fr' ? 'Encoder les cartes' : language === 'ar' ? 'برمجة البطاقات' : 'Encode cards')}
+                      </span>
+                    </button>
+                    <div className="flex items-center justify-between sm:justify-start gap-2 rounded-xl border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 px-3 py-1">
+                      <label htmlFor="room-card-count-confirm" className="text-xs font-semibold text-violet-900 dark:text-violet-200">
+                        {language === 'fr' ? 'Nombre' : language === 'ar' ? 'العدد' : 'Count'}
+                      </label>
+                      <input
+                        id="room-card-count-confirm"
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={requestedCardCount}
+                        onChange={(e) => {
+                          const value = Math.max(1, Math.min(20, Number(e.target.value) || 1));
+                          setRequestedCardCount(value);
+                          setBookingConfirmation((current: any) =>
+                            current ? { ...current, cardCountRequested: value } : current,
+                          );
+                        }}
+                        className="w-16 h-10 rounded-lg border border-violet-200 dark:border-violet-800 bg-slate-50 dark:bg-slate-950 px-1 text-center text-sm font-bold tabular-nums"
+                        aria-label={language === 'fr' ? 'Nombre de cartes à encoder' : 'Number of cards to encode'}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-violet-800 dark:text-violet-300">
+                    {usbConnected
+                      ? (language === 'fr' ? 'Encodeur proUSB connecté : prêt à encoder.' : language === 'ar' ? 'المبرمج متصل وجاهز.' : 'proUSB encoder connected: ready.')
+                      : (language === 'fr' ? 'Connectez l’encodeur proUSB dans Serrures pour créer les cartes.' : language === 'ar' ? 'وصّل مبرمج proUSB لإنشاء البطاقات.' : 'Connect proUSB encoder in Locks to encode cards.')}
+                  </p>
+                </div>
+              </div>
+            </section>
+            <footer className="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+              <div className="flex items-center justify-between sm:block gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {language === 'fr' ? 'Montant confirmé' : language === 'ar' ? 'المبلغ المؤكد' : 'Confirmed total'}
+                </span>
+                <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">
+                  {(bookingConfirmation.originalCurrencyAmount ?? priceInPaymentCurrency).toLocaleString()} {currencySymbols[paymentCurrency] || paymentCurrency}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="min-h-11 w-full sm:w-auto sm:min-w-44 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 font-bold text-sm cursor-pointer transition-colors"
+              >
+                {language === 'fr' ? 'Terminer' : language === 'ar' ? 'إنهاء' : 'Done'}
+              </button>
+            </footer>
+          </div>
+        ) : (
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 p-3 sm:p-6 overflow-y-auto overscroll-contain space-y-5 text-sm bg-slate-50 dark:bg-slate-950">
+          <div className="rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-900 p-3.5 sm:p-5 shadow-xs space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                  {language === 'fr' ? 'Parcours de réservation' : language === 'ar' ? 'مراحل الحجز' : 'Booking progress'}
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {language === 'fr' ? 'Progression du dossier' : language === 'ar' ? 'تقدم الملف' : 'Reservation steps'}
+                </p>
+              </div>
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 tabular-nums shrink-0">{bookingStep + 1}/3</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+              <div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${((bookingStep + 1) / 3) * 100}%` }} />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: language === 'fr' ? 'Client' : language === 'ar' ? 'النزيل' : 'Guest', target: 'booking-step-guest' },
+                { label: language === 'fr' ? 'Séjour' : language === 'ar' ? 'الإقامة' : 'Stay', target: 'booking-step-stay' },
+                { label: language === 'fr' ? 'Paiement' : language === 'ar' ? 'الدفع' : 'Payment', target: 'booking-step-payment' },
+              ].map((step, index) => (
+                <button
+                  key={step.target}
+                  type="button"
+                  onClick={() => {
+                    setBookingStep(index);
+                    document.getElementById(step.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                  className={`rounded-xl min-h-11 px-2 py-2 text-xs font-bold transition cursor-pointer ${
+                    bookingStep === index
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-slate-100/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <span className="block text-[10px] opacity-75 tabular-nums">0{index + 1}</span>
+                  <span className="block truncate">{step.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
           {conflictError && (
             <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
@@ -959,71 +1136,246 @@ export const BookingModal: React.FC = () => {
             </div>
           )}
 
-          {/* Traceability & Modification details (Audit trail) */}
+          {/* Traceability, Quick Stay Actions & Modification details (Audit trail) */}
           {isEditing && selectedBooking && (
-            <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200/80 dark:border-blue-800/80 rounded-xl space-y-2">
+            <div className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 border border-blue-200/80 dark:border-blue-800/80 rounded-2xl shadow-xs space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <Clock size={15} className="text-blue-600 dark:text-blue-400" />
-                  <span className="font-bold text-slate-800 dark:text-slate-100">
-                    Détails du Dossier & Traçabilité
+                <div className="flex items-center gap-2 min-w-0">
+                  <Clock size={15} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm truncate">
+                    {language === 'fr' ? 'Détails du Dossier & Actions' : language === 'ar' ? 'تفاصيل الملف والإجراءات' : 'Booking Dossier & Actions'}
                   </span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 font-bold text-blue-700 dark:text-blue-300">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-blue-800 font-bold text-blue-700 dark:text-blue-300 shrink-0">
                     #{selectedBooking.id.substring(0, 8)}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowHistoryModal(!showHistoryModal)}
-                  className="px-2 py-1 text-[11px] font-semibold bg-white dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-slate-700 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-slate-700 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                  className="min-h-10 px-3 py-1.5 text-xs font-semibold bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-slate-700 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  <FileSpreadsheet size={13} />
+                  <FileSpreadsheet size={14} />
                   <span>
                     {showHistoryModal
-                      ? 'Masquer Historique'
-                      : `Historique (${(selectedBooking.modificationHistory?.length || 0) + (selectedBooking.lastModifiedAt ? 1 : 0)})`}
+                      ? (language === 'fr' ? 'Masquer Historique' : language === 'ar' ? 'إخفاء السجل' : 'Hide History')
+                      : `${language === 'fr' ? 'Historique' : language === 'ar' ? 'السجل' : 'History'} (${(selectedBooking.modificationHistory?.length || 0) + (selectedBooking.lastModifiedAt ? 1 : 0)})`}
                   </span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300 pt-1 border-t border-blue-200/50 dark:border-blue-900/40">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300 pt-2 border-t border-slate-200/70 dark:border-slate-800">
                 <div>
-                  <span className="text-slate-400 font-medium">Dernière modification : </span>
-                  <span className="font-semibold text-slate-900 dark:text-white">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">
+                    {language === 'fr' ? 'Dernière modification : ' : language === 'ar' ? 'آخر تعديل: ' : 'Last updated: '}
+                  </span>
+                  <span className="font-semibold text-slate-900 dark:text-white tabular-nums">
                     {selectedBooking.lastModifiedAt
-                      ? new Date(selectedBooking.lastModifiedAt).toLocaleString(language === 'fr' ? 'fr-FR' : 'en-US', {
+                      ? new Date(selectedBooking.lastModifiedAt).toLocaleString(language === 'fr' ? 'fr-FR' : language === 'ar' ? 'ar-DZ' : 'en-US', {
                           day: '2-digit',
                           month: 'short',
                           year: 'numeric',
                           hour: '2-digit',
                           minute: '2-digit',
                         })
-                      : 'Création initiale'}
+                      : (language === 'fr' ? 'Création initiale' : language === 'ar' ? 'إنشاء أولي' : 'Initial creation')}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 font-medium">Modifié par : </span>
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">
+                    {language === 'fr' ? 'Modifié par : ' : language === 'ar' ? 'عُدّل بواسطة: ' : 'Modified by: '}
+                  </span>
                   <span className="font-semibold text-slate-900 dark:text-white">
                     {selectedBooking.lastModifiedBy || 'Réception'}
                   </span>
                 </div>
               </div>
 
+              {/* Stay lifecycle & document quick actions */}
+              <div className="pt-2 border-t border-slate-200/70 dark:border-slate-800 space-y-2.5">
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateBookingStatus(selectedBooking.id, 'checked_in');
+                      closeModal();
+                    }}
+                    className="min-h-11 justify-center px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <CheckCircle2 size={15} className="shrink-0" />
+                    <span className="truncate">{language === 'ar' ? 'تسجيل الوصول' : 'Check-in'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const now = new Date().toISOString();
+                      const pendingValuables = (selectedBooking.valuablesAtReception || []).filter((item) => item.status === 'held');
+                      const valuablesAtReception = (selectedBooking.valuablesAtReception || []).map((item) => {
+                        if (item.status !== 'held') return item;
+                        const returned = window.confirm(`Départ de ${selectedBooking.guestName} : l'objet « ${item.description} » a-t-il été restitué au client ? OK = restitué ; Annuler = non réclamé / à conserver.`);
+                        return returned ? { ...item, status: 'returned' as const, returnedAt: now } : { ...item, status: 'forgotten' as const };
+                      });
+                      if (pendingValuables.length > 0) updateBooking(selectedBooking.id, { valuablesAtReception });
+                      updateBookingStatus(selectedBooking.id, 'checked_out');
+                      generateTurnoverTasksForCheckout(selectedBooking.resourceName);
+                      closeModal();
+                    }}
+                    className="min-h-11 justify-center px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title={language === 'fr' ? 'Effectue le départ et génère les tâches de remise en état chambre' : 'Check out and generate turnover tasks'}
+                  >
+                    <Sparkles size={15} className="shrink-0" />
+                    <span className="truncate">{language === 'fr' ? 'Check-out' : language === 'ar' ? 'تسجيل المغادرة' : 'Check-out'}</span>
+                  </button>
+                  {activeDomain === 'hotel' && selectedBooking.status === 'confirmed' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const invoice = createInvoiceFromBooking(selectedBooking, 'invoice');
+                        if (invoice) {
+                          setIsInvoicePreviewOpen(true);
+                        }
+                      }}
+                      disabled={!createInvoiceFromBooking}
+                      className="min-h-11 justify-center px-3.5 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-emerald-500 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-900/40 cursor-pointer"
+                      title={language === 'fr' ? 'Créer la facture de ce séjour' : 'Create invoice for this stay'}
+                    >
+                      <FileText size={15} className="shrink-0" />
+                      <span className="truncate">{language === 'fr' ? 'Facture' : language === 'ar' ? 'الفاتورة' : 'Invoice'}</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => downloadICS(selectedBooking)}
+                    className="min-h-11 justify-center px-3.5 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-slate-700 dark:text-slate-200 flex items-center gap-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-xs font-semibold cursor-pointer"
+                    title={language === 'fr' ? "Télécharger l'événement .ICS" : 'Download .ICS event'}
+                  >
+                    <Download size={15} className="shrink-0" />
+                    <span>.ICS</span>
+                  </button>
+                  {!confirmDeleteBooking ? (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteBooking(true)}
+                      className="col-span-2 sm:col-span-1 sm:ms-auto min-h-11 justify-center px-3.5 py-2 border border-rose-200 dark:border-rose-900/70 bg-rose-50/70 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/60 rounded-xl transition-colors text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                      title={language === 'fr' ? 'Supprimer cette réservation' : 'Delete booking'}
+                    >
+                      <Trash2 size={15} className="shrink-0" />
+                      <span>{language === 'fr' ? 'Supprimer' : language === 'ar' ? 'حذف' : 'Delete'}</span>
+                    </button>
+                  ) : (
+                    <div className="col-span-2 sm:ms-auto flex flex-wrap items-center gap-2 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/50 p-1.5">
+                      <span className="text-xs font-bold text-rose-800 dark:text-rose-200 px-1.5">
+                        {language === 'fr' ? 'Supprimer ?' : language === 'ar' ? 'تأكيد الحذف؟' : 'Delete?'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          deleteBooking(selectedBooking.id);
+                          setConfirmDeleteBooking(false);
+                        }}
+                        className="min-h-10 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+                      >
+                        {language === 'fr' ? 'Oui, supprimer' : language === 'ar' ? 'نعم، حذف' : 'Confirm'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteBooking(false)}
+                        className="min-h-10 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer"
+                      >
+                        {language === 'fr' ? 'Non' : language === 'ar' ? 'لا' : 'No'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* proUSB RFID Card Encoding Bar (only for confirmed hotel stays) */}
+                {activeDomain === 'hotel' && selectedBooking.status === 'confirmed' && (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2.5 border-t border-slate-200/70 dark:border-slate-800">
+                    <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => void handleCreateRoomCard()}
+                        disabled={isCreatingCard}
+                        className={`min-h-11 flex-1 sm:flex-none justify-center px-4 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-violet-500 ${
+                          isCreatingCard
+                            ? 'bg-slate-300 text-slate-700 cursor-wait'
+                            : usbConnected
+                              ? 'bg-violet-600 hover:bg-violet-500 text-white cursor-pointer'
+                              : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-not-allowed'
+                        }`}
+                        title={
+                          usbConnected
+                            ? 'Encoder la carte client proUSB pour cette chambre et ce séjour'
+                            : "Encodeur proUSB non connecté - branchez-le d'abord dans l'onglet Serrures"
+                        }
+                      >
+                        {isCreatingCard ? (
+                          <Loader2 size={15} className="animate-spin shrink-0" />
+                        ) : (
+                          <KeyRound size={15} className="shrink-0" />
+                        )}
+                        <span>
+                          {isCreatingCard
+                            ? `Encodage… ${Math.round(cardProgress)}%`
+                            : language === 'fr'
+                              ? 'Créer la carte client'
+                              : language === 'ar'
+                                ? 'إنشاء بطاقة الغرفة'
+                                : 'Create Guest Card'}
+                        </span>
+                      </button>
+
+                      <div className="flex items-center gap-1.5 rounded-xl border border-violet-200 dark:border-violet-900 bg-violet-50/70 dark:bg-violet-950/30 px-2.5 py-1">
+                        <label htmlFor="room-card-count" className="text-xs font-semibold text-violet-900 dark:text-violet-200 whitespace-nowrap">
+                          {language === 'fr' ? 'Cartes' : language === 'ar' ? 'البطاقات' : 'Cards'}
+                        </label>
+                        <input
+                          id="room-card-count"
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={requestedCardCount}
+                          onChange={(e) => setRequestedCardCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                          className="w-14 h-9 rounded-lg border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 px-1 text-center text-xs font-bold text-slate-900 dark:text-white tabular-nums"
+                          aria-label={language === 'fr' ? 'Nombre de cartes à créer' : language === 'ar' ? 'عدد البطاقات المطلوبة' : 'Number of cards to create'}
+                        />
+                        <span className="text-[11px] text-violet-700 dark:text-violet-300 whitespace-nowrap tabular-nums">
+                          ({occupantCount} {language === 'ar' ? 'نزيل' : 'occ.'})
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold shrink-0">
+                      {usbConnected ? (
+                        <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 size={13} className="shrink-0" />
+                          <span>{language === 'fr' ? 'Encodeur proUSB prêt' : language === 'ar' ? 'المبرمج متصل' : 'Encoder ready'}</span>
+                        </span>
+                      ) : (
+                        <span className="text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                          <AlertCircle size={13} className="shrink-0" />
+                          <span>{language === 'fr' ? 'Encodeur non connecté' : language === 'ar' ? 'المبرمج غير متصل' : 'Encoder not connected'}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {showHistoryModal && selectedBooking.modificationHistory && selectedBooking.modificationHistory.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-blue-200/50 dark:border-blue-900/40 space-y-1.5 max-h-36 overflow-y-auto">
+                <div className="mt-2 pt-2 border-t border-slate-200/70 dark:border-slate-800 space-y-1.5 max-h-36 overflow-y-auto">
                   <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
                     Historique des modifications :
                   </div>
                   {selectedBooking.modificationHistory.slice().reverse().map((h, idx) => (
                     <div
                       key={idx}
-                      className="p-1.5 bg-white/80 dark:bg-slate-900/80 rounded-lg border border-slate-200/70 dark:border-slate-800 text-[11px] flex items-start justify-between gap-2"
+                      className="p-2 bg-slate-50 dark:bg-slate-950/60 rounded-lg border border-slate-200/70 dark:border-slate-800 text-[11px] flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-2"
                     >
-                      <div>
-                        <span className="font-bold text-slate-800 dark:text-slate-200 mr-2">{h.modifiedBy}</span>
-                        <span className="text-slate-600 dark:text-slate-400">{h.changes}</span>
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 me-2">{h.modifiedBy}</span>
+                        <span className="text-slate-600 dark:text-slate-400 break-words">{h.changes}</span>
                       </div>
-                      <span className="font-mono text-[10px] text-slate-400 shrink-0">
+                      <span className="font-mono text-[10px] text-slate-400 shrink-0 tabular-nums">
                         {new Date(h.timestamp).toLocaleDateString()} {new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
@@ -1035,8 +1387,8 @@ export const BookingModal: React.FC = () => {
 
           {/* 1. SECTOR RESOURCE ASSIGNMENT (Strictly scoped to activeDomain) */}
           {!isRoomCellBooking && (
-            <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-1">
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+            <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1.5">
+              <label className="font-semibold text-slate-700 dark:text-slate-300 flex flex-wrap items-center justify-between gap-2">
                 <span>
                   {language === 'fr'
                     ? `${domainCfg.unitTerm.fr} assignée :`
@@ -1044,7 +1396,7 @@ export const BookingModal: React.FC = () => {
                     ? `${domainCfg.unitTerm.ar} المخصصة:`
                     : `Assigned ${domainCfg.unitTerm.en}:`}
                 </span>
-                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-normal">
+                <span className="text-[11px] text-blue-600 dark:text-blue-400 font-normal">
                   {domainResources.length} {language === 'fr' ? 'disponibles dans ce domaine' : 'available in this domain'}
                 </span>
               </label>
@@ -1064,7 +1416,7 @@ export const BookingModal: React.FC = () => {
           )}
 
           {/* 2. BENEFICIARY / CLIENT / PATIENT IDENTITY */}
-          <div id="booking-step-guest" className="space-y-4 scroll-mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm">
+          <div id="booking-step-guest" className="space-y-4 scroll-mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-xs">
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 {language === 'fr'
@@ -1074,7 +1426,7 @@ export const BookingModal: React.FC = () => {
                   : `Full ${domainCfg.userTerm.en} Name *`}
               </label>
               <div className="relative">
-                <User size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <User size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   required
@@ -1085,40 +1437,40 @@ export const BookingModal: React.FC = () => {
                       ? 'Ex: Famille Delacroix (Villa 01)'
                       : 'Ex: Alexander Kaufmann'
                   }
-                  className="w-full h-11 pl-8 pr-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                  className="w-full h-11 ps-9 pe-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="min-w-0">
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   {language === 'fr' ? 'Email de contact :' : language === 'ar' ? 'البريد الإلكتروني:' : 'Email Address:'}
                 </label>
                 <div className="relative">
-                  <Mail size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Mail size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="email"
                     value={guestEmail}
                     onChange={(e) => setGuestEmail(e.target.value)}
                     placeholder="contact@exemple.com"
-                    className="w-full h-11 pl-8 pr-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                    className="w-full h-11 ps-9 pe-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
                   />
                 </div>
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   {language === 'fr' ? 'Téléphone (Rappel / SMS) :' : language === 'ar' ? 'رقم الهاتف للاتصال:' : 'Phone Number:'}
                 </label>
                 <div className="relative">
-                  <Phone size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Phone size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="tel"
                     value={guestPhone}
                     onChange={(e) => setGuestPhone(e.target.value)}
                     placeholder="+33 6 12 34 56 78"
-                    className="w-full h-11 pl-8 pr-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                    className="w-full h-11 ps-9 pe-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
                   />
                 </div>
               </div>
@@ -1145,10 +1497,16 @@ export const BookingModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPoliceSheetModal(true)}
-                  className="min-h-10 px-3 py-2 text-xs font-bold bg-white hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
+                  className="w-full sm:w-auto min-h-11 px-3.5 py-2 text-xs font-bold bg-white hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer shrink-0"
                 >
-                  <FileText size={13} />
-                  <span>{language === 'fr' ? 'Aperçu Fiche de Police' : 'Police Form'}</span>
+                  <FileText size={14} />
+                  <span>
+                    {language === 'fr'
+                      ? 'Aperçu Fiche de Police'
+                      : language === 'ar'
+                      ? 'معاينة بطاقة الشرطة'
+                      : 'Police Form'}
+                  </span>
                 </button>
               </div>
 
@@ -1160,7 +1518,7 @@ export const BookingModal: React.FC = () => {
                     setGuestType('algerian');
                     setForeignNationality('Algérienne');
                   }}
-                  className={`min-h-12 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                  className={`min-h-11 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
                     guestType === 'algerian'
                       ? 'bg-emerald-700 dark:bg-emerald-600 text-white shadow-md ring-1 ring-emerald-500/20'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -1175,7 +1533,7 @@ export const BookingModal: React.FC = () => {
                     setGuestType('foreigner');
                     if (foreignNationality === 'Algérienne') setForeignNationality('Française');
                   }}
-                  className={`min-h-12 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                  className={`min-h-11 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
                     guestType === 'foreigner'
                       ? 'bg-slate-900 dark:bg-slate-600 text-white shadow-md ring-1 ring-slate-500/20'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -1188,9 +1546,9 @@ export const BookingModal: React.FC = () => {
 
               <div className="space-y-3 pt-1">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
-                      {language === 'fr' ? 'Type de Pièce d\'Identité *' : 'ID Document Type *'}
+                      {language === 'fr' ? 'Type de Pièce d\'Identité *' : language === 'ar' ? 'نوع وثيقة الهوية *' : 'ID Document Type *'}
                     </label>
                     <select
                       value={idPieceType}
@@ -1199,7 +1557,7 @@ export const BookingModal: React.FC = () => {
                         setIdPieceType(val);
                         if (val === 'cni') setAlgerianIdType('cni');
                       }}
-                      className="w-full h-11 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-semibold text-xs"
+                      className="w-full h-11 px-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-semibold text-xs"
                     >
                       <option value="cni">🪪 CNI (Carte Nationale d'Identité)</option>
                       <option value="passport">🛂 Passeport Ordinaire</option>
@@ -1211,9 +1569,9 @@ export const BookingModal: React.FC = () => {
                     </select>
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
-                      {language === 'fr' ? 'N° de la Pièce *' : 'Document Number *'}
+                      {language === 'fr' ? 'N° de la Pièce *' : language === 'ar' ? 'رقم الوثيقة *' : 'Document Number *'}
                     </label>
                     <input
                       type="text"
@@ -1224,11 +1582,11 @@ export const BookingModal: React.FC = () => {
                         setPassportNumber(e.target.value);
                       }}
                       placeholder="Ex: 1102938491029 / 21EF98124"
-                      className="w-full h-11 px-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs font-bold"
+                      className="w-full h-11 px-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs font-bold"
                     />
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
                       {guestType === 'algerian' ? 'Wilaya de Résidence (69 Wilayas) *' : 'Nationalité *'}
                     </label>
@@ -1355,13 +1713,13 @@ export const BookingModal: React.FC = () => {
                 </div>)}
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <div>
+              <div className="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 gap-2.5">
+                <div className="min-w-0">
                   <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Adultes</label>
                   <select
                     value={hotelAdults}
                     onChange={(e) => setHotelAdults(Number(e.target.value))}
-                    className="w-full h-11 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   >
                     {[1, 2, 3, 4, 5].map((n) => (
                       <option key={n} value={n}>
@@ -1371,12 +1729,12 @@ export const BookingModal: React.FC = () => {
                   </select>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Enfants</label>
                   <select
                     value={hotelChildren}
                     onChange={(e) => setHotelChildren(Number(e.target.value))}
-                    className="w-full h-11 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   >
                     {[0, 1, 2, 3].map((n) => (
                       <option key={n} value={n}>
@@ -1386,30 +1744,30 @@ export const BookingModal: React.FC = () => {
                   </select>
                 </div>
 
-                <div>
+                <div className="min-w-0 col-span-1 min-[380px]:col-span-2 sm:col-span-1">
                   <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Heure Arrivée</label>
                   <input
                     type="time"
                     value={hotelCheckinTime}
                     onChange={(e) => setHotelCheckinTime(e.target.value)}
-                    className="w-full h-11 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
 
               {/* Formule de Pension & Restauration (Inspiré Booking & Airbnb) */}
-              <div className="space-y-2 pt-1 border-t border-blue-200/50 dark:border-blue-900/40">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-700 dark:text-slate-300 text-xs flex items-center gap-1.5">
-                    <UtensilsCrossed size={14} className="text-amber-500" />
-                    <span>Formule de Pension & Restauration (Standard Booking / Airbnb)</span>
+              <div className="space-y-2 pt-2 border-t border-blue-200/50 dark:border-blue-900/40">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="font-bold text-slate-700 dark:text-slate-300 text-xs flex items-center gap-1.5 min-w-0">
+                    <UtensilsCrossed size={14} className="text-amber-500 shrink-0" />
+                    <span className="truncate">Formule de Pension & Restauration</span>
                   </label>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200">
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 shrink-0">
                     {HOSPITALITY_MEAL_PLANS.find((p) => p.id === selectedMealPlanId)?.shortBadge || 'BB'}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {HOSPITALITY_MEAL_PLANS.map((plan) => {
                     const isSelected = selectedMealPlanId === plan.id;
                     const priceInDzd = Math.round(plan.pricePerPersonDay * 145.5);
@@ -1418,7 +1776,7 @@ export const BookingModal: React.FC = () => {
                         key={plan.id}
                         type="button"
                         onClick={() => setSelectedMealPlanId(plan.id)}
-                        className={`p-2 rounded-xl border text-left flex flex-col justify-between transition cursor-pointer ${
+                        className={`min-w-0 min-h-11 p-2.5 rounded-xl border text-start flex flex-col justify-between transition cursor-pointer ${
                           isSelected
                             ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-950/60 ring-2 ring-blue-500 shadow-xs'
                             : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600'
@@ -1426,7 +1784,7 @@ export const BookingModal: React.FC = () => {
                       >
                         <div className="flex items-center justify-between gap-1 mb-1">
                           <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-black shrink-0 ${
                               isSelected
                                 ? 'bg-blue-600 text-white'
                                 : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
@@ -1434,7 +1792,7 @@ export const BookingModal: React.FC = () => {
                           >
                             {plan.shortBadge}
                           </span>
-                          <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                          <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 tabular-nums truncate">
                             {plan.pricePerPersonDay === 0
                               ? 'Inclus'
                               : paymentCurrency === 'DA'
@@ -1455,7 +1813,7 @@ export const BookingModal: React.FC = () => {
                   const currentPlan = HOSPITALITY_MEAL_PLANS.find((p) => p.id === selectedMealPlanId);
                   if (!currentPlan) return null;
                   return (
-                    <div className="p-2 bg-slate-100/70 dark:bg-slate-900/60 rounded-lg text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
+                    <div className="p-2.5 bg-slate-100/70 dark:bg-slate-900/60 rounded-lg text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
                       <p className="italic">{currentPlan.description[language] || currentPlan.description.fr}</p>
                       <div className="flex flex-wrap gap-1 pt-0.5">
                         {currentPlan.includedItems.map((item, idx) => (
@@ -1472,7 +1830,7 @@ export const BookingModal: React.FC = () => {
                 })()}
 
                 {/* Dietary preferences */}
-                <div className="space-y-1 pt-1">
+                <div className="space-y-1.5 pt-1">
                   <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
                     Régimes & Préférences Alimentaires :
                   </span>
@@ -1490,7 +1848,7 @@ export const BookingModal: React.FC = () => {
                                 : [...selectedDietary, diet.id]
                             );
                           }}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition cursor-pointer ${
+                          className={`min-h-9 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
                             isChecked
                               ? 'bg-emerald-600 text-white shadow-xs'
                               : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -1504,11 +1862,11 @@ export const BookingModal: React.FC = () => {
                 </div>
 
                 {/* Airbnb & Booking Style Extras */}
-                <div className="space-y-1 pt-1">
+                <div className="space-y-1.5 pt-1">
                   <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
                     Extras Expérientiels Booking & Airbnb :
                   </span>
-                  <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     {[
                       { id: 'grab_go', label: '🥡 Grab & Go (Petit-déj emporté)', price: '+12€/p' },
                       { id: 'picnic', label: '🧺 Panier Pique-Nique Excursion', price: '+20€/p' },
@@ -1519,13 +1877,13 @@ export const BookingModal: React.FC = () => {
                       return (
                         <label
                           key={extra.id}
-                          className={`flex items-center justify-between p-1.5 rounded-lg border cursor-pointer select-none ${
+                          className={`min-h-11 flex items-center justify-between gap-2 px-3 py-2 rounded-xl border cursor-pointer select-none ${
                             isChecked
                               ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 font-semibold'
                               : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400'
                           }`}
                         >
-                          <div className="flex items-center gap-1.5 truncate">
+                          <div className="flex items-center gap-2 min-w-0">
                             <input
                               type="checkbox"
                               checked={isChecked}
@@ -1536,11 +1894,11 @@ export const BookingModal: React.FC = () => {
                                     : [...selectedExtras, extra.id]
                                 );
                               }}
-                              className="rounded text-blue-600"
+                              className="rounded text-blue-600 shrink-0"
                             />
                             <span className="truncate">{extra.label}</span>
                           </div>
-                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 shrink-0 ml-1">
+                          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0 tabular-nums">
                             {extra.price}
                           </span>
                         </label>
@@ -1550,40 +1908,40 @@ export const BookingModal: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-xs border-t border-slate-100 dark:border-slate-800">
-                <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 text-xs border-t border-slate-100 dark:border-slate-800">
+                <label className="min-h-11 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/30 flex items-center gap-2.5 cursor-pointer text-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"
                     checked={hotelOptionBabyBed}
                     onChange={(e) => setHotelOptionBabyBed(e.target.checked)}
-                    className="rounded text-blue-600"
+                    className="rounded text-blue-600 shrink-0"
                   />
                   <span>Lit bébé d'appoint (+10€)</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                <label className="min-h-11 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/30 flex items-center gap-2.5 cursor-pointer text-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"
                     checked={hotelOptionHighFloor}
                     onChange={(e) => setHotelOptionHighFloor(e.target.checked)}
-                    className="rounded text-blue-600"
+                    className="rounded text-blue-600 shrink-0"
                   />
                   <span>Étage élevé / Vue dégagée</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                <label className="min-h-11 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/30 flex items-center gap-2.5 cursor-pointer text-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"
                     checked={hotelOptionPet}
                     onChange={(e) => setHotelOptionPet(e.target.checked)}
-                    className="rounded text-blue-600"
+                    className="rounded text-blue-600 shrink-0"
                   />
                   <span>Animal de compagnie (+15€)</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                <label className="min-h-11 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/30 flex items-center gap-2.5 cursor-pointer text-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"
                     checked={hotelOptionWelcomeGift}
                     onChange={(e) => setHotelOptionWelcomeGift(e.target.checked)}
-                    className="rounded text-blue-600"
+                    className="rounded text-blue-600 shrink-0"
                   />
                   <span>Bouteille de bienvenue (+35€)</span>
                 </label>
@@ -1614,13 +1972,13 @@ export const BookingModal: React.FC = () => {
                   </div>
                 </div>)}
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="min-w-0">
                   <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Capacité / Occupants</label>
                   <select
                     value={resortOccupants}
                     onChange={(e) => setResortOccupants(Number(e.target.value))}
-                    className="w-full h-11 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   >
                     {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => (
                       <option key={n} value={n}>
@@ -1630,12 +1988,12 @@ export const BookingModal: React.FC = () => {
                   </select>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Formule Resort</label>
                   <select
                     value={resortFormula}
                     onChange={(e) => setResortFormula(e.target.value as any)}
-                    className="w-full h-11 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   >
                     <option value="all_inclusive">All-Inclusive Resort VIP (+60€ / pers / jour)</option>
                     <option value="half_board">Demi-Pension Gourmande (+35€ / pers / jour)</option>
@@ -1643,51 +2001,51 @@ export const BookingModal: React.FC = () => {
                   </select>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Heure Arrivée Souhaitée</label>
                   <input
                     type="time"
                     value={resortCheckinTime}
                     onChange={(e) => setResortCheckinTime(e.target.value)}
-                    className="w-full h-11 px-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
-                <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1 text-xs">
+                <label className="min-h-11 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/30 flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"
                     checked={resortOptionPrivatePool}
                     onChange={(e) => setResortOptionPrivatePool(e.target.checked)}
-                    className="rounded text-amber-600"
+                    className="rounded text-amber-600 shrink-0"
                   />
                   <span>Piscine privée chauffée</span>
                 </label>
-                <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300">
+                <label className="min-h-11 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/30 flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"
                     checked={resortOptionBeachCabana}
                     onChange={(e) => setResortOptionBeachCabana(e.target.checked)}
-                    className="rounded text-amber-600"
+                    className="rounded text-amber-600 shrink-0"
                   />
                   <span>Cabana Plage Privée</span>
                 </label>
-                <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300">
+                <label className="min-h-11 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/30 flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"
                     checked={resortOptionVipTransfer}
                     onChange={(e) => setResortOptionVipTransfer(e.target.checked)}
-                    className="rounded text-amber-600"
+                    className="rounded text-amber-600 shrink-0"
                   />
                   <span>Navette VIP Aéroport (+80€)</span>
                 </label>
-                <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300">
+                <label className="min-h-11 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/30 flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"
                     checked={resortOptionGolfBuggy}
                     onChange={(e) => setResortOptionGolfBuggy(e.target.checked)}
-                    className="rounded text-amber-600"
+                    className="rounded text-amber-600 shrink-0"
                   />
                   <span>Voiturette Resort (+30€/j)</span>
                 </label>
@@ -1697,10 +2055,10 @@ export const BookingModal: React.FC = () => {
 
           {/* 4. DATES & SCHEDULE */}
           <div id="booking-step-stay" className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-5 border-t border-slate-200 dark:border-slate-800 scroll-mt-4">
-            <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                <span>{language === 'fr' ? "Date d'arrivée / Début *" : 'Start / Check-in Date *'}</span>
-                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-normal">≥ Aujourd'hui</span>
+            <div className="min-w-0">
+              <label className="font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between gap-2">
+                <span>{language === 'fr' ? "Date d'arrivée / Début *" : language === 'ar' ? 'تاريخ الوصول *' : 'Start / Check-in Date *'}</span>
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-normal shrink-0">≥ Aujourd'hui</span>
               </label>
               <input
                 type="date"
@@ -1708,14 +2066,14 @@ export const BookingModal: React.FC = () => {
                 min={todayIso}
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full h-11 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow font-medium"
+                className="w-full h-11 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow font-medium"
               />
             </div>
 
-            <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                <span>{language === 'fr' ? 'Date de départ / Fin *' : 'End / Check-out Date *'}</span>
-                <span className="text-[10px] text-slate-400 font-normal">Min: Arrivée</span>
+            <div className="min-w-0">
+              <label className="font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between gap-2">
+                <span>{language === 'fr' ? 'Date de départ / Fin *' : language === 'ar' ? 'تاريخ المغادرة *' : 'End / Check-out Date *'}</span>
+                <span className="text-[10px] text-slate-400 font-normal shrink-0">Min: Arrivée</span>
               </label>
               <input
                 type="date"
@@ -1723,34 +2081,34 @@ export const BookingModal: React.FC = () => {
                 min={startDate || todayIso}
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full h-11 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow font-medium"
+                className="w-full h-11 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow font-medium"
               />
             </div>
           </div>
           {activeDomain === 'hotel' && (
-            <div className="grid grid-cols-2 gap-2 rounded-xl border border-blue-100 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/20 p-3">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 rounded-xl border border-blue-100 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/20 p-3">
+              <div className="min-w-0">
                 <label className="mb-1 block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Heure d'arrivée</label>
-                <input type="time" required value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} className="h-10 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 font-semibold text-slate-900 dark:text-white" />
+                <input type="time" required value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 font-semibold text-slate-900 dark:text-white" />
                 <span className="mt-1 block text-[10px] text-slate-500">Check-in</span>
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className="mb-1 block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Heure de départ</label>
-                <input type="time" required value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} className="h-10 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 font-semibold text-slate-900 dark:text-white" />
+                <input type="time" required value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 font-semibold text-slate-900 dark:text-white" />
                 <span className="mt-1 block text-[10px] text-slate-500">Check-out · 10 min de préparation avant la prochaine arrivée</span>
               </div>
             </div>
           )}
 
           {/* 5. STATUS, MULTI-CURRENCY & PAYMENT */}
-          <div className="overflow-hidden rounded-[1.5rem] border border-violet-200 dark:border-violet-900/70 bg-white dark:bg-slate-900 shadow-sm">
+          <div id="booking-step-payment" className="scroll-mt-4 overflow-hidden rounded-[1.5rem] border border-violet-200 dark:border-violet-900/70 bg-white dark:bg-slate-900 shadow-sm">
             <div className="flex items-center gap-3 px-4 sm:px-5 py-4 bg-gradient-to-r from-violet-50 via-white to-fuchsia-50/60 dark:from-violet-950/40 dark:via-slate-900 dark:to-fuchsia-950/20 border-b border-violet-100 dark:border-violet-900/60">
-              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-sm"><Coins size={19} /></span>
-              <div><h4 className="text-sm font-extrabold tracking-tight text-slate-900 dark:text-white">Devise & Conditions de Règlement</h4><p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">Devise de facturation, moyen de paiement et état d’encaissement.</p></div>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-sm"><Coins size={19} /></span>
+              <div className="min-w-0"><h4 className="text-sm font-extrabold tracking-tight text-slate-900 dark:text-white">Devise & Conditions de Règlement</h4><p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">Devise de facturation, moyen de paiement et état d’encaissement.</p></div>
             </div>
             <div className="space-y-3 p-4 sm:p-5">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div className="min-w-0">
                 <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
                   {language === 'fr' ? 'Devise de Paiement' : 'Currency'}
                 </label>
@@ -1902,213 +2260,104 @@ export const BookingModal: React.FC = () => {
             </div>
           </div>
 
-          {/* 7. DEDICATED DOMAIN PRICING BOX */}
-          <div className="relative overflow-hidden p-4 sm:p-5 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-950 rounded-[1.5rem] flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-700 shadow-lg text-white">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 block mb-1">Récapitulatif du séjour</span>
-              <span className="text-xs leading-relaxed text-slate-300 block max-w-2xl">
-                {priceBreakdown}
+          {/* 7. DEDICATED DOMAIN PRICING BREAKDOWN */}
+          <div className="relative overflow-hidden p-4 sm:p-5 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-950 rounded-[1.5rem] border border-slate-700 shadow-lg text-white space-y-2">
+            <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 block">
+              {language === 'fr' ? 'Détail du tarif' : language === 'ar' ? 'تفاصيل السعر' : 'Price breakdown'}
+            </span>
+            <p className="text-xs leading-relaxed text-slate-300">
+              {priceBreakdown}
+            </p>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pt-1">
+              <span className="font-black text-white text-xl sm:text-2xl tracking-tight tabular-nums">
+                {totalPrice === 0
+                  ? (language === 'fr' ? 'Gratuit (0.00)' : language === 'ar' ? 'مجاني (0.00)' : 'Free (0.00)')
+                  : `${priceInPaymentCurrency.toLocaleString('fr-FR')} ${currencySymbols[paymentCurrency] || paymentCurrency}`}
               </span>
-              <div className="flex items-baseline gap-2">
-                <span className="font-black text-white text-2xl sm:text-3xl tracking-tight tabular-nums">
-                  {totalPrice === 0
-                    ? 'Gratuit (0.00)'
-                    : `${priceInPaymentCurrency.toLocaleString()} ${currencySymbols[paymentCurrency] || paymentCurrency}`}
+              {totalPrice > 0 && paymentCurrency !== 'DA' && (
+                <span className="text-xs font-bold text-emerald-300 tabular-nums">
+                  {priceInDzd.toLocaleString('fr-FR')} DA · contre-valeur DZD
                 </span>
-                {totalPrice > 0 && (
-                  <span className="text-xs font-bold text-emerald-300">
-                    {priceInDzd.toLocaleString('fr-FR')} DA · contre-valeur DZD
+              )}
+              {totalPrice > 0 && paymentCurrency === 'DA' && (
+                <span className="text-[11px] font-semibold text-slate-300 tabular-nums">
+                  ({totalPrice.toLocaleString('fr-FR')} € base)
+                </span>
+              )}
+            </div>
+          </div>
+          </div>
+
+          {/* DOCKED FOOTER: PRICE + CONFIRMATION BUTTONS */}
+          <footer
+            id="booking-step-confirm"
+            className="shrink-0 scroll-mt-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 sm:px-6 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgb(15_23_42/0.06)] dark:shadow-[0_-4px_16px_rgb(0_0_0/0.35)] z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-4"
+          >
+            <div className="flex items-center justify-between sm:block gap-3 min-w-0">
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 block">
+                  {language === 'fr'
+                    ? `Total séjour · ${calculatedDays} nuit${calculatedDays > 1 ? 's' : ''}`
+                    : language === 'ar'
+                    ? `إجمالي الإقامة · ${calculatedDays} ليالٍ`
+                    : `Stay total · ${calculatedDays} night${calculatedDays > 1 ? 's' : ''}`}
+                </span>
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight tabular-nums">
+                    {totalPrice === 0
+                      ? (language === 'fr' ? 'Gratuit (0.00)' : language === 'ar' ? 'مجاني (0.00)' : 'Free (0.00)')
+                      : `${priceInPaymentCurrency.toLocaleString('fr-FR')} ${currencySymbols[paymentCurrency] || paymentCurrency}`}
                   </span>
-                )}
-                {totalPrice > 0 && paymentCurrency === 'DA' && (
-                  <span className="text-[11px] font-semibold text-slate-300">
-                    ({totalPrice.toLocaleString('fr-FR')} € base)
-                  </span>
-                )}
+                  {totalPrice > 0 && paymentCurrency !== 'DA' && (
+                    <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                      ({priceInDzd.toLocaleString('fr-FR')} DA)
+                    </span>
+                  )}
+                  {totalPrice > 0 && paymentCurrency === 'DA' && (
+                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 tabular-nums">
+                      ({totalPrice.toLocaleString('fr-FR')} €)
+                    </span>
+                  )}
+                </div>
               </div>
+              <span className="sm:hidden text-[11px] font-semibold px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
+                {paymentStatus === 'paid'
+                  ? (language === 'fr' ? 'Payé' : language === 'ar' ? 'مدفوع' : 'Paid')
+                  : paymentStatus === 'partial'
+                  ? (language === 'fr' ? 'Acompte' : language === 'ar' ? 'عربون' : 'Deposit')
+                  : (language === 'fr' ? 'À encaisser' : language === 'ar' ? 'عند الوصول' : 'Pending')}
+              </span>
             </div>
 
-            {isEditing && selectedBooking && (
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => downloadICS(selectedBooking)}
-                  className="px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 flex items-center gap-1 hover:bg-white dark:hover:bg-slate-700 transition-colors text-xs font-semibold"
-                  title="Télécharger l'événement .ICS"
-                >
-                  <Download size={14} />
-                  <span>.ICS</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm('Voulez-vous supprimer cette fiche de réservation ?')) {
-                      deleteBooking(selectedBooking.id);
-                    }
-                  }}
-                  className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
-                  title="Supprimer"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* ACTION BUTTONS */}
-          <div id="booking-step-confirm" className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 scroll-mt-4 backdrop-blur-md px-3 sm:px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-end gap-2 z-10">
-            {activeDomain === 'hotel' && (
-              <div className="flex items-center gap-2 w-full sm:w-auto sm:mr-auto">
-                {isEditing && selectedBooking?.status === 'confirmed' ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => void handleCreateRoomCard()}
-                      disabled={isCreatingCard}
-                      className={`min-h-11 flex-1 sm:flex-none justify-center px-3 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-violet-500 ${
-                        isCreatingCard
-                          ? 'bg-slate-300 text-slate-600 cursor-wait'
-                          : usbConnected
-                            ? 'bg-violet-600 hover:bg-violet-500 text-white cursor-pointer'
-                            : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
-                      }`}
-                      title={
-                        usbConnected
-                          ? 'Encoder la carte client proUSB pour cette chambre et ce s?jour'
-                          : "Encodeur proUSB non connect? - branchez-le d'abord dans l'onglet Serrures"
-                      }
-                    >
-                      {isCreatingCard ? (
-                        <div className="relative w-4 h-4 shrink-0 mr-1">
-                          <svg className="w-4 h-4 -rotate-90" viewBox="0 0 36 36">
-                            <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="4" className="opacity-25" />
-                            <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${Math.max(5, cardProgress)}, 100`} />
-                          </svg>
-                        </div>
-                      ) : (
-                        <KeyRound size={14} />
-                      )}
-                      <span>
-                        {isCreatingCard
-                          ? `Encodage. ${Math.round(cardProgress)}%`
-                          : language === 'fr'
-                            ? 'Cr?er la carte client'
-                            : language === 'ar'
-                              ? '????? ????? ??????'
-                              : 'Create Guest Card'}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const invoice = createInvoiceFromBooking(selectedBooking!, 'invoice');
-                        if (invoice) {
-                          setIsInvoicePreviewOpen(true);
-                        }
-                      }}
-                      disabled={!selectedBooking || !createInvoiceFromBooking}
-                      className="min-h-11 flex-1 sm:flex-none justify-center px-3 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-emerald-500 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
-                      title={language === 'fr' ? 'Créer la facture de ce séjour' : 'Create invoice for this stay'}
-                    >
-                      <FileText size={14} />
-                      <span>{language === 'fr' ? 'Facture' : 'Invoice'}</span>
-                    </button>
-                    <div className="flex items-center gap-1.5 rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/70 dark:bg-violet-950/30 px-2 py-1.5">
-                      <label htmlFor="room-card-count" className="text-[10px] font-semibold text-violet-800 dark:text-violet-200 whitespace-nowrap">Cartes</label>
-                      <input id="room-card-count" type="number" min={1} max={20} value={requestedCardCount} onChange={(e) => setRequestedCardCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-14 h-11 rounded-md border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 px-1 text-center text-xs font-bold text-slate-900 dark:text-white" aria-label="Nombre de cartes ? cr?er" />
-                      <span className="text-[10px] text-violet-700 dark:text-violet-300">{occupantCount} occupant(s)</span>
-                    </div>
-                    {!usbConnected && (
-                      <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                        <AlertCircle size={12} />
-                        {language === 'fr' ? 'Encodeur non connect?' : language === 'ar' ? '?????? ??? ????' : 'Encoder not connected'}
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <div className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                      {language === 'fr' ? 'R?capitulatif du s?jour' : language === 'ar' ? '???? ???????' : 'Stay summary'}
-                    </p>
-                    <p className="text-xs text-slate-700 dark:text-slate-200 mt-0.5 leading-relaxed">{priceBreakdown}</p>
-                    <p className="text-sm font-black text-slate-900 dark:text-white mt-1 tabular-nums">
-                      {totalPrice === 0
-                        ? (language === 'fr' ? 'Gratuit (0.00)' : 'Free (0.00)')
-                        : `${priceInPaymentCurrency.toLocaleString('fr-FR')} ${currencySymbols[paymentCurrency] || paymentCurrency}`}
-                    </p>
-                    {totalPrice > 0 && (
-                      <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                        {priceInDzd.toLocaleString('fr-FR')} DA ? contre-valeur DZD
-                        {paymentCurrency === 'DA' ? ` (${totalPrice.toLocaleString('fr-FR')} ? base)` : ''}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-            {isEditing && selectedBooking && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    updateBookingStatus(selectedBooking.id, 'checked_in');
-                    closeModal();
-                  }}
-                  className="min-h-11 flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto sm:flex-none justify-center px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
-                >
-                  <CheckCircle2 size={14} />
-                  <span>{language === 'fr' ? 'Check-in' : 'Check-in'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const now = new Date().toISOString();
-                    const pendingValuables = (selectedBooking.valuablesAtReception || []).filter((item) => item.status === 'held');
-                    const valuablesAtReception = (selectedBooking.valuablesAtReception || []).map((item) => {
-                      if (item.status !== 'held') return item;
-                      const returned = window.confirm(`Départ de ${selectedBooking.guestName} : l'objet « ${item.description} » a-t-il été restitué au client ? OK = restitué ; Annuler = non réclamé / à conserver.`);
-                      return returned ? { ...item, status: 'returned' as const, returnedAt: now } : { ...item, status: 'forgotten' as const };
-                    });
-                    if (pendingValuables.length > 0) updateBooking(selectedBooking.id, { valuablesAtReception });
-                    updateBookingStatus(selectedBooking.id, 'checked_out');
-                    generateTurnoverTasksForCheckout(selectedBooking.resourceName);
-                    closeModal();
-                  }}
-                  className="min-h-11 flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto sm:flex-none justify-center px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
-                  title="Effectue le départ et génère les tâches de remise en état chambre"
-                >
-                  <Sparkles size={14} />
-                  <span>{language === 'fr' ? 'Check-out & Turnover' : 'Check-out'}</span>
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={closeModal}
-              className="min-h-11 flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto sm:flex-none px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold transition-colors text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-slate-400"
-            >
-              {language === 'fr' ? 'Annuler' : language === 'ar' ? 'إلغاء' : 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              className="min-h-12 flex-[2] basis-[calc(50%-0.25rem)] sm:basis-auto sm:flex-none justify-center px-5 sm:px-7 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl shadow-md transition-colors flex items-center gap-2 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              <CheckCircle2 size={16} />
-              <span>
-                {isEditing
-                  ? language === 'fr'
-                    ? 'Enregistrer les modifications'
+            <div className="flex flex-col-reverse min-[360px]:flex-row sm:items-center gap-2 w-full sm:w-auto shrink-0">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="min-h-11 w-full min-[360px]:w-auto min-[360px]:min-w-24 px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold transition-colors text-xs sm:text-sm cursor-pointer focus-visible:ring-2 focus-visible:ring-slate-400"
+              >
+                {language === 'fr' ? 'Annuler' : language === 'ar' ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="submit"
+                className="min-h-11 w-full min-[360px]:flex-1 sm:flex-none sm:min-w-52 justify-center px-5 sm:px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl shadow-md transition-colors flex items-center gap-2 text-xs sm:text-sm cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                <CheckCircle2 size={16} className="shrink-0" />
+                <span>
+                  {isEditing
+                    ? language === 'fr'
+                      ? 'Enregistrer'
+                      : language === 'ar'
+                      ? 'حفظ التعديلات'
+                      : 'Save Changes'
+                    : language === 'fr'
+                    ? 'Confirmer la réservation'
                     : language === 'ar'
-                    ? 'حفظ التعديلات'
-                    : 'Save Changes'
-                  : language === 'fr'
-                  ? 'Confirmer cette réservation'
-                  : language === 'ar'
-                  ? 'تأكيد الحجز'
-                  : 'Confirm Booking'}
-              </span>
-            </button>
-          </div>
+                    ? 'تأكيد الحجز'
+                    : 'Confirm Booking'}
+                </span>
+              </button>
+            </div>
+          </footer>
         </form>
         )}
       </div>
@@ -2123,14 +2372,14 @@ export const BookingModal: React.FC = () => {
         >
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] my-auto pms-modal">
             {/* Header */}
-            <div className="p-4 bg-emerald-700 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldCheck size={20} className="text-emerald-200" />
-                <div>
-                  <h4 className="font-bold text-sm leading-tight">
+            <div className="px-4 py-3 bg-emerald-700 text-white flex items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <ShieldCheck size={20} className="text-emerald-200 shrink-0" />
+                <div className="min-w-0">
+                  <h4 className="font-bold text-sm leading-tight truncate">
                     Fiche Individuelle de Police • بطاقة الشرطة الفردية
                   </h4>
-                  <p className="text-[11px] text-emerald-100">
+                  <p className="text-[11px] text-emerald-100 truncate">
                     Réglementation Hôtelière Algérienne — Déclaration DGSN / Tourisme
                   </p>
                 </div>
@@ -2138,14 +2387,15 @@ export const BookingModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowPoliceSheetModal(false)}
-                className="p-1.5 text-white/80 hover:text-white hover:bg-emerald-600 rounded-lg transition-colors cursor-pointer"
+                className="min-w-11 min-h-11 inline-flex items-center justify-center text-white/80 hover:text-white hover:bg-emerald-600 rounded-xl transition-colors cursor-pointer shrink-0"
+                aria-label={language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}
               >
                 <X size={18} />
               </button>
             </div>
 
             {/* Document Content */}
-            <div className="p-6 overflow-y-auto space-y-4 text-xs font-sans bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+            <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 text-xs font-sans bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
               <div className="text-center border-b border-slate-200 dark:border-slate-700 pb-3">
                 <p className="font-bold text-[13px] tracking-wide">الجمهورية الجزائرية الديمقراطية الشعبية</p>
                 <p className="font-bold text-[12px] tracking-wide text-slate-700 dark:text-slate-300">
@@ -2162,61 +2412,61 @@ export const BookingModal: React.FC = () => {
               {/* Grid Details */}
               <div className="space-y-3">
                 <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
-                  <div className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] text-emerald-700 dark:text-emerald-400">
+                  <div className="font-bold uppercase tracking-wider text-[11px] text-emerald-700 dark:text-emerald-400">
                     1. Renseignements Personnels du Locataire / هوية النزيل
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="min-w-0">
                       <span className="text-slate-500 block">Nom & Prénom :</span>
-                      <span className="font-bold text-slate-900 dark:text-white">{guestName || '—'}</span>
+                      <span className="font-bold text-slate-900 dark:text-white break-words">{guestName || '—'}</span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-slate-500 block">Statut / Nationalité :</span>
-                      <span className="font-bold text-slate-900 dark:text-white">
+                      <span className="font-bold text-slate-900 dark:text-white break-words">
                         {guestType === 'algerian' ? '🇩🇿 Algérienne (Citoyen National)' : `🌐 ${foreignNationality}`}
                       </span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-slate-500 block">Pièce d'Identité :</span>
-                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                      <span className="font-mono font-bold text-slate-900 dark:text-white break-all">
                         {guestType === 'algerian'
                           ? `${algerianIdType.toUpperCase()}: ${algerianIdNumber || 'Non renseigné'}`
                           : `Passeport: ${passportNumber || 'Non renseigné'}`}
                       </span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-slate-500 block">
                         {guestType === 'algerian' ? 'Wilaya d\'origine / Résidence :' : 'Visa / Entrée :'}
                       </span>
-                      <span className="font-medium text-slate-900 dark:text-white">
+                      <span className="font-medium text-slate-900 dark:text-white break-words">
                         {guestType === 'algerian'
                           ? wilayaOfOrigin
                           : `Visa N°: ${visaNumber || '—'} (Entrée: ${entryDateInCountry || '—'})`}
                       </span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-slate-500 block">Contact Téléphonique :</span>
-                      <span className="font-medium text-slate-900 dark:text-white">{guestPhone || '—'}</span>
+                      <span className="font-medium text-slate-900 dark:text-white break-all">{guestPhone || '—'}</span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-slate-500 block">Email :</span>
-                      <span className="font-medium text-slate-900 dark:text-white">{guestEmail || '—'}</span>
+                      <span className="font-medium text-slate-900 dark:text-white break-all">{guestEmail || '—'}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
-                  <div className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] text-blue-700 dark:text-blue-400">
+                  <div className="font-bold uppercase tracking-wider text-[11px] text-blue-700 dark:text-blue-400">
                     2. Modalités du Séjour Hôtelier / تفاصيل الإقامة
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="min-w-0">
                       <span className="text-slate-500 block">Chambre / Hébergement :</span>
-                      <span className="font-bold text-slate-900 dark:text-white">
+                      <span className="font-bold text-slate-900 dark:text-white break-words">
                         {currentResource?.name || 'Chambre'} ({currentResource?.type || 'Hébergement'})
                       </span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-slate-500 block">Nombre d'Occupants dans la Chambre :</span>
                       <span className="font-bold text-slate-900 dark:text-white">
                         {activeDomain === 'hotel'
@@ -2224,37 +2474,37 @@ export const BookingModal: React.FC = () => {
                           : `${resortOccupants} occupant(s)`}
                       </span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-slate-500 block">Date d'Arrivée (Check-in) :</span>
-                      <span className="font-medium text-slate-900 dark:text-white">{startDate}</span>
+                      <span className="font-medium text-slate-900 dark:text-white tabular-nums">{startDate}</span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-slate-500 block">Date de Départ Prévue (Check-out) :</span>
-                      <span className="font-medium text-slate-900 dark:text-white">{endDate || startDate}</span>
+                      <span className="font-medium text-slate-900 dark:text-white tabular-nums">{endDate || startDate}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
-                  <div className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] text-amber-700 dark:text-amber-400">
+                  <div className="font-bold uppercase tracking-wider text-[11px] text-amber-700 dark:text-amber-400">
                     3. Règlement & Devises / الدفع والعملة
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div className="min-w-0">
                       <span className="text-slate-500 block">Devise Facturée :</span>
                       <span className="font-bold text-slate-900 dark:text-white">
                         {paymentCurrency} ({currencySymbols[paymentCurrency] || paymentCurrency})
                       </span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-slate-500 block">Montant Facturé :</span>
-                      <span className="font-extrabold text-slate-900 dark:text-white">
+                      <span className="font-extrabold text-slate-900 dark:text-white tabular-nums">
                         {priceInPaymentCurrency.toLocaleString()} {currencySymbols[paymentCurrency] || paymentCurrency}
                       </span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-slate-500 block">Contre-valeur DZD (DA) :</span>
-                      <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
+                      <span className="font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums">
                         {priceInDzd.toLocaleString()} DA
                       </span>
                     </div>
@@ -2262,7 +2512,7 @@ export const BookingModal: React.FC = () => {
                 </div>
 
                 {/* Signatures */}
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-dashed border-slate-300 dark:border-slate-700">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-dashed border-slate-300 dark:border-slate-700">
                   <div className="h-20 border border-slate-300 dark:border-slate-700 rounded-lg p-2 flex flex-col justify-between">
                     <span className="text-[10px] text-slate-500 uppercase font-bold">
                       Signature du Séjournant / تأشيرة النزيل
@@ -2280,25 +2530,25 @@ export const BookingModal: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-3 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div className="p-3 sm:px-5 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <span className="text-[11px] text-slate-500 dark:text-slate-400">
                 Formulaire conforme au Décret exécutif n° 08-364 relatif aux établissements hôteliers.
               </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="px-3 py-1.5 bg-slate-800 dark:bg-slate-200 hover:bg-slate-700 dark:hover:bg-slate-300 text-white dark:text-slate-900 font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Printer size={14} />
-                  <span>Imprimer la Fiche</span>
-                </button>
+              <div className="flex flex-col-reverse min-[360px]:flex-row items-stretch min-[360px]:items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowPoliceSheetModal(false)}
-                  className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 text-xs font-semibold cursor-pointer"
+                  className="min-h-11 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 text-xs font-semibold cursor-pointer"
                 >
                   Fermer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="min-h-11 px-4 py-2 bg-slate-800 dark:bg-slate-200 hover:bg-slate-700 dark:hover:bg-slate-300 text-white dark:text-slate-900 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Printer size={14} />
+                  <span>Imprimer la Fiche</span>
                 </button>
               </div>
             </div>
@@ -2315,8 +2565,8 @@ export const BookingModal: React.FC = () => {
               <div><strong>{language === 'ar' ? 'الغرفة' : language === 'en' ? 'Room' : 'Chambre'} :</strong> {roomStatusAlert.roomName}</div>
               <div><strong>{language === 'ar' ? 'الحالة' : language === 'en' ? 'Status' : 'Statut'} :</strong> {roomStatusAlert.status === 'cleaning' ? (language === 'en' ? 'Cleaning' : language === 'ar' ? 'قيد التنظيف' : 'Nettoyage en cours') : roomStatusAlert.status === 'dirty' ? (language === 'en' ? 'Dirty' : language === 'ar' ? 'متسخة' : 'Sale') : roomStatusAlert.status === 'out_of_order' ? (language === 'en' ? 'Out of order' : language === 'ar' ? 'خارج الخدمة' : 'Hors service') : (language === 'en' ? 'Unconfirmed' : language === 'ar' ? 'غير مؤكدة' : 'Non confirmée')}</div>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{language === 'ar' ? 'اطلب من التدبير المنزلي تحديث حالة الغرفة إلى نظيفة بعد contrôle.' : language === 'en' ? 'Ask housekeeping to update the room to Clean after inspection.' : 'Demandez au service d’étage de contrôler la chambre puis de passer son statut à « Propre ».'}</p>
-            <div className="flex justify-end"><button type="button" onClick={() => setRoomStatusAlert(null)} className="px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold text-sm">{language === 'ar' ? 'حسنًا' : language === 'en' ? 'Understood' : 'Compris'}</button></div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{language === 'ar' ? 'اطلب من التدبير المنزلي تحديث حالة الغرفة إلى نظيفة بعد المراقبة.' : language === 'en' ? 'Ask housekeeping to update the room to Clean after inspection.' : 'Demandez au service d’étage de contrôler la chambre puis de passer son statut à « Propre ».'}</p>
+            <div className="flex justify-end"><button type="button" onClick={() => setRoomStatusAlert(null)} className="min-h-11 px-5 py-2 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold text-sm cursor-pointer">{language === 'ar' ? 'حسنًا' : language === 'en' ? 'Understood' : 'Compris'}</button></div>
           </div>
         </div>
       )}
