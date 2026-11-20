@@ -456,7 +456,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .catch((error) => console.error('[Outbox] Booking mutation was not queued:', error));
   };
 
-  const createInvoiceFromBooking = (booking: TimelineBooking, docType: DocumentType = 'invoice'): InvoiceRecord | null => {
+  const createInvoiceFromBooking = (booking: TimelineBooking, docType: DocumentType = 'ticket'): InvoiceRecord | null => {
     if (!booking.id) return null;
     const profile = establishmentProfile;
     const activeCurrency = profile.defaultCurrency || currency || 'DA';

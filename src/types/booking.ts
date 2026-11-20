@@ -51,7 +51,7 @@ export type BookingStatus =
   | 'out_of_order'
   | 'cancelled';
 
-export type DocumentType = 'invoice' | 'quote' | 'proforma';
+export type DocumentType = 'ticket' | 'invoice' | 'quote' | 'proforma';
 
 export interface InvoiceItem {
   id: string;
