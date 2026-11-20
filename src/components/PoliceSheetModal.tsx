@@ -15,8 +15,9 @@ import {
   CreditCard,
   FileBadge2,
 } from 'lucide-react';
-import { DomainType, ResourceItem } from '../types/booking';
+import { DomainType, ResourceGroup, ResourceItem } from '../types/booking';
 import { EstablishmentProfile } from '../types/establishment';
+import { PRESET_HOTEL_LOGOS } from '../utils/establishmentDefaults';
 
 export interface PoliceCompanionGuest {
   fullName: string;
@@ -34,6 +35,8 @@ export interface PoliceSheetModalProps {
   establishmentProfile: EstablishmentProfile;
   bookingId?: string;
   activeDomain: DomainType;
+  resourceGroups: ResourceGroup[];
+  selectedBuildingGroupId?: string | 'all';
   currentResource?: ResourceItem;
   guestName: string;
   guestPhone: string;
@@ -144,6 +147,8 @@ export const PoliceSheetModal: React.FC<PoliceSheetModalProps> = ({
   establishmentProfile,
   bookingId,
   activeDomain,
+  resourceGroups,
+  selectedBuildingGroupId,
   currentResource,
   guestName,
   guestPhone,
@@ -241,8 +246,47 @@ export const PoliceSheetModal: React.FC<PoliceSheetModalProps> = ({
     (language === 'ar'
       ? 'المؤسسة الفندقية'
       : language === 'en'
-      ? 'Hospitality Establishment'
+      ? 'Hotel Establishment'
       : 'Établissement Hôtelier');
+
+  const hotelLogoSrc =
+    establishmentProfile.logoUrl?.trim() ||
+    (activeDomain === 'resort'
+      ? PRESET_HOTEL_LOGOS[1]?.svgDataUrl
+      : PRESET_HOTEL_LOGOS[0]?.svgDataUrl) ||
+    '';
+
+  const matchedGroup =
+    resourceGroups.find(
+      (group) =>
+        (currentResource?.groupId && group.id === currentResource.groupId) ||
+        (currentResource?.id && group.resources.some((r) => r.id === currentResource.id))
+    ) ||
+    (selectedBuildingGroupId && selectedBuildingGroupId !== 'all'
+      ? resourceGroups.find((group) => group.id === selectedBuildingGroupId)
+      : undefined);
+
+  const groupBuildingName = matchedGroup
+    ? (matchedGroup.name[language] || matchedGroup.name.fr || matchedGroup.name.en || '').trim()
+    : '';
+  const rawResourceBuilding = currentResource?.building?.trim() || '';
+  const buildingDisplay = (() => {
+    if (groupBuildingName && rawResourceBuilding) {
+      if (groupBuildingName.toLowerCase().includes(rawResourceBuilding.toLowerCase())) {
+        return groupBuildingName;
+      }
+      return `${groupBuildingName} (${language === 'ar' ? `مبنى ${rawResourceBuilding}` : language === 'en' ? `Bldg ${rawResourceBuilding}` : `Bât. ${rawResourceBuilding}`})`;
+    }
+    if (groupBuildingName) return groupBuildingName;
+    if (rawResourceBuilding) {
+      return language === 'ar'
+        ? `المبنى ${rawResourceBuilding}`
+        : language === 'en'
+        ? `Building ${rawResourceBuilding}`
+        : `Bâtiment ${rawResourceBuilding}`;
+    }
+    return '';
+  })();
 
   return createPortal(
     <div
@@ -346,22 +390,22 @@ export const PoliceSheetModal: React.FC<PoliceSheetModalProps> = ({
                 <div className="pt-3.5 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   {/* Establishment Identity */}
                   <div className="flex items-start gap-3 min-w-0">
-                    {establishmentProfile.logoUrl ? (
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl border border-slate-200 bg-white p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                    {hotelLogoSrc ? (
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl border border-slate-300 bg-white p-1.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                         <img
-                          src={establishmentProfile.logoUrl}
+                          src={hotelLogoSrc}
                           alt={hotelName}
                           className="max-w-full max-h-full object-contain"
                         />
                       </div>
                     ) : (
-                      <div className="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
-                        <Building2 size={22} />
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
+                        <Building2 size={24} />
                       </div>
                     )}
-                    <div className="min-w-0 space-y-0.5">
+                    <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <h2 className="font-black text-sm text-slate-950 uppercase tracking-tight break-words">
+                        <h2 className="font-black text-sm sm:text-base text-slate-950 uppercase tracking-tight break-words">
                           {hotelName}
                         </h2>
                         {establishmentProfile.stars > 0 && (
@@ -375,6 +419,25 @@ export const PoliceSheetModal: React.FC<PoliceSheetModalProps> = ({
                                 />
                               )
                             )}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {establishmentProfile.typeLabel?.trim() && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-700">
+                            {establishmentProfile.typeLabel}
+                          </span>
+                        )}
+                        {buildingDisplay && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-900">
+                            <Building2 size={10} className="text-emerald-700 shrink-0" />
+                            <span>
+                              {language === 'ar'
+                                ? `المبنى : ${buildingDisplay}`
+                                : language === 'en'
+                                ? `Building: ${buildingDisplay}`
+                                : `Bâtiment : ${buildingDisplay}`}
+                            </span>
                           </span>
                         )}
                       </div>
@@ -598,7 +661,26 @@ export const PoliceSheetModal: React.FC<PoliceSheetModalProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 divide-x divide-slate-200">
+                <div className="grid grid-cols-2 sm:grid-cols-5 divide-y sm:divide-y-0 divide-x divide-slate-200">
+                  <div className="px-3.5 py-2.5 col-span-2 sm:col-span-1">
+                    <span className="text-[10px] text-slate-500 font-semibold uppercase block">
+                      Bâtiment / المبنى
+                    </span>
+                    <p className="font-extrabold text-slate-950 mt-0.5 break-words">
+                      {buildingDisplay || '—'}
+                    </p>
+                    {(currentResource?.floor || currentResource?.wing) && (
+                      <p className="text-[10px] text-slate-500">
+                        {[
+                          currentResource?.floor ? `Étage ${currentResource.floor}` : null,
+                          currentResource?.wing || null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                    )}
+                  </div>
+
                   <div className="px-3.5 py-2.5 col-span-2 sm:col-span-1">
                     <span className="text-[10px] text-slate-500 font-semibold uppercase block">
                       Chambre / الغرفة

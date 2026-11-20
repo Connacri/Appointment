@@ -72,6 +72,7 @@ export const BookingModal: React.FC = () => {
     currentRole,
     clientProfile,
     resourceGroups,
+    selectedBuildingGroupId,
     bookings,
     generateTurnoverTasksForCheckout,
     currency,
@@ -2420,6 +2421,8 @@ export const BookingModal: React.FC = () => {
         establishmentProfile={establishmentProfile}
         bookingId={bookingConfirmation?.id ?? selectedBooking?.id}
         activeDomain={activeDomain}
+        resourceGroups={resourceGroups}
+        selectedBuildingGroupId={selectedBuildingGroupId}
         currentResource={currentResource}
         guestName={guestName}
         guestPhone={guestPhone}
