@@ -38,6 +38,7 @@ import { isRoomReadyForBooking } from '../utils/roomReadiness';
 import { lockManager } from '../locks/lockManager';
 import { CardResultDialog, CardResult } from './CardResultDialog';
 import { CardCreationProgressModal } from './CardCreationProgressModal';
+import { InvoicePreviewModal } from './InvoicePreviewModal';
 import { ALGERIA_69_WILAYAS } from '../data/algeriaWilayas';
 import { HOSPITALITY_MEAL_PLANS, DIETARY_PREFERENCES } from '../data/mealPlans';
 import { KeyRound, Loader2, Utensils, UtensilsCrossed, ShieldAlert, Award, FileSpreadsheet } from 'lucide-react';
@@ -72,6 +73,9 @@ export const BookingModal: React.FC = () => {
     bookings,
     generateTurnoverTasksForCheckout,
     currency,
+    lastCreatedInvoice,
+    setLastCreatedInvoice,
+    createInvoiceFromBooking,
   } = useApp();
 
   const isEditing = !!selectedBooking;
@@ -224,6 +228,7 @@ export const BookingModal: React.FC = () => {
   const [cardsCreatedCount, setCardsCreatedCount] = useState(0);
   const [cardResult, setCardResult] = useState<CardResult | null>(null);
   const [usbConnected, setUsbConnected] = useState<boolean>(lockManager.getStatus() === 'connected');
+  const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false);
 
   // A confirmed booking must never leak into the next sheet: reopening the dialog
   // used to show the previous confirmation (and its step indicator) instead of a
@@ -1976,6 +1981,21 @@ export const BookingModal: React.FC = () => {
                               : 'Create Guest Card'}
                       </span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const invoice = createInvoiceFromBooking(selectedBooking!, 'invoice');
+                        if (invoice) {
+                          setIsInvoicePreviewOpen(true);
+                        }
+                      }}
+                      disabled={!selectedBooking || !createInvoiceFromBooking}
+                      className="min-h-11 flex-1 sm:flex-none justify-center px-3 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-emerald-500 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                      title={language === 'fr' ? 'Créer la facture de ce séjour' : 'Create invoice for this stay'}
+                    >
+                      <FileText size={14} />
+                      <span>{language === 'fr' ? 'Facture' : 'Invoice'}</span>
+                    </button>
                     <div className="flex items-center gap-1.5 rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/70 dark:bg-violet-950/30 px-2 py-1.5">
                       <label htmlFor="room-card-count" className="text-[10px] font-semibold text-violet-800 dark:text-violet-200 whitespace-nowrap">Cartes</label>
                       <input id="room-card-count" type="number" min={1} max={20} value={requestedCardCount} onChange={(e) => setRequestedCardCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-14 h-11 rounded-md border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 px-1 text-center text-xs font-bold text-slate-900 dark:text-white" aria-label="Nombre de cartes ? cr?er" />
@@ -2294,6 +2314,18 @@ export const BookingModal: React.FC = () => {
 
       {/* Card creation result — success or failure dialog */}
       <CardResultDialog result={cardResult} onClose={() => setCardResult(null)} />
+
+      {/* Invoice preview — opened after creating an invoice from a confirmed booking */}
+      {lastCreatedInvoice && (
+        <InvoicePreviewModal
+          invoice={lastCreatedInvoice}
+          isOpen={isInvoicePreviewOpen}
+          onClose={() => {
+            setIsInvoicePreviewOpen(false);
+            setLastCreatedInvoice(null);
+          }}
+        />
+      )}
     </div>
   );
 };

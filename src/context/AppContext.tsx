@@ -15,6 +15,9 @@ import {
   StockItem,
   StockMovement,
   HotelEstablishment,
+  InvoiceRecord,
+  InvoiceItem,
+  DocumentType,
 } from '../types/booking';
 import {
   initialResourceGroups,
@@ -133,6 +136,9 @@ interface AppContextType {
   ) => { success: boolean; message: string; booking?: TimelineBooking };
   selectedBooking: TimelineBooking | null;
   setSelectedBooking: (booking: TimelineBooking | null) => void;
+  lastCreatedInvoice: InvoiceRecord | null;
+  setLastCreatedInvoice: (invoice: InvoiceRecord | null) => void;
+  createInvoiceFromBooking: (booking: TimelineBooking, docType?: DocumentType) => InvoiceRecord | null;
   isNewBookingModalOpen: boolean;
   setIsNewBookingModalOpen: (open: boolean) => void;
   newBookingInitialSlot: { resourceId?: string; date?: string; time?: string } | null;
@@ -449,6 +455,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .catch((error) => console.error('[Outbox] Booking mutation was not queued:', error));
   };
 
+  const createInvoiceFromBooking = (booking: TimelineBooking, docType: DocumentType = 'invoice'): InvoiceRecord | null => {
+    if (!booking.id) return null;
+    const profile = establishmentProfile;
+    const activeCurrency = profile.defaultCurrency || currency || 'DA';
+    const now = new Date();
+    const issueDate = now.toISOString().split('T')[0];
+    const dueDate = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().split('T')[0];
+    const prefix = docType === 'invoice' ? 'FAC' : docType === 'quote' ? 'DEV' : 'PRO';
+    const randNum = Math.floor(1000 + Math.random() * 9000);
+    const docNumber = `${prefix}-2026-${randNum}`;
+    const item: InvoiceItem = {
+      id: `inv_item_${Date.now()}`,
+      description: booking.resourceName || 'Séjour / Hébergement',
+      quantity: 1,
+      unitPrice: booking.totalPrice > 0 ? booking.totalPrice : 0,
+      vatRate: 10,
+      total: booking.totalPrice > 0 ? booking.totalPrice : 0,
+    };
+    const subtotalHT = Math.round((item.quantity * item.unitPrice) / (1 + item.vatRate / 100) * 100) / 100;
+    const vatAmount = Math.round(subtotalHT * (item.vatRate / 100) * 100) / 100;
+    const totalTTC = Math.round((subtotalHT + vatAmount) * 100) / 100;
+    const invoice: InvoiceRecord = {
+      id: `inv_${Date.now()}`,
+      docNumber,
+      docType,
+      domain: booking.sector as DomainType,
+      bookingId: booking.id,
+      customerName: booking.guestName || 'Client',
+      customerEmail: booking.guestEmail || 'client@example.com',
+      customerPhone: booking.guestPhone || undefined,
+      issueDate,
+      validUntilOrDueDate: dueDate,
+      items: [item],
+      subtotalHT,
+      discountType: 'none',
+      discountValue: 0,
+      discountAmount: 0,
+      vatAmount,
+      cityTouristTax: 0,
+      currency: activeCurrency,
+      totalTTC,
+      depositPaid: 0,
+      balanceDue: totalTTC,
+      status: docType === 'invoice' ? 'sent' : 'draft',
+      termsAndNotes: `Document généré depuis la réservation ${booking.id}.`,
+    };
+    try {
+      const saved = localStorage.getItem('omnibook_invoices');
+      const existing: InvoiceRecord[] = saved ? JSON.parse(saved) : [];
+      const updated = [invoice, ...existing];
+      localStorage.setItem('omnibook_invoices', JSON.stringify(updated));
+      setLastCreatedInvoice(invoice);
+      return invoice;
+    } catch (error) {
+      console.error('[Invoice] Failed to persist invoice from booking:', error);
+      return null;
+    }
+  };
+
   const [clientProfile, setClientProfileState] = useState<ClientProfile>(() => {
     const saved = localStorage.getItem('omnibook_client_profile');
     if (saved) {
@@ -479,6 +544,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const [selectedBooking, setSelectedBooking] = useState<TimelineBooking | null>(null);
+  const [lastCreatedInvoice, setLastCreatedInvoice] = useState<InvoiceRecord | null>(null);
   const [isNewBookingModalOpen, setIsNewBookingModalOpen] = useState(false);
   const [newBookingInitialSlot, setNewBookingInitialSlot] = useState<{ resourceId?: string; date?: string; time?: string } | null>(null);
   const [isCockpitOpen, setIsCockpitOpen] = useState(false);
@@ -1842,6 +1908,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         markBookingAsPaid,
         selectedBooking,
         setSelectedBooking,
+        lastCreatedInvoice,
+        setLastCreatedInvoice,
+        createInvoiceFromBooking,
         isNewBookingModalOpen,
         setIsNewBookingModalOpen,
         newBookingInitialSlot,
