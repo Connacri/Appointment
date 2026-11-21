@@ -1,3 +1,5 @@
+#![allow(dead_code)] // Win32 ABI fields are read by the operating system, not Rust.
+
 use std::ffi::c_void;
 use std::mem::zeroed;
 use std::ptr::{null, null_mut};
