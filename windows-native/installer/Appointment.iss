@@ -10,7 +10,7 @@ AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\Appointment PMS
 DefaultGroupName={#AppName}
-OutputDir=..\\dist
+OutputDir=..\dist
 OutputBaseFilename=Appointment-PMS-Setup-v{#AppVersion}
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
@@ -21,7 +21,7 @@ WizardStyle=modern
 UninstallDisplayIcon={app}\{#AppExeName}
 
 [Files]
-Source: "target\release\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\target\release\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"
