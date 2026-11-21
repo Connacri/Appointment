@@ -126,7 +126,11 @@ impl PmsDatabase {
             return Ok(());
         }
         let version: i64 = tx.query_row(
-            "SELECT COALESCE(MAX(version), 0) + 1 FROM bookings WHERE workspace_id=?1 AND id=?2",
+            "SELECT COALESCE(MAX(version), 0) + 1 FROM (
+               SELECT version FROM bookings WHERE workspace_id=?1 AND id=?2
+               UNION ALL
+               SELECT version FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2
+             )",
             params![workspace_id, booking.id], |row| row.get(0)
         ).map_err(|e| e.to_string())?;
         tx.execute(
@@ -263,7 +267,7 @@ impl PmsDatabase {
         outbox_id: &str,
     ) -> rusqlite::Result<bool> {
         let changed = self.connection.execute(
-            "UPDATE outbox SET status='synced', last_error=NULL WHERE workspace_id=?1 AND id=?2 AND status='pending'",
+            "UPDATE outbox SET status='synced', last_error=NULL WHERE workspace_id=?1 AND id=?2 AND status IN ('pending','failed')",
             params![workspace_id, outbox_id],
         )?;
         Ok(changed == 1)
@@ -444,7 +448,7 @@ mod tests {
     }
 
     #[test]
-    fn outbox_retry_state_is_workspace_scoped() {
+    fn outbox_retry_state_is_workspace_scoped_and_late_ack_is_accepted() {
         let mut db = database();
         db.upsert_booking("w-1", &booking("b-1"), "idem-1").unwrap();
         let entry = db.pending_outbox("w-1", 1).unwrap().remove(0);
@@ -453,7 +457,24 @@ mod tests {
             .mark_outbox_failed("w-1", &entry.id, "network timeout")
             .unwrap());
         assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 0);
-        assert!(db.retry_outbox("w-1", &entry.id).unwrap());
-        assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 1);
+        assert!(db.mark_outbox_synced("w-1", &entry.id).unwrap());
+    }
+
+    #[test]
+    fn recreation_keeps_version_monotonic_after_tombstone() {
+        let mut db = database();
+        let item = booking("b-1");
+        db.upsert_booking("w-1", &item, "idem-1").unwrap();
+        db.delete_booking("w-1", "b-1", "idem-2").unwrap();
+        db.upsert_booking("w-1", &item, "idem-3").unwrap();
+        let version: i64 = db
+            .connection
+            .query_row(
+                "SELECT version FROM bookings WHERE workspace_id='w-1' AND id='b-1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, 3);
     }
 }
