@@ -42,16 +42,6 @@ jobs:
         with:
           workspaces: windows-native -> target
 
-      - name: Resolve Rust dependencies and generate lockfile
-        run: cargo generate-lockfile
-
-      - name: Export resolved Cargo lockfile
-        shell: pwsh
-        run: |
-          $bytes = [System.IO.File]::ReadAllBytes("Cargo.lock")
-          Write-Output "CARGO_LOCKFILE_BASE64"
-          Write-Output ([Convert]::ToBase64String($bytes))
-
       - name: Verify Rust formatting
         run: cargo fmt --all -- --check
 
@@ -59,7 +49,7 @@ jobs:
         run: cargo test --locked
 
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets --locked -- -D warnings
 
       - name: Build release executable
         run: cargo build --release --locked
