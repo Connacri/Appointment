@@ -4,6 +4,9 @@ import {
   buildEventLogExportFilename,
   buildHistoricalEventSeeds,
   computeBookingDiff,
+  computeEventLogStats,
+  countActiveEventLogFilters,
+  detectEventLogDatePreset,
   filterEventLogs,
   formatEventLogsAsCsv,
   formatEventLogsAsText,
@@ -322,4 +325,62 @@ test('buildEventLogExportFilename and formatEventLogsAsText produce complete str
   assert.ok(txt.includes('- Montant total : 18000 -> 22000'));
   assert.ok(txt.includes('Metadonnees: currency=DA'));
 });
+
+test('detectEventLogDatePreset, countActiveEventLogFilters, and computeEventLogStats work accurately', () => {
+  const refNow = new Date(2026, 10, 21, 14, 0, 0);
+  assert.equal(detectEventLogDatePreset('', '', refNow), 'all');
+  assert.equal(detectEventLogDatePreset('2026-11-21', '2026-11-21', refNow), 'today');
+  assert.equal(detectEventLogDatePreset('2026-11-15', '2026-11-21', refNow), '7d');
+  assert.equal(detectEventLogDatePreset('2026-11-01', '2026-11-10', refNow), 'custom');
+
+  assert.equal(countActiveEventLogFilters({}), 0);
+  assert.equal(
+    countActiveEventLogFilters({
+      query: '101',
+      category: 'booking',
+      severity: 'warn',
+      fromDate: '2026-11-21',
+    }),
+    4
+  );
+
+  const stats = computeEventLogStats([
+    {
+      id: '1',
+      timestamp: '2026-11-21T10:00:00Z',
+      category: 'booking',
+      action: 'a',
+      severity: 'info',
+      title: 't',
+      description: 'd',
+      actor: { role: 'staff', label: 's' },
+      source: 'live',
+    },
+    {
+      id: '2',
+      timestamp: '2026-11-21T10:01:00Z',
+      category: 'booking',
+      action: 'b',
+      severity: 'success',
+      title: 't',
+      description: 'd',
+      actor: { role: 'staff', label: 's' },
+      source: 'live',
+    },
+    {
+      id: '3',
+      timestamp: '2026-11-21T10:02:00Z',
+      category: 'sync',
+      action: 'c',
+      severity: 'error',
+      title: 't',
+      description: 'd',
+      actor: { role: 'system', label: 's' },
+      source: 'live',
+    },
+  ]);
+
+  assert.deepEqual(stats, { total: 3, info: 1, success: 1, warn: 0, error: 1 });
+});
+
 

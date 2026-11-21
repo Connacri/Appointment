@@ -27,6 +27,7 @@ import {
   Coins,
   Package,
   History,
+  LogOut,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -46,6 +47,11 @@ import { ALGERIA_69_WILAYAS } from '../data/algeriaWilayas';
 import { HOSPITALITY_MEAL_PLANS, DIETARY_PREFERENCES } from '../data/mealPlans';
 import { KeyRound, Loader2, Utensils, UtensilsCrossed, ShieldAlert, Award, FileSpreadsheet } from 'lucide-react';
 import { normalizeBookingText } from '../utils/bookingText';
+import {
+  buildBookingModalSummary,
+  buildGuestCheckoutPayload,
+  resolveHeldValuablesOnCheckout,
+} from '../utils/bookingSummary';
 
 /**
  * Imported or legacy bookings can miss text fields (guest name, e-mail, alert
@@ -125,7 +131,11 @@ export const BookingModal: React.FC = () => {
   const [valuablesText, setValuablesText] = useState('');
   const [forgottenText, setForgottenText] = useState('');
   const [guestAlertsText, setGuestAlertsText] = useState('');
-  const [showCheckoutPropertyDialog, setShowCheckoutPropertyDialog] = useState(false);
+  const [pendingCheckoutPrompt, setPendingCheckoutPrompt] = useState<{
+    mode: 'checkout' | 'guest_left';
+    returnedById: Record<string, boolean>;
+  } | null>(null);
+  const [checkoutNotice, setCheckoutNotice] = useState<{ title: string; message: string } | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending' | 'partial'>('paid');
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [roomStatusAlert, setRoomStatusAlert] = useState<{ roomName: string; status: ResourceItem['housekeepingStatus'] } | null>(null);
@@ -254,6 +264,8 @@ export const BookingModal: React.FC = () => {
       setCardResult(null);
       setConflictError(null);
       setConfirmDeleteBooking(false);
+      setPendingCheckoutPrompt(null);
+      setCheckoutNotice(null);
     }
     wasOpenRef.current = isOpen;
   }, [isOpen]);
@@ -1073,6 +1085,8 @@ export const BookingModal: React.FC = () => {
     setCardsCreatedCount(0);
     setRequestedCardCount(2);
     setConfirmDeleteBooking(false);
+    setPendingCheckoutPrompt(null);
+    setCheckoutNotice(null);
   };
 
   // Keyboard accessibility hook called unconditionally BEFORE any early exit
@@ -1160,6 +1174,8 @@ export const BookingModal: React.FC = () => {
                 >
                   {isRoomCellBooking
                     ? (currentResource?.name || resourceNameFallback || domainResources.find((r) => r.id === resourceId)?.name || '')
+                    : isEditing && selectedBooking
+                    ? `${selectedBooking.resourceName || currentResource?.name || ''} · ${selectedBooking.guestName || sheetTitle[language] || sheetTitle.en}`
                     : (sheetTitle[language] || sheetTitle.en)}
                 </h3>
                 {isEditing && selectedBooking && (
@@ -1174,6 +1190,7 @@ export const BookingModal: React.FC = () => {
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
                 {domainCfg.label[language] || domainCfg.label.en} · {domainCfg.bookingTerm[language]}
+                {isEditing && selectedBooking?.resourceName ? ` · ${selectedBooking.resourceName}` : ''}
               </p>
             </div>
           </div>
@@ -1392,7 +1409,101 @@ export const BookingModal: React.FC = () => {
           )}
 
           {/* Traceability, Quick Stay Actions & Modification details (Audit trail) */}
-          {isEditing && selectedBooking && (
+          {isEditing && selectedBooking && (() => {
+            const summary = buildBookingModalSummary(selectedBooking, currency, currentResource?.name);
+            const resolvedRoomName =
+              currentResource?.name?.trim() ||
+              selectedBooking.resourceName?.trim() ||
+              (language === 'fr' ? 'sélectionnée' : language === 'ar' ? 'المحددة' : 'selected room');
+            const resolvedGuestName =
+              guestName.trim() ||
+              selectedBooking.guestName?.trim() ||
+              (language === 'fr' ? 'Client' : language === 'ar' ? 'النزيل' : 'Guest');
+            const heldValuables = (selectedBooking.valuablesAtReception || []).filter((item) => item.status === 'held');
+
+            const executeCheckoutAction = (
+              mode: 'checkout' | 'guest_left',
+              returnedById?: Record<string, boolean>
+            ) => {
+              const now = new Date();
+              const nowIso = now.toISOString();
+              const updatedValuables =
+                heldValuables.length > 0 && returnedById
+                  ? resolveHeldValuablesOnCheckout(selectedBooking.valuablesAtReception, returnedById, nowIso)
+                  : undefined;
+
+              if (mode === 'guest_left') {
+                const payload = buildGuestCheckoutPayload(now);
+                updateBooking(selectedBooking.id, {
+                  endDate: payload.endDate,
+                  checkOutTime: payload.checkOutTime,
+                  actualCheckOutAt: payload.actualCheckOutAt,
+                  status: 'checked_out',
+                  ...(updatedValuables ? { valuablesAtReception: updatedValuables } : {}),
+                });
+                setEndDate(payload.endDate);
+                setCheckOutTime(payload.checkOutTime);
+                setStatus('checked_out');
+                generateTurnoverTasksForCheckout(resolvedRoomName);
+                setPendingCheckoutPrompt(null);
+                setCheckoutNotice({
+                  title:
+                    language === 'fr'
+                      ? 'Départ enregistré'
+                      : language === 'ar'
+                      ? 'تم تسجيل المغادرة'
+                      : 'Guest checkout recorded',
+                  message:
+                    language === 'fr'
+                      ? `Le départ de ${resolvedGuestName} est enregistré à ${payload.checkOutTime}. La chambre ${resolvedRoomName} sera proposée à nouveau à partir de ${payload.turnoverReadyAt} après 10 minutes de remise en état.`
+                      : language === 'ar'
+                      ? `تم تسجيل مغادرة ${resolvedGuestName} في الساعة ${payload.checkOutTime}. ستصبح الغرفة ${resolvedRoomName} متاحة بعد 10 دقائق (${payload.turnoverReadyAt}).`
+                      : `Checkout for ${resolvedGuestName} recorded at ${payload.checkOutTime}. Room ${resolvedRoomName} available from ${payload.turnoverReadyAt} after the 10-minute turnover.`,
+                });
+              } else {
+                updateBooking(selectedBooking.id, {
+                  status: 'checked_out',
+                  actualCheckOutAt: nowIso,
+                  ...(updatedValuables ? { valuablesAtReception: updatedValuables } : {}),
+                });
+                generateTurnoverTasksForCheckout(resolvedRoomName);
+                setPendingCheckoutPrompt(null);
+                closeModal();
+              }
+            };
+
+            const requestCheckoutAction = (mode: 'checkout' | 'guest_left') => {
+              if (heldValuables.length > 0) {
+                const defaults: Record<string, boolean> = {};
+                heldValuables.forEach((item) => {
+                  defaults[item.id] = true;
+                });
+                setPendingCheckoutPrompt({ mode, returnedById: defaults });
+                return;
+              }
+              executeCheckoutAction(mode);
+            };
+
+            const paymentStatusLabel =
+              summary.paymentStatus === 'paid'
+                ? language === 'fr'
+                  ? 'Payé'
+                  : language === 'ar'
+                  ? 'مدفوع'
+                  : 'Paid'
+                : summary.paymentStatus === 'partial'
+                ? language === 'fr'
+                  ? 'Acompte'
+                  : language === 'ar'
+                  ? 'عربون'
+                  : 'Deposit'
+                : language === 'fr'
+                ? 'En attente'
+                : language === 'ar'
+                ? 'قيد الانتظار'
+                : 'Pending';
+
+            return (
             <div className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 border border-blue-200/80 dark:border-blue-800/80 rounded-2xl shadow-xs space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2 min-w-0">
@@ -1416,6 +1527,69 @@ export const BookingModal: React.FC = () => {
                       : `${language === 'fr' ? 'Historique' : language === 'ar' ? 'السجل' : 'History'} (${(selectedBooking.modificationHistory?.length || 0) + (selectedBooking.lastModifiedAt ? 1 : 0)})`}
                   </span>
                 </button>
+              </div>
+
+              {/* At-a-glance Stay Summary (consolidates all stay overview details directly inside the dialog) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2 border-t border-slate-200/70 dark:border-slate-800 text-xs">
+                <div className="min-w-0 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 p-2.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 block">
+                    {getTranslation('ganttTenant', language)}
+                  </span>
+                  <div className="mt-1 flex items-center gap-1.5 min-w-0">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 shrink-0">
+                      {summary.guestType === 'algerian' ? 'DZ' : 'INT'}
+                    </span>
+                    <span className="font-bold text-slate-900 dark:text-white truncate">
+                      {summary.guestName}
+                    </span>
+                  </div>
+                  <span className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 truncate block">
+                    {summary.roomName}
+                  </span>
+                </div>
+
+                <div className="min-w-0 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 p-2.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 block">
+                    {getTranslation('ganttOccupants', language)}
+                  </span>
+                  <div className="mt-1 flex items-center gap-1.5 font-bold text-slate-900 dark:text-white tabular-nums">
+                    <Users size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span>{summary.totalOccupants} pers.</span>
+                  </div>
+                  <span className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums block">
+                    {summary.adults} {language === 'fr' ? 'adulte(s)' : language === 'ar' ? 'بالغ' : 'adult(s)'}
+                    {summary.children > 0
+                      ? ` · ${summary.children} ${language === 'fr' ? 'enfant(s)' : language === 'ar' ? 'طفل' : 'child(ren)'}`
+                      : ''}
+                  </span>
+                </div>
+
+                <div className="min-w-0 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 p-2.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 block">
+                    {getTranslation('ganttDates', language)}
+                  </span>
+                  <div className="mt-1 font-mono font-bold text-slate-900 dark:text-white tabular-nums truncate">
+                    {summary.startDate} → {summary.endDate}
+                  </div>
+                  <span className="mt-0.5 font-mono text-[11px] text-slate-500 dark:text-slate-400 tabular-nums block">
+                    {summary.checkInTime} → {summary.checkOutTime}
+                    {summary.actualCheckOutAt
+                      ? ` (${language === 'fr' ? 'parti' : language === 'ar' ? 'غادر' : 'left'} ${new Date(summary.actualCheckOutAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+                      : ''}
+                  </span>
+                </div>
+
+                <div className="min-w-0 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 p-2.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 block">
+                    {getTranslation('ganttPayment', language)}
+                  </span>
+                  <div className="mt-1 font-mono font-extrabold text-slate-900 dark:text-white tabular-nums">
+                    {summary.displayAmount.toLocaleString('fr-FR')} {summary.currency}
+                  </div>
+                  <span className="mt-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 block">
+                    {paymentStatusLabel}
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300 pt-2 border-t border-slate-200/70 dark:border-slate-800">
@@ -1445,6 +1619,107 @@ export const BookingModal: React.FC = () => {
                 </div>
               </div>
 
+              {checkoutNotice && (
+                <div
+                  role="status"
+                  className="rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-3 text-xs text-emerald-900 dark:text-emerald-200 flex items-start justify-between gap-3"
+                >
+                  <div className="flex items-start gap-2 min-w-0">
+                    <CheckCircle2 size={16} className="shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="font-bold">{checkoutNotice.title}</p>
+                      <p className="mt-0.5 leading-relaxed">{checkoutNotice.message}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="min-h-9 shrink-0 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white px-3 text-xs font-semibold cursor-pointer"
+                  >
+                    {language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}
+                  </button>
+                </div>
+              )}
+
+              {pendingCheckoutPrompt && (
+                <div
+                  role="alertdialog"
+                  aria-label={language === 'fr' ? 'Restitution des objets confiés' : 'Return held valuables'}
+                  className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/90 dark:bg-amber-950/40 p-3.5 text-xs space-y-2.5"
+                >
+                  <p className="font-bold text-amber-950 dark:text-amber-200">
+                    {language === 'fr'
+                      ? `Départ de ${selectedBooking.guestName} : vérifiez les objets confiés à la réception`
+                      : language === 'ar'
+                      ? `مغادرة ${selectedBooking.guestName}: تحقق من الأمانات المسلمة`
+                      : `Departure of ${selectedBooking.guestName}: verify held valuables`}
+                  </p>
+                  <div className="space-y-1.5">
+                    {heldValuables.map((item) => {
+                      const isReturned = Boolean(pendingCheckoutPrompt.returnedById[item.id]);
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900 px-3 py-2"
+                        >
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">{item.description}</span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPendingCheckoutPrompt((prev) =>
+                                  prev ? { ...prev, returnedById: { ...prev.returnedById, [item.id]: true } } : prev
+                                )
+                              }
+                              className={`min-h-9 px-2.5 rounded-md font-semibold cursor-pointer border ${
+                                isReturned
+                                  ? 'bg-emerald-600 text-white border-emerald-600'
+                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'
+                              }`}
+                            >
+                              {language === 'fr' ? 'Restitué' : language === 'ar' ? 'تم التسليم' : 'Returned'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPendingCheckoutPrompt((prev) =>
+                                  prev ? { ...prev, returnedById: { ...prev.returnedById, [item.id]: false } } : prev
+                                )
+                              }
+                              className={`min-h-9 px-2.5 rounded-md font-semibold cursor-pointer border ${
+                                !isReturned
+                                  ? 'bg-amber-600 text-white border-amber-600'
+                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'
+                              }`}
+                            >
+                              {language === 'fr' ? 'Conservé / non réclamé' : language === 'ar' ? 'محفوظ' : 'Kept / unclaimed'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setPendingCheckoutPrompt(null)}
+                      className="min-h-10 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
+                    >
+                      {language === 'fr' ? 'Annuler' : language === 'ar' ? 'إلغاء' : 'Cancel'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        executeCheckoutAction(pendingCheckoutPrompt.mode, pendingCheckoutPrompt.returnedById)
+                      }
+                      className="min-h-10 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer"
+                    >
+                      {language === 'fr' ? 'Confirmer le départ' : language === 'ar' ? 'تأكيد المغادرة' : 'Confirm departure'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Stay lifecycle & document quick actions */}
               <div className="pt-2 border-t border-slate-200/70 dark:border-slate-800 space-y-2.5">
                 <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center gap-2">
@@ -1461,25 +1736,32 @@ export const BookingModal: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      const now = new Date().toISOString();
-                      const pendingValuables = (selectedBooking.valuablesAtReception || []).filter((item) => item.status === 'held');
-                      const valuablesAtReception = (selectedBooking.valuablesAtReception || []).map((item) => {
-                        if (item.status !== 'held') return item;
-                        const returned = window.confirm(`Départ de ${selectedBooking.guestName} : l'objet « ${item.description} » a-t-il été restitué au client ? OK = restitué ; Annuler = non réclamé / à conserver.`);
-                        return returned ? { ...item, status: 'returned' as const, returnedAt: now } : { ...item, status: 'forgotten' as const };
-                      });
-                      if (pendingValuables.length > 0) updateBooking(selectedBooking.id, { valuablesAtReception });
-                      updateBookingStatus(selectedBooking.id, 'checked_out');
-                      generateTurnoverTasksForCheckout(selectedBooking.resourceName);
-                      closeModal();
-                    }}
+                    onClick={() => requestCheckoutAction('checkout')}
                     className="min-h-11 justify-center px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                     title={language === 'fr' ? 'Effectue le départ et génère les tâches de remise en état chambre' : 'Check out and generate turnover tasks'}
                   >
                     <Sparkles size={15} className="shrink-0" />
                     <span className="truncate">{language === 'fr' ? 'Check-out' : language === 'ar' ? 'تسجيل المغادرة' : 'Check-out'}</span>
                   </button>
+                  {activeDomain === 'hotel' && !['checked_out', 'cancelled'].includes(selectedBooking.status) && (
+                    <button
+                      type="button"
+                      onClick={() => requestCheckoutAction('guest_left')}
+                      className="min-h-11 justify-center px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                      title={
+                        language === 'fr'
+                          ? "Enregistre le départ immédiat à l'heure actuelle (chambre libre après 10 min de remise en état)"
+                          : language === 'ar'
+                          ? 'تسجيل مغادرة النزيل فورًا بالساعة الحالية'
+                          : 'Record immediate guest departure at current time (10-min turnover)'
+                      }
+                    >
+                      <LogOut size={15} className="shrink-0" />
+                      <span className="truncate">
+                        {language === 'fr' ? 'Locataire parti' : language === 'ar' ? 'غادر النزيل' : 'Guest left'}
+                      </span>
+                    </button>
+                  )}
                   {activeDomain === 'hotel' && selectedBooking.status === 'confirmed' && (
                     <button
                       type="button"
@@ -1638,7 +1920,8 @@ export const BookingModal: React.FC = () => {
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* 1. SECTOR RESOURCE ASSIGNMENT (Strictly scoped to activeDomain) */}
           {!isRoomCellBooking && (

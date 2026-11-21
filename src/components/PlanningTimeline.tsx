@@ -10,7 +10,6 @@ import {
   User,
   CheckCircle2,
   Clock,
-  Download,
   AlertCircle,
   X,
   Maximize2,
@@ -32,7 +31,6 @@ import { useApp } from '../context/AppContext';
 import { ResourceGroup, ResourceItem, TimelineBooking } from '../types/booking';
 import { statusConfig } from './LegendBar';
 import { getTranslation } from '../i18n/translations';
-import { downloadICS } from '../utils/icsExport';
 import { BookingPrintReportModal } from './BookingPrintReportModal';
 import { computeTimelineBarGeometry } from '../utils/timelineBarGeometry';
 import { useTimelineSync } from '../hooks/useTimelineSync';
@@ -78,8 +76,6 @@ export const PlanningTimeline: React.FC = () => {
     setSelectedBooking,
     setIsNewBookingModalOpen,
     setNewBookingInitialSlot,
-    updateBooking,
-    updateBookingStatus,
     updateHousekeepingStatus,
     selectedBuildingGroupId,
     setSelectedBuildingGroupId,
@@ -89,26 +85,6 @@ export const PlanningTimeline: React.FC = () => {
   } = useApp();
 
   const isRTL = language === 'ar';
-
-  const handleGuestCheckout = (booking: TimelineBooking) => {
-    if (booking.status === 'checked_out' || booking.status === 'cancelled') return;
-    const now = new Date();
-    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    updateBooking(booking.id, { endDate: date, checkOutTime: time, actualCheckOutAt: now.toISOString() });
-    updateBookingStatus(booking.id, 'checked_out');
-    setActivePreviewBooking(null);
-    setTimelineNotice({
-      title: language === 'fr' ? 'Départ enregistré' : language === 'ar' ? 'تم تسجيل المغادرة' : 'Guest checkout recorded',
-      message: language === 'fr'
-        ? `Le départ de ${booking.guestName} est enregistré à ${time}. La chambre ${booking.resourceName} sera proposée à nouveau à partir de ${(() => { const m = now.getHours() * 60 + now.getMinutes() + 10; return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; })()} après 10 minutes de remise en état.`
-        : language === 'ar'
-        ? `تم تسجيل مغادرة ${booking.guestName} في الساعة ${time}. ستصبح الغرفة متاحة بعد 10 دقائق.`
-        : `Checkout for ${booking.guestName} recorded at ${time}. Room available after the 10-minute turnover.`,
-      tone: 'info',
-      roomName: booking.resourceName,
-    });
-  };
   const [groupingMode, setGroupingMode] = useState<'floor' | 'wing' | 'floor_wing'>(
     () => establishmentProfile?.roomGroupingMode || 'floor'
   );
@@ -388,31 +364,6 @@ export const PlanningTimeline: React.FC = () => {
   // Collapsed state for resource groups
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [collapsedFloors, setCollapsedFloors] = useState<Record<string, boolean>>({});
-
-  // Hovered / selected booking for floating preview or mobile touch sheet
-  const [activePreviewBooking, setActivePreviewBooking] = useState<{
-    booking: TimelineBooking;
-    x?: number;
-    y?: number;
-    isMobileSheet?: boolean;
-  } | null>(null);
-
-  // Keep the hover preview alive while the pointer travels from a booking bar to its card.
-  const previewCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cancelPreviewClose = () => {
-    if (previewCloseTimerRef.current) {
-      clearTimeout(previewCloseTimerRef.current);
-      previewCloseTimerRef.current = null;
-    }
-  };
-  const schedulePreviewClose = () => {
-    cancelPreviewClose();
-    previewCloseTimerRef.current = setTimeout(() => {
-      setActivePreviewBooking(null);
-      previewCloseTimerRef.current = null;
-    }, 300);
-  };
-  useEffect(() => () => cancelPreviewClose(), []);
 
   const toggleGroup = (groupId: string) => {
     setCollapsedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -810,7 +761,6 @@ export const PlanningTimeline: React.FC = () => {
   const openQuickCreateForCell = useCallback(
     (res: ResourceItem, dateStr: string, resBookings: TimelineBooking[]) => {
       const suggestedCheckIn = computeQuickCreateCheckInTime(dateStr, resBookings);
-      setActivePreviewBooking(null);
       setSelectedBooking(null);
       setNewBookingInitialSlot({
         resourceId: res.id,
@@ -1899,22 +1849,6 @@ export const PlanningTimeline: React.FC = () => {
                                   e.stopPropagation();
                                   setSelectedBooking(bkg);
                                   setIsNewBookingModalOpen(true);
-                                  setActivePreviewBooking(null);
-                                }}
-                                onMouseEnter={(e) => {
-                                  if (!isMobileScreen) {
-                                    cancelPreviewClose();
-                                    const rect = e.currentTarget.getBoundingClientRect();
-                                    setActivePreviewBooking({
-                                      booking: bkg,
-                                      x: rect.left,
-                                      y: rect.bottom + 6,
-                                      isMobileSheet: false,
-                                    });
-                                  }
-                                }}
-                                onMouseLeave={() => {
-                                  if (!isMobileScreen) schedulePreviewClose();
                                 }}
                                 style={posStyle}
                                 className={`pms-booking-bar ${isConfirmed ? 'pms-booking-bar-confirmed ' : ''}absolute top-1 sm:top-1.5 h-8 sm:h-9 rounded-md px-1 sm:px-1.5 md:px-2 flex items-center justify-between cursor-pointer shadow-xs hover:brightness-105 active:scale-[0.98] transition z-10 border ${statusStyle.bg} ${statusStyle.border} ${
@@ -2102,204 +2036,6 @@ export const PlanningTimeline: React.FC = () => {
               </div>
             );
           })()}
-
-          {/* Floating Tooltip Card for Desktop */}
-          {activePreviewBooking && !activePreviewBooking.isMobileSheet && activePreviewBooking.x !== undefined && (
-            <div
-              style={{
-                position: 'fixed',
-                left: `${Math.min(window.innerWidth - 270, Math.max(10, activePreviewBooking.x))}px`,
-                top: `${Math.min(window.innerHeight - 250, activePreviewBooking.y ?? 100)}px`,
-              }}
-              className="w-68 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-3 z-50 text-xs pointer-events-auto pms-pop"
-              onMouseEnter={cancelPreviewClose}
-              onMouseLeave={schedulePreviewClose}
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 mb-2">
-                <span className="font-bold text-slate-900 dark:text-white truncate">
-                  {activePreviewBooking.booking.resourceName}
-                </span>
-                <span
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                    statusConfig[activePreviewBooking.booking.status]?.pillBg
-                  }`}
-                >
-                  {statusConfig[activePreviewBooking.booking.status]?.label[language] ||
-                    activePreviewBooking.booking.status}
-                </span>
-              </div>
-
-              <div className="space-y-1.5 text-slate-600 dark:text-slate-300">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">{getTranslation('ganttTenant', language)}</span>
-                  <div className="flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 truncate">
-                    <span>{activePreviewBooking.booking.guestType === 'algerian' ? '🇩🇿' : '🌐'}</span>
-                    <span className="truncate">{activePreviewBooking.booking.guestName}</span>
-                  </div>
-                </div>
-
-                {/* Occupants count with icons */}
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-slate-400">{getTranslation('ganttOccupants', language)}</span>
-                  <div className="flex items-center gap-1 font-medium text-slate-800 dark:text-slate-200">
-                    <div className="flex items-center -space-x-1">
-                      {Array.from({
-                        length: Math.min(
-                          (activePreviewBooking.booking.adults || 1) + (activePreviewBooking.booking.children || 0),
-                          4
-                        ),
-                      }).map((_, i) => (
-                        <User key={i} size={11} className={i > 0 ? 'text-amber-400' : 'text-blue-500'} />
-                      ))}
-                    </div>
-                    <span>
-                      {(activePreviewBooking.booking.adults || 1) + (activePreviewBooking.booking.children || 0)} pers.
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between font-mono text-[11px]">
-                  <span className="text-slate-400 font-sans">{getTranslation('ganttDates', language)}</span>
-                  <span>
-                    {activePreviewBooking.booking.startDate} → {activePreviewBooking.booking.endDate}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
-                  <span className="font-bold text-slate-800 dark:text-slate-200">{getTranslation('ganttPayment', language)}</span>
-                  <span className="font-bold text-slate-900 dark:text-white font-mono text-xs tabular-nums">
-                    {activePreviewBooking.booking.originalCurrencyAmount || activePreviewBooking.booking.totalPrice}{' '}
-                    {activePreviewBooking.booking.paymentCurrency || currency}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
-                <button
-                  onClick={() => {
-                    setSelectedBooking(activePreviewBooking.booking);
-                    setActivePreviewBooking(null);
-                  }}
-                  className="flex-1 py-1 bg-blue-600 text-white rounded text-center font-medium hover:bg-blue-700 transition-colors"
-                >
-                  {getTranslation('ganttOpenBooking', language)}
-                </button>
-                <button
-                  onClick={() => {
-                    downloadICS(activePreviewBooking.booking);
-                  }}
-                  className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-white border border-slate-200 dark:border-slate-700 rounded transition-colors"
-                  title={getTranslation('ganttExportIcs', language)}
-                >
-                  <Download size={13} />
-                </button>
-                {activePreviewBooking.booking.sector === 'hotel' && !['checked_out', 'cancelled'].includes(activePreviewBooking.booking.status) && (
-                  <button
-                    type="button"
-                    onClick={() => handleGuestCheckout(activePreviewBooking.booking)}
-                    className="px-2 py-1 rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700"
-                  >
-                    {language === 'fr' ? 'Locataire parti' : language === 'ar' ? 'غادر النزيل' : 'Guest left'}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Mobile Touch Action Sheet for Smartphone Tap */}
-          {activePreviewBooking && activePreviewBooking.isMobileSheet && (
-            <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-2xs flex items-end justify-center p-0 sm:p-4 pms-modal-backdrop">
-              <div className="w-full sm:max-w-md max-h-[88dvh] overflow-y-auto bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl space-y-3 pms-slide-up pms-sheet">
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900 dark:text-white text-sm">
-                      {activePreviewBooking.booking.resourceName}
-                    </span>
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                        statusConfig[activePreviewBooking.booking.status]?.pillBg
-                      }`}
-                    >
-                      {statusConfig[activePreviewBooking.booking.status]?.label[language] ||
-                        activePreviewBooking.booking.status}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setActivePreviewBooking(null)}
-                    className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">{getTranslation('ganttTenant', language)}</span>
-                    <span className="font-bold text-slate-900 dark:text-white truncate block">
-                      {activePreviewBooking.booking.guestType === 'algerian' ? '🇩🇿 ' : '🌐 '}
-                      {activePreviewBooking.booking.guestName}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">{getTranslation('ganttPayment', language)}</span>
-                    <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400 block tabular-nums">
-                      {activePreviewBooking.booking.originalCurrencyAmount || activePreviewBooking.booking.totalPrice}{' '}
-                      {activePreviewBooking.booking.paymentCurrency || currency}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">{getTranslation('ganttCheckInLabel', language)}</span>
-                    <span className="font-mono text-slate-700 dark:text-slate-300 block">
-                      {activePreviewBooking.booking.startDate}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">{getTranslation('ganttCheckOutLabel', language)}</span>
-                    <span className="font-mono text-slate-700 dark:text-slate-300 block">
-                      {activePreviewBooking.booking.endDate}
-                    </span>
-                  </div>
-                  <div className="col-span-2 pt-1 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">{getTranslation('ganttRoomOccupants', language)}</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {(activePreviewBooking.booking.adults || 1) + (activePreviewBooking.booking.children || 0)} pers. ({activePreviewBooking.booking.adults || 1} {language === 'fr' ? 'adultes' : language === 'ar' ? 'بالغين' : 'adults'})
-                    </span>
-                  </div>
-                </div>
-
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                onClick={() => {
-                  setSelectedBooking(activePreviewBooking.booking);
-                  setActivePreviewBooking(null);
-                }}
-                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-semibold text-center transition-colors shadow-xs cursor-pointer"
-              >
-                {getTranslation('ganttOpenFullBooking', language)}
-              </button>
-              <button
-                onClick={() => {
-                  downloadICS(activePreviewBooking.booking);
-                }}
-                className="px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                title={getTranslation('ganttExportIcs', language)}
-              >
-                <Download size={14} />
-                <span>.ICS</span>
-              </button>
-              {activePreviewBooking.booking.sector === 'hotel' && !['checked_out', 'cancelled'].includes(activePreviewBooking.booking.status) && (
-                <button
-                  type="button"
-                  onClick={() => handleGuestCheckout(activePreviewBooking.booking)}
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold"
-                >
-                  {language === 'fr' ? 'Locataire parti' : language === 'ar' ? 'غادر النزيل' : 'Guest left'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       <BookingPrintReportModal
         isOpen={isPoliceBatchPrintOpen}

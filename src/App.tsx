@@ -17,6 +17,7 @@ import { SupabaseAuthGate } from './services/supabase/SupabaseAuthGate';
 import { WorkspaceProvider } from './services/supabase/WorkspaceContext';
 import { VideoBubble } from './services/VideoBubbleBridge';
 import { PullToRefresh } from './components/PullToRefresh';
+import { useBrandIconSync } from './hooks/useBrandIconSync';
 
 /**
  * Secondary views are code-split: Vite emits one chunk per module and the chunk
@@ -211,7 +212,10 @@ const MainLayout: React.FC = () => {
     isLegalModalOpen,
     hasOnboarded,
     refreshWorkspaces,
+    establishmentProfile,
   } = useApp();
+
+  useBrandIconSync(establishmentProfile?.logoUrl, establishmentProfile?.name);
 
   const [hasOpenedVideoHub, setHasOpenedVideoHub] = React.useState(activeView === 'videos');
 

@@ -181,6 +181,66 @@ export function filterEventLogs(
   return sortEventLogsDesc(filtered);
 }
 
+export type EventLogDatePreset = 'today' | '7d' | 'all' | 'custom';
+
+function toLocalIsoDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function detectEventLogDatePreset(
+  fromDate: string,
+  toDate: string,
+  now: Date = new Date()
+): EventLogDatePreset {
+  const from = fromDate.trim();
+  const to = toDate.trim();
+  if (!from && !to) return 'all';
+
+  const today = toLocalIsoDate(now);
+  if (from === today && to === today) return 'today';
+
+  const sevenDaysStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+  if (from === toLocalIsoDate(sevenDaysStart) && to === today) return '7d';
+
+  return 'custom';
+}
+
+export function countActiveEventLogFilters(filters: EventLogFilterOptions): number {
+  let count = 0;
+  if (filters.query && filters.query.trim().length > 0) count += 1;
+  if (filters.category && filters.category !== 'all') count += 1;
+  if (filters.severity && filters.severity !== 'all') count += 1;
+  if ((filters.fromDate && filters.fromDate.trim().length > 0) || (filters.toDate && filters.toDate.trim().length > 0)) {
+    count += 1;
+  }
+  return count;
+}
+
+export interface EventLogSeverityStats {
+  total: number;
+  info: number;
+  success: number;
+  warn: number;
+  error: number;
+}
+
+export function computeEventLogStats(entries: EventLogEntry[]): EventLogSeverityStats {
+  let info = 0;
+  let success = 0;
+  let warn = 0;
+  let error = 0;
+  for (const item of entries) {
+    if (item.severity === 'success') success += 1;
+    else if (item.severity === 'warn') warn += 1;
+    else if (item.severity === 'error') error += 1;
+    else info += 1;
+  }
+  return { total: entries.length, info, success, warn, error };
+}
+
 function toIsoTimestamp(raw: string | undefined, fallbackDate?: string): string | null {
   if (raw) {
     const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');

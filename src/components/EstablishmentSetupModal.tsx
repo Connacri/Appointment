@@ -89,6 +89,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   const [editingRoomWing, setEditingRoomWing] = useState<Record<string, string>>({});
   const [editingRoomFloor, setEditingRoomFloor] = useState<Record<string, string>>({});
   const [structureMessage, setStructureMessage] = useState('');
+  const [logoError, setLogoError] = useState('');
   const [isImportingMdb, setIsImportingMdb] = useState(false);
   const [mdbBackups, setMdbBackups] = useState<MdbBackupFile[] | null>(null);
   const [isPickingBackups, setIsPickingBackups] = useState(false);
@@ -134,9 +135,10 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      alert("L'image ne doit pas dépasser 2 Mo pour des performances optimales.");
+      setLogoError("L'image ne doit pas dépasser 2 Mo pour des performances optimales.");
       return;
     }
+    setLogoError('');
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -151,6 +153,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   };
 
   const handleSelectPresetLogo = (dataUrl: string) => {
+    setLogoError('');
     setCustomLogoPreview(dataUrl);
     setFormData((prev) => ({ ...prev, logoUrl: dataUrl }));
     playClickFeedback();
@@ -294,8 +297,12 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
         {/* Modal Header */}
         <div className="px-3.5 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-blue-50/60 via-indigo-50/40 to-transparent dark:from-blue-950/30 dark:via-slate-900 dark:to-transparent shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0">
-              <Building2 size={18} />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-slate-900/5 dark:bg-white/5 ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden flex items-center justify-center shadow-xs shrink-0">
+              {customLogoPreview ? (
+                <img src={customLogoPreview} alt={formData.name || 'Logo'} className="w-full h-full object-contain" />
+              ) : (
+                <Building2 size={18} className="text-blue-600" />
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -540,6 +547,11 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                       className="hidden"
                     />
                   </div>
+                  {logoError && (
+                    <p role="alert" className="text-xs font-semibold text-rose-600 dark:text-rose-400">
+                      {logoError}
+                    </p>
+                  )}
                 </div>
               </div>
 

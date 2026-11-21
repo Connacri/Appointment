@@ -40,6 +40,7 @@ import { getTranslation } from '../i18n/translations';
 import { DomainType } from '../types/booking';
 import { APP_THEMES } from '../data/themes';
 import { supabase } from '../services/supabase/supabaseClient';
+import { resolveAppIconHref } from '../utils/faviconSync';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -65,6 +66,7 @@ export const Sidebar: React.FC = () => {
     toggleSound,
     isSidebarMobileOpen,
     setIsSidebarMobileOpen,
+    establishmentProfile,
   } = useApp();
 
   // Collapsible state persisted to localStorage
@@ -253,25 +255,44 @@ export const Sidebar: React.FC = () => {
       <div className="flex-1 min-h-0 w-full workspace-sidebar-scroll overflow-y-auto overscroll-y-contain pb-10 flex flex-col select-none">
         {/* Brand Header */}
         <div className={`min-h-[64px] border-b border-slate-200 dark:border-white/5 flex items-center shrink-0 ${showCompact ? 'flex-col justify-center px-1 py-2 gap-1.5' : 'justify-between px-4'}`}>
-          {!showCompact ? (
-            <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-                AP
+          {(() => {
+            const appIconSrc = resolveAppIconHref(establishmentProfile?.logoUrl);
+            const hotelDisplayName = establishmentProfile?.name?.trim() || getTranslation('brandName', language);
+            const hotelSubtitle = establishmentProfile?.name?.trim()
+              ? getTranslation('brandName', language)
+              : 'Front Desk & Resort PMS';
+
+            return !showCompact ? (
+              <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-slate-900/5 dark:bg-white/5 ring-1 ring-slate-200/80 dark:ring-white/10 overflow-hidden flex items-center justify-center shadow-xs shrink-0">
+                  <img
+                    src={appIconSrc}
+                    alt={hotelDisplayName}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-bold text-slate-900 dark:text-white text-sm tracking-tight leading-none truncate">
+                    {hotelDisplayName}
+                  </span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5 font-medium">
+                    {hotelSubtitle}
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-col min-w-0">
-                <span className="font-bold text-slate-900 dark:text-white text-sm tracking-tight leading-none truncate">
-                  {getTranslation('brandName', language)}
-                </span>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5 font-medium">
-                  Front Desk & Resort PMS
-                </span>
+            ) : (
+              <div
+                className="w-9 h-9 rounded-xl bg-slate-900/5 dark:bg-white/5 ring-1 ring-slate-200/80 dark:ring-white/10 overflow-hidden flex items-center justify-center shadow-xs shrink-0"
+                title={hotelDisplayName}
+              >
+                <img
+                  src={appIconSrc}
+                  alt={hotelDisplayName}
+                  className="w-full h-full object-contain"
+                />
               </div>
-            </div>
-          ) : (
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0" title={getTranslation('brandName', language)}>
-              AP
-            </div>
-          )}
+            );
+          })()}
 
           {isMobileView ? (
             <button

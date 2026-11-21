@@ -2104,6 +2104,26 @@ export const translations = {
     en: '{count} change(s)',
     ar: '{count} تغيير',
   },
+  eventLogFiltersToggle: {
+    fr: 'Filtres',
+    en: 'Filters',
+    ar: 'التصفية',
+  },
+  eventLogSeverityLabel: {
+    fr: 'Niveau',
+    en: 'Severity',
+    ar: 'المستوى',
+  },
+  eventLogDateRangeLabel: {
+    fr: 'Période',
+    en: 'Date range',
+    ar: 'الفترة الزمنية',
+  },
+  eventLogTapToInspect: {
+    fr: 'Voir le détail',
+    en: 'View details',
+    ar: 'عرض التفاصيل',
+  },
   bookingOccupantsHeading: {
     fr: 'Identités & coordonnées de tous les occupants ({count})',
     en: 'Identities & contact details for all occupants ({count})',

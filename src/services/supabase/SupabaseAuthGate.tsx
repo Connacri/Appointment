@@ -85,8 +85,15 @@ export function SupabaseAuthGate({ children }: Props) {
   return <main className="min-h-screen grid place-items-center bg-slate-50 px-4 py-10 dark:bg-slate-950">
     <form onSubmit={submit} className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900">
       <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Appointment PMS</p>
-        <h1 className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{mode === 'signin' ? 'Connexion' : 'Créer un compte'}</h1>
+        <div className="flex items-center gap-3">
+          <img
+            src="/favicon.svg"
+            alt="Appointment PMS"
+            className="w-10 h-10 rounded-xl object-contain shrink-0 ring-1 ring-slate-200 dark:ring-slate-700"
+          />
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Appointment PMS</p>
+        </div>
+        <h1 className="mt-3 text-2xl font-bold text-slate-900 dark:text-white">{mode === 'signin' ? 'Connexion' : 'Créer un compte'}</h1>
         <p className="mt-2 text-sm text-slate-500">Authentification sécurisée par Supabase. Les données métier sont protégées par les politiques RLS.</p>
       </div>
       <label className="mb-1 block text-sm font-medium">Adresse e-mail</label>
