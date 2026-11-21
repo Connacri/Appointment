@@ -8,9 +8,9 @@ Install the Rust MSVC toolchain and Visual Studio Build Tools C++ workload:
 
 ```powershell
 cargo fmt --all -- --check
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo build --release
+cargo test --locked
+cargo clippy --all-targets --locked -- -D warnings
+cargo build --release --locked
 ```
 
 The committed `Cargo.lock` pins the dependency graph; the Windows pipeline uses `--locked` for tests, Clippy and release builds. The MSVC runtime is statically linked. The output is `target/release/appointment-pms-native.exe`; Inno Setup produces the installer.
