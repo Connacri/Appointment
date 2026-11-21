@@ -121,7 +121,16 @@ jobs:
           APK_SHA="$(grep -m1 'certificate SHA-256 digest' apk-cert.txt | awk '{print $NF}' | norm)"
 
           echo "== Audit signature AAB (jarsigner) =="
-          jarsigner -verify -certs "$AAB" | tail -n 5
+          AAB_VERIFY="$(jarsigner -verify -certs "$AAB" 2>&1)"
+          printf '%s\n' "$AAB_VERIFY" | tail -n 8
+          grep -qi 'jar verified\.' <<< "$AAB_VERIFY" || {
+            echo "::error::AAB signature verification did not report a verified JAR"; exit 1; }
+
+          AAB_SHA="$(keytool -printcert -jarfile "$AAB" | awk '/SHA256:/{print $2; exit}' | norm)"
+          test -n "$AAB_SHA" || { echo "::error::Unable to read AAB signer SHA-256"; exit 1; }
+          [[ "$AAB_SHA" == "$APK_SHA" ]] || {
+            echo "::error::AAB signer $AAB_SHA does not match APK signer $APK_SHA"; exit 1; }
+          echo "APK and AAB use the same signing certificate."
 
           if [[ -z "${{ vars.UPLOAD_CERT_SHA256 }}" ]]; then
             echo "::error::UPLOAD_CERT_SHA256 repository variable is required for production signing verification."
