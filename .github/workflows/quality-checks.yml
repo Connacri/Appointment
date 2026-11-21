@@ -1,117 +1,110 @@
 name: Quality Checks
 
 on:
+  workflow_call:
   workflow_dispatch:
   pull_request:
-    types: [opened, synchronize, reopened]
   push:
-    branches: [main, master]
+    branches:
+      - '**'
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  # 1. Data Contract — Toujours
   data-contract:
-    name: Data contract validation
+    name: Data contract change-set validation
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout full history for PR/push diff
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - uses: ./.github/actions/npm-install
-        with:
-          cache-npm: true
-          cache-dir: .npm
-      - run: npm run data-contract:check
 
-  # 2. Typecheck — Avec cache npm
+      - name: Validate data-contract change set
+        run: npm run data-contract:check
+
   typecheck:
     name: TypeScript typecheck
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - uses: ./.github/actions/npm-install
-        with:
-          cache-npm: true
-          cache-dir: .npm
-      - run: npm run typecheck
 
-  # 3. Tests sélectifs — Matrix OR optimisée
+      - name: Install dependencies
+        uses: ./.github/actions/npm-install
+
+      - name: Run TypeScript typecheck
+        run: npm run typecheck
+
   regression-tests:
     name: Regression tests
     runs-on: ubuntu-latest
-    timeout-minutes: 12
-    strategy:
-      matrix:
-        test-file: ["bookingFinder", "bookingValidation"]
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - uses: ./.github/actions/npm-install
-        with:
-          cache-npm: true
-          cache-dir: .npm
-      - run: npm test -- --testPathPattern="tests/${{ matrix.test-file }}.test.ts"
 
-  # 4. i18n check — Rapide
-  i18n-check:
-    name: i18n parity (fr / en / ar)
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - uses: ./.github/actions/npm-install
-        with:
-          cache-npm: true
-          cache-dir: .npm
-      - run: npm run i18n:check
+      - name: Install dependencies
+        uses: ./.github/actions/npm-install
 
-  # 5. Production build — Cache Vite intelligent
+      - name: Run regression tests
+        run: npm run test
+
+      - name: i18n parity (fr / en / ar)
+        run: npm run i18n:check
+
   production-build:
     name: Production build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - uses: ./.github/actions/npm-install
-        with:
-          cache-npm: true
-          cache-dir: .npm
-          # Cache Vite hashé au package.json
-          - key: vite-${{ hashPackageJson 'package.json' }}-${{ runner.os }}
-            restore-keys: |
-              vite-${{ hashPackageJson 'package.json' }}-${{ runner.os }}
-      - run: npm run build
 
-  # 6. Résumé CI — Rapport final
+      - name: Install dependencies
+        uses: ./.github/actions/npm-install
+
+      - name: Build production application
+        run: npm run build
+        env:
+          VITE_BASE: ./
+
   ci-summary:
     name: CI required checks summary
     runs-on: ubuntu-latest
-    timeout-minutes: 3
-    needs: [data-contract, typecheck, regression-tests, i18n-check, production-build]
-    if: always()
+    needs:
+      - data-contract
+      - typecheck
+      - regression-tests
+      - production-build
+    if: ${{ always() }}
     steps:
       - name: Report check results
         env:
@@ -120,16 +113,19 @@ jobs:
           BUILD_RESULT: ${{ needs.production-build.result }}
           DATA_CONTRACT_RESULT: ${{ needs.data-contract.result }}
         run: |
-          echo "## CI quality checks" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Check | Result |" >> $GITHUB_STEP_SUMMARY
-          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| TypeScript typecheck | $TYPECHECK_RESULT |" >> $GITHUB_STEP_SUMMARY
-          echo "| Regression tests | $TEST_RESULT |" >> $GITHUB_STEP_SUMMARY
-          echo "| Production build | $BUILD_RESULT |" >> $GITHUB_STEP_SUMMARY
-          echo "| Data contract | $DATA_CONTRACT_RESULT |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## CI quality checks"
+            echo ""
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| TypeScript typecheck | $TYPECHECK_RESULT |"
+            echo "| Regression tests | $TEST_RESULT |"
+            echo "| Production build | $BUILD_RESULT |"
+            echo "| Data contract | $DATA_CONTRACT_RESULT |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
           if [[ "$TYPECHECK_RESULT" != "success" || "$TEST_RESULT" != "success" || "$BUILD_RESULT" != "success" || "$DATA_CONTRACT_RESULT" != "success" ]]; then
-            echo "::error::At least one required quality check did not succeed." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "All required quality checks succeeded." >> $GITHUB_STEP_SUMMARY
+            echo "::error::At least one required quality check did not succeed."
+            exit 1
+          fi
+          echo "All required quality checks succeeded."
