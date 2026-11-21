@@ -98,6 +98,14 @@ fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
+pub fn show_error(message: &str) {
+    unsafe {
+        let body = wide(message);
+        let caption = wide("Appointment PMS — Startup error");
+        MessageBoxW(null_mut(), body.as_ptr(), caption.as_ptr(), 0x10);
+    }
+}
+
 pub fn run() -> Result<(), String> {
     unsafe {
         let instance = GetModuleHandleW(null());
