@@ -3,17 +3,29 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum BookingStatus {
-    New, Confirmed, DueIn, CheckedIn, DueOut, CheckedOut, BookingOffer,
-    OutOfOrder, Cancelled,
+    New,
+    Confirmed,
+    DueIn,
+    CheckedIn,
+    DueOut,
+    CheckedOut,
+    BookingOffer,
+    OutOfOrder,
+    Cancelled,
 }
 
 impl BookingStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::New => "new", Self::Confirmed => "confirmed", Self::DueIn => "due_in",
-            Self::CheckedIn => "checked_in", Self::DueOut => "due_out",
-            Self::CheckedOut => "checked_out", Self::BookingOffer => "booking_offer",
-            Self::OutOfOrder => "out_of_order", Self::Cancelled => "cancelled",
+            Self::New => "new",
+            Self::Confirmed => "confirmed",
+            Self::DueIn => "due_in",
+            Self::CheckedIn => "checked_in",
+            Self::DueOut => "due_out",
+            Self::CheckedOut => "checked_out",
+            Self::BookingOffer => "booking_offer",
+            Self::OutOfOrder => "out_of_order",
+            Self::Cancelled => "cancelled",
         }
     }
 }
@@ -37,9 +49,15 @@ pub struct Booking {
 
 impl Booking {
     pub fn validate(&self) -> Result<(), String> {
-        if self.id.trim().is_empty() { return Err("booking.id is required".into()); }
-        if self.resource_id.trim().is_empty() { return Err("booking.resource_id is required".into()); }
-        if self.guest_name.trim().is_empty() { return Err("booking.guest_name is required".into()); }
+        if self.id.trim().is_empty() {
+            return Err("booking.id is required".into());
+        }
+        if self.resource_id.trim().is_empty() {
+            return Err("booking.resource_id is required".into());
+        }
+        if self.guest_name.trim().is_empty() {
+            return Err("booking.guest_name is required".into());
+        }
         if !valid_date(&self.start_date) || !valid_date(&self.end_date) {
             return Err("booking dates must use YYYY-MM-DD".into());
         }
@@ -61,8 +79,16 @@ impl Booking {
 
 fn valid_date(value: &str) -> bool {
     let bytes = value.as_bytes();
-    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' { return false; }
-    if !bytes.iter().enumerate().all(|(i, b)| i == 4 || i == 7 || b.is_ascii_digit()) { return false; }
+    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
+        return false;
+    }
+    if !bytes
+        .iter()
+        .enumerate()
+        .all(|(i, b)| i == 4 || i == 7 || b.is_ascii_digit())
+    {
+        return false;
+    }
     let month: u32 = value[5..7].parse().unwrap_or(0);
     let day: u32 = value[8..10].parse().unwrap_or(0);
     (1..=12).contains(&month) && (1..=31).contains(&day)
@@ -74,16 +100,26 @@ mod tests {
 
     fn sample() -> Booking {
         Booking {
-            id: "b-1".into(), resource_id: "r-1".into(), resource_name: "101".into(),
-            sector: "hotel".into(), guest_name: "Guest".into(), guest_email: "".into(),
-            guest_phone: "".into(), start_date: "2026-11-21".into(), end_date: "2026-11-23".into(),
-            status: BookingStatus::Confirmed, total_price: 12000.0, payment_status: "pending".into(),
+            id: "b-1".into(),
+            resource_id: "r-1".into(),
+            resource_name: "101".into(),
+            sector: "hotel".into(),
+            guest_name: "Guest".into(),
+            guest_email: "".into(),
+            guest_phone: "".into(),
+            start_date: "2026-11-21".into(),
+            end_date: "2026-11-23".into(),
+            status: BookingStatus::Confirmed,
+            total_price: 12000.0,
+            payment_status: "pending".into(),
             notes: None,
         }
     }
 
     #[test]
-    fn accepts_valid_booking() { assert!(sample().validate().is_ok()); }
+    fn accepts_valid_booking() {
+        assert!(sample().validate().is_ok());
+    }
 
     #[test]
     fn rejects_non_positive_stay() {
