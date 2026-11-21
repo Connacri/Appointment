@@ -4,6 +4,7 @@
 
 - `.github/workflows/quality-checks.yml`: runs on pull requests and branch pushes, and is reusable through `workflow_call`.
 - `.github/workflows/deploy-web.yml`: deploys GitHub Pages from `main` only after the reusable quality gate succeeds.
+- The Pages job uses `upload-pages-artifact@v4`, verifies the returned artifact ID is visible through the workflow-artifacts API before deployment, and keeps `deploy-pages@v4` within its documented 600,000 ms timeout. This preflight distinguishes artifact publication/visibility failures from Pages deployment failures.
 - `.github/workflows/release-and-deploy.yml`: creates Android and Windows releases only for `vX.Y.Z` tags or an explicit manual dispatch. Both entry points run the quality gate first.
 
 A push to `main` no longer publishes Android and Windows binaries. Create a semantic version tag after the change is accepted to start a production binary release. Manual dispatch remains available for controlled release builds.
