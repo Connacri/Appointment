@@ -80,7 +80,7 @@ jobs:
           grep -qi 'delete-account' README.md || fail "README.md must link the Delete Account page"
 
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v5
 
       - name: Remove stale github-pages artifacts on rerun
         uses: actions/github-script@v7
@@ -102,15 +102,55 @@ jobs:
             }
 
       - name: Upload Pages Artifact
-        uses: actions/upload-pages-artifact@v3
+        id: upload-pages
+        uses: actions/upload-pages-artifact@v4
         with:
           path: dist
+
+      - name: Verify Pages artifact metadata is visible
+        uses: actions/github-script@v7
+        env:
+          EXPECTED_ARTIFACT_ID: ${{ steps.upload-pages.outputs.artifact_id }}
+        with:
+          script: |
+            const expectedId = Number(process.env.EXPECTED_ARTIFACT_ID);
+            if (!Number.isSafeInteger(expectedId) || expectedId <= 0) {
+              throw new Error("upload-pages-artifact did not return a valid artifact_id.");
+            }
+
+            for (let attempt = 1; attempt <= 8; attempt += 1) {
+              const { data } = await github.rest.actions.listWorkflowRunArtifacts({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.runId,
+                per_page: 100,
+              });
+              const artifact = (data.artifacts || []).find(
+                (item) => item.id === expectedId &&
+                  item.name === "github-pages" &&
+                  item.expired === false
+              );
+
+              if (artifact) {
+                core.info(`Pages artifact ${artifact.name} (#${artifact.id}) is visible (${artifact.size_in_bytes} bytes).`);
+                return;
+              }
+
+              core.warning(`Pages artifact #${expectedId} not visible yet (attempt ${attempt}/8).`);
+              if (attempt < 8) {
+                await new Promise((resolve) => setTimeout(resolve, 5000));
+              }
+            }
+
+            throw new Error(
+              `GitHub Actions artifact API did not expose github-pages artifact #${expectedId} after 8 checks.`
+            );
 
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
         with:
-          timeout: 900000
+          timeout: 600000
 
       - name: Verify deployed website matches this build
         run: |
