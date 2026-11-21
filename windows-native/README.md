@@ -1,38 +1,33 @@
 # Appointment PMS — Native Windows
 
-This crate starts the independent Windows desktop implementation.
+Independent Windows desktop client built with Rust and Win32. No browser, Edge, WebView2, Electron, Node runtime, or HTML renderer is embedded.
 
-## Runtime constraints
+## Build
 
-- Rust executable using the Windows Win32 API directly.
-- No browser process, Edge app mode, WebView2, WebView, Electron, Node.js runtime, or embedded HTML renderer.
-- No external signing certificate is required to compile, test, or package the application.
-- Current target: Windows 10/11 x64 (MSVC ABI).
-
-## Build locally
-
-Install the Rust MSVC toolchain and Visual Studio Build Tools C++ workload, then run:
+Install the Rust MSVC toolchain and Visual Studio Build Tools C++ workload:
 
 ```powershell
-cargo fmt --check
+cargo fmt --all -- --check
 cargo test
+cargo clippy --all-targets -- -D warnings
 cargo build --release
 ```
 
-The executable is written to `target/release/appointment-pms-native.exe`.
+The Windows pipeline resolves Rust dependencies and generates the executable. The output is `target/release/appointment-pms-native.exe`; Inno Setup produces the installer.
 
-## Current implementation status
+## Implemented native foundation
 
-The current binary proves native Win32 startup and a native message loop. It provides a basic native navigation shell. Buttons intentionally report that the corresponding modules have not yet been migrated. This is a foundation build, not a production PMS replacement.
+- Direct Win32 window and message loop.
+- Rust domain model for PMS bookings, with input validation.
+- SQLite database migrations and workspace-scoped booking persistence.
+- Atomic booking + Outbox writes; atomic delete + tombstone + Outbox writes.
+- Unique idempotency keys and bounded, workspace-scoped pagination.
+- Automated tests for validation, atomicity, workspace isolation, tombstones and idempotency.
 
-## Migration order
+## Not yet implemented
 
-1. Domain contracts and validation parity with the existing TypeScript implementation.
-2. SQLite local persistence, transactional Outbox, workspace isolation, idempotency and tombstones.
-3. Supabase Auth and REST synchronization with explicit real push/pull states.
-4. Establishments, buildings, floors, rooms and the planning/Gantt surface.
-5. Reservations, occupants, billing, inventory, housekeeping and reports.
-6. CardLock MDB import and native USB/HID hardware integration.
-7. Installer, upgrade/uninstall behavior, backup/restore and Windows compatibility tests.
+Supabase authentication/remote synchronization, conflict resolution, full PMS entities and screens, CardLock MDB import, USB/HID hardware, printing and reports. The current Win32 shell remains a foundation and does not claim feature parity with the React client.
 
-Every migrated module must have Rust unit/integration tests and fixture-based parity tests against the existing application before it is enabled in production.
+## Data compatibility
+
+The Rust booking model is a deliberately explicit first slice of the existing TypeScript `TimelineBooking` contract. Do not import/export production records until a versioned compatibility mapper covers all existing optional booking fields, occupant identity fields, payments, extras, currencies, modification history and legacy aliases. Never sync demo records.
