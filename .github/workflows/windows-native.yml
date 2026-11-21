@@ -42,17 +42,6 @@ jobs:
         with:
           workspaces: windows-native -> target
 
-      - name: Generate canonical Rust formatting
-        shell: pwsh
-        run: |
-          cargo fmt --all
-          $files = @("src/main.rs", "src/domain.rs", "src/database.rs", "src/win32.rs")
-          foreach ($file in $files) {
-            Write-Output "RUSTFMT_FILE:$file"
-            $bytes = [System.IO.File]::ReadAllBytes($file)
-            Write-Output ([Convert]::ToBase64String($bytes))
-          }
-
       - name: Verify Rust formatting
         run: cargo fmt --all -- --check
 
