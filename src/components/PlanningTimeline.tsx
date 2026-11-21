@@ -26,12 +26,14 @@ import {
   Search,
   ChevronUp,
   Crosshair,
+  Printer,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ResourceGroup, ResourceItem, TimelineBooking } from '../types/booking';
 import { statusConfig } from './LegendBar';
 import { getTranslation } from '../i18n/translations';
 import { downloadICS } from '../utils/icsExport';
+import { BookingPrintReportModal } from './BookingPrintReportModal';
 import { computeTimelineBarGeometry } from '../utils/timelineBarGeometry';
 import { useTimelineSync } from '../hooks/useTimelineSync';
 import {
@@ -145,6 +147,7 @@ export const PlanningTimeline: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const dragPanRef = useRef<TimelineDragState | null>(null);
   const [isHeaderDragging, setIsHeaderDragging] = useState(false);
+  const [isPoliceBatchPrintOpen, setIsPoliceBatchPrintOpen] = useState(false);
   const suppressClickRef = useRef(false);
 
   const cleanupDrag = useCallback(() => {
@@ -1093,6 +1096,31 @@ export const PlanningTimeline: React.FC = () => {
                 {allFloorsCollapsed
                   ? getTranslation('ganttExpandFloors', language)
                   : getTranslation('ganttCollapseFloors', language)}
+              </span>
+            </button>
+          )}
+
+          {/* Batch Police Sheets Print Button (Today & Date Interval) */}
+          {currentRole !== 'client' && (
+            <button
+              type="button"
+              onClick={() => setIsPoliceBatchPrintOpen(true)}
+              className="flex h-7 shrink-0 items-center justify-center rounded-md border border-emerald-600/35 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/50 px-2 text-[10px] font-bold text-emerald-800 dark:text-emerald-200 shadow-2xs hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors cursor-pointer gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+              title={
+                language === 'fr'
+                  ? "Imprimer les fiches de police d'aujourd'hui ou d'un intervalle de dates"
+                  : language === 'ar'
+                  ? 'طباعة بطاقات الشرطة لليوم أو لفترة زمنية محددة'
+                  : "Print today's or date-interval police sheets"
+              }
+            >
+              <Printer size={12} className="shrink-0" />
+              <span>
+                {language === 'fr'
+                  ? 'Fiches Police'
+                  : language === 'ar'
+                  ? 'بطاقات الشرطة'
+                  : 'Police Sheets'}
               </span>
             </button>
           )}
@@ -2273,6 +2301,11 @@ export const PlanningTimeline: React.FC = () => {
         </div>
       )}
 
+      <BookingPrintReportModal
+        isOpen={isPoliceBatchPrintOpen}
+        onClose={() => setIsPoliceBatchPrintOpen(false)}
+        initialMode="today"
+      />
     </div>
   );
 };

@@ -30,6 +30,7 @@ import {
   Percent,
   X,
   XCircle,
+  Printer,
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useApp } from '../context/AppContext';
@@ -37,6 +38,7 @@ import { statusConfig } from './LegendBar';
 import { downloadICS } from '../utils/icsExport';
 import { getTranslation } from '../i18n/translations';
 import { DomainType } from '../types/booking';
+import { BookingPrintReportModal } from './BookingPrintReportModal';
 
 export const MyBookingsView: React.FC = () => {
   const {
@@ -70,6 +72,7 @@ export const MyBookingsView: React.FC = () => {
   const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
   const [discountValue, setDiscountValue] = useState<number>(10);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+  const [isPoliceBatchPrintOpen, setIsPoliceBatchPrintOpen] = useState(false);
   const [bulkNotice, setBulkNotice] = useState<string | null>(null);
 
   const handleSaveProfile = (e: React.FormEvent) => {
@@ -411,9 +414,34 @@ export const MyBookingsView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
           {!isClientRole && (
             <button
+              type="button"
+              onClick={() => setIsPoliceBatchPrintOpen(true)}
+              className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3.5 bg-emerald-800 hover:bg-emerald-700 active:bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+              title={
+                language === 'fr'
+                  ? "Imprimer les fiches de police d'aujourd'hui ou sur un intervalle"
+                  : language === 'ar'
+                  ? 'طباعة بطاقات الشرطة لليوم أو لفترة زمنية'
+                  : "Print today's or interval police sheets"
+              }
+            >
+              <Printer size={14} />
+              <span>
+                {language === 'fr'
+                  ? 'Fiches Police'
+                  : language === 'ar'
+                  ? 'بطاقات الشرطة'
+                  : 'Police Sheets'}
+              </span>
+            </button>
+          )}
+
+          {!isClientRole && (
+            <button
+              type="button"
               onClick={() => setIsQrScannerOpen(true)}
               className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
             >
@@ -423,6 +451,7 @@ export const MyBookingsView: React.FC = () => {
           )}
 
           <button
+            type="button"
             onClick={() => setIsNewBookingModalOpen(true)}
             className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
           >
@@ -885,6 +914,12 @@ export const MyBookingsView: React.FC = () => {
           </div>
         </div>
       )}
+
+      <BookingPrintReportModal
+        isOpen={isPoliceBatchPrintOpen}
+        onClose={() => setIsPoliceBatchPrintOpen(false)}
+        initialMode="today"
+      />
     </div>
   );
 };

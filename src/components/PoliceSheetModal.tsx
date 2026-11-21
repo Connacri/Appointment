@@ -18,19 +18,18 @@ import {
 import { DomainType, ResourceGroup, ResourceItem } from '../types/booking';
 import { EstablishmentProfile } from '../types/establishment';
 import { PRESET_HOTEL_LOGOS } from '../utils/establishmentDefaults';
+import {
+  getPoliceSheetMissingFields,
+  PoliceCompanionData,
+  PoliceIdPieceType,
+  PolicePaymentMethodType,
+} from '../utils/bookingPrintReport';
 
-export interface PoliceCompanionGuest {
-  fullName: string;
-  phone: string;
-  email: string;
-  documentType: string;
-  documentNumber: string;
-  documentExpiryDate?: string;
-}
+export type PoliceCompanionGuest = PoliceCompanionData;
 
-export interface PoliceSheetModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+export interface PoliceSheetDocumentProps {
+  articleId?: string;
+  className?: string;
   language: 'fr' | 'en' | 'ar';
   establishmentProfile: EstablishmentProfile;
   bookingId?: string;
@@ -43,14 +42,7 @@ export interface PoliceSheetModalProps {
   guestEmail: string;
   guestType: 'algerian' | 'foreigner';
   foreignNationality: string;
-  idPieceType:
-    | 'cni'
-    | 'passport'
-    | 'driving_license'
-    | 'special_authorization'
-    | 'diplomatic_passport'
-    | 'special_passport'
-    | 'official_document';
+  idPieceType: PoliceIdPieceType;
   idPieceNumber: string;
   algerianIdType: 'cni' | 'nin';
   algerianIdNumber: string;
@@ -74,13 +66,12 @@ export interface PoliceSheetModalProps {
   currencySymbol: string;
   priceInPaymentCurrency: number;
   priceInDzd: number;
-  paymentMethodType:
-    | 'cash_dzd'
-    | 'cib'
-    | 'edahabia'
-    | 'cash_forex'
-    | 'card_international'
-    | 'bank_transfer';
+  paymentMethodType: PolicePaymentMethodType;
+}
+
+export interface PoliceSheetModalProps extends Omit<PoliceSheetDocumentProps, 'articleId' | 'className'> {
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 const ID_PIECE_LABELS: Record<
@@ -140,9 +131,9 @@ const PAYMENT_METHOD_LABELS: Record<
   bank_transfer: { fr: 'Virement Bancaire', en: 'Bank Transfer', ar: 'تحويل بنكي' },
 };
 
-export const PoliceSheetModal: React.FC<PoliceSheetModalProps> = ({
-  isOpen,
-  onClose,
+export const PoliceSheetDocument: React.FC<PoliceSheetDocumentProps> = ({
+  articleId,
+  className = '',
   language,
   establishmentProfile,
   bookingId,
@@ -181,21 +172,6 @@ export const PoliceSheetModal: React.FC<PoliceSheetModalProps> = ({
   priceInDzd,
   paymentMethodType,
 }) => {
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  if (!isOpen || typeof document === 'undefined') return null;
-
-  const isRtl = language === 'ar';
   const effectiveDocNumber =
     idPieceNumber.trim() ||
     (guestType === 'algerian' ? algerianIdNumber.trim() : passportNumber.trim());
@@ -209,23 +185,6 @@ export const PoliceSheetModal: React.FC<PoliceSheetModalProps> = ({
     PAYMENT_METHOD_LABELS[paymentMethodType]?.[language] ||
     PAYMENT_METHOD_LABELS[paymentMethodType]?.fr ||
     paymentMethodType;
-
-  const missingFields: string[] = [];
-  if (!guestName.trim()) {
-    missingFields.push(
-      language === 'ar' ? 'اسم النزيل' : language === 'en' ? 'Guest name' : 'Nom du client'
-    );
-  }
-  if (!effectiveDocNumber) {
-    missingFields.push(
-      language === 'ar' ? 'رقم الوثيقة' : language === 'en' ? 'ID number' : 'N° de pièce'
-    );
-  }
-  if (guestType === 'foreigner' && !visaNumber?.trim()) {
-    missingFields.push(
-      language === 'ar' ? 'رقم التأشيرة' : language === 'en' ? 'Visa number' : 'N° visa'
-    );
-  }
 
   const companions =
     activeDomain === 'hotel' && hotelAdults > 1
@@ -288,88 +247,14 @@ export const PoliceSheetModal: React.FC<PoliceSheetModalProps> = ({
     return '';
   })();
 
-  return createPortal(
-    <div
-      className="pms-police-print-portal fixed inset-0 z-[10002] flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs pms-modal-backdrop overflow-y-auto print:static print:inset-auto print:bg-transparent print:p-0 print:block"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+  return (
+    <article
+      id={articleId}
+      dir="ltr"
+      className={`pms-police-sheet-article mx-auto w-full bg-white text-slate-900 rounded-2xl border border-slate-300 shadow-lg overflow-hidden print:rounded-none print:border-none print:shadow-none ${className}`}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="police-sheet-dialog-title"
-        dir={isRtl ? 'rtl' : 'ltr'}
-        className="pms-dialog-panel bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[94dvh] my-auto pms-modal print:border-none print:shadow-none print:rounded-none print:max-h-none print:max-w-none print:bg-white print:overflow-visible"
-      >
-        {/* Top Control Bar (hidden when printing) */}
-        <header className="print:hidden px-3.5 sm:px-5 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2.5 shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-emerald-800 text-white flex items-center justify-center shrink-0 shadow-xs">
-              <ShieldCheck size={20} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <h4
-                  id="police-sheet-dialog-title"
-                  className="font-extrabold text-sm text-slate-900 dark:text-white leading-tight truncate"
-                >
-                  {language === 'ar'
-                    ? 'بطاقة الشرطة الفردية • Fiche de Police'
-                    : language === 'en'
-                    ? 'Official Police Registration Sheet'
-                    : 'Fiche Individuelle de Police • بطاقة الشرطة'}
-                </h4>
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide ${
-                    guestType === 'algerian'
-                      ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/80 dark:text-emerald-300'
-                      : 'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200'
-                  }`}
-                >
-                  {guestType === 'algerian'
-                    ? language === 'ar'
-                      ? 'وطني'
-                      : language === 'en'
-                      ? 'National'
-                      : 'National DZ'
-                    : language === 'ar'
-                    ? 'أجنبي'
-                    : language === 'en'
-                    ? 'Foreign'
-                    : 'Étranger'}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                {language === 'ar'
-                  ? 'التصريح التنظيمي للإقامة الفندقية (المديرية العامة للأمن الوطني)'
-                  : language === 'en'
-                  ? 'Algerian Hospitality Regulation — DGSN / Tourism Declaration'
-                  : 'Réglementation Hôtelière Algérienne — Déclaration DGSN / Tourisme'}
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-w-11 min-h-11 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
-            aria-label={language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}
-          >
-            <X size={19} />
-          </button>
-        </header>
-
-        {/* Preview Stage */}
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-2.5 sm:p-5 bg-slate-200/75 dark:bg-slate-950 print:p-0 print:bg-white print:overflow-visible">
-          {/* Official White Paper Document */}
-          <article
-            id="printable-police-sheet"
-            dir="ltr"
-            className="mx-auto w-full bg-white text-slate-900 rounded-2xl border border-slate-300 shadow-lg overflow-hidden print:rounded-none print:border-none print:shadow-none"
-          >
-            {/* Top Institutional Strip */}
-            <div className="h-2 bg-gradient-to-r from-emerald-800 via-emerald-700 to-slate-900 print:bg-emerald-800" />
+      {/* Top Institutional Strip */}
+      <div className="h-2 bg-gradient-to-r from-emerald-800 via-emerald-700 to-slate-900 print:bg-emerald-800" />
 
             <div className="p-4 sm:p-7 space-y-5 text-xs leading-relaxed">
               {/* Bilingual Republic & Ministry Header */}
@@ -834,6 +719,107 @@ export const PoliceSheetModal: React.FC<PoliceSheetModalProps> = ({
               </div>
             </div>
           </article>
+  );
+};
+
+export const PoliceSheetModal: React.FC<PoliceSheetModalProps> = ({
+  isOpen,
+  onClose,
+  ...docProps
+}) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen || typeof document === 'undefined') return null;
+
+  const { language, guestType } = docProps;
+  const isRtl = language === 'ar';
+  const missingFields = getPoliceSheetMissingFields(docProps, language);
+
+  return createPortal(
+    <div
+      className="pms-police-print-portal fixed inset-0 z-[10002] flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs pms-modal-backdrop overflow-y-auto print:static print:inset-auto print:bg-transparent print:p-0 print:block"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="police-sheet-dialog-title"
+        dir={isRtl ? 'rtl' : 'ltr'}
+        className="pms-dialog-panel bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[94dvh] my-auto pms-modal print:block print:border-none print:shadow-none print:rounded-none print:max-h-none print:max-w-none print:bg-white print:overflow-visible"
+      >
+        {/* Top Control Bar (hidden when printing) */}
+        <header className="print:hidden px-3.5 sm:px-5 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2.5 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-emerald-800 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <ShieldCheck size={20} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <h4
+                  id="police-sheet-dialog-title"
+                  className="font-extrabold text-sm text-slate-900 dark:text-white leading-tight truncate"
+                >
+                  {language === 'ar'
+                    ? 'بطاقة الشرطة الفردية • Fiche de Police'
+                    : language === 'en'
+                    ? 'Official Police Registration Sheet'
+                    : 'Fiche Individuelle de Police • بطاقة الشرطة'}
+                </h4>
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide ${
+                    guestType === 'algerian'
+                      ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/80 dark:text-emerald-300'
+                      : 'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200'
+                  }`}
+                >
+                  {guestType === 'algerian'
+                    ? language === 'ar'
+                      ? 'وطني'
+                      : language === 'en'
+                      ? 'National'
+                      : 'National DZ'
+                    : language === 'ar'
+                    ? 'أجنبي'
+                    : language === 'en'
+                    ? 'Foreign'
+                    : 'Étranger'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                {language === 'ar'
+                  ? 'التصريح التنظيمي للإقامة الفندقية (المديرية العامة للأمن الوطني)'
+                  : language === 'en'
+                  ? 'Algerian Hospitality Regulation — DGSN / Tourism Declaration'
+                  : 'Réglementation Hôtelière Algérienne — Déclaration DGSN / Tourisme'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-w-11 min-h-11 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+            aria-label={language === 'fr' ? 'Fermer' : language === 'ar' ? 'إغلاق' : 'Close'}
+          >
+            <X size={19} />
+          </button>
+        </header>
+
+        {/* Preview Stage */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-2.5 sm:p-5 bg-slate-200/75 dark:bg-slate-950 print:p-0 print:bg-white print:overflow-visible">
+          <PoliceSheetDocument articleId="printable-police-sheet" {...docProps} />
         </div>
 
         {/* Sticky Responsive Action Footer (hidden when printing) */}

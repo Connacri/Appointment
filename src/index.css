@@ -1310,23 +1310,44 @@ body {
 }
 
 @media print {
-  body:has(.pms-police-print-portal) > *:not(.pms-police-print-portal) {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  body:has(.pms-police-print-portal) > *:not(.pms-police-print-portal),
+  body:has(.pms-bookings-print-portal) > *:not(.pms-bookings-print-portal) {
     display: none !important;
   }
 
-  body:has(.pms-police-print-portal) .pms-police-print-portal {
+  body:has(.pms-police-print-portal) .pms-police-print-portal,
+  body:has(.pms-bookings-print-portal) .pms-bookings-print-portal {
     position: static !important;
     inset: auto !important;
     display: block !important;
     background: #ffffff !important;
     padding: 0 !important;
     overflow: visible !important;
+    height: auto !important;
   }
 
-  body:has(.pms-police-print-portal) #printable-police-sheet {
+  body:has(.pms-police-print-portal) .pms-police-sheet-article,
+  body:has(.pms-bookings-print-portal) .pms-police-sheet-article {
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
+  }
+
+  .pms-police-batch-item {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .pms-police-batch-item:last-child {
+    break-after: auto;
+    page-break-after: auto;
   }
 }
 
