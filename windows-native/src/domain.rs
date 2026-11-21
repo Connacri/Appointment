@@ -42,7 +42,8 @@ pub struct Booking {
     pub start_date: String,
     pub end_date: String,
     pub status: BookingStatus,
-    pub total_price: f64,
+    pub total_price_minor: i64,
+    pub currency_code: String,
     pub payment_status: String,
     pub notes: Option<String>,
 }
@@ -64,8 +65,13 @@ impl Booking {
         if self.end_date <= self.start_date {
             return Err("booking.end_date must be later than booking.start_date".into());
         }
-        if !self.total_price.is_finite() || self.total_price < 0.0 {
-            return Err("booking.total_price must be a finite non-negative amount".into());
+        if self.total_price_minor < 0 {
+            return Err("booking.total_price_minor must be non-negative".into());
+        }
+        if self.currency_code.len() != 3
+            || !self.currency_code.bytes().all(|byte| byte.is_ascii_uppercase())
+        {
+            return Err("booking.currency_code must be a three-letter uppercase ISO code".into());
         }
         if !matches!(self.sector.as_str(), "hotel" | "resort") {
             return Err("booking.sector must be hotel or resort".into());
@@ -89,9 +95,18 @@ fn valid_date(value: &str) -> bool {
     {
         return false;
     }
+    let year: u32 = value[0..4].parse().unwrap_or(0);
     let month: u32 = value[5..7].parse().unwrap_or(0);
     let day: u32 = value[8..10].parse().unwrap_or(0);
-    (1..=12).contains(&month) && (1..=31).contains(&day)
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days_in_month = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    day >= 1 && day <= days_in_month
 }
 
 #[cfg(test)]
@@ -110,7 +125,8 @@ mod tests {
             start_date: "2026-11-21".into(),
             end_date: "2026-11-23".into(),
             status: BookingStatus::Confirmed,
-            total_price: 12000.0,
+            total_price_minor: 1_200_000,
+            currency_code: "DZD".into(),
             payment_status: "pending".into(),
             notes: None,
         }
@@ -129,9 +145,16 @@ mod tests {
     }
 
     #[test]
-    fn rejects_invalid_money() {
+    fn rejects_negative_money() {
         let mut booking = sample();
-        booking.total_price = f64::NAN;
-        assert!(booking.validate().unwrap_err().contains("finite"));
+        booking.total_price_minor = -1;
+        assert!(booking.validate().unwrap_err().contains("non-negative"));
+    }
+
+    #[test]
+    fn rejects_impossible_calendar_date() {
+        let mut booking = sample();
+        booking.start_date = "2026-02-29".into();
+        assert!(booking.validate().unwrap_err().contains("YYYY-MM-DD"));
     }
 }
