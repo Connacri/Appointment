@@ -1,4 +1,4 @@
-name: Production Release (Signed APK, AAB & Windows EXE) & Website Deploy
+name: Production Release (Signed APK, AAB & Windows EXE)
 
 on:
   push:
@@ -123,14 +123,16 @@ jobs:
           echo "== Audit signature AAB (jarsigner) =="
           jarsigner -verify -certs "$AAB" | tail -n 5
 
-          if [[ -n "${{ vars.UPLOAD_CERT_SHA256 }}" ]]; then
-            EXPECTED="$(echo "${{ vars.UPLOAD_CERT_SHA256 }}" | norm)"
-            [[ "$APK_SHA" == "$EXPECTED" ]] || {
-              echo "::error::APK signing certificate $APK_SHA does not match UPLOAD_CERT_SHA256 ($EXPECTED)"; exit 1; }
-            echo "Signing certificate matches UPLOAD_CERT_SHA256."
-          else
-            echo "::warning::UPLOAD_CERT_SHA256 variable not set - fingerprint not enforced."
+          if [[ -z "${{ vars.UPLOAD_CERT_SHA256 }}" ]]; then
+            echo "::error::UPLOAD_CERT_SHA256 repository variable is required for production signing verification."
+            exit 1
           fi
+          EXPECTED="$(echo "${{ vars.UPLOAD_CERT_SHA256 }}" | norm)"
+          [[ -n "$EXPECTED" ]] || { echo "::error::UPLOAD_CERT_SHA256 is empty"; exit 1; }
+          [[ "$APK_SHA" == "$EXPECTED" ]] || {
+            echo "::error::APK signing certificate $APK_SHA does not match UPLOAD_CERT_SHA256 ($EXPECTED)"; exit 1; }
+          echo "Signing certificate matches UPLOAD_CERT_SHA256."
+
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
