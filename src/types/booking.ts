@@ -131,6 +131,22 @@ export interface ResourceItem {
   establishmentId?: string;
 }
 
+export interface BookingOccupant {
+  id?: string;
+  role?: 'adult' | 'child';
+  isAdult?: boolean;
+  isPrimary?: boolean;
+  fullName: string;
+  phone: string;
+  email: string;
+  documentType: string;
+  documentNumber: string;
+  documentExpiryDate?: string;
+  // Compatibilité avec le format simplifié `occupantsList`
+  name?: string;
+  idDoc?: string;
+}
+
 export interface TimelineBooking {
   id: string;
   resourceId: string;
@@ -155,7 +171,7 @@ export interface TimelineBooking {
   mealPlan?: '' | 'bf' | 'hb' | 'fb';
   originChannel?: 'Direct' | 'Booking.com' | 'Airbnb' | 'Expedia';
   adults?: number;
-  adultGuests?: { fullName: string; phone: string; email: string; documentType: string; documentNumber: string; documentExpiryDate?: string }[];
+  adultGuests?: BookingOccupant[];
   children?: number;
   extras?: { label: string; amount: number; category?: string }[];
   payments?: { amount: number; method: 'cash' | 'cib' | 'transfer'; date: string }[];
@@ -193,7 +209,7 @@ export interface TimelineBooking {
   originalCurrencyAmount?: number;
   currencyRateToDzd?: number;
   paymentMethodType?: 'cash_dzd' | 'cib' | 'edahabia' | 'cash_forex' | 'card_international' | 'bank_transfer';
-  occupantsList?: { name: string; isAdult: boolean; idDoc?: string }[];
+  occupantsList?: BookingOccupant[];
   customMetadata?: Record<string, any>;
 }
 

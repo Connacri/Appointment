@@ -125,6 +125,13 @@ for an unverified operation. Verified by `tests/cloudRecovery.test.ts` and
   a difference array merged per resource so overlapping bookings are counted once.
   Verified by `tests/pmsRepositorySelect.test.ts` and `tests/availability.test.ts`.
 - CardLock MDB source locations are centralized per platform in `src/locks/database/mdbPaths.ts` (Windows: exact live VirtualStore path to use — `%LOCALAPPDATA%\VirtualStore\Program Files (x86)\ProUSB SOFTWARE\proUSBHotelLockSystem\CardLock.mdb` — and `D:\proUSB_DBBak` backups; no separate Program Files copy path is kept. Android/web have no automatic exact local proUSB path). UI and import guidance must use these canonical exact paths; sandboxed runtimes cannot open arbitrary filesystem paths automatically and must rely on explicit user file/directory selection.
+- Local operational audit log (`src/types/eventLog.ts`, `src/utils/eventLog.ts`, `src/db/indexedDb.ts` v6 `eventLogs` store): stores bounded (`2000` max) device-local live audit events with before/after field diffs (`computeBookingDiff`) alongside deterministic read-only history seeds derived from real persisted bookings, stock movements, proUSB cards/audits, and invoices (`buildHistoricalEventSeeds`). It is local-only (not enqueued to Supabase Outbox, no remote schema change), never fabricates records, supports CSV formula-safe export (`formatEventLogsAsCsv`), and is cleared atomically inside `indexedDb.clearAll()` during GDPR user data purge. Verified by `tests/eventLog.test.ts`.
+- Multi-person occupant completeness & lossless booking persistence (`src/types/booking.ts`, `src/utils/bookingOccupants.ts`, `src/utils/bookingValidation.ts`, `src/db/bookingMigration.ts`, `src/db/indexedDb.ts` v7, `src/services/supabase/bookingMapper.ts`, `src/services/supabase/cloudRecovery.ts`, `src/context/AppContext.tsx`, `src/components/BookingModal.tsx`):
+  - Every booking tracks canonical occupancy (`adults >= 1`, `children >= 0`) synchronized across `adultGuests`, `occupantsList` (unified adults + children with `id`, `role`, `isAdult`, `isPrimary`, `fullName`, `phone`, `email`, `documentType`, `documentNumber`, `documentExpiryDate`), and `customMetadata` (`hotelAdults`/`hotelChildren` or `resortOccupants`). Person #1 always stays in sync with primary guest identity/contact fields.
+  - Whenever `adults + children > 1` (Hotel) or `resortOccupants > 1` (Resort), `validateBookingOccupants` enforces that **every** occupant (primary guest, each additional adult, and each child) has valid `fullName`, `phone`, `email`, `documentType`, and `documentNumber` (plus `specialAuthorizationDesc` when `idPieceType === 'special_authorization'`) before persistence in `AppContext.addBooking` / `updateBooking` or enqueueing to the Supabase Outbox. Single-person bookings never fabricate fallback phone numbers or `@example.com` emails.
+  - IndexedDB v7 (`migrateBookingRecordV7`) upgrades `bookings` and `workspaceEntities` (`entity === 'booking'`) non-destructively while preserving sync metadata (`workspaceId`, `establishmentId`, `syncVersion`, `deletedAt`) and adds the `sectorStartDate` index.
+  - `bookingMapper.ts` (`toSupabaseBookingRow` / `fromSupabaseBookingRow`) maps the entire booking contract losslessly across verified `public.bookings` columns in `database.types.ts`: `occupants` (`occupantsList`), `currency`, `payments_summary` (`paymentCurrency`, `originalCurrencyAmount`, `currencyRateToDzd`, `paymentMethodType`, `payments`), and `guest_metadata._pms` (check-in/out times, identity/passport/visa/police fields, diet preferences, valuables, forgotten items, guest alerts, modification history) while keeping domain `customMetadata` isolated.
+  - Police sheets (`src/utils/bookingPrintReport.ts`, `src/components/PoliceSheetModal.tsx`), print reports (`BookingPrintReportModal.tsx`), search (`timelineSearch.ts`, `bookingFinder.ts`), and audit logs (`eventLog.ts`) surface all co-occupants and children. Verified by `tests/multiPersonAlignment.test.ts` and `tests/bookingPrintReport.test.ts`.
 
 ## 4. Mandatory change protocol
 
@@ -210,6 +217,15 @@ At the last live audit the remote `bookings_check` constraint was still
 migration had not been applied remotely because the project-scoped MCP connection is
 read-only and the Supabase CLI is not linked in this environment. Same-day Force sync will
 keep failing until that migration is applied with a write-enabled, owner-reviewed path.
+
+Multi-person occupant completeness (`adults + children > 1`) is enforced in the UI (`BookingModal`),
+application persistence layer (`AppContext`), IndexedDB v7 migration, and lossless `bookingMapper`
+round-trips using the existing verified `public.bookings.occupants` and `guest_metadata` columns
+from `src/services/supabase/database.types.ts`. No remote SQL DDL (`booking_occupants` normalized
+table or database-level PostgreSQL `CHECK` constraint verifying `jsonb_array_length(occupants) >= adults + children`)
+was created or applied because Supabase CLI is unavailable and the MCP connection is read-only.
+Server-side enforcement via versioned SQL migration remains a separate owner-reviewed step once
+a write-enabled migration environment is available.
 
 Update this section only after verifying local schema, migrations, live remote schema,
 generated types, repositories, RLS and tests together.

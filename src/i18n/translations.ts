@@ -1767,6 +1767,413 @@ export const translations = {
     en: 'The end date must be the same as or after the start date.',
     ar: 'يجب أن يكون تاريخ النهاية مساويًا أو لاحقًا لتاريخ البداية.',
   },
+
+  // Detailed Event Log (Journal d'événements)
+  navEventLog: {
+    fr: "Journal d'événements",
+    en: 'Event log',
+    ar: 'سجل الأحداث',
+  },
+  eventLogTitle: {
+    fr: 'Journal détaillé des événements',
+    en: 'Detailed Event Log',
+    ar: 'سجل الأحداث المفصل',
+  },
+  eventLogSubtitle: {
+    fr: 'Traçabilité complète des réservations, paiements, ménage, tâches, stock, serrures proUSB et synchronisation.',
+    en: 'Complete audit trail for bookings, payments, housekeeping, tasks, inventory, proUSB locks, and sync.',
+    ar: 'تتبع شامل للحجوزات والمدفوعات والتدبير المنزلي والمهام والمخزون وأقفال proUSB والمزامنة.',
+  },
+  eventLogSearchPlaceholder: {
+    fr: 'Rechercher client, chambre, opérateur, action ou ID…',
+    en: 'Search guest, room, actor, action, or ID…',
+    ar: 'ابحث باسم النزيل أو الغرفة أو المشغل أو الإجراء أو المعرّف…',
+  },
+  eventLogCategoryAll: {
+    fr: 'Tous',
+    en: 'All',
+    ar: 'الكل',
+  },
+  eventLogCategoryBooking: {
+    fr: 'Réservations',
+    en: 'Bookings',
+    ar: 'الحجوزات',
+  },
+  eventLogCategoryHousekeeping: {
+    fr: 'Ménage',
+    en: 'Housekeeping',
+    ar: 'خدمة الغرف',
+  },
+  eventLogCategoryTask: {
+    fr: 'Tâches',
+    en: 'Tasks',
+    ar: 'المهام',
+  },
+  eventLogCategoryStock: {
+    fr: 'Stock',
+    en: 'Inventory',
+    ar: 'المخزون',
+  },
+  eventLogCategoryBilling: {
+    fr: 'Facturation',
+    en: 'Billing',
+    ar: 'الفوترة',
+  },
+  eventLogCategoryLocks: {
+    fr: 'Serrures',
+    en: 'Locks',
+    ar: 'الأقفال',
+  },
+  eventLogCategorySync: {
+    fr: 'Sync',
+    en: 'Sync',
+    ar: 'المزامنة',
+  },
+  eventLogCategorySystem: {
+    fr: 'Système',
+    en: 'System',
+    ar: 'النظام',
+  },
+  eventLogSeverityAll: {
+    fr: 'Toutes sévérités',
+    en: 'All severities',
+    ar: 'كل المستويات',
+  },
+  eventLogSeverityInfo: {
+    fr: 'Information',
+    en: 'Info',
+    ar: 'معلومة',
+  },
+  eventLogSeveritySuccess: {
+    fr: 'Succès',
+    en: 'Success',
+    ar: 'نجاح',
+  },
+  eventLogSeverityWarn: {
+    fr: 'Alerte',
+    en: 'Warning',
+    ar: 'تنبيه',
+  },
+  eventLogSeverityError: {
+    fr: 'Erreur',
+    en: 'Error',
+    ar: 'خطأ',
+  },
+  eventLogTotalEvents: {
+    fr: 'Événements affichés',
+    en: 'Displayed events',
+    ar: 'الأحداث المعروضة',
+  },
+  eventLogSuccessCount: {
+    fr: 'Confirmés',
+    en: 'Succeeded',
+    ar: 'ناجحة',
+  },
+  eventLogWarnCount: {
+    fr: 'Alertes / Refus',
+    en: 'Warnings',
+    ar: 'تنبيهات',
+  },
+  eventLogErrorCount: {
+    fr: 'Erreurs',
+    en: 'Errors',
+    ar: 'أخطاء',
+  },
+  eventLogFromDate: {
+    fr: 'Du',
+    en: 'From',
+    ar: 'من',
+  },
+  eventLogToDate: {
+    fr: 'Au',
+    en: 'To',
+    ar: 'إلى',
+  },
+  eventLogQuickToday: {
+    fr: "Aujourd'hui",
+    en: 'Today',
+    ar: 'اليوم',
+  },
+  eventLogQuick7Days: {
+    fr: '7 jours',
+    en: '7 days',
+    ar: '7 أيام',
+  },
+  eventLogQuickAll: {
+    fr: 'Tout',
+    en: 'All',
+    ar: 'الكل',
+  },
+  eventLogResetFilters: {
+    fr: 'Réinitialiser',
+    en: 'Reset',
+    ar: 'إعادة ضبط',
+  },
+  eventLogExportCsv: {
+    fr: 'Exporter CSV',
+    en: 'Export CSV',
+    ar: 'تصدير CSV',
+  },
+  eventLogExportJson: {
+    fr: 'Exporter JSON',
+    en: 'Export JSON',
+    ar: 'تصدير JSON',
+  },
+  eventLogExportMenuBtn: {
+    fr: 'Exporter le journal',
+    en: 'Export log',
+    ar: 'تصدير السجل',
+  },
+  eventLogExportPdf: {
+    fr: 'Rapport PDF (.pdf)',
+    en: 'PDF report (.pdf)',
+    ar: 'تقرير PDF (.pdf)',
+  },
+  eventLogExportCsvItem: {
+    fr: 'Tableur Excel (.csv)',
+    en: 'Spreadsheet (.csv)',
+    ar: 'جدول Excel (.csv)',
+  },
+  eventLogExportJsonItem: {
+    fr: 'Archive structurée (.json)',
+    en: 'Structured JSON (.json)',
+    ar: 'بيانات منظمة (.json)',
+  },
+  eventLogExportTxtItem: {
+    fr: 'Journal texte (.txt)',
+    en: 'Text log (.txt)',
+    ar: 'ملف نصي (.txt)',
+  },
+  eventLogPrint: {
+    fr: 'Imprimer le journal',
+    en: 'Print event log',
+    ar: 'طباعة السجل',
+  },
+  eventLogExportSuccess: {
+    fr: 'Export {format} généré ({count} événement(s)).',
+    en: '{format} export generated ({count} event(s)).',
+    ar: 'تم إنشاء تصدير {format} ({count} حدث).',
+  },
+  eventLogExportError: {
+    fr: "Impossible de générer l'export {format}.",
+    en: 'Unable to generate {format} export.',
+    ar: 'تعذر إنشاء ملف {format}.',
+  },
+  eventLogPrintGeneratedAt: {
+    fr: 'Généré le',
+    en: 'Generated on',
+    ar: 'تاريخ الإنشاء',
+  },
+  eventLogPrintFilters: {
+    fr: 'Filtres actifs',
+    en: 'Active filters',
+    ar: 'عوامل التصفية النشطة',
+  },
+  eventLogPrintNoFilter: {
+    fr: 'Aucun filtre (tous les événements)',
+    en: 'No filter (all events)',
+    ar: 'دون تصفية (جميع الأحداث)',
+  },
+  eventLogPrintPageNotice: {
+    fr: 'Document d’audit horodaté — stockage local IndexedDB',
+    en: 'Timestamped audit document — local IndexedDB storage',
+    ar: 'وثيقة تدقيق مؤرخة — التخزين المحلي IndexedDB',
+  },
+  eventLogClearLocal: {
+    fr: 'Vider le journal',
+    en: 'Clear log',
+    ar: 'مسح السجل',
+  },
+  eventLogClearConfirmTitle: {
+    fr: 'Effacer les événements enregistrés en direct sur cet appareil ?',
+    en: 'Clear live events stored on this device?',
+    ar: 'هل تريد مسح الأحداث المسجلة محليًا على هذا الجهاز؟',
+  },
+  eventLogClearConfirmNote: {
+    fr: 'Les réservations, factures et mouvements de stock restent intacts.',
+    en: 'Bookings, invoices, and stock movements remain untouched.',
+    ar: 'تبقى الحجوزات والفواتير وحركات المخزون سليمة.',
+  },
+  eventLogConfirmAction: {
+    fr: 'Confirmer',
+    en: 'Confirm',
+    ar: 'تأكيد',
+  },
+  eventLogCancelAction: {
+    fr: 'Annuler',
+    en: 'Cancel',
+    ar: 'إلغاء',
+  },
+  eventLogEmptyAll: {
+    fr: 'Aucun événement enregistré pour le moment. Les actions sur les réservations, chambres, tâches, stock, serrures et sync apparaîtront ici.',
+    en: 'No events recorded yet. Actions on bookings, rooms, tasks, inventory, locks, and sync will appear here.',
+    ar: 'لا توجد أحداث مسجلة بعد. ستظهر هنا العمليات على الحجوزات والغرف والمهام والمخزون والأقفال والمزامنة.',
+  },
+  eventLogEmptyFiltered: {
+    fr: 'Aucun événement ne correspond aux filtres actifs.',
+    en: 'No events match the active filters.',
+    ar: 'لا توجد أحداث تطابق معايير التصفية الحالية.',
+  },
+  eventLogSelectPrompt: {
+    fr: 'Sélectionnez un événement pour inspecter tous ses détails.',
+    en: 'Select an event to inspect all details.',
+    ar: 'اختر حدثًا لعرض كامل تفاصيله.',
+  },
+  eventLogDetailHeading: {
+    fr: "Détails de l'événement",
+    en: 'Event details',
+    ar: 'تفاصيل الحدث',
+  },
+  eventLogCloseDetail: {
+    fr: 'Fermer',
+    en: 'Close',
+    ar: 'إغلاق',
+  },
+  eventLogTimestamp: {
+    fr: 'Horodatage exact',
+    en: 'Exact timestamp',
+    ar: 'الطابع الزمني الدقيق',
+  },
+  eventLogActor: {
+    fr: 'Opérateur',
+    en: 'Actor',
+    ar: 'المشغّل',
+  },
+  eventLogTarget: {
+    fr: 'Cible',
+    en: 'Target',
+    ar: 'الهدف',
+  },
+  eventLogActionCode: {
+    fr: 'Code action',
+    en: 'Action key',
+    ar: 'رمز الإجراء',
+  },
+  eventLogSourceLive: {
+    fr: 'En direct',
+    en: 'Live capture',
+    ar: 'تسجيل مباشر',
+  },
+  eventLogSourceHistory: {
+    fr: 'Historique',
+    en: 'Derived history',
+    ar: 'سجل مسترجع',
+  },
+  eventLogChangesHeading: {
+    fr: 'Modifications détaillées',
+    en: 'Detailed changes',
+    ar: 'التغييرات التفصيلية',
+  },
+  eventLogField: {
+    fr: 'Champ',
+    en: 'Field',
+    ar: 'الحقل',
+  },
+  eventLogBefore: {
+    fr: 'Avant',
+    en: 'Before',
+    ar: 'قبل',
+  },
+  eventLogAfter: {
+    fr: 'Après',
+    en: 'After',
+    ar: 'بعد',
+  },
+  eventLogMetadataHeading: {
+    fr: 'Métadonnées techniques',
+    en: 'Technical metadata',
+    ar: 'البيانات الوصفية',
+  },
+  eventLogOpenBooking: {
+    fr: 'Ouvrir la réservation',
+    en: 'Open booking',
+    ar: 'فتح الحجز',
+  },
+  eventLogBookingMissing: {
+    fr: "Ce dossier n'est plus dans la liste locale actuelle.",
+    en: 'This booking is no longer in the current local list.',
+    ar: 'لم يعد هذا الحجز موجودًا في القائمة المحلية الحالية.',
+  },
+  eventLogLocalNotice: {
+    fr: "Stockage local IndexedDB (jusqu'à 2 000 événements) · mode hors ligne pris en charge",
+    en: 'Local IndexedDB storage (up to 2,000 events) · offline supported',
+    ar: 'تخزين محلي عبر IndexedDB (حتى 2,000 حدث) · يدعم العمل دون اتصال',
+  },
+  eventLogChangesCount: {
+    fr: '{count} modif.',
+    en: '{count} change(s)',
+    ar: '{count} تغيير',
+  },
+  bookingOccupantsHeading: {
+    fr: 'Identités & coordonnées de tous les occupants ({count})',
+    en: 'Identities & contact details for all occupants ({count})',
+    ar: 'هويات وبيانات الاتصال لجميع النزلاء ({count})',
+  },
+  bookingOccupantsRuleBanner: {
+    fr: 'Réservation multi-personnes : renseignez les détails et coordonnées de chaque personne (adultes et enfants).',
+    en: 'Multi-person booking: complete full identity and contact details for every adult and child.',
+    ar: 'حجز متعدد الأشخاص: يجب إدخال الهوية الكاملة وبيانات الاتصال لكل شخص (بالغين وأطفال).',
+  },
+  bookingOccupantsCompletionStatus: {
+    fr: '{completed}/{total} renseigné(s)',
+    en: '{completed}/{total} completed',
+    ar: 'تم إكمال {completed}/{total}',
+  },
+  bookingOccupantPrimaryTag: {
+    fr: 'Titulaire principal · synchronisé',
+    en: 'Primary guest · synced',
+    ar: 'النزيل الرئيسي · متزامن',
+  },
+  bookingOccupantAdultRole: {
+    fr: 'Adulte #{index}',
+    en: 'Adult #{index}',
+    ar: 'بالغ #{index}',
+  },
+  bookingOccupantChildRole: {
+    fr: 'Enfant #{index}',
+    en: 'Child #{index}',
+    ar: 'طفل #{index}',
+  },
+  bookingOccupantFullName: {
+    fr: 'Nom & Prénom *',
+    en: 'Full name *',
+    ar: 'الاسم الكامل *',
+  },
+  bookingOccupantPhone: {
+    fr: 'Téléphone *',
+    en: 'Phone number *',
+    ar: 'رقم الهاتف *',
+  },
+  bookingOccupantEmail: {
+    fr: 'Adresse e-mail *',
+    en: 'Email address *',
+    ar: 'البريد الإلكتروني *',
+  },
+  bookingOccupantDocType: {
+    fr: 'Type de pièce *',
+    en: 'Document type *',
+    ar: 'نوع الوثيقة *',
+  },
+  bookingOccupantDocNumber: {
+    fr: 'Numéro de pièce *',
+    en: 'Document number *',
+    ar: 'رقم الوثيقة *',
+  },
+  bookingOccupantDocExpiry: {
+    fr: 'Expiration (optionnel)',
+    en: 'Expiry date (optional)',
+    ar: 'تاريخ الانتهاء (اختياري)',
+  },
+  bookingOccupantCopyPrimaryContact: {
+    fr: 'Reprendre tél. / e-mail du titulaire',
+    en: 'Use primary guest contact',
+    ar: 'استخدام هاتف وبريد النزيل الرئيسي',
+  },
+  bookingOccupantPrimaryContactHint: {
+    fr: 'Renseigné ci-dessus et synchronisé automatiquement avec le titulaire.',
+    en: 'Edited above and automatically synced with the primary guest.',
+    ar: 'يتم تحريره أعلاه وتتم مزامنته تلقائياً مع النزيل الرئيسي.',
+  },
 };
 
 export function getTranslation(key: keyof typeof translations, lang: Language): string {

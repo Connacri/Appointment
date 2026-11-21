@@ -1,5 +1,10 @@
 import { requireSupabase } from './supabaseClient';
 import type { TimelineBooking, ResourceGroup, ResourceItem, HotelEstablishment, EstablishmentSyncRecord, PmsTask, StockItem, StockMovement } from '../../types/booking';
+import {
+  BOOKING_SELECT_COLUMNS,
+  fromSupabaseBookingRow,
+  toSupabaseBookingRow,
+} from './bookingMapper';
 
 type WorkspaceId = string;
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
@@ -181,28 +186,7 @@ export async function saveResource(workspaceId: WorkspaceId, establishmentId: st
 }
 
 function mapBookingRow(r: any): TimelineBooking {
-  return {
-    id: r.id,
-    resourceId: r.resource_id,
-    resourceName: r.resource_name,
-    sector: r.domain,
-    guestName: r.guest_name,
-    guestEmail: r.guest_email ?? '',
-    guestPhone: r.guest_phone ?? '',
-    startDate: r.start_date,
-    endDate: r.end_date,
-    status: r.status,
-    totalPrice: Number(r.total_price),
-    paymentStatus: r.payment_status,
-    notes: r.notes ?? undefined,
-    adults: r.adults,
-    children: r.children,
-    mealPlan: r.meal_plan ?? undefined,
-    originChannel: r.origin_channel ?? undefined,
-    extras: r.extras ?? [],
-    occupantsList: r.occupants ?? [],
-    customMetadata: r.guest_metadata ?? {},
-  };
+  return fromSupabaseBookingRow(r);
 }
 
 export async function listBookings(workspaceId: WorkspaceId, establishmentId?: string): Promise<TimelineBooking[]> {
@@ -275,8 +259,8 @@ export async function listBookingsWindow(
 ): Promise<BookingsWindowResult> {
   const { establishmentId, offset = 0, limit = 200, withCount = true } = options;
   const db = requireSupabase();
-  // Narrow projection: only columns the timeline renders.
-  const selectCols = 'id,resource_id,resource_name,domain,guest_name,guest_email,guest_phone,start_date,end_date,status,total_price,payment_status,notes,adults,children,meal_plan,origin_channel,extras,occupants,guest_metadata,establishment_id,workspace_id,deleted_at,updated_at,version';
+  // Narrow projection: verified columns required for timeline & detail hydration.
+  const selectCols = BOOKING_SELECT_COLUMNS;
   let q = db
     .from('bookings')
     .select(selectCols, withCount ? { count: 'exact' } : undefined)
@@ -314,7 +298,8 @@ export async function saveBooking(workspaceId: WorkspaceId, establishmentId: str
     throw new Error('Réservation refusée : la chambre/ressource n’appartient pas à l’établissement et au workspace sélectionnés.');
   }
   const {data:auth} = await db.auth.getUser();
-  return unwrap(await db.from('bookings').upsert({id:b.id,workspace_id:workspaceId,establishment_id:establishmentId,resource_id:b.resourceId,domain:b.sector,resource_name:b.resourceName,guest_name:b.guestName,guest_email:b.guestEmail || null,guest_phone:b.guestPhone || null,start_date:b.startDate,end_date:b.endDate,status:b.status,total_price:b.totalPrice,payment_status:b.paymentStatus,adults:b.adults ?? 1,children:b.children ?? 0,notes:b.notes ?? null,meal_plan:b.mealPlan ?? null,origin_channel:b.originChannel ?? null,extras:b.extras ?? [],occupants:b.occupantsList ?? [],guest_metadata:b.customMetadata ?? {},created_by:auth.user?.id ?? null}).select().single());
+  const row = toSupabaseBookingRow(workspaceId, establishmentId, b, auth.user?.id ?? null);
+  return unwrap(await db.from('bookings').upsert(row).select().single());
 }
 
 export async function deleteResource(id: string, workspaceId?: WorkspaceId) {

@@ -1,6 +1,8 @@
 import jsPDF from 'jspdf';
 import { InvoiceRecord } from '../types/booking';
 import { EstablishmentProfile, DEFAULT_ESTABLISHMENT_PROFILE } from '../types/establishment';
+import type { EventLogEntry } from '../types/eventLog';
+import { buildEventLogExportFilename } from './eventLog';
 
 export function exportInvoicePDF(
   doc: InvoiceRecord,
@@ -355,3 +357,344 @@ export function exportInvoicePDF(
   // Save the PDF
   pdf.save(`${doc.docNumber}_${doc.customerName.replace(/\s+/g, '_')}.pdf`);
 }
+
+export interface EventLogPdfOptions {
+  language?: 'fr' | 'en' | 'ar';
+  establishmentProfile?: EstablishmentProfile;
+  filterSummary?: string;
+  filename?: string;
+}
+
+function toPdfSafeText(raw: string | undefined | null): string {
+  if (!raw) return '';
+  return String(raw)
+    .replace(/→/g, '->')
+    .replace(/←/g, '<-')
+    .replace(/œ/g, 'oe')
+    .replace(/Œ/g, 'OE')
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
+    .replace(/[\u2600-\u27BF]/g, '')
+    .replace(/[^\x09\x0A\x0D\x20-\xFF]/g, '?')
+    .trim();
+}
+
+export function exportEventLogPDF(
+  entries: EventLogEntry[],
+  options: EventLogPdfOptions = {}
+): void {
+  const pdf = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  const profile = options.establishmentProfile || DEFAULT_ESTABLISHMENT_PROFILE;
+  // jsPDF's built-in Helvetica font uses WinAnsi encoding (French/English);
+  // Arabic script printing uses the native RTL browser print ledger in EventLogView.
+  const isFr = options.language !== 'en';
+  const pageWidth = 297;
+  const pageHeight = 210;
+  const marginX = 10;
+  const contentWidth = pageWidth - marginX * 2; // 277mm
+
+  const colWidths = {
+    time: 34,
+    severity: 21,
+    category: 27,
+    details: 137,
+    actorTarget: 58,
+  };
+
+  const colX = {
+    time: marginX,
+    severity: marginX + colWidths.time,
+    category: marginX + colWidths.time + colWidths.severity,
+    details: marginX + colWidths.time + colWidths.severity + colWidths.category,
+    actorTarget:
+      marginX + colWidths.time + colWidths.severity + colWidths.category + colWidths.details,
+  };
+
+  const now = new Date();
+  const exportedLabel = `${now.toISOString().slice(0, 10)} ${now.toTimeString().slice(0, 8)}`;
+
+  let successCount = 0;
+  let warnCount = 0;
+  let errorCount = 0;
+  for (const item of entries) {
+    if (item.severity === 'success') successCount += 1;
+    else if (item.severity === 'warn') warnCount += 1;
+    else if (item.severity === 'error') errorCount += 1;
+  }
+
+  // Top Navy Accent Strip
+  pdf.setFillColor(15, 23, 42);
+  pdf.rect(0, 0, pageWidth, 5, 'F');
+
+  const headerY = 11;
+  let logoDrawn = false;
+  if (
+    profile.logoUrl &&
+    (profile.logoUrl.startsWith('data:image/png') || profile.logoUrl.startsWith('data:image/jpeg'))
+  ) {
+    try {
+      const format = profile.logoUrl.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
+      pdf.addImage(profile.logoUrl, format, marginX, headerY, 14, 14);
+      logoDrawn = true;
+    } catch {
+      logoDrawn = false;
+    }
+  }
+
+  const titleX = logoDrawn ? marginX + 18 : marginX;
+  pdf.setTextColor(15, 23, 42);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(13);
+  pdf.text(
+    toPdfSafeText(profile.name || 'Appointment PMS').toUpperCase(),
+    titleX,
+    headerY + 5
+  );
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8.5);
+  pdf.setTextColor(71, 85, 105);
+  const hotelSub = [profile.city, profile.phone, profile.email]
+    .filter(Boolean)
+    .map((v) => toPdfSafeText(v))
+    .join('  ·  ');
+  pdf.text(hotelSub || 'Property Management System', titleX, headerY + 10.5);
+
+  // Right document title & timestamp
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(11);
+  pdf.setTextColor(30, 58, 138);
+  pdf.text(
+    isFr ? "JOURNAL D'EVENEMENTS — AUDIT" : 'DETAILED EVENT LOG — AUDIT',
+    pageWidth - marginX,
+    headerY + 5,
+    { align: 'right' }
+  );
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8);
+  pdf.setTextColor(71, 85, 105);
+  pdf.text(
+    `${isFr ? 'Exporte le' : 'Exported'}: ${exportedLabel}`,
+    pageWidth - marginX,
+    headerY + 10.5,
+    { align: 'right' }
+  );
+
+  // Active filter summary & KPI strip
+  const metaY = headerY + 18;
+  pdf.setFillColor(248, 250, 252);
+  pdf.setDrawColor(226, 232, 240);
+  pdf.roundedRect(marginX, metaY, contentWidth, 14, 1.5, 1.5, 'FD');
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(7.5);
+  pdf.setTextColor(100, 116, 139);
+  pdf.text(isFr ? 'FILTRES ACTIFS' : 'ACTIVE FILTERS', marginX + 3, metaY + 4.8);
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8);
+  pdf.setTextColor(15, 23, 42);
+  const filterText = toPdfSafeText(
+    options.filterSummary || (isFr ? 'Aucun filtre (journal complet)' : 'No filter (all events)')
+  );
+  pdf.text(filterText.slice(0, 115), marginX + 3, metaY + 10.2);
+
+  // Compact KPI summary on the right inside the strip
+  const kpiStartX = pageWidth - marginX - 102;
+  const kpis: Array<{ label: string; value: number; rgb: [number, number, number] }> = [
+    { label: isFr ? 'Total' : 'Total', value: entries.length, rgb: [15, 23, 42] },
+    { label: isFr ? 'Confirmes' : 'Succeeded', value: successCount, rgb: [5, 150, 105] },
+    { label: isFr ? 'Alertes' : 'Warnings', value: warnCount, rgb: [217, 119, 6] },
+    { label: isFr ? 'Erreurs' : 'Errors', value: errorCount, rgb: [220, 38, 38] },
+  ];
+
+  kpis.forEach((kpi, idx) => {
+    const x = kpiStartX + idx * 25.5;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(kpi.label, x, metaY + 4.8);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(kpi.rgb[0], kpi.rgb[1], kpi.rgb[2]);
+    pdf.text(String(kpi.value), x, metaY + 10.6);
+  });
+
+  const drawTableHeader = (yPos: number): number => {
+    pdf.setFillColor(30, 58, 138);
+    pdf.rect(marginX, yPos, contentWidth, 7.5, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(7.5);
+    pdf.text(isFr ? 'HORODATAGE' : 'TIMESTAMP', colX.time + 2, yPos + 5);
+    pdf.text(isFr ? 'NIVEAU' : 'LEVEL', colX.severity + 2, yPos + 5);
+    pdf.text(isFr ? 'CATEGORIE' : 'CATEGORY', colX.category + 2, yPos + 5);
+    pdf.text(
+      isFr ? 'EVENEMENT, DETAILS & MODIFICATIONS' : 'EVENT, DETAILS & CHANGES',
+      colX.details + 2,
+      yPos + 5
+    );
+    pdf.text(
+      isFr ? 'OPERATEUR & CIBLE' : 'ACTOR & TARGET',
+      colX.actorTarget + 2,
+      yPos + 5
+    );
+    return yPos + 7.5;
+  };
+
+  let curY = drawTableHeader(metaY + 18);
+
+  if (entries.length === 0) {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(
+      isFr ? 'Aucun evenement pour les filtres selectionnes.' : 'No events match active filters.',
+      marginX + 4,
+      curY + 8
+    );
+  } else {
+    entries.forEach((entry, idx) => {
+      const tsDisplay = toPdfSafeText(entry.timestamp.replace('T', ' ').slice(0, 19));
+      const sevLabel = entry.severity.toUpperCase();
+      const catLines = pdf.splitTextToSize(
+        toPdfSafeText(`${entry.category}\n${entry.action}`),
+        colWidths.category - 4
+      ) as string[];
+
+      const detailSegments: string[] = [
+        toPdfSafeText(entry.title),
+        toPdfSafeText(entry.description),
+      ];
+      if (entry.changes && entry.changes.length > 0) {
+        const diffSummary = entry.changes
+          .map((c) => `${c.field}: ${c.before ?? '-'} -> ${c.after ?? '-'}`)
+          .join(' | ');
+        detailSegments.push(toPdfSafeText(`Modifs: ${diffSummary}`));
+      }
+      if (entry.metadata) {
+        const metaPairs = Object.entries(entry.metadata)
+          .filter(([, v]) => v !== null && v !== undefined && v !== '')
+          .slice(0, 5)
+          .map(([k, v]) => `${k}=${String(v)}`)
+          .join(' · ');
+        if (metaPairs) {
+          detailSegments.push(toPdfSafeText(metaPairs));
+        }
+      }
+
+      const detailLines = pdf.splitTextToSize(
+        detailSegments.filter(Boolean).join('\n'),
+        colWidths.details - 4
+      ) as string[];
+
+      const actorLines = pdf.splitTextToSize(
+        toPdfSafeText(
+          [
+            `${entry.actor?.label || '-'} (${entry.actor?.role || '-'})`,
+            entry.target
+              ? `${entry.target.label || entry.target.type}${
+                  entry.target.secondaryLabel ? ` - ${entry.target.secondaryLabel}` : ''
+                }`
+              : '',
+          ]
+            .filter(Boolean)
+            .join('\n')
+        ),
+        colWidths.actorTarget - 4
+      ) as string[];
+
+      const maxLineCount = Math.max(catLines.length, detailLines.length, actorLines.length, 1);
+      const lineHeight = 3.6;
+      const rowHeight = Math.max(8, maxLineCount * lineHeight + 3.5);
+
+      // Page break if row won't fit above footer
+      if (curY + rowHeight > pageHeight - 14) {
+        pdf.addPage();
+        pdf.setFillColor(15, 23, 42);
+        pdf.rect(0, 0, pageWidth, 3, 'F');
+        curY = drawTableHeader(10);
+      }
+
+      if (idx % 2 === 1) {
+        pdf.setFillColor(248, 250, 252);
+        pdf.rect(marginX, curY, contentWidth, rowHeight, 'F');
+      }
+      pdf.setDrawColor(226, 232, 240);
+      pdf.line(marginX, curY + rowHeight, marginX + contentWidth, curY + rowHeight);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(51, 65, 85);
+      pdf.text(tsDisplay, colX.time + 2, curY + 4.2);
+
+      // Severity text with explicit label + semantic color
+      const sevColor: [number, number, number] =
+        entry.severity === 'success'
+          ? [5, 150, 105]
+          : entry.severity === 'warn'
+          ? [180, 83, 9]
+          : entry.severity === 'error'
+          ? [220, 38, 38]
+          : [37, 99, 235];
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(sevColor[0], sevColor[1], sevColor[2]);
+      pdf.text(sevLabel, colX.severity + 2, curY + 4.2);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(51, 65, 85);
+      pdf.text(catLines, colX.category + 2, curY + 4.2);
+
+      // Render title line bold, remaining detail lines normal
+      if (detailLines.length > 0) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(detailLines[0], colX.details + 2, curY + 4.2);
+        if (detailLines.length > 1) {
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(51, 65, 85);
+          pdf.text(detailLines.slice(1), colX.details + 2, curY + 4.2 + lineHeight);
+        }
+      }
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(51, 65, 85);
+      pdf.text(actorLines, colX.actorTarget + 2, curY + 4.2);
+
+      curY += rowHeight;
+    });
+  }
+
+  // Page Footer across all pages
+  const totalPages = pdf.getNumberOfPages();
+  for (let page = 1; page <= totalPages; page += 1) {
+    pdf.setPage(page);
+    pdf.setDrawColor(226, 232, 240);
+    pdf.line(marginX, pageHeight - 10, pageWidth - marginX, pageHeight - 10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(
+      toPdfSafeText(
+        `${profile.name || 'Appointment PMS'} · ${
+          isFr
+            ? "Journal d'evenements local IndexedDB (piste d'audit)"
+            : 'Local IndexedDB Event Log (audit trail)'
+        }`
+      ),
+      marginX,
+      pageHeight - 5.5
+    );
+    pdf.text(`Page ${page} / ${totalPages}`, pageWidth - marginX, pageHeight - 5.5, {
+      align: 'right',
+    });
+  }
+
+  pdf.save(options.filename || buildEventLogExportFilename('pdf'));
+}
+

@@ -28,6 +28,7 @@ import {
   CloudOff,
   AlertTriangle,
   CalendarSearch,
+  History,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -774,6 +775,21 @@ export const TopBar: React.FC = () => {
                     {language === 'fr' ? 'Inspecteur des données locales' : language === 'ar' ? 'فاحص البيانات المحلية' : 'Local Data Inspector'}
                   </span>
                 </button>
+
+                {/* Event Log shortcut */}
+                {currentRole !== 'client' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveView('events');
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer text-left rtl:text-right"
+                  >
+                    <History size={14} className="text-indigo-500 shrink-0" />
+                    <span>{getTranslation('navEventLog', language)}</span>
+                  </button>
+                )}
 
                 {/* CI/CD & AGENTS.md Specs */}
                 <button

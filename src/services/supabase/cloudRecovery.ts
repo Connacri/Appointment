@@ -1,5 +1,6 @@
 import type { OutboxRecord, TombstoneRecord } from '../../db/indexedDb';
 import type { ResourceGroup, ResourceItem, TimelineBooking } from '../../types/booking';
+import { normalizeBookingForPersistence } from '../../utils/bookingOccupants';
 
 export interface MergeCloudStateParams {
   localGroups: ResourceGroup[];
@@ -117,7 +118,7 @@ export function mergeCloudStateWithLocal({
     if (demoBookingIds.has(localBooking.id) || deletedBookingIds.has(localBooking.id)) {
       continue;
     }
-    bookingMap.set(localBooking.id, localBooking);
+    bookingMap.set(localBooking.id, normalizeBookingForPersistence(localBooking));
   }
 
   let recoveredBookingsCount = 0;
@@ -131,7 +132,7 @@ export function mergeCloudStateWithLocal({
     if (!bookingMap.has(remoteBooking.id)) {
       recoveredBookingsCount += 1;
     }
-    bookingMap.set(remoteBooking.id, remoteBooking);
+    bookingMap.set(remoteBooking.id, normalizeBookingForPersistence(remoteBooking));
   }
 
   return {

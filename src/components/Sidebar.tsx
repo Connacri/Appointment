@@ -33,6 +33,7 @@ import {
   LogOut,
   GraduationCap,
   Film,
+  History,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -216,6 +217,14 @@ export const Sidebar: React.FC = () => {
       icon: FileText,
       view: 'reports' as const,
       roles: ['manager'],
+      domains: ['hotel', 'resort'] as DomainType[],
+    },
+    {
+      id: 'events',
+      label: getTranslation('navEventLog', language),
+      icon: History,
+      view: 'events' as const,
+      roles: ['manager', 'receptionist', 'staff'],
       domains: ['hotel', 'resort'] as DomainType[],
     },
     {

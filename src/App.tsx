@@ -29,6 +29,9 @@ const MyBookingsView = React.lazy(() =>
 const ReportsView = React.lazy(() =>
   import('./components/ReportsView').then((m) => ({ default: m.ReportsView })),
 );
+const EventLogView = React.lazy(() =>
+  import('./components/EventLogView').then((m) => ({ default: m.EventLogView })),
+);
 const BookingAnalyticsView = React.lazy(() =>
   import('./components/BookingAnalyticsView').then((m) => ({ default: m.BookingAnalyticsView })),
 );
@@ -317,6 +320,8 @@ const MainLayout: React.FC = () => {
                 {activeView === 'channels' && <ChannelManagerView />}
 
                 {activeView === 'reports' && <ReportsView />}
+
+                {activeView === 'events' && <EventLogView />}
 
                 {activeView === 'prousb' && <ProUsbLockSystemView />}
 

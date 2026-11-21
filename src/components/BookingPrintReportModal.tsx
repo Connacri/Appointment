@@ -15,6 +15,7 @@ import {
   BookingPrintScope,
   buildPoliceSheetDataFromBooking,
   filterBookingsForPrintReport,
+  getPoliceSheetCompanionMissingFields,
   getPoliceSheetMissingFields,
 } from '../utils/bookingPrintReport';
 import { PoliceSheetDocument } from './PoliceSheetModal';
@@ -138,7 +139,10 @@ export const BookingPrintReportModal: React.FC<BookingPrintReportModalProps> = (
         resource: hit.resource,
         defaultCurrency: currency || 'DA',
       });
-      const missingFields = getPoliceSheetMissingFields(mapped, language);
+      const missingFields = [
+        ...getPoliceSheetMissingFields(mapped, language),
+        ...getPoliceSheetCompanionMissingFields(mapped, language),
+      ];
       return {
         hit,
         mapped,

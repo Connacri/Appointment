@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Language,
   Theme,
@@ -58,9 +58,17 @@ import {
   type SyncLogEntry,
   type SyncProgressEvent,
 } from '../services/supabase/syncLog';
-import { isValidCalendarDate, shouldMarkPaymentAsPaid } from '../utils/bookingValidation';
+import { isValidCalendarDate, shouldMarkPaymentAsPaid, validateBookingOccupants } from '../utils/bookingValidation';
+import { normalizeBookingForPersistence } from '../utils/bookingOccupants';
 import { isRoomReadyForBooking } from '../utils/roomReadiness';
 import { lockManager } from '../locks/lockManager';
+import type { EventLogEntry, NewEventLogInput } from '../types/eventLog';
+import {
+  EVENT_LOG_MAX_ENTRIES,
+  buildHistoricalEventSeeds,
+  computeBookingDiff,
+  mergeEventLogs,
+} from '../utils/eventLog';
 import { useThemeSync } from '../hooks/useThemeSync';
 import {
   audioFeedbackService,
@@ -87,6 +95,7 @@ export type ActiveAppView =
   | 'channels'
   | 'prousb'
   | 'spa'
+  | 'events'
   | 'help'
   | 'videos';
 
@@ -124,7 +133,7 @@ interface AppContextType {
   updateHousekeepingStatus: (resourceId: string, status: 'clean' | 'cleaning' | 'dirty' | 'out_of_order') => void;
   checkConflict: (resourceId: string, startDate: string, endDate: string, excludeBookingId?: string, checkInTime?: string, checkOutTime?: string) => boolean;
   addBooking: (booking: Omit<TimelineBooking, 'id'>) => { success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'; booking?: TimelineBooking };
-  updateBooking: (id: string, updates: Partial<TimelineBooking>) => void;
+  updateBooking: (id: string, updates: Partial<TimelineBooking>) => { success: boolean; error?: string };
   updateBookingStatus: (id: string, status: BookingStatus) => void;
   deleteBooking: (id: string) => void;
   confirmCheckInAndCashPayment: (
@@ -204,6 +213,10 @@ interface AppContextType {
   syncTerminalOpen: boolean;
   setSyncTerminalOpen: (open: boolean) => void;
   clearSyncLog: () => void;
+  eventLogs: EventLogEntry[];
+  logEvent: (input: NewEventLogInput) => EventLogEntry;
+  clearEventLogs: () => Promise<void>;
+  openBookingFromEvent: (bookingId: string) => boolean;
 }
 
 export interface CloudRecoveryReport {
@@ -253,6 +266,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return (localStorage.getItem('omnibook_role') as UserRole) || 'manager';
   });
 
+  const [persistedEventLogs, setPersistedEventLogs] = useState<EventLogEntry[]>([]);
+  const [lockHistoryVersion, setLockHistoryVersion] = useState(0);
+  const eventLogSeqRef = useRef(0);
+  const activeWorkspaceIdRef = useRef(workspace.activeWorkspaceId);
+  activeWorkspaceIdRef.current = workspace.activeWorkspaceId;
+  const currentRoleRef = useRef<UserRole>(currentRole);
+  currentRoleRef.current = currentRole;
+  const clientProfileRef = useRef<ClientProfile | null>(null);
+
+  const resolveActorLabel = useCallback((role: UserRole): string => {
+    const profileName = clientProfileRef.current?.name?.trim();
+    if (profileName) return profileName;
+    switch (role) {
+      case 'admin': return 'Admin';
+      case 'manager': return 'Gérant';
+      case 'receptionist': return 'Réception';
+      case 'staff': return 'Étage & Maintenance';
+      case 'client': return 'Client';
+    }
+  }, []);
+
+  const logEvent = useCallback((input: NewEventLogInput): EventLogEntry => {
+    eventLogSeqRef.current += 1;
+    const role = currentRoleRef.current;
+    const entry: EventLogEntry = {
+      id: input.id || `evt_${Date.now()}_${eventLogSeqRef.current}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: input.timestamp || new Date().toISOString(),
+      category: input.category,
+      action: input.action,
+      severity: input.severity,
+      title: input.title,
+      description: input.description,
+      actor: input.actor || {
+        role,
+        label: resolveActorLabel(role),
+      },
+      target: input.target,
+      changes: input.changes,
+      metadata: input.metadata,
+      bookingId: input.bookingId,
+      resourceId: input.resourceId,
+      workspaceId: input.workspaceId ?? (activeWorkspaceIdRef.current || undefined),
+      source: input.source ?? 'live',
+    };
+    setPersistedEventLogs((prev) => [entry, ...prev.filter((item) => item.id !== entry.id)].slice(0, EVENT_LOG_MAX_ENTRIES));
+    void indexedDb.appendEventLog(entry, EVENT_LOG_MAX_ENTRIES).catch((error) => {
+      console.warn('[EventLog] Failed to persist event locally:', error);
+    });
+    return entry;
+  }, [resolveActorLabel]);
+
+  const clearEventLogs = useCallback(async (): Promise<void> => {
+    setPersistedEventLogs([]);
+    await indexedDb.clearEventLogs();
+  }, []);
+
   const [isSoundEnabled, setIsSoundEnabled] = useState<boolean>(() => audioFeedbackService.isEnabled());
 
   const toggleSound = () => {
@@ -270,6 +339,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setCurrentDomain = (d: DomainType) => {
+    if (d !== currentDomain) {
+      logEvent({
+        category: 'system',
+        action: 'system.domain_changed',
+        severity: 'info',
+        title: `Domaine actif modifié · ${d}`,
+        description: `Bascule du secteur ${currentDomain} vers ${d}.`,
+        changes: [{ field: 'Domaine', before: currentDomain, after: d }],
+      });
+    }
     setCurrentDomainState(d);
     localStorage.setItem('omnibook_domain', d);
     if (!isViewAllowedForDomain(activeView, d)) {
@@ -278,6 +357,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setCurrentRole = (r: UserRole) => {
+    if (r !== currentRole) {
+      logEvent({
+        category: 'system',
+        action: 'system.role_changed',
+        severity: 'info',
+        title: `Profil opérateur modifié · ${r}`,
+        description: `Changement de rôle session : ${currentRole} → ${r}.`,
+        changes: [{ field: 'Rôle', before: currentRole, after: r }],
+      });
+    }
     setCurrentRoleState(r);
     localStorage.setItem('omnibook_role', r);
   };
@@ -306,6 +395,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const setCurrency = (c: string) => {
+    if (c !== currency) {
+      logEvent({
+        category: 'system',
+        action: 'system.currency_changed',
+        severity: 'info',
+        title: `Devise modifiée · ${c}`,
+        description: `Changement de devise par défaut : ${currency} → ${c}.`,
+        changes: [{ field: 'Devise', before: currency, after: c }],
+      });
+    }
     setCurrencyState(c);
     localStorage.setItem('omnibook_currency', c);
   };
@@ -331,6 +430,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setEstablishmentProfile = (profile: EstablishmentProfile) => {
     const normalized = { ...DEFAULT_ESTABLISHMENT_PROFILE, ...profile };
+    const prev = establishmentProfile;
+    const changes: Array<{ field: string; before?: string; after?: string }> = [];
+    if (prev.name !== normalized.name) changes.push({ field: 'Nom établissement', before: prev.name || '—', after: normalized.name || '—' });
+    if (prev.city !== normalized.city) changes.push({ field: 'Ville', before: prev.city || '—', after: normalized.city || '—' });
+    if (prev.phone !== normalized.phone) changes.push({ field: 'Téléphone', before: prev.phone || '—', after: normalized.phone || '—' });
+    if (prev.defaultCurrency !== normalized.defaultCurrency) changes.push({ field: 'Devise', before: prev.defaultCurrency || '—', after: normalized.defaultCurrency || '—' });
+    if (changes.length > 0) {
+      logEvent({
+        category: 'system',
+        action: 'system.profile_updated',
+        severity: 'info',
+        title: `Fiche établissement mise à jour · ${normalized.name || 'Hôtel'}`,
+        description: `${changes.length} paramètre(s) établissement modifié(s).`,
+        target: { type: 'establishment', id: normalized.id, label: normalized.name },
+        changes,
+      });
+    }
     setEstablishmentProfileState(normalized);
     localStorage.setItem('omnibook_establishment_profile', JSON.stringify(normalized));
   };
@@ -509,6 +625,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated = [invoice, ...existing];
       localStorage.setItem('omnibook_invoices', JSON.stringify(updated));
       setLastCreatedInvoice(invoice);
+      logEvent({
+        category: 'billing',
+        action: 'billing.invoice_created',
+        severity: 'success',
+        title: `${docNumber} créé · ${invoice.customerName}`,
+        description: `Document ${docType.toUpperCase()} généré depuis séjour · Total TTC ${totalTTC} ${activeCurrency}.`,
+        target: { type: 'invoice', id: invoice.id, label: docNumber, secondaryLabel: invoice.customerName },
+        metadata: {
+          docType,
+          docNumber,
+          totalTTC,
+          subtotalHT,
+          vatAmount,
+          currency: activeCurrency,
+        },
+        bookingId: booking.id,
+        resourceId: booking.resourceId,
+      });
       return invoice;
     } catch (error) {
       console.error('[Invoice] Failed to persist invoice from booking:', error);
@@ -539,6 +673,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       loyaltyPoints: 0,
     };
   });
+  clientProfileRef.current = clientProfile;
 
   const setClientProfile = (p: ClientProfile) => {
     setClientProfileState(p);
@@ -589,10 +724,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     void (async () => {
       try {
         await indexedDb.openStore();
-        const [storedBookings, storedResources, storedGroups] = await Promise.all([
+        const [storedBookings, storedResources, storedGroups, storedEventLogs] = await Promise.all([
           indexedDb.queryStore<TimelineBooking>('bookings'),
           indexedDb.queryStore<ResourceItem>('resources'),
           indexedDb.getAllFromStore<ResourceGroup>('resourceGroups'),
+          indexedDb.getEventLogs(),
         ]);
         const demoBookingIds = new Set(initialBookings.map((booking) => booking.id));
         const demoResourceIds = new Set(initialResourceGroups.flatMap((group) => group.resources.map((resource) => resource.id)));
@@ -603,7 +739,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         for (const booking of legacyBookings) bookingById.set(booking.id, booking);
         // IndexedDB wins on conflicts; legacy localStorage contributes only missing IDs.
         for (const booking of storedBookings.data) bookingById.set(booking.id, booking);
-        const realBookings = [...bookingById.values()].filter((booking) => !demoBookingIds.has(booking.id));
+        const realBookings = [...bookingById.values()]
+          .filter((booking) => !demoBookingIds.has(booking.id))
+          .map((booking) => normalizeBookingForPersistence(booking));
 
         const legacyGroups = readLegacy<ResourceGroup>('omnibook_resource_groups')
           .filter((group) => !demoGroupIds.has(group.id));
@@ -675,6 +813,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (cancelled) return;
         setBookings(realBookings);
         setResourceGroups(hydratedGroups);
+        if (storedEventLogs.length > 0) {
+          setPersistedEventLogs((prev) => {
+            const byId = new Map(storedEventLogs.map((item) => [item.id, item]));
+            for (const item of prev) byId.set(item.id, item);
+            return [...byId.values()].sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, EVENT_LOG_MAX_ENTRIES);
+          });
+        }
         setIsCoreDataHydrated(true);
       } catch (error) {
         console.error('[AppContext] Core IndexedDB hydration failed; writes are disabled to protect existing data:', error);
@@ -718,8 +863,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const pendingForceRef = useRef(false);
   const cloudSyncStatusRef = useRef(cloudSyncStatus);
   cloudSyncStatusRef.current = cloudSyncStatus;
-  const activeWorkspaceIdRef = useRef(workspace.activeWorkspaceId);
-  activeWorkspaceIdRef.current = workspace.activeWorkspaceId;
   const selectedEstablishmentIdRef = useRef(selectedEstablishmentId);
   selectedEstablishmentIdRef.current = selectedEstablishmentId;
   const isOfflineRef = useRef(isOffline);
@@ -796,9 +939,150 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       at: new Date().toISOString(),
     };
     setSyncLog((prev) => [...prev, entry].slice(-SYNC_LOG_MAX_ENTRIES));
-  }, []);
+
+    if (
+      event.key !== 'syncLogNothingToSync' &&
+      event.key !== 'syncLogStarted' &&
+      event.key !== 'syncLogVerifying'
+    ) {
+      const severity =
+        event.level === 'error'
+          ? 'error'
+          : event.level === 'warn'
+          ? 'warn'
+          : event.key === 'syncLogSynced' || event.key === 'syncLogPushDone' || event.key === 'syncLogBackfillDone'
+          ? 'success'
+          : 'info';
+      const titleMap: Record<string, string> = {
+        syncLogSynced: 'Synchronisation Supabase vérifiée',
+        syncLogPending: 'Synchronisation partielle (Outbox en attente)',
+        syncLogForceStarted: 'Synchronisation manuelle lancée',
+        syncLogBackfillSkipped: 'Initialisation espace ignorée',
+        syncLogBackfillDone: 'Espace personnel initialisé vers Supabase',
+        syncLogBackfillFailed: 'Échec initialisation espace personnel',
+        syncLogPushing: 'Envoi Outbox vers Supabase',
+        syncLogPushed: 'Élément poussé vers Supabase',
+        syncLogPushDone: 'Envoi Outbox terminé',
+        syncLogPushFailed: 'Échec partiel d’envoi Outbox',
+        syncLogPulling: 'Récupération des données distantes',
+        syncLogPulled: 'Données distantes récupérées',
+        syncLogPullFailed: 'Échec récupération distante',
+        syncLogMerged: 'Fusion locale/distante appliquée',
+        syncLogError: 'Erreur synchronisation Supabase',
+        cloudStatusOffline: 'Mode hors ligne détecté',
+        cloudStatusNotConfigured: 'Synchronisation cloud non configurée',
+        supabaseStatusAuthRequired: 'Session Supabase requise',
+        supabaseStatusNoWorkspace: 'Aucun espace de travail actif',
+      };
+      const meta: Record<string, string | number | boolean | null> = {
+        key: event.key,
+        detail: event.detail ?? null,
+      };
+      if (event.params) {
+        for (const [k, v] of Object.entries(event.params)) {
+          meta[k] = v;
+        }
+      }
+      logEvent({
+        category: 'sync',
+        action: `sync.${event.key}`,
+        severity,
+        title: titleMap[event.key] || event.key,
+        description: event.detail || `Événement synchronisation (${event.key})`,
+        actor: { role: 'system', label: 'Sync Supabase' },
+        metadata: meta,
+      });
+    }
+  }, [logEvent]);
 
   const clearSyncLog = useCallback(() => setSyncLog([]), []);
+
+  // Observe proUSB lock hardware, card issuance/revocation, and lock audit scans.
+  useEffect(() => {
+    const getAuditKey = (audit: { orderFlag: number; openTime: string; recDataHex: string }) =>
+      `${audit.orderFlag}-${audit.openTime}-${audit.recDataHex}`;
+
+    let prevStatus = lockManager.getStatus();
+    let prevCardsById = new Map(lockManager.getIssuedCards().map((c) => [c.id, c.status]));
+    let prevAuditIds = new Set(lockManager.getAuditRecords().map(getAuditKey));
+
+    const unsubscribe = lockManager.subscribeState(() => {
+      setLockHistoryVersion((v) => v + 1);
+      const nextStatus = lockManager.getStatus();
+      if (nextStatus !== prevStatus) {
+        const device = lockManager.getDeviceInfo();
+        prevStatus = nextStatus;
+        if (nextStatus === 'connected') {
+          logEvent({
+            category: 'locks',
+            action: 'locks.usb_connected',
+            severity: 'success',
+            title: 'Encodeur proUSB connecté',
+            description: `${device?.productName || 'proUSB-TEMIC'}${device?.readerLabel ? ` · ${device.readerLabel}` : ''}`,
+            target: { type: 'hardware', label: device?.productName || 'proUSB-TEMIC' },
+            metadata: {
+              encoderNo: device?.encoderNo ?? null,
+              machineCode: device?.machineCode ?? null,
+            },
+          });
+        } else {
+          logEvent({
+            category: 'locks',
+            action: 'locks.usb_disconnected',
+            severity: 'warn',
+            title: 'Encodeur proUSB déconnecté',
+            description: 'L’encodeur WebHID a été déconnecté.',
+            target: { type: 'hardware', label: 'proUSB-TEMIC' },
+          });
+        }
+      }
+
+      const currentCards = lockManager.getIssuedCards();
+      for (const card of currentCards) {
+        const prevCardStatus = prevCardsById.get(card.id);
+        if (!prevCardStatus) {
+          logEvent({
+            category: 'locks',
+            action: 'locks.card_issued',
+            severity: 'success',
+            title: `Carte ${card.type} émise · ${card.roomNumber || 'Système'}`,
+            description: `Titulaire : ${card.holderName || '—'} · Validité jusqu’au ${card.validUntil || '—'}`,
+            target: { type: 'card', id: card.id, label: card.holderName || card.type, secondaryLabel: card.roomNumber },
+            metadata: { cardType: card.type, roomNumber: card.roomNumber || null, status: card.status, operator: card.operator },
+          });
+        } else if (prevCardStatus !== 'revoked' && card.status === 'revoked') {
+          logEvent({
+            category: 'locks',
+            action: 'locks.card_revoked',
+            severity: 'warn',
+            title: `Carte ${card.type} révoquée · ${card.roomNumber || 'Système'}`,
+            description: `Carte annulée pour ${card.holderName || 'titulaire'}.`,
+            target: { type: 'card', id: card.id, label: card.holderName || card.type, secondaryLabel: card.roomNumber },
+          });
+        }
+      }
+      prevCardsById = new Map(currentCards.map((c) => [c.id, c.status]));
+
+      const currentAudits = lockManager.getAuditRecords();
+      for (const audit of currentAudits) {
+        const auditKey = getAuditKey(audit);
+        if (!prevAuditIds.has(auditKey)) {
+          logEvent({
+            category: 'locks',
+            action: `locks.${audit.eventType}`,
+            severity: audit.eventType === 'emergency_open' || audit.eventType === 'deadbolt_forced' || audit.eventType === 'invalid_card' ? 'warn' : 'info',
+            title: `Audit serrure ${audit.roomNo || '—'} · ${audit.eventType}`,
+            description: `Carte ${audit.cardIdentifier || '—'} · Trame ${audit.recDataHex}`,
+            target: { type: 'lock_audit', id: auditKey, label: audit.roomNo || 'Serrure', secondaryLabel: audit.cardIdentifier },
+            metadata: { roomNo: audit.roomNo || null, cardIdentifier: audit.cardIdentifier || null, orderFlag: audit.orderFlag },
+          });
+        }
+      }
+      prevAuditIds = new Set(currentAudits.map(getAuditKey));
+    });
+
+    return unsubscribe;
+  }, [logEvent]);
 
   // Bidirectional automatic Supabase synchronization:
   // pushes Outbox mutations sequentially (ACK before dequeue), pulls latest remote state,
@@ -1278,9 +1562,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     status: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'
   ) => {
     let updatedResource: ResourceItem | undefined;
+    let previousStatus: string | undefined;
+    let groupLabel: string | undefined;
     for (const grp of latestGroupsRef.current) {
       const match = grp.resources.find((r) => r.id === resourceId);
       if (match) {
+        previousStatus = match.housekeepingStatus || 'clean';
+        groupLabel = grp.name?.[language] || grp.name?.fr || grp.name?.en;
         updatedResource = { ...match, groupId: match.groupId ?? grp.id, housekeepingStatus: status };
         break;
       }
@@ -1293,6 +1581,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ),
       }))
     );
+    if (updatedResource) {
+      logEvent({
+        category: 'housekeeping',
+        action: 'housekeeping.status_changed',
+        severity: status === 'out_of_order' ? 'warn' : status === 'clean' ? 'success' : 'info',
+        title: `Statut ménage · ${updatedResource.name} → ${status}`,
+        description: `${updatedResource.name}${groupLabel ? ` (${groupLabel})` : ''} : ${previousStatus || '—'} → ${status}`,
+        target: { type: 'resource', id: resourceId, label: updatedResource.name, secondaryLabel: groupLabel },
+        changes: [{ field: 'Statut ménage', before: previousStatus || '—', after: status }],
+        resourceId,
+      });
+    }
     if (updatedResource && workspace.activeWorkspaceId && !DEMO_RESOURCE_IDS.has(resourceId)) {
       const resolvedEstId =
         updatedResource.establishmentId ??
@@ -1367,15 +1667,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): { success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'; booking?: TimelineBooking } => {
     // Validate both calendar dates for every reservation sector before changing state.
     if (!isValidCalendarDate(bookingData.startDate) || !isValidCalendarDate(bookingData.endDate)) {
-      return {
-        success: false,
-        error:
-          language === 'fr'
-            ? 'Dates de réservation invalides.'
-            : language === 'ar'
-            ? 'تواريخ الحجز غير صالحة.'
-            : 'Invalid booking dates.',
-      };
+      const msg =
+        language === 'fr'
+          ? 'Dates de réservation invalides.'
+          : language === 'ar'
+          ? 'تواريخ الحجز غير صالحة.'
+          : 'Invalid booking dates.';
+      logEvent({
+        category: 'booking',
+        action: 'booking.rejected',
+        severity: 'warn',
+        title: `Réservation refusée · ${bookingData.guestName}`,
+        description: `${msg} (${bookingData.resourceName})`,
+        target: { type: 'booking', label: bookingData.guestName, secondaryLabel: bookingData.resourceName },
+        metadata: { reason: 'invalid_dates', startDate: bookingData.startDate, endDate: bookingData.endDate },
+        resourceId: bookingData.resourceId,
+      });
+      return { success: false, error: msg };
     }
 
     // A hotel room must be explicitly marked clean (green) before a new stay is accepted.
@@ -1388,6 +1696,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : language === 'ar'
             ? 'تم رفض الحجز: يجب أن تكون الغرفة نظيفة ومتاحة (الحالة الخضراء) قبل الحجز.'
             : 'Booking rejected: the room must be clean and available (green status) before it can be booked.';
+        logEvent({
+          category: 'booking',
+          action: 'booking.rejected',
+          severity: 'warn',
+          title: `Réservation bloquée · ${room?.name ?? bookingData.resourceName}`,
+          description: `${bookingData.guestName} · Chambre non prête (${room?.housekeepingStatus || 'inconnue'})`,
+          target: { type: 'booking', label: bookingData.guestName, secondaryLabel: room?.name ?? bookingData.resourceName },
+          metadata: { reason: 'room_not_ready', roomStatus: room?.housekeepingStatus ?? null },
+          resourceId: bookingData.resourceId,
+        });
         return { success: false, code: 'room_not_ready', roomName: room?.name ?? bookingData.resourceName, roomStatus: room?.housekeepingStatus, error: statusMessage };
       }
     }
@@ -1397,37 +1715,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const s = new Date(`${bookingData.startDate}T${bookingData.checkInTime || '14:00'}:00`);
       const e = new Date(`${bookingData.endDate}T${bookingData.checkOutTime || '12:00'}:00`);
       if (isNaN(s.getTime()) || isNaN(e.getTime())) {
-        return {
-          success: false,
-          error:
-            language === 'fr'
-              ? 'Dates de séjour invalides.'
-              : language === 'ar'
-              ? 'تواريخ الإقامة غير صالحة.'
-              : 'Invalid stay dates.',
-        };
+        const msg =
+          language === 'fr'
+            ? 'Dates de séjour invalides.'
+            : language === 'ar'
+            ? 'تواريخ الإقامة غير صالحة.'
+            : 'Invalid stay dates.';
+        logEvent({
+          category: 'booking',
+          action: 'booking.rejected',
+          severity: 'warn',
+          title: `Réservation refusée · ${bookingData.guestName}`,
+          description: msg,
+          target: { type: 'booking', label: bookingData.guestName, secondaryLabel: bookingData.resourceName },
+          metadata: { reason: 'invalid_stay_dates' },
+          resourceId: bookingData.resourceId,
+        });
+        return { success: false, error: msg };
       }
       if (e <= s) {
-        return {
-          success: false,
-          error:
-            language === 'fr'
-              ? "Règle hôtel : la date de départ doit être postérieure à la date d'arrivée."
-              : language === 'ar'
-              ? 'قاعدة الفندق: يجب أن يكون تاريخ المغادرة بعد تاريخ الوصول.'
-              : 'Hotel rule: Check-out date must be after check-in date.',
-        };
+        const msg =
+          language === 'fr'
+            ? "Règle hôtel : la date de départ doit être postérieure à la date d'arrivée."
+            : language === 'ar'
+            ? 'قاعدة الفندق: يجب أن يكون تاريخ المغادرة بعد تاريخ الوصول.'
+            : 'Hotel rule: Check-out date must be after check-in date.';
+        logEvent({
+          category: 'booking',
+          action: 'booking.rejected',
+          severity: 'warn',
+          title: `Réservation refusée · ${bookingData.guestName}`,
+          description: msg,
+          target: { type: 'booking', label: bookingData.guestName, secondaryLabel: bookingData.resourceName },
+          metadata: { reason: 'checkout_before_checkin', startDate: bookingData.startDate, endDate: bookingData.endDate },
+          resourceId: bookingData.resourceId,
+        });
+        return { success: false, error: msg };
       }
       if (e.getTime() - s.getTime() > 365 * 24 * 3600 * 1000) {
-        return {
-          success: false,
-          error:
-            language === 'fr'
-              ? 'Règle hôtel : séjour supérieur à 365 jours non autorisé.'
-              : language === 'ar'
-              ? 'قاعدة الفندق: لا يُسمح بإقامة تتجاوز 365 يوماً.'
-              : 'Hotel rule: Stay cannot exceed 365 days.',
-        };
+        const msg =
+          language === 'fr'
+            ? 'Règle hôtel : séjour supérieur à 365 jours non autorisé.'
+            : language === 'ar'
+            ? 'قاعدة الفندق: لا يُسمح بإقامة تتجاوز 365 يوماً.'
+            : 'Hotel rule: Stay cannot exceed 365 days.';
+        logEvent({
+          category: 'booking',
+          action: 'booking.rejected',
+          severity: 'warn',
+          title: `Réservation refusée · ${bookingData.guestName}`,
+          description: msg,
+          target: { type: 'booking', label: bookingData.guestName, secondaryLabel: bookingData.resourceName },
+          metadata: { reason: 'exceeds_365_days' },
+          resourceId: bookingData.resourceId,
+        });
+        return { success: false, error: msg };
       }
     }
 
@@ -1442,24 +1784,85 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     if (hasConflict) {
-      return {
-        success: false,
-        error:
-          language === 'fr'
-            ? 'Conflit détecté : Cette ressource est déjà réservée sur cette plage de dates.'
-            : language === 'ar'
-            ? 'تعارض في الحجز: هذه الغرفة أو العيادة محجوزة بالفعل في نفس الفترة.'
-            : 'Scheduling conflict: This resource is already booked for these dates.',
-      };
+      const msg =
+        language === 'fr'
+          ? 'Conflit détecté : Cette ressource est déjà réservée sur cette plage de dates.'
+          : language === 'ar'
+          ? 'تعارض في الحجز: هذه الغرفة أو العيادة محجوزة بالفعل في نفس الفترة.'
+          : 'Scheduling conflict: This resource is already booked for these dates.';
+      logEvent({
+        category: 'booking',
+        action: 'booking.rejected',
+        severity: 'warn',
+        title: `Conflit de réservation · ${bookingData.resourceName}`,
+        description: `${bookingData.guestName} (${bookingData.startDate} → ${bookingData.endDate}) refusé pour chevauchement.`,
+        target: { type: 'booking', label: bookingData.guestName, secondaryLabel: bookingData.resourceName },
+        metadata: { reason: 'scheduling_conflict', startDate: bookingData.startDate, endDate: bookingData.endDate },
+        resourceId: bookingData.resourceId,
+      });
+      return { success: false, error: msg };
     }
 
-    // 3. Only now instantiate and commit the valid booking
-    const newBkg: TimelineBooking = {
-      ...bookingData,
+    const normalizedInput = normalizeBookingForPersistence(bookingData);
+    const occupantValidation = validateBookingOccupants(normalizedInput, language);
+    if (!occupantValidation.valid) {
+      const msg =
+        occupantValidation.summaryError ||
+        (language === 'fr'
+          ? 'Veuillez renseigner les coordonnées et pièces d’identité de tous les occupants.'
+          : language === 'ar'
+          ? 'يرجى إدخال بيانات ووسائل تواصل جميع النزلاء.'
+          : 'Please complete details and contact info for all occupants.');
+      logEvent({
+        category: 'booking',
+        action: 'booking.rejected',
+        severity: 'warn',
+        title: `Réservation incomplète · ${normalizedInput.guestName || normalizedInput.resourceName}`,
+        description: msg,
+        target: { type: 'booking', label: normalizedInput.guestName || normalizedInput.resourceName, secondaryLabel: normalizedInput.resourceName },
+        metadata: {
+          reason: 'incomplete_occupants',
+          totalPeople: occupantValidation.totalPeople,
+          errorsCount: occupantValidation.errors.length,
+        },
+        resourceId: normalizedInput.resourceId,
+      });
+      return { success: false, error: msg };
+    }
+
+    // 3. Only now instantiate and commit the valid normalized booking
+    const newBkg: TimelineBooking = normalizeBookingForPersistence({
+      ...normalizedInput,
       id: `bkg_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`,
-    };
+    });
     setBookings((prev) => [newBkg, ...prev]);
     persistBookingMutation(newBkg);
+
+    logEvent({
+      category: 'booking',
+      action: 'booking.created',
+      severity: 'success',
+      title: `Nouvelle réservation · ${newBkg.guestName}`,
+      description: `${newBkg.resourceName} · ${newBkg.startDate} → ${newBkg.endDate} · ${newBkg.totalPrice} ${newBkg.paymentCurrency || currency}`,
+      target: {
+        type: 'booking',
+        id: newBkg.id,
+        label: newBkg.guestName,
+        secondaryLabel: newBkg.resourceName,
+      },
+      metadata: {
+        startDate: newBkg.startDate,
+        endDate: newBkg.endDate,
+        totalPrice: newBkg.totalPrice,
+        currency: newBkg.paymentCurrency || currency,
+        status: newBkg.status,
+        paymentStatus: newBkg.paymentStatus,
+        paymentMethodType: newBkg.paymentMethodType || null,
+        sector: newBkg.sector,
+      },
+      bookingId: newBkg.id,
+      resourceId: newBkg.resourceId,
+    });
 
     // Auto-issue proUSB guest card for hotel/resort bookings
     if (bookingData.sector === 'hotel' || bookingData.sector === 'resort') {
@@ -1492,20 +1895,105 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, booking: newBkg };
   };
 
-  const updateBooking = (id: string, updates: Partial<TimelineBooking>) => {
+  const updateBooking = (
+    id: string,
+    updates: Partial<TimelineBooking>
+  ): { success: boolean; error?: string } => {
     const existing = bookings.find((booking) => booking.id === id);
-    if (existing) persistBookingMutation({ ...existing, ...updates });
+    if (!existing) {
+      return { success: false, error: 'Booking not found.' };
+    }
+
+    const merged = normalizeBookingForPersistence({ ...existing, ...updates });
+    const touchesOccupancyOrIdentity =
+      'adults' in updates ||
+      'children' in updates ||
+      'adultGuests' in updates ||
+      'occupantsList' in updates ||
+      'guestName' in updates ||
+      Boolean(
+        updates.customMetadata &&
+          ('hotelAdults' in updates.customMetadata ||
+            'hotelChildren' in updates.customMetadata ||
+            'resortOccupants' in updates.customMetadata)
+      );
+
+    if (touchesOccupancyOrIdentity) {
+      const validation = validateBookingOccupants(merged, language);
+      if (!validation.valid) {
+        const msg =
+          validation.summaryError ||
+          (language === 'fr'
+            ? 'Veuillez renseigner les coordonnées et pièces d’identité de tous les occupants.'
+            : language === 'ar'
+            ? 'يرجى إدخال بيانات ووسائل تواصل جميع النزلاء.'
+            : 'Please complete details and contact info for all occupants.');
+        logEvent({
+          category: 'booking',
+          action: 'booking.rejected',
+          severity: 'warn',
+          title: `Mise à jour refusée · ${merged.guestName || existing.guestName}`,
+          description: msg,
+          target: { type: 'booking', id, label: merged.guestName || existing.guestName, secondaryLabel: merged.resourceName },
+          metadata: { reason: 'incomplete_occupants', totalPeople: validation.totalPeople },
+          bookingId: id,
+          resourceId: merged.resourceId,
+        });
+        return { success: false, error: msg };
+      }
+    }
+
+    persistBookingMutation(merged);
+    const changes = computeBookingDiff(existing, merged);
+    if (changes.length > 0) {
+      logEvent({
+        category: 'booking',
+        action: 'booking.updated',
+        severity: 'info',
+        title: `Réservation modifiée · ${merged.guestName}`,
+        description: `${merged.resourceName} · ${changes.map((c) => `${c.field}: ${c.before} → ${c.after}`).join(' · ')}`,
+        target: {
+          type: 'booking',
+          id,
+          label: merged.guestName,
+          secondaryLabel: merged.resourceName,
+        },
+        changes,
+        bookingId: id,
+        resourceId: merged.resourceId,
+      });
+    }
+
     setBookings((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, ...updates } : b))
+      prev.map((b) => (b.id === id ? merged : b))
     );
     if (selectedBooking && selectedBooking.id === id) {
-      setSelectedBooking((prev) => (prev ? { ...prev, ...updates } : null));
+      setSelectedBooking((prev) => (prev && prev.id === id ? merged : prev));
     }
+    return { success: true };
   };
 
   const updateBookingStatus = (id: string, status: BookingStatus) => {
     const existing = bookings.find((booking) => booking.id === id);
-    if (existing) persistBookingMutation({ ...existing, status });
+    if (existing) {
+      persistBookingMutation({ ...existing, status });
+      logEvent({
+        category: 'booking',
+        action: 'booking.status_changed',
+        severity: status === 'cancelled' || status === 'out_of_order' ? 'warn' : status === 'checked_in' || status === 'checked_out' ? 'success' : 'info',
+        title: `Statut séjour · ${existing.guestName} → ${status}`,
+        description: `${existing.resourceName} · ${existing.status} → ${status}`,
+        target: {
+          type: 'booking',
+          id,
+          label: existing.guestName,
+          secondaryLabel: existing.resourceName,
+        },
+        changes: [{ field: 'Statut séjour', before: existing.status, after: status }],
+        bookingId: id,
+        resourceId: existing.resourceId,
+      });
+    }
     setBookings((prev) =>
       prev.map((b) => (b.id === id ? { ...b, status } : b))
     );
@@ -1516,6 +2004,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteBooking = (id: string) => {
     const existing = bookings.find((booking) => booking.id === id);
+    if (existing) {
+      logEvent({
+        category: 'booking',
+        action: 'booking.deleted',
+        severity: 'warn',
+        title: `Réservation supprimée · ${existing.guestName}`,
+        description: `${existing.resourceName} (${existing.startDate} → ${existing.endDate}) · ${existing.totalPrice} ${existing.paymentCurrency || currency}`,
+        target: {
+          type: 'booking',
+          id,
+          label: existing.guestName,
+          secondaryLabel: existing.resourceName,
+        },
+        metadata: {
+          startDate: existing.startDate,
+          endDate: existing.endDate,
+          totalPrice: existing.totalPrice,
+          status: existing.status,
+        },
+        bookingId: id,
+        resourceId: existing.resourceId,
+      });
+    }
     if (existing && workspace.activeWorkspaceId && !DEMO_BOOKING_IDS.has(id) && !DEMO_RESOURCE_IDS.has(existing.resourceId)) {
       const bookedResource = latestGroupsRef.current
         .flatMap((group) => group.resources)
@@ -1548,7 +2059,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notes: (currentBooking.notes || '') + (receiptNote ||
         ' [✓ Reçu de paiement acquitté via QR Code - Marqué PAYÉ par le personnel]'),
     } : undefined;
-    if (targetBooking) persistBookingMutation(targetBooking);
+    if (targetBooking && currentBooking) {
+      persistBookingMutation(targetBooking);
+      logEvent({
+        category: 'billing',
+        action: 'booking.payment_settled',
+        severity: 'success',
+        title: `Paiement encaissé · ${currentBooking.guestName}`,
+        description: `${currentBooking.resourceName} · ${currentBooking.totalPrice} ${currentBooking.paymentCurrency || currency} marqué PAYÉ`,
+        target: {
+          type: 'booking',
+          id: bookingId,
+          label: currentBooking.guestName,
+          secondaryLabel: currentBooking.resourceName,
+        },
+        changes: [{ field: 'Statut paiement', before: currentBooking.paymentStatus, after: 'paid' }],
+        metadata: {
+          totalPrice: currentBooking.totalPrice,
+          currency: currentBooking.paymentCurrency || currency,
+        },
+        bookingId,
+        resourceId: currentBooking.resourceId,
+      });
+    }
     setBookings((prev) =>
       prev.map((booking) => booking.id === bookingId && targetBooking ? targetBooking : booking)
     );
@@ -1602,6 +2135,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     persistBookingMutation(updatedBooking);
+    const changes: Array<{ field: string; before?: string; after?: string }> = [];
+    if (currentBooking.status !== 'checked_in') {
+      changes.push({ field: 'Statut séjour', before: currentBooking.status, after: 'checked_in' });
+    }
+    if (paymentSettled && currentBooking.paymentStatus !== 'paid') {
+      changes.push({ field: 'Statut paiement', before: currentBooking.paymentStatus, after: 'paid' });
+    }
+    logEvent({
+      category: 'booking',
+      action: 'booking.qr_checkin',
+      severity: 'success',
+      title: `Check-in QR · ${currentBooking.guestName}`,
+      description: `${currentBooking.resourceName} · ${paymentSettled ? 'Présence confirmée & paiement réglé' : 'Présence confirmée (paiement en attente)'}`,
+      target: {
+        type: 'booking',
+        id: bookingId,
+        label: currentBooking.guestName,
+        secondaryLabel: currentBooking.resourceName,
+      },
+      changes: changes.length > 0 ? changes : undefined,
+      metadata: {
+        cashReceived,
+        paymentSettled,
+      },
+      bookingId,
+      resourceId: currentBooking.resourceId,
+    });
     setBookings((prev) =>
       prev.map((booking) =>
         booking.id === bookingId ? updatedBooking : booking
@@ -1644,6 +2204,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
       return updated;
     });
+    logEvent({
+      category: 'task',
+      action: 'task.created',
+      severity: newTask.priority === 'urgent' ? 'warn' : 'info',
+      title: `Tâche créée · ${newTask.typeName}`,
+      description: `Chambre ${newTask.room} · Assignée à ${newTask.assignee} · Priorité ${newTask.priority}`,
+      target: { type: 'task', id: newTask.id, label: newTask.typeName, secondaryLabel: newTask.room },
+      metadata: { assignee: newTask.assignee, priority: newTask.priority, category: newTask.category, date: newTask.date },
+    });
   };
 
   const updateTaskStatus = (id: string, status: PmsTask['status']) => {
@@ -1651,6 +2220,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       playSuccessFeedback();
     } else {
       playClickFeedback();
+    }
+
+    const targetTask = tasks.find((t) => t.id === id);
+    if (targetTask) {
+      logEvent({
+        category: 'task',
+        action: 'task.status_changed',
+        severity: status === 'done' ? 'success' : status === 'cancel' ? 'warn' : 'info',
+        title: `Tâche ${targetTask.room} · ${targetTask.typeName} → ${status}`,
+        description: `Statut tâche : ${targetTask.status} → ${status} (${targetTask.assignee})`,
+        target: { type: 'task', id, label: targetTask.typeName, secondaryLabel: targetTask.room },
+        changes: [{ field: 'Statut tâche', before: targetTask.status, after: status }],
+      });
     }
 
     setTasks((prev) => {
@@ -1684,6 +2266,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const toggleSubtask = (taskId: string, subtaskId: string) => {
     playClickFeedback();
+    const targetTask = tasks.find((t) => t.id === taskId);
+    const targetSub = targetTask?.subtasks?.find((st) => st.id === subtaskId);
+    if (targetTask && targetSub) {
+      logEvent({
+        category: 'task',
+        action: 'task.subtask_toggled',
+        severity: 'info',
+        title: `Sous-tâche ${!targetSub.completed ? 'cochée' : 'décochée'} · ${targetTask.room}`,
+        description: `${targetSub.text} (${targetTask.typeName})`,
+        target: { type: 'task', id: taskId, label: targetTask.typeName, secondaryLabel: targetTask.room },
+        changes: [{ field: targetSub.text, before: targetSub.completed ? 'Fait' : 'À faire', after: !targetSub.completed ? 'Fait' : 'À faire' }],
+      });
+    }
     setTasks((prev) => {
       const updated = prev.map((t) => {
         if (t.id === taskId && t.subtasks) {
@@ -1701,6 +2296,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteTask = (id: string) => {
     playClickFeedback();
+    const targetTask = tasks.find((t) => t.id === id);
+    if (targetTask) {
+      logEvent({
+        category: 'task',
+        action: 'task.deleted',
+        severity: 'warn',
+        title: `Tâche supprimée · ${targetTask.room}`,
+        description: `${targetTask.typeName} (${targetTask.assignee}) supprimée.`,
+        target: { type: 'task', id, label: targetTask.typeName, secondaryLabel: targetTask.room },
+      });
+    }
     setTasks((prev) => {
       const updated = prev.filter((t) => t.id !== id);
       localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
@@ -1772,10 +2378,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
 
     checkoutTaskList.forEach((t) => addTask(t));
+    logEvent({
+      category: 'housekeeping',
+      action: 'housekeeping.turnover_generated',
+      severity: 'info',
+      title: `Protocole départ lancé · ${roomName}`,
+      description: `${checkoutTaskList.length} tâche(s) de remise en état générée(s) suite au départ.`,
+      target: { type: 'resource', id: foundRes?.id, label: roomName },
+      metadata: { generatedTasks: checkoutTaskList.length },
+      resourceId: foundRes?.id,
+    });
   };
 
   const addStockMovement = (itemId: string, delta: number, reason: string, room?: string) => {
     const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    const targetItem = stockItems.find((s) => s.id === itemId);
+    const prevQty = targetItem?.quantity ?? 0;
+    const nextQty = Math.max(0, prevQty + delta);
     setStockItems((prev) => {
       const updated = prev.map((item) => {
         if (item.id === itemId) {
@@ -1787,7 +2406,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
 
-    const targetItem = stockItems.find((s) => s.id === itemId);
     const newMovement: StockMovement = {
       id: `mov_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       timestamp: nowStr,
@@ -1804,29 +2422,76 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem('omnibook_stock_movements', JSON.stringify(updated));
       return updated;
     });
+
+    logEvent({
+      category: 'stock',
+      action: delta >= 0 ? 'stock.entry' : 'stock.exit',
+      severity: targetItem && nextQty <= targetItem.minThreshold ? 'warn' : delta >= 0 ? 'success' : 'info',
+      title: `${delta >= 0 ? 'Entrée' : 'Sortie'} stock · ${targetItem?.name || itemId}`,
+      description: `${delta >= 0 ? '+' : ''}${delta} (${prevQty} → ${nextQty}) · ${reason}${room ? ` · ${room}` : ''}`,
+      target: { type: 'stock_item', id: itemId, label: targetItem?.name || itemId, secondaryLabel: room },
+      changes: [{ field: 'Quantité stock', before: String(prevQty), after: String(nextQty) }],
+      metadata: { delta, reason, room: room || null },
+    });
   };
 
   const updateStockItem = (updatedItem: StockItem) => {
+    const existing = stockItems.find((item) => item.id === updatedItem.id);
     setStockItems((prev) => {
       const updated = prev.map((item) => (item.id === updatedItem.id ? updatedItem : item));
       localStorage.setItem('omnibook_stock_items', JSON.stringify(updated));
       return updated;
     });
+    logEvent({
+      category: 'stock',
+      action: 'stock.item_updated',
+      severity: 'info',
+      title: `Article stock mis à jour · ${updatedItem.name}`,
+      description: `Stock : ${updatedItem.quantity} ${updatedItem.unit} (seuil min ${updatedItem.minThreshold})`,
+      target: { type: 'stock_item', id: updatedItem.id, label: updatedItem.name, secondaryLabel: updatedItem.category },
+      changes: existing
+        ? [
+            ...(existing.quantity !== updatedItem.quantity ? [{ field: 'Quantité', before: String(existing.quantity), after: String(updatedItem.quantity) }] : []),
+            ...(existing.minThreshold !== updatedItem.minThreshold ? [{ field: 'Seuil alerte', before: String(existing.minThreshold), after: String(updatedItem.minThreshold) }] : []),
+          ]
+        : undefined,
+    });
   };
 
   const deleteStockItem = (id: string) => {
+    const existing = stockItems.find((item) => item.id === id);
     setStockItems((prev) => {
       const updated = prev.filter((item) => item.id !== id);
       localStorage.setItem('omnibook_stock_items', JSON.stringify(updated));
       return updated;
     });
+    if (existing) {
+      logEvent({
+        category: 'stock',
+        action: 'stock.item_deleted',
+        severity: 'warn',
+        title: `Article stock supprimé · ${existing.name}`,
+        description: `Article retiré de l’inventaire (${existing.quantity} ${existing.unit}).`,
+        target: { type: 'stock_item', id, label: existing.name, secondaryLabel: existing.category },
+      });
+    }
   };
 
   const setDynamicRate = (roomType: string, date: string, price: number) => {
+    const prevPrice = dynamicRates[roomType]?.[date];
     setDynamicRates((prev) => {
       const next = { ...prev, [roomType]: { ...(prev[roomType] || {}), [date]: price } };
       localStorage.setItem('omnibook_dynamic_rates', JSON.stringify(next));
       return next;
+    });
+    logEvent({
+      category: 'billing',
+      action: 'pricing.rate_updated',
+      severity: 'info',
+      title: `Tarif dynamique modifié · ${roomType}`,
+      description: `${date} : ${prevPrice !== undefined ? prevPrice : 'auto'} → ${price} ${currency}`,
+      target: { type: 'rate', label: roomType, secondaryLabel: date },
+      changes: [{ field: `Tarif ${date}`, before: prevPrice !== undefined ? String(prevPrice) : 'Standard', after: String(price) }],
     });
   };
 
@@ -1835,6 +2500,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const next = { ...prev, [roomType]: { ...(prev[roomType] || {}), ...rates } };
       localStorage.setItem('omnibook_dynamic_rates', JSON.stringify(next));
       return next;
+    });
+    const datesCount = Object.keys(rates).length;
+    logEvent({
+      category: 'billing',
+      action: 'pricing.bulk_updated',
+      severity: 'info',
+      title: `Tarifs dynamiques appliqués en masse · ${roomType}`,
+      description: `${datesCount} journée(s) tarifaire(s) mise(s) à jour.`,
+      target: { type: 'rate', label: roomType },
+      metadata: { datesCount },
     });
   };
 
@@ -1847,6 +2522,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStockItems([]);
     setStockMovements([]);
     setDynamicRates({});
+    setPersistedEventLogs([]);
     setEstablishmentProfileState(DEFAULT_ESTABLISHMENT_PROFILE);
     setClientProfileState({
       id: '',
@@ -1894,6 +2570,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Wait for IndexedDB completion. A failed transaction must not be reported as success.
     await indexedDb.clearAll();
   };
+
+  const eventLogs = useMemo<EventLogEntry[]>(() => {
+    let invoicesSnapshot: InvoiceRecord[] = [];
+    try {
+      const raw = localStorage.getItem('omnibook_invoices');
+      invoicesSnapshot = raw ? (JSON.parse(raw) as InvoiceRecord[]) : [];
+    } catch {
+      invoicesSnapshot = [];
+    }
+    const historicalSeeds = buildHistoricalEventSeeds({
+      bookings,
+      stockMovements,
+      issuedCards: lockManager.getIssuedCards(),
+      auditRecords: lockManager.getAuditRecords(),
+      invoices: invoicesSnapshot,
+      workspaceId: workspace.activeWorkspaceId || undefined,
+    });
+    return mergeEventLogs(persistedEventLogs, historicalSeeds, EVENT_LOG_MAX_ENTRIES);
+  }, [
+    persistedEventLogs,
+    bookings,
+    stockMovements,
+    lastCreatedInvoice,
+    lockHistoryVersion,
+    workspace.activeWorkspaceId,
+  ]);
+
+  const openBookingFromEvent = useCallback((bookingId: string): boolean => {
+    const match = latestBookingsRef.current.find((b) => b.id === bookingId);
+    if (!match) return false;
+    setSelectedBooking(match);
+    return true;
+  }, []);
 
   return (
     <AppContext.Provider
@@ -2003,6 +2712,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         syncTerminalOpen,
         setSyncTerminalOpen,
         clearSyncLog,
+        eventLogs,
+        logEvent,
+        clearEventLogs,
+        openBookingFromEvent,
       }}
     >
       {children}

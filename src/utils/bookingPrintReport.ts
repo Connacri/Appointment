@@ -1,4 +1,5 @@
 import { DomainType, Language, ResourceGroup, ResourceItem, TimelineBooking } from '../types/booking';
+import { buildNormalizedOccupantList } from './bookingOccupants';
 
 export type BookingPrintScope = 'all' | 'arrivals' | 'departures';
 
@@ -224,6 +225,8 @@ export interface PoliceCompanionData {
   documentType: string;
   documentNumber: string;
   documentExpiryDate?: string;
+  role?: 'adult' | 'child';
+  isPrimary?: boolean;
 }
 
 export interface PoliceSheetMappedFields {
@@ -255,6 +258,7 @@ export interface PoliceSheetMappedFields {
   hotelChildren: number;
   resortOccupants: number;
   adultGuests: PoliceCompanionData[];
+  occupants?: PoliceCompanionData[];
   paymentCurrency: string;
   currencySymbol: string;
   priceInPaymentCurrency: number;
@@ -350,6 +354,8 @@ export function buildPoliceSheetDataFromBooking({
     booking.paymentMethodType ||
     (paymentCurrency === 'DA' || paymentCurrency === 'DZD' ? 'cash_dzd' : 'cash_forex');
 
+  const normalizedOccupants = buildNormalizedOccupantList(booking);
+
   return {
     bookingId: booking.id,
     activeDomain: booking.sector || 'hotel',
@@ -386,16 +392,28 @@ export function buildPoliceSheetDataFromBooking({
     checkInTime: booking.checkInTime || '14:00',
     checkOutTime: booking.checkOutTime || '12:00',
     calculatedDays,
-    hotelAdults: adultsCount,
-    hotelChildren: childrenCount,
-    resortOccupants: adultsCount,
-    adultGuests: (booking.adultGuests || []).map((guest) => ({
-      fullName: guest.fullName || '',
-      phone: guest.phone || '',
-      email: guest.email || '',
-      documentType: guest.documentType || 'cni',
-      documentNumber: guest.documentNumber || '',
+    hotelAdults: normalizedOccupants.adultsCount,
+    hotelChildren: normalizedOccupants.childrenCount,
+    resortOccupants: normalizedOccupants.adultsCount,
+    adultGuests: normalizedOccupants.adults.map((guest) => ({
+      fullName: guest.fullName,
+      phone: guest.phone,
+      email: guest.email,
+      documentType: guest.documentType,
+      documentNumber: guest.documentNumber,
       documentExpiryDate: guest.documentExpiryDate,
+      role: guest.role,
+      isPrimary: guest.isPrimary,
+    })),
+    occupants: normalizedOccupants.allOccupants.map((guest) => ({
+      fullName: guest.fullName,
+      phone: guest.phone,
+      email: guest.email,
+      documentType: guest.documentType,
+      documentNumber: guest.documentNumber,
+      documentExpiryDate: guest.documentExpiryDate,
+      role: guest.role,
+      isPrimary: guest.isPrimary,
     })),
     paymentCurrency,
     currencySymbol,
@@ -427,5 +445,47 @@ export function getPoliceSheetMissingFields(
     missing.push(language === 'ar' ? 'رقم التأشيرة' : language === 'en' ? 'Visa number' : 'N° visa');
   }
   return missing;
+}
+
+export function getPoliceSheetCompanionMissingFields(
+  data: Pick<
+    PoliceSheetMappedFields,
+    'activeDomain' | 'hotelAdults' | 'hotelChildren' | 'resortOccupants' | 'adultGuests' | 'occupants'
+  >,
+  language: Language
+): string[] {
+  const expectedTotal =
+    data.activeDomain === 'resort'
+      ? Math.max(1, data.resortOccupants)
+      : Math.max(1, data.hotelAdults) + Math.max(0, data.hotelChildren);
+  if (expectedTotal <= 1) return [];
+
+  const list =
+    data.occupants && data.occupants.length > 0
+      ? data.occupants
+      : data.adultGuests;
+
+  let incompleteCompanions = 0;
+  for (let i = 1; i < expectedTotal; i += 1) {
+    const companion = list[i];
+    if (
+      !companion ||
+      !companion.fullName?.trim() ||
+      !companion.phone?.trim() ||
+      !companion.email?.trim() ||
+      !companion.documentNumber?.trim()
+    ) {
+      incompleteCompanions += 1;
+    }
+  }
+
+  if (incompleteCompanions === 0) return [];
+  return [
+    language === 'ar'
+      ? `المرافقون (${incompleteCompanions})`
+      : language === 'en'
+      ? `Companions (${incompleteCompanions})`
+      : `Accompagnants (${incompleteCompanions})`,
+  ];
 }
 

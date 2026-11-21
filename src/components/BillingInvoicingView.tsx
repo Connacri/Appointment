@@ -27,7 +27,7 @@ import { InvoicePreviewModal } from './InvoicePreviewModal';
 import { playClickFeedback } from '../utils/audioFeedback';
 
 export const BillingInvoicingView: React.FC = () => {
-  const { language, activeSector, currentDomain, establishmentProfile, setIsEstablishmentModalOpen, currency } = useApp();
+  const { language, activeSector, currentDomain, establishmentProfile, setIsEstablishmentModalOpen, currency, logEvent } = useApp();
   const activeCurrency = establishmentProfile.defaultCurrency || currency || 'DA';
 
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => {
@@ -191,6 +191,22 @@ export const BillingInvoicingView: React.FC = () => {
     const updated = [newDoc, ...invoices];
     setInvoices(updated);
     localStorage.setItem('omnibook_invoices', JSON.stringify(updated));
+    logEvent({
+      category: 'billing',
+      action: 'billing.document_created',
+      severity: newDoc.status === 'paid' ? 'success' : 'info',
+      title: `${docNumber} créé · ${newCustomerName}`,
+      description: `Document ${newDocType.toUpperCase()} · Total TTC ${newDoc.totalTTC} ${activeCurrency} · Acompte ${newDeposit} ${activeCurrency}`,
+      target: { type: 'invoice', id: newDoc.id, label: docNumber, secondaryLabel: newCustomerName },
+      metadata: {
+        docType: newDocType,
+        docNumber,
+        totalTTC: newDoc.totalTTC,
+        depositPaid: newDeposit,
+        balanceDue: newDoc.balanceDue,
+        currency: activeCurrency,
+      },
+    });
     setIsCreateModalOpen(false);
 
     // Reset Form

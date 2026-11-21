@@ -11,7 +11,10 @@
  */
 
 import { TimelineBooking, InvoiceRecord, ResourceItem, DomainType } from '../types/booking';
+import type { EventLogEntry } from '../types/eventLog';
+import { EVENT_LOG_MAX_ENTRIES, sortEventLogsDesc } from '../utils/eventLog';
 import { waitForTransactionCompletion } from './indexedDbTransaction';
+import { migrateBookingRecordV7 } from './bookingMigration';
 
 export interface IndexedDbQueryOptions<T> {
   where?: (item: T) => boolean;
@@ -67,7 +70,7 @@ export interface OutboxSummary {
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 5;
+  private dbVersion = 7;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -210,6 +213,52 @@ class IndexedDbStore {
           const groups = db.createObjectStore('resourceGroups', { keyPath: 'id' });
           groups.createIndex('sector', 'sector', { unique: false });
         }
+        if (!db.objectStoreNames.contains('eventLogs')) {
+          const eventLogs = db.createObjectStore('eventLogs', { keyPath: 'id' });
+          eventLogs.createIndex('timestamp', 'timestamp', { unique: false });
+          eventLogs.createIndex('category', 'category', { unique: false });
+          eventLogs.createIndex('workspaceId', 'workspaceId', { unique: false });
+        }
+
+        // v7 upgrade: index sector+startDate and normalize existing local booking records without data loss.
+        const upgradeTx = (e.target as IDBOpenDBRequest).transaction;
+        if (e.oldVersion > 0 && e.oldVersion < 7 && upgradeTx) {
+          if (db.objectStoreNames.contains('bookings')) {
+            const bStore = upgradeTx.objectStore('bookings');
+            if (!bStore.indexNames.contains('sectorStartDate')) {
+              bStore.createIndex('sectorStartDate', ['sector', 'startDate'], { unique: false });
+            }
+            const cursorReq = bStore.openCursor();
+            cursorReq.onsuccess = (cursorEvent) => {
+              const cursor = (cursorEvent.target as IDBRequest<IDBCursorWithValue | null>).result;
+              if (!cursor) return;
+              const migrated = migrateBookingRecordV7(cursor.value as TimelineBooking);
+              cursor.update(migrated);
+              cursor.continue();
+            };
+          }
+          if (db.objectStoreNames.contains('workspaceEntities')) {
+            const wStore = upgradeTx.objectStore('workspaceEntities');
+            const cursorReq = wStore.openCursor();
+            cursorReq.onsuccess = (cursorEvent) => {
+              const cursor = (cursorEvent.target as IDBRequest<IDBCursorWithValue | null>).result;
+              if (!cursor) return;
+              const row = cursor.value as { entity?: OutboxEntity; payload?: Record<string, unknown> };
+              if (row?.entity === 'booking' && row.payload && typeof row.payload === 'object') {
+                cursor.update({
+                  ...row,
+                  payload: migrateBookingRecordV7(row.payload as Partial<TimelineBooking>),
+                });
+              }
+              cursor.continue();
+            };
+          }
+        } else if (db.objectStoreNames.contains('bookings') && upgradeTx) {
+          const bStore = upgradeTx.objectStore('bookings');
+          if (!bStore.indexNames.contains('sectorStartDate')) {
+            bStore.createIndex('sectorStartDate', ['sector', 'startDate'], { unique: false });
+          }
+        }
       };
 
       req.onsuccess = () => {
@@ -263,6 +312,81 @@ class IndexedDbStore {
     await waitForTransactionCompletion(tx, `replaceStore ${storeName}`);
   }
 
+  /** Append a live PMS event log entry with bounded local retention. */
+  public async appendEventLog(
+    entry: EventLogEntry,
+    maxEntries = EVENT_LOG_MAX_ENTRIES
+  ): Promise<void> {
+    await this.openStore();
+    if (!this.idb) {
+      let existing: EventLogEntry[] = [];
+      try {
+        existing = JSON.parse(localStorage.getItem('ob_eventLogs') || '[]') as EventLogEntry[];
+      } catch {
+        existing = [];
+      }
+      const next = sortEventLogsDesc([
+        ...existing.filter((item) => item.id !== entry.id),
+        entry,
+      ]).slice(0, maxEntries);
+      localStorage.setItem('ob_eventLogs', JSON.stringify(next));
+      return;
+    }
+
+    const tx = this.idb.transaction('eventLogs', 'readwrite');
+    const store = tx.objectStore('eventLogs');
+    store.put(entry);
+
+    const getAllReq = store.getAll();
+    getAllReq.onsuccess = () => {
+      const all = sortEventLogsDesc(getAllReq.result as EventLogEntry[]);
+      if (all.length > maxEntries) {
+        for (const obsolete of all.slice(maxEntries)) {
+          store.delete(obsolete.id);
+        }
+      }
+    };
+    getAllReq.onerror = () => tx.abort();
+    await waitForTransactionCompletion(tx, `appendEventLog ${entry.id}`);
+  }
+
+  /** Read locally stored event log entries ordered newest-first. */
+  public async getEventLogs(limit = EVENT_LOG_MAX_ENTRIES): Promise<EventLogEntry[]> {
+    await this.openStore();
+    if (!this.idb) {
+      try {
+        const list = JSON.parse(localStorage.getItem('ob_eventLogs') || '[]') as EventLogEntry[];
+        return sortEventLogsDesc(Array.isArray(list) ? list : []).slice(0, limit);
+      } catch {
+        return [];
+      }
+    }
+
+    const tx = this.idb.transaction('eventLogs', 'readonly');
+    const request = tx.objectStore('eventLogs').getAll();
+    const result = await new Promise<EventLogEntry[]>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result as EventLogEntry[]);
+      request.onerror = () => reject(request.error);
+    });
+    await waitForTransactionCompletion(tx, 'getEventLogs');
+    return sortEventLogsDesc(result).slice(0, limit);
+  }
+
+  /** Clear locally persisted event logs without disturbing operational business records. */
+  public async clearEventLogs(): Promise<void> {
+    await this.openStore();
+    if (this.idb) {
+      const tx = this.idb.transaction('eventLogs', 'readwrite');
+      tx.objectStore('eventLogs').clear();
+      await waitForTransactionCompletion(tx, 'clearEventLogs');
+    }
+    try {
+      localStorage.removeItem('ob_eventLogs');
+    } catch {
+      /* storage unavailable */
+    }
+  }
+
   // Generic paginated box query with true storage-side cursor pagination (IndexedDB §11 pattern)
   public async queryStore<T>(
     storeName: 'bookings' | 'invoices' | 'resources',
@@ -274,6 +398,9 @@ class IndexedDbStore {
       // Memory fallback from localStorage
       const raw = localStorage.getItem(`ob_${storeName}`);
       let list: T[] = raw ? JSON.parse(raw) : [];
+      if (storeName === 'bookings') {
+        list = list.map((entry) => migrateBookingRecordV7(entry as Partial<TimelineBooking>) as T);
+      }
       if (options?.where) list = list.filter(options.where);
       const total = list.length;
       if (options?.offset !== undefined || options?.limit !== undefined) {
@@ -382,6 +509,10 @@ class IndexedDbStore {
     storeName: 'bookings' | 'invoices' | 'resources',
     items: T[]
   ): Promise<void> {
+    const normalizedItems =
+      storeName === 'bookings'
+        ? items.map((entry) => migrateBookingRecordV7(entry as Partial<TimelineBooking>) as T)
+        : items;
     this.beginSyncOp();
     try {
       await this.openStore();
@@ -395,7 +526,7 @@ class IndexedDbStore {
               .map((entry) => [entry.id, entry])
           );
           store.clear();
-          for (const item of items) {
+          for (const item of normalizedItems) {
             const existing = existingById.get(item.id);
             store.put(existing ? {
               ...item,
@@ -414,7 +545,7 @@ class IndexedDbStore {
       }
 
       // In fallback mode this is the primary store, so failure must reach the caller.
-      localStorage.setItem(`ob_${storeName}`, JSON.stringify(items));
+      localStorage.setItem(`ob_${storeName}`, JSON.stringify(normalizedItems));
     } finally {
       this.endSyncOp();
     }
@@ -425,13 +556,17 @@ class IndexedDbStore {
     storeName: 'bookings' | 'invoices' | 'resources',
     item: T
   ): Promise<void> {
+    const normalizedItem =
+      storeName === 'bookings'
+        ? (migrateBookingRecordV7(item as Partial<TimelineBooking>) as T)
+        : item;
     this.beginSyncOp();
     try {
       await this.openStore();
 
       if (this.idb) {
         const tx = this.idb.transaction(storeName, 'readwrite');
-        tx.objectStore(storeName).put(item);
+        tx.objectStore(storeName).put(normalizedItem);
         await waitForTransactionCompletion(tx, `put ${storeName}/${item.id}`);
 
         // Do not mirror operational records into localStorage when IndexedDB is available.
@@ -443,7 +578,7 @@ class IndexedDbStore {
       const list: T[] = raw ? JSON.parse(raw) : [];
       localStorage.setItem(
         `ob_${storeName}`,
-        JSON.stringify([...list.filter((entry) => entry.id !== item.id), item])
+        JSON.stringify([...list.filter((entry) => entry.id !== normalizedItem.id), normalizedItem])
       );
     } finally {
       this.endSyncOp();
@@ -490,7 +625,7 @@ class IndexedDbStore {
       await this.openStore();
 
       if (this.idb) {
-        const tx = this.idb.transaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'issuedCards', 'resourceGroups'], 'readwrite');
+        const tx = this.idb.transaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'issuedCards', 'resourceGroups', 'eventLogs'], 'readwrite');
         tx.objectStore('bookings').clear();
         tx.objectStore('invoices').clear();
         tx.objectStore('resources').clear();
@@ -499,11 +634,12 @@ class IndexedDbStore {
         tx.objectStore('workspaceEntities').clear();
         tx.objectStore('issuedCards').clear();
         tx.objectStore('resourceGroups').clear();
+        tx.objectStore('eventLogs').clear();
         await waitForTransactionCompletion(tx, 'clear all stores');
       }
 
       // Clear the fallback only after the authoritative IDB transaction commits.
-      for (const storeName of ['bookings', 'invoices', 'resources', 'issuedCards', 'resourceGroups'] as const) {
+      for (const storeName of ['bookings', 'invoices', 'resources', 'issuedCards', 'resourceGroups', 'eventLogs'] as const) {
         localStorage.removeItem(`ob_${storeName}`);
       }
       this.emitOutboxChange();
@@ -554,7 +690,11 @@ class IndexedDbStore {
       if (!entityReady || !tombstoneReady) return;
       const version = Math.max(current?.version ?? 0, previousTombstone?.version ?? 0) + 1;
       const now = new Date().toISOString();
-      const persisted = { ...item, workspaceId: context.workspaceId, establishmentId: context.establishmentId, syncVersion: version, deletedAt: null };
+      const baseItem =
+        storeName === 'bookings'
+          ? (migrateBookingRecordV7(item as Partial<TimelineBooking>) as T)
+          : item;
+      const persisted = { ...baseItem, workspaceId: context.workspaceId, establishmentId: context.establishmentId, syncVersion: version, deletedAt: null };
       const entityRecord = {
         workspaceId: context.workspaceId, establishmentId: context.establishmentId,
         entity, entityId: item.id, version, updatedAt: now, payload: persisted,
@@ -651,7 +791,11 @@ class IndexedDbStore {
         previousTombstone?.version ?? 0,
       ) + 1;
       const now = new Date().toISOString();
-      const persisted = { ...item, workspaceId: context.workspaceId, establishmentId: context.establishmentId, syncVersion: resolvedVersion, deletedAt: null };
+      const baseItem =
+        storeName === 'bookings'
+          ? (migrateBookingRecordV7(item as Partial<TimelineBooking>) as T)
+          : item;
+      const persisted = { ...baseItem, workspaceId: context.workspaceId, establishmentId: context.establishmentId, syncVersion: resolvedVersion, deletedAt: null };
       const entityRecord = {
         workspaceId: context.workspaceId, establishmentId: context.establishmentId,
         entity, entityId: item.id, version: resolvedVersion, updatedAt: now, payload: persisted,

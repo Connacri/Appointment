@@ -30,8 +30,9 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
-import { isValidBookingDateRange } from '../utils/bookingValidation';
-import { BookingStatus, DomainType, TimelineBooking, ResourceItem } from '../types/booking';
+import { isValidBookingDateRange, validateBookingOccupants, type OccupantValidationError } from '../utils/bookingValidation';
+import { buildNormalizedOccupantList, normalizeOccupantEntry } from '../utils/bookingOccupants';
+import { BookingOccupant, BookingStatus, DomainType, TimelineBooking, ResourceItem } from '../types/booking';
 import { domainConfigs } from '../data/mockData';
 import { statusConfig } from './LegendBar';
 import { downloadICS } from '../utils/icsExport';
@@ -111,7 +112,10 @@ export const BookingModal: React.FC = () => {
   const [guestName, setGuestName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
-  const [adultGuests, setAdultGuests] = useState<{ fullName: string; phone: string; email: string; documentType: string; documentNumber: string; documentExpiryDate?: string }[]>([]);
+  const [adultGuests, setAdultGuests] = useState<BookingOccupant[]>([]);
+  const [childGuests, setChildGuests] = useState<BookingOccupant[]>([]);
+  const [occupantErrors, setOccupantErrors] = useState<OccupantValidationError[]>([]);
+  const [showOccupantValidation, setShowOccupantValidation] = useState(false);
   const [startDate, setStartDate] = useState(currentBaseDate);
   const [endDate, setEndDate] = useState('');
   const [checkInTime, setCheckInTime] = useState('14:00');
@@ -192,7 +196,7 @@ export const BookingModal: React.FC = () => {
     setWilayaOfOrigin(previous.wilayaOfOrigin || previous.wilaya || '31 - Oran');
     setIdDocumentExpiryDate(previous.idDocumentExpiryDate || '');
     setVisaExpiryDate(previous.visaExpiryDate || '');
-    setGuestAlertsText((previous.guestAlerts || []).map((alert) => alert?.text ?? '').join('\\n'));
+    setGuestAlertsText((previous.guestAlerts || []).map((alert) => alert?.text ?? '').join('\n'));
   }, [isOpen, guestName, guestEmail, bookings, activeDomain, currentRole, selectedBooking]);
 
   const documentExpiryWarning = (date?: string) => {
@@ -278,20 +282,24 @@ export const BookingModal: React.FC = () => {
     if (!isOpen) return;
 
     if (selectedBooking) {
+      const normalizedOccupants = buildNormalizedOccupantList(selectedBooking);
       setResourceId(selectedBooking.resourceId);
       setGuestName(selectedBooking.guestName || '');
       setGuestEmail(selectedBooking.guestEmail || '');
       setGuestPhone(selectedBooking.guestPhone || '');
-      setAdultGuests(selectedBooking.adultGuests || []);
+      setAdultGuests(normalizedOccupants.adults);
+      setChildGuests(normalizedOccupants.children);
+      setOccupantErrors([]);
+      setShowOccupantValidation(false);
       setStartDate(selectedBooking.startDate || currentBaseDate);
       setEndDate(selectedBooking.endDate || selectedBooking.startDate);
       setCheckInTime(selectedBooking.checkInTime || '14:00');
       setCheckOutTime(selectedBooking.checkOutTime || '12:00');
       setStatus(selectedBooking.status || 'confirmed');
       setNotes(selectedBooking.notes || '');
-      setValuablesText((selectedBooking.valuablesAtReception || []).filter((item) => item.status === 'held').map((item) => item.description).join('\\n'));
-      setForgottenText((selectedBooking.forgottenItems || []).filter((item) => item.status === 'stored').map((item) => item.description).join('\\n'));
-      setGuestAlertsText((selectedBooking.guestAlerts || []).map((item) => item.text).join('\\n'));
+      setValuablesText((selectedBooking.valuablesAtReception || []).filter((item) => item.status === 'held').map((item) => item.description).join('\n'));
+      setForgottenText((selectedBooking.forgottenItems || []).filter((item) => item.status === 'stored').map((item) => item.description).join('\n'));
+      setGuestAlertsText((selectedBooking.guestAlerts || []).map((item) => item.text).join('\n'));
       setPaymentStatus(selectedBooking.paymentStatus || 'paid');
       setConflictError(null);
 
@@ -342,11 +350,13 @@ export const BookingModal: React.FC = () => {
         setSelectedDietary(selectedBooking.mealPlanDietPreferences);
       }
 
-      // Hydrate custom metadata if present
+      // Hydrate custom metadata and authoritative occupancy counts
       const meta = selectedBooking.customMetadata || {};
+      const resolvedAdults = selectedBooking.adults ?? (selectedBooking.sector === 'resort' ? meta.resortOccupants : meta.hotelAdults);
+      const resolvedChildren = selectedBooking.children ?? meta.hotelChildren ?? 0;
       if (selectedBooking.sector === 'hotel') {
-        if (meta.hotelAdults) setHotelAdults(meta.hotelAdults);
-        if (meta.hotelChildren !== undefined) setHotelChildren(meta.hotelChildren);
+        setHotelAdults(Math.max(1, Number(resolvedAdults) || 1));
+        setHotelChildren(Math.max(0, Number(resolvedChildren) || 0));
         if (meta.hotelMealPlan) setHotelMealPlan(meta.hotelMealPlan);
         if (meta.hotelCheckinTime) setHotelCheckinTime(meta.hotelCheckinTime);
         if (meta.hotelOptionBabyBed !== undefined) setHotelOptionBabyBed(meta.hotelOptionBabyBed);
@@ -354,7 +364,7 @@ export const BookingModal: React.FC = () => {
         if (meta.hotelOptionPet !== undefined) setHotelOptionPet(meta.hotelOptionPet);
         if (meta.hotelOptionWelcomeGift !== undefined) setHotelOptionWelcomeGift(meta.hotelOptionWelcomeGift);
       } else if (selectedBooking.sector === 'resort') {
-        if (meta.resortOccupants) setResortOccupants(meta.resortOccupants);
+        setResortOccupants(Math.max(1, Number(resolvedAdults) || 1));
         if (meta.resortFormula) setResortFormula(meta.resortFormula);
         if (meta.resortCheckinTime) setResortCheckinTime(meta.resortCheckinTime);
         if (meta.resortOptionPrivatePool !== undefined) setResortOptionPrivatePool(meta.resortOptionPrivatePool);
@@ -403,8 +413,11 @@ export const BookingModal: React.FC = () => {
         setGuestName('');
         setGuestEmail('');
         setGuestPhone('');
-      setAdultGuests([]);
       }
+      setAdultGuests([]);
+      setChildGuests([]);
+      setOccupantErrors([]);
+      setShowOccupantValidation(false);
       setStatus('confirmed');
       setNotes('');
       setValuablesText('');
@@ -433,16 +446,211 @@ export const BookingModal: React.FC = () => {
     }
   }, [isOpen, selectedBooking, newBookingInitialSlot, currentBaseDate, activeDomain, domainResources, currentRole, clientProfile]);
 
+  // Keep adult & child occupant arrays sized to active occupancy and synchronize Person #1 with primary guest fields
   useEffect(() => {
-    const count = activeDomain === 'hotel' ? hotelAdults : activeDomain === 'resort' ? resortOccupants : 1;
-    setAdultGuests((current) => Array.from({ length: count }, (_, index) => current[index] || { fullName: index === 0 ? guestName : '', phone: index === 0 ? guestPhone : '', email: index === 0 ? guestEmail : '', documentType: index === 0 ? idPieceType : 'cni', documentNumber: index === 0 ? idPieceNumber : '', documentExpiryDate: index === 0 ? idDocumentExpiryDate : '' }));
-  }, [hotelAdults, resortOccupants, activeDomain]);
+    const adultTarget = activeDomain === 'hotel' ? hotelAdults : activeDomain === 'resort' ? resortOccupants : 1;
+    const childTarget = activeDomain === 'hotel' ? hotelChildren : 0;
+
+    setAdultGuests((current) =>
+      Array.from({ length: adultTarget }, (_, index) => {
+        if (index === 0) {
+          return normalizeOccupantEntry(
+            {
+              ...(current[0] || {}),
+              fullName: guestName,
+              phone: guestPhone,
+              email: guestEmail,
+              documentType: idPieceType,
+              documentNumber: idPieceNumber,
+              documentExpiryDate: idDocumentExpiryDate || undefined,
+            },
+            { index: 0, role: 'adult', isPrimary: true }
+          );
+        }
+        return normalizeOccupantEntry(current[index], {
+          index,
+          role: 'adult',
+          isPrimary: false,
+        });
+      })
+    );
+
+    setChildGuests((current) =>
+      Array.from({ length: childTarget }, (_, index) =>
+        normalizeOccupantEntry(current[index], {
+          index: adultTarget + index,
+          role: 'child',
+          isPrimary: false,
+        })
+      )
+    );
+  }, [
+    hotelAdults,
+    hotelChildren,
+    resortOccupants,
+    activeDomain,
+    guestName,
+    guestPhone,
+    guestEmail,
+    idPieceType,
+    idPieceNumber,
+    idDocumentExpiryDate,
+  ]);
+
+  const updateAdultOccupantField = (
+    index: number,
+    field: keyof BookingOccupant,
+    value: string
+  ) => {
+    if (index === 0) {
+      if (field === 'fullName') setGuestName(value);
+      else if (field === 'phone') setGuestPhone(value);
+      else if (field === 'email') setGuestEmail(value);
+      else if (field === 'documentType') {
+        setIdPieceType(value as typeof idPieceType);
+        if (value === 'cni') setAlgerianIdType('cni');
+      } else if (field === 'documentNumber') {
+        setIdPieceNumber(value);
+        setAlgerianIdNumber(value);
+        setPassportNumber(value);
+      } else if (field === 'documentExpiryDate') {
+        setIdDocumentExpiryDate(value);
+      }
+      return;
+    }
+
+    setAdultGuests((current) =>
+      current.map((item, i) =>
+        i === index
+          ? normalizeOccupantEntry(
+              { ...item, [field]: value },
+              { index: i, role: 'adult', isPrimary: false }
+            )
+          : item
+      )
+    );
+  };
+
+  const updateChildOccupantField = (
+    childIndex: number,
+    field: keyof BookingOccupant,
+    value: string
+  ) => {
+    const adultOffset = activeDomain === 'hotel' ? hotelAdults : activeDomain === 'resort' ? resortOccupants : 1;
+    setChildGuests((current) =>
+      current.map((item, i) =>
+        i === childIndex
+          ? normalizeOccupantEntry(
+              { ...item, [field]: value },
+              { index: adultOffset + i, role: 'child', isPrimary: false }
+            )
+          : item
+      )
+    );
+  };
+
+  const applyPrimaryContactToChild = (childIndex: number) => {
+    const adultOffset = activeDomain === 'hotel' ? hotelAdults : activeDomain === 'resort' ? resortOccupants : 1;
+    setChildGuests((current) =>
+      current.map((item, i) =>
+        i === childIndex
+          ? normalizeOccupantEntry(
+              {
+                ...item,
+                phone: guestPhone.trim() || item.phone,
+                email: guestEmail.trim() || item.email,
+              },
+              { index: adultOffset + i, role: 'child', isPrimary: false }
+            )
+          : item
+      )
+    );
+  };
 
   // Card quantity defaults to all occupants; reception can override it.
   const occupantCount = activeDomain === 'hotel' ? hotelAdults + hotelChildren : activeDomain === 'resort' ? resortOccupants : 1;
   useEffect(() => {
     setRequestedCardCount(Math.max(1, occupantCount));
   }, [occupantCount]);
+
+  // Live occupant validation errors when validation is triggered
+  const normalizedOccupantsPreview = useMemo(() => {
+    const adultsTarget = activeDomain === 'hotel' ? hotelAdults : activeDomain === 'resort' ? resortOccupants : 1;
+    const childrenTarget = activeDomain === 'hotel' ? hotelChildren : 0;
+    return buildNormalizedOccupantList({
+      sector: activeDomain,
+      guestName,
+      guestPhone,
+      guestEmail,
+      idPieceType,
+      idPieceNumber,
+      identityNumber: algerianIdNumber,
+      passportNumber,
+      idDocumentExpiryDate,
+      adults: adultsTarget,
+      children: childrenTarget,
+      adultGuests: adultGuests.slice(0, adultsTarget),
+      occupantsList: [
+        ...adultGuests.slice(0, adultsTarget),
+        ...childGuests.slice(0, childrenTarget),
+      ],
+    });
+  }, [
+    activeDomain,
+    hotelAdults,
+    hotelChildren,
+    resortOccupants,
+    guestName,
+    guestPhone,
+    guestEmail,
+    idPieceType,
+    idPieceNumber,
+    algerianIdNumber,
+    passportNumber,
+    idDocumentExpiryDate,
+    adultGuests,
+    childGuests,
+  ]);
+
+  const liveOccupantCheck = useMemo(() => {
+    return validateBookingOccupants(
+      {
+        sector: activeDomain,
+        guestName,
+        guestPhone,
+        guestEmail,
+        idPieceType,
+        idPieceNumber,
+        specialAuthorizationDesc,
+        adults: normalizedOccupantsPreview.adultsCount,
+        children: normalizedOccupantsPreview.childrenCount,
+        adultGuests: normalizedOccupantsPreview.adults,
+        occupantsList: normalizedOccupantsPreview.allOccupants,
+      },
+      language
+    );
+  }, [
+    activeDomain,
+    guestName,
+    guestPhone,
+    guestEmail,
+    idPieceType,
+    idPieceNumber,
+    specialAuthorizationDesc,
+    normalizedOccupantsPreview,
+    language,
+  ]);
+
+  useEffect(() => {
+    if (showOccupantValidation) {
+      setOccupantErrors(liveOccupantCheck.errors);
+    }
+  }, [showOccupantValidation, liveOccupantCheck]);
+
+  const getFieldError = (personIndex: number, field: OccupantValidationError['field']): string | undefined => {
+    if (!showOccupantValidation) return undefined;
+    return occupantErrors.find((err) => err.personIndex === personIndex && err.field === field)?.message;
+  };
 
   // Current selected resource
   const currentResource = useMemo(() => {
@@ -649,7 +857,7 @@ export const BookingModal: React.FC = () => {
       setRoomStatusAlert({ roomName: currentResource?.name ?? '—', status: currentResource?.housekeepingStatus });
       return;
     }
-    if (!guestName.trim()) return;
+
     const effectiveEndDate = endDate || startDate;
     if (!isValidBookingDateRange(startDate, effectiveEndDate)) {
       setConflictError(getTranslation('bookingInvalidDateRange', language));
@@ -663,18 +871,41 @@ export const BookingModal: React.FC = () => {
         return;
       }
     }
+
+    // Strict validation of ALL occupants & coordinates before checkConflict / write
+    setShowOccupantValidation(true);
+    setOccupantErrors(liveOccupantCheck.errors);
+    if (!liveOccupantCheck.valid) {
+      setConflictError(
+        liveOccupantCheck.summaryError ||
+          getTranslation('bookingOccupantsRuleBanner', language)
+      );
+      const firstErr = liveOccupantCheck.errors[0];
+      const targetAnchor =
+        firstErr && firstErr.personIndex === 0 && (firstErr.field === 'fullName' || firstErr.field === 'phone' || firstErr.field === 'email')
+          ? 'booking-step-guest'
+          : firstErr && firstErr.personIndex === 0 && (firstErr.field === 'documentNumber' || firstErr.field === 'documentType' || firstErr.field === 'specialAuthorizationDesc')
+          ? 'booking-step-police'
+          : 'booking-step-occupants';
+      document.getElementById(targetAnchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+
     if (activeDomain === 'hotel' && checkConflict(resourceId, startDate, effectiveEndDate, selectedBooking?.id, checkInTime, checkOutTime)) {
       setConflictError('Cette chambre n’est pas disponible sur ce créneau. Vérifiez les heures ou choisissez une autre chambre.');
       return;
     }
     setConflictError(null);
 
+    const totalAdults = normalizedOccupantsPreview.adultsCount;
+    const totalChildren = normalizedOccupantsPreview.childrenCount;
+
     // Build custom domain metadata payload
     let customMetadata: Record<string, any> = {};
     if (activeDomain === 'hotel') {
       customMetadata = {
-        hotelAdults,
-        hotelChildren,
+        hotelAdults: totalAdults,
+        hotelChildren: totalChildren,
         hotelMealPlan,
         hotelCheckinTime,
         hotelOptionBabyBed,
@@ -684,7 +915,7 @@ export const BookingModal: React.FC = () => {
       };
     } else if (activeDomain === 'resort') {
       customMetadata = {
-        resortOccupants,
+        resortOccupants: totalAdults,
         resortFormula,
         resortCheckinTime,
         resortOptionPrivatePool,
@@ -694,28 +925,27 @@ export const BookingModal: React.FC = () => {
       };
     }
 
-    const totalAdults = activeDomain === 'hotel' ? hotelAdults : resortOccupants;
-    const totalChildren = activeDomain === 'hotel' ? hotelChildren : 0;
     const computedOriginalAmount = Math.round(totalPrice * (ratesFromEur[paymentCurrency] || 1));
     const computedRateToDzd = ratesFromEur['DA'] / (ratesFromEur[paymentCurrency] || 1);
 
     const currentUserName = `${currentRole.toUpperCase()} (${clientProfile?.name || 'Réception'})`;
     const nowIso = new Date().toISOString();
+    const effectivePrimaryDocNum = idPieceNumber || (guestType === 'algerian' ? algerianIdNumber : passportNumber);
 
     if (isEditing && selectedBooking) {
       const historyEntry = {
         timestamp: nowIso,
         modifiedBy: currentUserName,
-        changes: `Mise à jour: ${guestName}, Dates: ${startDate} au ${endDate}, Statut: ${status}, Pension: ${selectedMealPlanId.toUpperCase()}, Pièce: ${idPieceType}`,
+        changes: `Mise à jour: ${guestName}, Dates: ${startDate} au ${effectiveEndDate}, Statut: ${status}, Pension: ${selectedMealPlanId.toUpperCase()}, Pièce: ${idPieceType}`,
       };
       const updatedHistory = [...(selectedBooking.modificationHistory || []), historyEntry];
 
-      updateBooking(selectedBooking.id, {
+      const updateRes = updateBooking(selectedBooking.id, {
         resourceId,
         resourceName: currentResource?.name || selectedBooking.resourceName,
-        guestName,
-        guestEmail,
-        guestPhone,
+        guestName: guestName.trim(),
+        guestEmail: guestEmail.trim(),
+        guestPhone: guestPhone.trim(),
         startDate,
         endDate: effectiveEndDate,
         checkInTime,
@@ -724,18 +954,19 @@ export const BookingModal: React.FC = () => {
         totalPrice,
         paymentStatus,
         notes,
-        valuablesAtReception: (selectedBooking.valuablesAtReception || []).filter((item) => item.status !== 'returned').concat(valuablesText.split('\\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'held' as const, recordedAt: nowIso }))),
-        forgottenItems: (selectedBooking.forgottenItems || []).filter((item) => item.status !== 'returned').concat(forgottenText.split('\\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'stored' as const, foundAt: nowIso, foundBy: currentUserName }))),
-        guestAlerts: (selectedBooking.guestAlerts || []).concat(guestAlertsText.split('\\n').map((text) => text.trim()).filter(Boolean).map((text) => ({ id: crypto.randomUUID(), text, source: (currentRole === 'staff' ? 'housekeeping' : currentRole === 'manager' || currentRole === 'admin' ? 'management' : 'reception') as 'housekeeping' | 'reception' | 'management', createdAt: nowIso, createdBy: currentUserName }))),
+        valuablesAtReception: (selectedBooking.valuablesAtReception || []).filter((item) => item.status !== 'returned').concat(valuablesText.split('\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'held' as const, recordedAt: nowIso }))),
+        forgottenItems: (selectedBooking.forgottenItems || []).filter((item) => item.status !== 'returned').concat(forgottenText.split('\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'stored' as const, foundAt: nowIso, foundBy: currentUserName }))),
+        guestAlerts: (selectedBooking.guestAlerts || []).concat(guestAlertsText.split('\n').map((text) => text.trim()).filter(Boolean).map((text) => ({ id: crypto.randomUUID(), text, source: (currentRole === 'staff' ? 'housekeeping' : currentRole === 'manager' || currentRole === 'admin' ? 'management' : 'reception') as 'housekeeping' | 'reception' | 'management', createdAt: nowIso, createdBy: currentUserName }))),
         adults: totalAdults,
-        adultGuests: adultGuests.slice(0, totalAdults),
+        adultGuests: normalizedOccupantsPreview.adults,
+        occupantsList: normalizedOccupantsPreview.allOccupants,
         children: totalChildren,
         guestType,
         nationality: guestType === 'algerian' ? 'Algérienne' : foreignNationality,
         identityType: guestType === 'algerian' ? algerianIdType : 'passport',
-        identityNumber: idPieceNumber || (guestType === 'algerian' ? algerianIdNumber : passportNumber),
+        identityNumber: effectivePrimaryDocNum,
         idPieceType,
-        idPieceNumber: idPieceNumber || (guestType === 'algerian' ? algerianIdNumber : passportNumber),
+        idPieceNumber: effectivePrimaryDocNum,
         specialAuthorizationDesc: idPieceType === 'special_authorization' ? specialAuthorizationDesc : undefined,
         passportNumber: guestType === 'foreigner' ? (passportNumber || idPieceNumber) : undefined,
         idDocumentExpiryDate: idDocumentExpiryDate || undefined,
@@ -755,6 +986,10 @@ export const BookingModal: React.FC = () => {
         paymentMethodType,
         customMetadata,
       });
+      if (updateRes && !updateRes.success) {
+        setConflictError(updateRes.error || getTranslation('bookingOccupantsRuleBanner', language));
+        return;
+      }
       setSelectedBooking(null);
       setIsNewBookingModalOpen(false);
     } else {
@@ -770,10 +1005,9 @@ export const BookingModal: React.FC = () => {
         resourceId: resourceId || domainResources[0]?.id || 'res_1',
         resourceName: currentResource?.name || 'Ressource',
         sector: activeDomain,
-        guestName,
-        guestEmail: guestEmail || `${guestName.toLowerCase().replace(/\s+/g, '.')}@example.com`,
-        guestPhone:
-          guestPhone || (guestType === 'algerian' ? '+213 550 12 34 56' : '+33 6 00 00 00 00'),
+        guestName: guestName.trim(),
+        guestEmail: guestEmail.trim(),
+        guestPhone: guestPhone.trim(),
         startDate,
         endDate: effectiveEndDate,
         checkInTime,
@@ -782,18 +1016,19 @@ export const BookingModal: React.FC = () => {
         totalPrice,
         paymentStatus,
         notes,
-        valuablesAtReception: valuablesText.split('\\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'held' as const, recordedAt: nowIso })),
-        forgottenItems: forgottenText.split('\\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'stored' as const, foundAt: nowIso, foundBy: currentUserName })),
-        guestAlerts: guestAlertsText.split('\\n').map((text) => text.trim()).filter(Boolean).map((text) => ({ id: crypto.randomUUID(), text, source: (currentRole === 'staff' ? 'housekeeping' : currentRole === 'manager' || currentRole === 'admin' ? 'management' : 'reception') as 'housekeeping' | 'reception' | 'management', createdAt: nowIso, createdBy: currentUserName })),
+        valuablesAtReception: valuablesText.split('\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'held' as const, recordedAt: nowIso })),
+        forgottenItems: forgottenText.split('\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'stored' as const, foundAt: nowIso, foundBy: currentUserName })),
+        guestAlerts: guestAlertsText.split('\n').map((text) => text.trim()).filter(Boolean).map((text) => ({ id: crypto.randomUUID(), text, source: (currentRole === 'staff' ? 'housekeeping' : currentRole === 'manager' || currentRole === 'admin' ? 'management' : 'reception') as 'housekeeping' | 'reception' | 'management', createdAt: nowIso, createdBy: currentUserName })),
         adults: totalAdults,
-        adultGuests: adultGuests.slice(0, totalAdults),
+        adultGuests: normalizedOccupantsPreview.adults,
+        occupantsList: normalizedOccupantsPreview.allOccupants,
         children: totalChildren,
         guestType,
         nationality: guestType === 'algerian' ? 'Algérienne' : foreignNationality,
         identityType: guestType === 'algerian' ? algerianIdType : 'passport',
-        identityNumber: idPieceNumber || (guestType === 'algerian' ? algerianIdNumber : passportNumber),
+        identityNumber: effectivePrimaryDocNum,
         idPieceType,
-        idPieceNumber: idPieceNumber || (guestType === 'algerian' ? algerianIdNumber : passportNumber),
+        idPieceNumber: effectivePrimaryDocNum,
         specialAuthorizationDesc: idPieceType === 'special_authorization' ? specialAuthorizationDesc : undefined,
         passportNumber: guestType === 'foreigner' ? (passportNumber || idPieceNumber) : undefined,
         idDocumentExpiryDate: idDocumentExpiryDate || undefined,
@@ -1438,7 +1673,7 @@ export const BookingModal: React.FC = () => {
           {/* 2. BENEFICIARY / CLIENT / PATIENT IDENTITY */}
           <div id="booking-step-guest" className="space-y-4 scroll-mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-xs">
             <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label htmlFor="booking-primary-name" className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 {language === 'fr'
                   ? `${domainCfg.userTerm.fr} (Nom complet) *`
                   : language === 'ar'
@@ -1448,58 +1683,95 @@ export const BookingModal: React.FC = () => {
               <div className="relative">
                 <User size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
+                  id="booking-primary-name"
                   type="text"
                   required
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
+                  aria-invalid={Boolean(getFieldError(0, 'fullName'))}
                   placeholder={
                     activeDomain === 'resort'
                       ? 'Ex: Famille Delacroix (Villa 01)'
                       : 'Ex: Alexander Kaufmann'
                   }
-                  className="w-full h-11 ps-9 pe-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                  className={`w-full h-11 ps-9 pe-3 bg-slate-50 dark:bg-slate-800 border rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 transition-shadow ${
+                    getFieldError(0, 'fullName')
+                      ? 'border-rose-500 focus:ring-rose-500/30 focus:border-rose-500'
+                      : 'border-slate-300 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500'
+                  }`}
                 />
               </div>
+              {getFieldError(0, 'fullName') && (
+                <p className="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400">
+                  {getFieldError(0, 'fullName')}
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="min-w-0">
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {language === 'fr' ? 'Email de contact :' : language === 'ar' ? 'البريد الإلكتروني:' : 'Email Address:'}
+                <label htmlFor="booking-primary-email" className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {language === 'fr' ? 'Email de contact' : language === 'ar' ? 'البريد الإلكتروني' : 'Email Address'}
+                  {occupantCount > 1 ? ' *' : ' :'}
                 </label>
                 <div className="relative">
                   <Mail size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
+                    id="booking-primary-email"
                     type="email"
+                    required={occupantCount > 1}
                     value={guestEmail}
                     onChange={(e) => setGuestEmail(e.target.value)}
+                    aria-invalid={Boolean(getFieldError(0, 'email'))}
                     placeholder="contact@exemple.com"
-                    className="w-full h-11 ps-9 pe-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                    className={`w-full h-11 ps-9 pe-3 bg-slate-50 dark:bg-slate-800 border rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 transition-shadow ${
+                      getFieldError(0, 'email')
+                        ? 'border-rose-500 focus:ring-rose-500/30 focus:border-rose-500'
+                        : 'border-slate-300 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500'
+                    }`}
                   />
                 </div>
+                {getFieldError(0, 'email') && (
+                  <p className="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400">
+                    {getFieldError(0, 'email')}
+                  </p>
+                )}
               </div>
 
               <div className="min-w-0">
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {language === 'fr' ? 'Téléphone (Rappel / SMS) :' : language === 'ar' ? 'رقم الهاتف للاتصال:' : 'Phone Number:'}
+                <label htmlFor="booking-primary-phone" className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {language === 'fr' ? 'Téléphone (Rappel / SMS)' : language === 'ar' ? 'رقم الهاتف للاتصال' : 'Phone Number'}
+                  {occupantCount > 1 ? ' *' : ' :'}
                 </label>
                 <div className="relative">
                   <Phone size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
+                    id="booking-primary-phone"
                     type="tel"
+                    required={occupantCount > 1}
                     value={guestPhone}
                     onChange={(e) => setGuestPhone(e.target.value)}
-                    placeholder="+33 6 12 34 56 78"
-                    className="w-full h-11 ps-9 pe-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                    aria-invalid={Boolean(getFieldError(0, 'phone'))}
+                    placeholder="+213 550 00 00 00"
+                    className={`w-full h-11 ps-9 pe-3 bg-slate-50 dark:bg-slate-800 border rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 transition-shadow tabular-nums ${
+                      getFieldError(0, 'phone')
+                        ? 'border-rose-500 focus:ring-rose-500/30 focus:border-rose-500'
+                        : 'border-slate-300 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500'
+                    }`}
                   />
                 </div>
+                {getFieldError(0, 'phone') && (
+                  <p className="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400">
+                    {getFieldError(0, 'phone')}
+                  </p>
+                )}
               </div>
             </div>
           </div>
 
           {/* 2.b TENANT NATIONALITY & POLICE REGULATION (Algérien vs Étranger) */}
           {(activeDomain === 'hotel' || activeDomain === 'resort') && (
-            <div className="overflow-hidden rounded-[1.5rem] border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+            <div id="booking-step-police" className="scroll-mt-4 overflow-hidden rounded-[1.5rem] border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 px-4 sm:px-5 py-4">
                 <div className="flex items-start gap-3 min-w-0">
                   <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-800 text-white shadow-xs shrink-0">
@@ -1620,10 +1892,11 @@ export const BookingModal: React.FC = () => {
                   </div>
 
                   <div className="min-w-0">
-                    <label className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    <label htmlFor="booking-primary-doc-number" className="block font-medium text-slate-600 dark:text-slate-400 mb-1">
                       {language === 'fr' ? 'N° de la Pièce *' : language === 'ar' ? 'رقم الوثيقة *' : 'Document Number *'}
                     </label>
                     <input
+                      id="booking-primary-doc-number"
                       type="text"
                       value={idPieceNumber}
                       onChange={(e) => {
@@ -1631,9 +1904,19 @@ export const BookingModal: React.FC = () => {
                         setAlgerianIdNumber(e.target.value);
                         setPassportNumber(e.target.value);
                       }}
+                      aria-invalid={Boolean(getFieldError(0, 'documentNumber'))}
                       placeholder="Ex: 1102938491029 / 21EF98124"
-                      className="w-full h-11 px-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs font-bold"
+                      className={`w-full h-11 px-2.5 bg-white dark:bg-slate-900 border rounded-lg text-slate-800 dark:text-slate-100 font-mono text-xs font-bold tabular-nums ${
+                        getFieldError(0, 'documentNumber')
+                          ? 'border-rose-500 ring-1 ring-rose-500/30'
+                          : 'border-slate-300 dark:border-slate-700'
+                      }`}
                     />
+                    {getFieldError(0, 'documentNumber') && (
+                      <p className="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400">
+                        {getFieldError(0, 'documentNumber')}
+                      </p>
+                    )}
                   </div>
 
                   <div className="min-w-0">
@@ -1749,25 +2032,11 @@ export const BookingModal: React.FC = () => {
               </div>
               <div className="space-y-4 p-4 sm:p-5">
 
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-950/40 p-3 sm:p-4 space-y-3">
-                <div><p className="text-xs font-bold text-blue-900 dark:text-blue-200">Coordonnées de tous les adultes</p><p className="text-[11px] text-slate-500">Chaque adulte doit avoir sa propre identité et ses coordonnées.</p></div>
-                {adultGuests.slice(0, hotelAdults).map((adult, index) => <div key={index} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2">
-                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Adulte {index + 1} {index === 0 ? '(client principal)' : ''}</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input value={adult.fullName} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,fullName:e.target.value}:item))} placeholder="Nom et prénom" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <input value={adult.phone} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,phone:e.target.value}:item))} placeholder="Téléphone" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <input type="email" value={adult.email} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,email:e.target.value}:item))} placeholder="E-mail" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <select value={adult.documentType} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentType:e.target.value}:item))} className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"><option value="cni">Carte d'identité</option><option value="passport">Passeport</option><option value="driving_license">Permis de conduire</option><option value="other">Autre document</option></select>
-                    <input value={adult.documentNumber} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentNumber:e.target.value}:item))} placeholder="Numéro du document" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <input type="date" value={adult.documentExpiryDate || ''} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentExpiryDate:e.target.value}:item))} className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs" aria-label="Expiration du document"/>
-                  </div>
-                </div>)}
-              </div>
-
               <div className="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 gap-2.5">
                 <div className="min-w-0">
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Adultes</label>
+                  <label htmlFor="hotel-adults-count" className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Adultes</label>
                   <select
+                    id="hotel-adults-count"
                     value={hotelAdults}
                     onChange={(e) => setHotelAdults(Number(e.target.value))}
                     className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
@@ -1781,8 +2050,9 @@ export const BookingModal: React.FC = () => {
                 </div>
 
                 <div className="min-w-0">
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Enfants</label>
+                  <label htmlFor="hotel-children-count" className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Enfants</label>
                   <select
+                    id="hotel-children-count"
                     value={hotelChildren}
                     onChange={(e) => setHotelChildren(Number(e.target.value))}
                     className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
@@ -1796,13 +2066,325 @@ export const BookingModal: React.FC = () => {
                 </div>
 
                 <div className="min-w-0 col-span-1 min-[380px]:col-span-2 sm:col-span-1">
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Heure Arrivée</label>
+                  <label htmlFor="hotel-checkin-time" className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Heure Arrivée</label>
                   <input
+                    id="hotel-checkin-time"
                     type="time"
                     value={hotelCheckinTime}
                     onChange={(e) => setHotelCheckinTime(e.target.value)}
-                    className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 tabular-nums"
                   />
+                </div>
+              </div>
+
+              {/* All Occupants (Adults + Children) details & coordinates */}
+              <div
+                id="booking-step-occupants"
+                className="scroll-mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/40 p-3 sm:p-4 space-y-3"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h5 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
+                      {getTranslation('bookingOccupantsHeading', language).replace('{count}', String(normalizedOccupantsPreview.totalOccupants))}
+                    </h5>
+                    <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
+                      {occupantCount > 1
+                        ? getTranslation('bookingOccupantsRuleBanner', language)
+                        : getTranslation('bookingOccupantPrimaryContactHint', language)}
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 tabular-nums shrink-0">
+                    {getTranslation('bookingOccupantsCompletionStatus', language)
+                      .replace(
+                        '{completed}',
+                        String(
+                          normalizedOccupantsPreview.allOccupants.filter(
+                            (p) =>
+                              p.fullName.trim().length >= 2 &&
+                              (occupantCount <= 1 ||
+                                (p.phone.trim().length >= 6 &&
+                                  p.email.trim().includes('@') &&
+                                  p.documentNumber.trim().length >= 2))
+                          ).length
+                        )
+                      )
+                      .replace('{total}', String(normalizedOccupantsPreview.totalOccupants))}
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {normalizedOccupantsPreview.adults.map((adult, index) => {
+                    const nameErr = getFieldError(index, 'fullName');
+                    const phoneErr = getFieldError(index, 'phone');
+                    const emailErr = getFieldError(index, 'email');
+                    const docTypeErr = getFieldError(index, 'documentType');
+                    const docNumErr = getFieldError(index, 'documentNumber');
+
+                    return (
+                      <div
+                        key={adult.id || `adult-${index}`}
+                        className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:p-3.5 space-y-2.5"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            {getTranslation('bookingOccupantAdultRole', language).replace('{index}', String(index + 1))}
+                            {index === 0 && (
+                              <span className="ms-2 font-medium text-emerald-700 dark:text-emerald-400">
+                                · {getTranslation('bookingOccupantPrimaryTag', language)}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                          <div className="min-w-0">
+                            <label htmlFor={`occ-adult-${index}-name`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                              {getTranslation('bookingOccupantFullName', language)}
+                            </label>
+                            <input
+                              id={`occ-adult-${index}-name`}
+                              type="text"
+                              value={adult.fullName}
+                              onChange={(e) => updateAdultOccupantField(index, 'fullName', e.target.value)}
+                              aria-invalid={Boolean(nameErr)}
+                              placeholder={getTranslation('bookingOccupantFullName', language).replace(' *', '')}
+                              className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white ${
+                                nameErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                              }`}
+                            />
+                            {nameErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{nameErr}</p>}
+                          </div>
+
+                          <div className="min-w-0">
+                            <label htmlFor={`occ-adult-${index}-phone`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                              {getTranslation('bookingOccupantPhone', language)}
+                            </label>
+                            <input
+                              id={`occ-adult-${index}-phone`}
+                              type="tel"
+                              value={adult.phone}
+                              onChange={(e) => updateAdultOccupantField(index, 'phone', e.target.value)}
+                              aria-invalid={Boolean(phoneErr)}
+                              placeholder="+213 550 00 00 00"
+                              className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white tabular-nums ${
+                                phoneErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                              }`}
+                            />
+                            {phoneErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{phoneErr}</p>}
+                          </div>
+
+                          <div className="min-w-0">
+                            <label htmlFor={`occ-adult-${index}-email`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                              {getTranslation('bookingOccupantEmail', language)}
+                            </label>
+                            <input
+                              id={`occ-adult-${index}-email`}
+                              type="email"
+                              value={adult.email}
+                              onChange={(e) => updateAdultOccupantField(index, 'email', e.target.value)}
+                              aria-invalid={Boolean(emailErr)}
+                              placeholder="contact@exemple.com"
+                              className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white ${
+                                emailErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                              }`}
+                            />
+                            {emailErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{emailErr}</p>}
+                          </div>
+
+                          <div className="min-w-0">
+                            <label htmlFor={`occ-adult-${index}-doctype`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                              {getTranslation('bookingOccupantDocType', language)}
+                            </label>
+                            <select
+                              id={`occ-adult-${index}-doctype`}
+                              value={adult.documentType}
+                              onChange={(e) => updateAdultOccupantField(index, 'documentType', e.target.value)}
+                              aria-invalid={Boolean(docTypeErr)}
+                              className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white ${
+                                docTypeErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                              }`}
+                            >
+                              <option value="cni">Carte d'identité (CNI)</option>
+                              <option value="passport">Passeport</option>
+                              <option value="driving_license">Permis de conduire</option>
+                              <option value="special_authorization">Autorisation spéciale</option>
+                              <option value="diplomatic_passport">Passeport diplomatique</option>
+                              <option value="special_passport">Passeport spécial</option>
+                              <option value="official_document">Document officiel</option>
+                            </select>
+                            {docTypeErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{docTypeErr}</p>}
+                          </div>
+
+                          <div className="min-w-0">
+                            <label htmlFor={`occ-adult-${index}-docnum`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                              {getTranslation('bookingOccupantDocNumber', language)}
+                            </label>
+                            <input
+                              id={`occ-adult-${index}-docnum`}
+                              type="text"
+                              value={adult.documentNumber}
+                              onChange={(e) => updateAdultOccupantField(index, 'documentNumber', e.target.value)}
+                              aria-invalid={Boolean(docNumErr)}
+                              placeholder="N° CNI / Passeport"
+                              className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs font-mono font-bold text-slate-900 dark:text-white tabular-nums ${
+                                docNumErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                              }`}
+                            />
+                            {docNumErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{docNumErr}</p>}
+                          </div>
+
+                          <div className="min-w-0">
+                            <label htmlFor={`occ-adult-${index}-docexp`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                              {getTranslation('bookingOccupantDocExpiry', language)}
+                            </label>
+                            <input
+                              id={`occ-adult-${index}-docexp`}
+                              type="date"
+                              value={adult.documentExpiryDate || ''}
+                              onChange={(e) => updateAdultOccupantField(index, 'documentExpiryDate', e.target.value)}
+                              className="w-full h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white tabular-nums"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {normalizedOccupantsPreview.children.map((child, childIdx) => {
+                    const personIdx = normalizedOccupantsPreview.adultsCount + childIdx;
+                    const nameErr = getFieldError(personIdx, 'fullName');
+                    const phoneErr = getFieldError(personIdx, 'phone');
+                    const emailErr = getFieldError(personIdx, 'email');
+                    const docTypeErr = getFieldError(personIdx, 'documentType');
+                    const docNumErr = getFieldError(personIdx, 'documentNumber');
+
+                    return (
+                      <div
+                        key={child.id || `child-${childIdx}`}
+                        className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:p-3.5 space-y-2.5"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            {getTranslation('bookingOccupantChildRole', language).replace('{index}', String(childIdx + 1))}
+                          </span>
+                          {(guestPhone.trim() || guestEmail.trim()) && (
+                            <button
+                              type="button"
+                              onClick={() => applyPrimaryContactToChild(childIdx)}
+                              className="min-h-10 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                            >
+                              {getTranslation('bookingOccupantCopyPrimaryContact', language)}
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                          <div className="min-w-0">
+                            <label htmlFor={`occ-child-${childIdx}-name`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                              {getTranslation('bookingOccupantFullName', language)}
+                            </label>
+                            <input
+                              id={`occ-child-${childIdx}-name`}
+                              type="text"
+                              value={child.fullName}
+                              onChange={(e) => updateChildOccupantField(childIdx, 'fullName', e.target.value)}
+                              aria-invalid={Boolean(nameErr)}
+                              placeholder={getTranslation('bookingOccupantFullName', language).replace(' *', '')}
+                              className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white ${
+                                nameErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                              }`}
+                            />
+                            {nameErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{nameErr}</p>}
+                          </div>
+
+                          <div className="min-w-0">
+                            <label htmlFor={`occ-child-${childIdx}-phone`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                              {getTranslation('bookingOccupantPhone', language)}
+                            </label>
+                            <input
+                              id={`occ-child-${childIdx}-phone`}
+                              type="tel"
+                              value={child.phone}
+                              onChange={(e) => updateChildOccupantField(childIdx, 'phone', e.target.value)}
+                              aria-invalid={Boolean(phoneErr)}
+                              placeholder="+213 550 00 00 00"
+                              className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white tabular-nums ${
+                                phoneErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                              }`}
+                            />
+                            {phoneErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{phoneErr}</p>}
+                          </div>
+
+                          <div className="min-w-0">
+                            <label htmlFor={`occ-child-${childIdx}-email`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                              {getTranslation('bookingOccupantEmail', language)}
+                            </label>
+                            <input
+                              id={`occ-child-${childIdx}-email`}
+                              type="email"
+                              value={child.email}
+                              onChange={(e) => updateChildOccupantField(childIdx, 'email', e.target.value)}
+                              aria-invalid={Boolean(emailErr)}
+                              placeholder="contact@exemple.com"
+                              className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white ${
+                                emailErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                              }`}
+                            />
+                            {emailErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{emailErr}</p>}
+                          </div>
+
+                          <div className="min-w-0">
+                            <label htmlFor={`occ-child-${childIdx}-doctype`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                              {getTranslation('bookingOccupantDocType', language)}
+                            </label>
+                            <select
+                              id={`occ-child-${childIdx}-doctype`}
+                              value={child.documentType}
+                              onChange={(e) => updateChildOccupantField(childIdx, 'documentType', e.target.value)}
+                              aria-invalid={Boolean(docTypeErr)}
+                              className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white ${
+                                docTypeErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                              }`}
+                            >
+                              <option value="cni">Carte d'identité / Livret de famille</option>
+                              <option value="passport">Passeport</option>
+                              <option value="official_document">Acte de naissance / Document officiel</option>
+                            </select>
+                            {docTypeErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{docTypeErr}</p>}
+                          </div>
+
+                          <div className="min-w-0">
+                            <label htmlFor={`occ-child-${childIdx}-docnum`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                              {getTranslation('bookingOccupantDocNumber', language)}
+                            </label>
+                            <input
+                              id={`occ-child-${childIdx}-docnum`}
+                              type="text"
+                              value={child.documentNumber}
+                              onChange={(e) => updateChildOccupantField(childIdx, 'documentNumber', e.target.value)}
+                              aria-invalid={Boolean(docNumErr)}
+                              placeholder="N° Acte / Livret / Passeport"
+                              className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs font-mono font-bold text-slate-900 dark:text-white tabular-nums ${
+                                docNumErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                              }`}
+                            />
+                            {docNumErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{docNumErr}</p>}
+                          </div>
+
+                          <div className="min-w-0">
+                            <label htmlFor={`occ-child-${childIdx}-docexp`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                              {getTranslation('bookingOccupantDocExpiry', language)}
+                            </label>
+                            <input
+                              id={`occ-child-${childIdx}-docexp`}
+                              type="date"
+                              value={child.documentExpiryDate || ''}
+                              onChange={(e) => updateChildOccupantField(childIdx, 'documentExpiryDate', e.target.value)}
+                              className="w-full h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white tabular-nums"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2009,24 +2591,11 @@ export const BookingModal: React.FC = () => {
                 <span>Paramètres Resort, Villas & Bungalows</span>
               </div>
 
-              <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-white/70 dark:bg-slate-900/60 p-3 space-y-3">
-                <p className="text-xs font-bold text-amber-900 dark:text-amber-200">Coordonnées et documents de chaque adulte</p>
-                {adultGuests.slice(0, resortOccupants).map((adult, index) => <div key={index} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2">
-                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Adulte {index + 1} {index === 0 ? '(client principal)' : ''}</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input value={adult.fullName} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,fullName:e.target.value}:item))} placeholder="Nom et prénom" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <input value={adult.phone} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,phone:e.target.value}:item))} placeholder="Téléphone" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <input type="email" value={adult.email} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,email:e.target.value}:item))} placeholder="E-mail" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <select value={adult.documentType} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentType:e.target.value}:item))} className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"><option value="cni">Carte d'identité</option><option value="passport">Passeport</option><option value="driving_license">Permis de conduire</option><option value="other">Autre document</option></select>
-                    <input value={adult.documentNumber} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentNumber:e.target.value}:item))} placeholder="Numéro du document" className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs"/>
-                    <input type="date" value={adult.documentExpiryDate || ''} onChange={(e) => setAdultGuests((current) => current.map((item,i)=>i===index?{...item,documentExpiryDate:e.target.value}:item))} className="h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 text-xs" aria-label="Expiration du document"/>
-                  </div>
-                </div>)}
-              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div className="min-w-0">
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Capacité / Occupants</label>
+                  <label htmlFor="resort-occupants-count" className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Capacité / Occupants</label>
                   <select
+                    id="resort-occupants-count"
                     value={resortOccupants}
                     onChange={(e) => setResortOccupants(Number(e.target.value))}
                     className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
@@ -2040,8 +2609,9 @@ export const BookingModal: React.FC = () => {
                 </div>
 
                 <div className="min-w-0">
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Formule Resort</label>
+                  <label htmlFor="resort-formula-select" className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Formule Resort</label>
                   <select
+                    id="resort-formula-select"
                     value={resortFormula}
                     onChange={(e) => setResortFormula(e.target.value as any)}
                     className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
@@ -2053,14 +2623,175 @@ export const BookingModal: React.FC = () => {
                 </div>
 
                 <div className="min-w-0">
-                  <label className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Heure Arrivée Souhaitée</label>
+                  <label htmlFor="resort-checkin-time" className="block font-medium text-slate-600 dark:text-slate-300 mb-1">Heure Arrivée Souhaitée</label>
                   <input
+                    id="resort-checkin-time"
                     type="time"
                     value={resortCheckinTime}
                     onChange={(e) => setResortCheckinTime(e.target.value)}
-                    className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    className="w-full h-11 px-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 tabular-nums"
                   />
                 </div>
+              </div>
+
+              <div id="booking-step-occupants" className="scroll-mt-4 rounded-xl border border-amber-200 dark:border-amber-900 bg-slate-50/70 dark:bg-slate-950/40 p-3 sm:p-4 space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h5 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
+                      {getTranslation('bookingOccupantsHeading', language).replace('{count}', String(normalizedOccupantsPreview.totalOccupants))}
+                    </h5>
+                    <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
+                      {occupantCount > 1
+                        ? getTranslation('bookingOccupantsRuleBanner', language)
+                        : getTranslation('bookingOccupantPrimaryContactHint', language)}
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 tabular-nums shrink-0">
+                    {getTranslation('bookingOccupantsCompletionStatus', language)
+                      .replace(
+                        '{completed}',
+                        String(
+                          normalizedOccupantsPreview.allOccupants.filter(
+                            (p) =>
+                              p.fullName.trim().length >= 2 &&
+                              (occupantCount <= 1 ||
+                                (p.phone.trim().length >= 6 &&
+                                  p.email.trim().includes('@') &&
+                                  p.documentNumber.trim().length >= 2))
+                          ).length
+                        )
+                      )
+                      .replace('{total}', String(normalizedOccupantsPreview.totalOccupants))}
+                  </span>
+                </div>
+                {normalizedOccupantsPreview.adults.map((adult, index) => {
+                  const nameErr = getFieldError(index, 'fullName');
+                  const phoneErr = getFieldError(index, 'phone');
+                  const emailErr = getFieldError(index, 'email');
+                  const docTypeErr = getFieldError(index, 'documentType');
+                  const docNumErr = getFieldError(index, 'documentNumber');
+
+                  return (
+                    <div
+                      key={adult.id || `resort-adult-${index}`}
+                      className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2.5"
+                    >
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">
+                        {getTranslation('bookingOccupantAdultRole', language).replace('{index}', String(index + 1))}
+                        {index === 0 && (
+                          <span className="ms-2 font-medium text-emerald-700 dark:text-emerald-400">
+                            · {getTranslation('bookingOccupantPrimaryTag', language)}
+                          </span>
+                        )}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        <div className="min-w-0">
+                          <label htmlFor={`resort-occ-${index}-name`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                            {getTranslation('bookingOccupantFullName', language)}
+                          </label>
+                          <input
+                            id={`resort-occ-${index}-name`}
+                            type="text"
+                            value={adult.fullName}
+                            onChange={(e) => updateAdultOccupantField(index, 'fullName', e.target.value)}
+                            aria-invalid={Boolean(nameErr)}
+                            placeholder={getTranslation('bookingOccupantFullName', language).replace(' *', '')}
+                            className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white ${
+                              nameErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                            }`}
+                          />
+                          {nameErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{nameErr}</p>}
+                        </div>
+                        <div className="min-w-0">
+                          <label htmlFor={`resort-occ-${index}-phone`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                            {getTranslation('bookingOccupantPhone', language)}
+                          </label>
+                          <input
+                            id={`resort-occ-${index}-phone`}
+                            type="tel"
+                            value={adult.phone}
+                            onChange={(e) => updateAdultOccupantField(index, 'phone', e.target.value)}
+                            aria-invalid={Boolean(phoneErr)}
+                            placeholder="+213 550 00 00 00"
+                            className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white tabular-nums ${
+                              phoneErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                            }`}
+                          />
+                          {phoneErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{phoneErr}</p>}
+                        </div>
+                        <div className="min-w-0">
+                          <label htmlFor={`resort-occ-${index}-email`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                            {getTranslation('bookingOccupantEmail', language)}
+                          </label>
+                          <input
+                            id={`resort-occ-${index}-email`}
+                            type="email"
+                            value={adult.email}
+                            onChange={(e) => updateAdultOccupantField(index, 'email', e.target.value)}
+                            aria-invalid={Boolean(emailErr)}
+                            placeholder="contact@exemple.com"
+                            className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white ${
+                              emailErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                            }`}
+                          />
+                          {emailErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{emailErr}</p>}
+                        </div>
+                        <div className="min-w-0">
+                          <label htmlFor={`resort-occ-${index}-doctype`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                            {getTranslation('bookingOccupantDocType', language)}
+                          </label>
+                          <select
+                            id={`resort-occ-${index}-doctype`}
+                            value={adult.documentType}
+                            onChange={(e) => updateAdultOccupantField(index, 'documentType', e.target.value)}
+                            aria-invalid={Boolean(docTypeErr)}
+                            className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white ${
+                              docTypeErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                            }`}
+                          >
+                            <option value="cni">Carte d'identité (CNI)</option>
+                            <option value="passport">Passeport</option>
+                            <option value="driving_license">Permis de conduire</option>
+                            <option value="special_authorization">Autorisation spéciale</option>
+                            <option value="diplomatic_passport">Passeport diplomatique</option>
+                            <option value="special_passport">Passeport spécial</option>
+                            <option value="official_document">Document officiel</option>
+                          </select>
+                          {docTypeErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{docTypeErr}</p>}
+                        </div>
+                        <div className="min-w-0">
+                          <label htmlFor={`resort-occ-${index}-docnum`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                            {getTranslation('bookingOccupantDocNumber', language)}
+                          </label>
+                          <input
+                            id={`resort-occ-${index}-docnum`}
+                            type="text"
+                            value={adult.documentNumber}
+                            onChange={(e) => updateAdultOccupantField(index, 'documentNumber', e.target.value)}
+                            aria-invalid={Boolean(docNumErr)}
+                            placeholder="N° CNI / Passeport"
+                            className={`w-full h-11 rounded-lg border bg-white dark:bg-slate-950 px-2.5 text-xs font-mono font-bold text-slate-900 dark:text-white tabular-nums ${
+                              docNumErr ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-slate-300 dark:border-slate-700'
+                            }`}
+                          />
+                          {docNumErr && <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">{docNumErr}</p>}
+                        </div>
+                        <div className="min-w-0">
+                          <label htmlFor={`resort-occ-${index}-docexp`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                            {getTranslation('bookingOccupantDocExpiry', language)}
+                          </label>
+                          <input
+                            id={`resort-occ-${index}-docexp`}
+                            type="date"
+                            value={adult.documentExpiryDate || ''}
+                            onChange={(e) => updateAdultOccupantField(index, 'documentExpiryDate', e.target.value)}
+                            className="w-full h-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white tabular-nums"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1 text-xs">
@@ -2448,7 +3179,8 @@ export const BookingModal: React.FC = () => {
         hotelAdults={hotelAdults}
         hotelChildren={hotelChildren}
         resortOccupants={resortOccupants}
-        adultGuests={adultGuests}
+        adultGuests={normalizedOccupantsPreview.adults}
+        occupants={normalizedOccupantsPreview.allOccupants}
         paymentCurrency={paymentCurrency}
         currencySymbol={currencySymbols[paymentCurrency] || paymentCurrency}
         priceInPaymentCurrency={priceInPaymentCurrency}

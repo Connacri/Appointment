@@ -97,7 +97,27 @@ export function doesBookingMatchQuery(
 
   if (Array.isArray(booking.adultGuests)) {
     for (const guest of booking.adultGuests) {
-      if (normalizeSearchToken(guest?.fullName).includes(q)) return true;
+      if (
+        normalizeSearchToken(guest?.fullName).includes(q) ||
+        normalizeSearchToken(guest?.phone).includes(q) ||
+        normalizeSearchToken(guest?.email).includes(q) ||
+        normalizeSearchToken(guest?.documentNumber).includes(q)
+      ) {
+        return true;
+      }
+    }
+  }
+
+  if (Array.isArray(booking.occupantsList)) {
+    for (const occ of booking.occupantsList) {
+      if (
+        normalizeSearchToken(occ?.fullName ?? occ?.name).includes(q) ||
+        normalizeSearchToken(occ?.phone).includes(q) ||
+        normalizeSearchToken(occ?.email).includes(q) ||
+        normalizeSearchToken(occ?.documentNumber ?? occ?.idDoc).includes(q)
+      ) {
+        return true;
+      }
     }
   }
 

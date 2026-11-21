@@ -19,11 +19,13 @@ import { DomainType, ResourceGroup, ResourceItem } from '../types/booking';
 import { EstablishmentProfile } from '../types/establishment';
 import { PRESET_HOTEL_LOGOS } from '../utils/establishmentDefaults';
 import {
+  getPoliceSheetCompanionMissingFields,
   getPoliceSheetMissingFields,
   PoliceCompanionData,
   PoliceIdPieceType,
   PolicePaymentMethodType,
 } from '../utils/bookingPrintReport';
+import { buildNormalizedOccupantList } from '../utils/bookingOccupants';
 
 export type PoliceCompanionGuest = PoliceCompanionData;
 
@@ -62,6 +64,7 @@ export interface PoliceSheetDocumentProps {
   hotelChildren: number;
   resortOccupants: number;
   adultGuests: PoliceCompanionGuest[];
+  occupants?: PoliceCompanionGuest[];
   paymentCurrency: string;
   currencySymbol: string;
   priceInPaymentCurrency: number;
@@ -166,6 +169,7 @@ export const PoliceSheetDocument: React.FC<PoliceSheetDocumentProps> = ({
   hotelChildren,
   resortOccupants,
   adultGuests,
+  occupants,
   paymentCurrency,
   currencySymbol,
   priceInPaymentCurrency,
@@ -186,12 +190,23 @@ export const PoliceSheetDocument: React.FC<PoliceSheetDocumentProps> = ({
     PAYMENT_METHOD_LABELS[paymentMethodType]?.fr ||
     paymentMethodType;
 
-  const companions =
-    activeDomain === 'hotel' && hotelAdults > 1
-      ? adultGuests
-          .slice(1, hotelAdults)
-          .filter((g) => g.fullName.trim() || g.documentNumber.trim())
-      : [];
+  const normalizedSummary = buildNormalizedOccupantList({
+    sector: activeDomain,
+    guestName,
+    guestPhone,
+    guestEmail,
+    idPieceType,
+    idPieceNumber: effectiveDocNumber,
+    idDocumentExpiryDate,
+    adults: activeDomain === 'resort' ? resortOccupants : hotelAdults,
+    children: activeDomain === 'resort' ? 0 : hotelChildren,
+    adultGuests,
+    occupantsList: occupants,
+  });
+
+  const companions = normalizedSummary.allOccupants
+    .slice(1)
+    .filter((g) => g.fullName.trim() || g.documentNumber.trim() || g.phone.trim() || g.email.trim());
 
   const todayFormatted = new Date().toLocaleDateString(
     language === 'ar' ? 'ar-DZ' : language === 'en' ? 'en-GB' : 'fr-FR'
@@ -612,24 +627,52 @@ export const PoliceSheetDocument: React.FC<PoliceSheetDocumentProps> = ({
                 </div>
 
                 {companions.length > 0 && (
-                  <div className="border-t border-slate-200 bg-slate-50/80 px-3.5 py-2.5 space-y-1.5">
+                  <div className="border-t border-slate-200 bg-slate-50/80 px-3.5 py-2.5 space-y-2">
                     <div className="flex items-center justify-between text-[10px] font-bold uppercase text-slate-600">
-                      <span>Accompagnants Adultes Enregistrés ({companions.length})</span>
-                      <span dir="rtl">المرافقون البالغون</span>
+                      <span>Co-occupants Enregistrés ({companions.length})</span>
+                      <span dir="rtl">المرافقون والنزلاء الإضافيون</span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {companions.map((companion, idx) => (
                         <div
-                          key={idx}
-                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11px]"
+                          key={companion.id || idx}
+                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 space-y-1 text-[11px]"
                         >
-                          <span className="font-bold text-slate-900 truncate">
-                            {companion.fullName || `Adulte ${idx + 2}`}
-                          </span>
-                          <span className="font-mono text-slate-600 shrink-0 tabular-nums">
-                            {companion.documentType?.toUpperCase()}:{' '}
-                            {companion.documentNumber || '—'}
-                          </span>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-slate-900 truncate">
+                              {companion.fullName || `Personne ${idx + 2}`}
+                            </span>
+                            <span className="text-[10px] font-semibold text-slate-500 shrink-0">
+                              {companion.role === 'child'
+                                ? language === 'ar'
+                                  ? 'طفل'
+                                  : language === 'en'
+                                  ? 'Child'
+                                  : 'Enfant'
+                                : language === 'ar'
+                                ? 'بالغ'
+                                : language === 'en'
+                                ? 'Adult'
+                                : 'Adulte'}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-600">
+                            <span className="font-mono tabular-nums">
+                              {companion.documentType?.toUpperCase()}: {companion.documentNumber || '—'}
+                            </span>
+                            {companion.documentExpiryDate && (
+                              <span className="tabular-nums text-slate-500">
+                                · Exp: {companion.documentExpiryDate}
+                              </span>
+                            )}
+                          </div>
+                          {(companion.phone || companion.email) && (
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
+                              {companion.phone && <span className="tabular-nums">{companion.phone}</span>}
+                              {companion.phone && companion.email && <span aria-hidden="true">·</span>}
+                              {companion.email && <span className="break-all">{companion.email}</span>}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -743,7 +786,10 @@ export const PoliceSheetModal: React.FC<PoliceSheetModalProps> = ({
 
   const { language, guestType } = docProps;
   const isRtl = language === 'ar';
-  const missingFields = getPoliceSheetMissingFields(docProps, language);
+  const missingFields = [
+    ...getPoliceSheetMissingFields(docProps, language),
+    ...getPoliceSheetCompanionMissingFields(docProps, language),
+  ];
 
   return createPortal(
     <div
