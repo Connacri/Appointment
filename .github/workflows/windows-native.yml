@@ -1,0 +1,88 @@
+name: Windows Native (Rust)
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "windows-native/**"
+      - ".github/workflows/windows-native.yml"
+  pull_request:
+    paths:
+      - "windows-native/**"
+      - ".github/workflows/windows-native.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-windows:
+    name: Build native Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: windows-native
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: windows-native -> target
+
+      - name: Verify formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run tests
+        run: cargo test --locked
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build release executable
+        run: cargo build --release --locked
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
+          & $iscc installer\Appointment.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE" }
+
+      - name: Verify browser independence
+        shell: pwsh
+        run: |
+          $exe = "target\release\appointment-pms-native.exe"
+          if (!(Test-Path $exe)) { throw "Native executable missing" }
+          $imports = (dumpbin /dependents $exe 2>&1 | Out-String)
+          if ($imports -match "WebView2|msedge|chrome|node") {
+            throw "Browser/WebView/Node dependency detected in native executable"
+          }
+          Write-Host $imports
+
+      - name: Upload native distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: appointment-windows-native-x64
+          path: |
+            windows-native/target/release/appointment-pms-native.exe
+            windows-native/dist/Appointment-PMS-Setup-v1.2.0.exe
+          if-no-files-found: error
+          retention-days: 30
