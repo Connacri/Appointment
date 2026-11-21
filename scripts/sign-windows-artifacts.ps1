@@ -22,6 +22,12 @@ try {
     throw "The configured PFX does not contain an accessible code-signing private key."
   }
 
+  $ekuExtension = $certificate.Extensions | Where-Object { $_.Oid.Value -eq "2.5.29.37" } | Select-Object -First 1
+  $hasCodeSigningEku = $ekuExtension -and ($ekuExtension.EnhancedKeyUsages | Where-Object { $_.Value -eq "1.3.6.1.5.5.7.3.3" })
+  if (-not $hasCodeSigningEku) {
+    throw "The selected PFX certificate does not include the Code Signing EKU."
+  }
+
   foreach ($path in $Paths) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
       throw "Required Windows release artifact not found: $path"
