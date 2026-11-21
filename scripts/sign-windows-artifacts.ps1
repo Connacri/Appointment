@@ -15,7 +15,8 @@ $certificate = $null
 try {
   [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERT_BASE64))
   $password = ConvertTo-SecureString ([string]$env:WINDOWS_CERT_PASSWORD) -AsPlainText -Force
-  $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation "Cert:\CurrentUser\My" -Password $password -Exportable
+  $importedCertificates = @(Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation "Cert:\CurrentUser\My" -Password $password -Exportable)
+  $certificate = $importedCertificates | Where-Object { $_.HasPrivateKey } | Select-Object -First 1
 
   if (-not $certificate -or -not $certificate.HasPrivateKey) {
     throw "The configured PFX does not contain an accessible code-signing private key."
