@@ -11,12 +11,12 @@ fn main() {
     let _database = match initialize_local_database() {
         Ok(database) => database,
         Err(error) => {
-            eprintln!("Appointment Native database startup failed: {error}");
+            win32::show_error(&format!("Local database initialization failed:\n{error}"));
             std::process::exit(1);
         }
     };
     if let Err(error) = win32::run() {
-        eprintln!("Appointment Native startup failed: {error}");
+        win32::show_error(&error);
         std::process::exit(1);
     }
 }
