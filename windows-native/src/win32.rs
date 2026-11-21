@@ -192,7 +192,7 @@ unsafe extern "system" fn window_proc(
             );
             create_label(
                 hwnd,
-                "Storage and synchronization adapters are not enabled in this foundation build.",
+                "SQLite local database is initialized; PMS screens and remote sync are not connected yet.",
                 270,
                 292,
                 820,
