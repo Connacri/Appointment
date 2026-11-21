@@ -8,6 +8,14 @@ description: >
 runs:
   using: composite
   steps:
+    - name: Cache npm download artifacts
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm
+        key: npm-${{ runner.os }}-node-${{ hashFiles('package.json') }}
+        restore-keys: |
+          npm-${{ runner.os }}-node-
+
     - name: npm install (up to 3 attempts)
       shell: bash
       run: |
@@ -15,7 +23,7 @@ runs:
         attempt=1
         while [ "$attempt" -le 3 ]; do
           echo "::group::npm install — attempt $attempt/3"
-          npm install --legacy-peer-deps
+          npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund
           status=$?
           echo "::endgroup::"
           if [ "$status" -eq 0 ]; then
@@ -25,7 +33,7 @@ runs:
           # A partially written node_modules makes the next attempt fail on EPERM/ENOTEMPTY.
           rm -rf node_modules
           attempt=$((attempt + 1))
-          sleep 15
+          sleep $((15 * attempt))
         done
         echo "::error::npm install failed after 3 attempts."
         exit 1
