@@ -81,6 +81,9 @@ jobs:
           if ($imports -match "WebView2|msedge|chrome|node") {
             throw "Browser/WebView/Node dependency detected in native executable"
           }
+          if ($imports -match "VCRUNTIME|MSVCP|ucrtbase|api-ms-win-crt") {
+            throw "Dynamic Microsoft C/C++ runtime detected; the installer must be self-contained"
+          }
           Write-Host $imports
 
       - name: Upload native distribution
