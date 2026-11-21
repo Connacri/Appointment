@@ -13,13 +13,14 @@ cargo clippy --all-targets -- -D warnings
 cargo build --release
 ```
 
-The Windows pipeline resolves Rust dependencies and generates the executable. The output is `target/release/appointment-pms-native.exe`; Inno Setup produces the installer.
+The committed `Cargo.lock` pins the dependency graph; the Windows pipeline uses `--locked` for tests, Clippy and release builds. The MSVC runtime is statically linked. The output is `target/release/appointment-pms-native.exe`; Inno Setup produces the installer.
 
 ## Implemented native foundation
 
 - Direct Win32 window and message loop.
 - Rust domain model for PMS bookings, with input validation.
-- SQLite database migrations and workspace-scoped booking persistence.
+- SQLite database migrations and workspace-scoped booking persistence under `%LOCALAPPDATA%\\Connacri\\Appointment`.
+- Exact money representation using integer minor units plus a validated ISO currency code.
 - Atomic booking + Outbox writes; atomic delete + tombstone + Outbox writes.
 - Unique idempotency keys and bounded, workspace-scoped pagination.
 - Automated tests for validation, atomicity, workspace isolation, tombstones and idempotency.
