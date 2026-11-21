@@ -69,7 +69,10 @@ impl Booking {
             return Err("booking.total_price_minor must be non-negative".into());
         }
         if self.currency_code.len() != 3
-            || !self.currency_code.bytes().all(|byte| byte.is_ascii_uppercase())
+            || !self
+                .currency_code
+                .bytes()
+                .all(|byte| byte.is_ascii_uppercase())
         {
             return Err("booking.currency_code must be a three-letter uppercase ISO code".into());
         }
