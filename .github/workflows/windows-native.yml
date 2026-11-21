@@ -45,10 +45,7 @@ jobs:
       - name: Resolve Rust dependencies and generate lockfile
         run: cargo generate-lockfile
 
-      - name: Format Rust sources
-        run: cargo fmt --all
-
-      - name: Verify formatting
+      - name: Verify Rust formatting
         run: cargo fmt --all -- --check
 
       - name: Run tests
