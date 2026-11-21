@@ -32,7 +32,10 @@ const ID_RESERVATIONS: usize = 103;
 const ID_SETTINGS: usize = 104;
 
 #[repr(C)]
-struct Point { x: i32, y: i32 }
+struct Point {
+    x: i32,
+    y: i32,
+}
 
 #[repr(C)]
 struct WndClassW {
@@ -62,9 +65,20 @@ struct Msg {
 #[link(name = "user32")]
 unsafe extern "system" {
     fn RegisterClassW(class: *const WndClassW) -> u16;
-    fn CreateWindowExW(ex_style: u32, class_name: *const u16, window_name: *const u16,
-        style: u32, x: i32, y: i32, width: i32, height: i32, parent: Hwnd,
-        menu: Hmenu, instance: Hinstance, param: *mut c_void) -> Hwnd;
+    fn CreateWindowExW(
+        ex_style: u32,
+        class_name: *const u16,
+        window_name: *const u16,
+        style: u32,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        parent: Hwnd,
+        menu: Hmenu,
+        instance: Hinstance,
+        param: *mut c_void,
+    ) -> Hwnd;
     fn DefWindowProcW(hwnd: Hwnd, message: u32, w_param: Wparam, l_param: Lparam) -> Lresult;
     fn ShowWindow(hwnd: Hwnd, command: i32) -> i32;
     fn UpdateWindow(hwnd: Hwnd) -> i32;
@@ -87,7 +101,9 @@ fn wide(value: &str) -> Vec<u16> {
 pub fn run() -> Result<(), String> {
     unsafe {
         let instance = GetModuleHandleW(null());
-        if instance.is_null() { return Err("GetModuleHandleW returned NULL".into()); }
+        if instance.is_null() {
+            return Err("GetModuleHandleW returned NULL".into());
+        }
 
         let class_name = wide("AppointmentNativeWindow");
         let title = wide("Appointment PMS — Native Windows");
@@ -103,20 +119,39 @@ pub fn run() -> Result<(), String> {
             lpsz_menu_name: null(),
             lpsz_class_name: class_name.as_ptr(),
         };
-        if RegisterClassW(&class) == 0 { return Err("RegisterClassW failed".into()); }
+        if RegisterClassW(&class) == 0 {
+            return Err("RegisterClassW failed".into());
+        }
 
-        let hwnd = CreateWindowExW(0, class_name.as_ptr(), title.as_ptr(),
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
-            1180, 760, null_mut(), null_mut(), instance, null_mut());
-        if hwnd.is_null() { return Err("CreateWindowExW failed".into()); }
+        let hwnd = CreateWindowExW(
+            0,
+            class_name.as_ptr(),
+            title.as_ptr(),
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            1180,
+            760,
+            null_mut(),
+            null_mut(),
+            instance,
+            null_mut(),
+        );
+        if hwnd.is_null() {
+            return Err("CreateWindowExW failed".into());
+        }
 
         ShowWindow(hwnd, SW_SHOW);
         UpdateWindow(hwnd);
         let mut message: Msg = zeroed();
         loop {
             let result = GetMessageW(&mut message, null_mut(), 0, 0);
-            if result == -1 { return Err("GetMessageW failed".into()); }
-            if result == 0 { break; }
+            if result == -1 {
+                return Err("GetMessageW failed".into());
+            }
+            if result == 0 {
+                break;
+            }
             TranslateMessage(&message);
             DispatchMessageW(&message);
         }
@@ -124,19 +159,45 @@ pub fn run() -> Result<(), String> {
     Ok(())
 }
 
-unsafe extern "system" fn window_proc(hwnd: Hwnd, message: u32, w_param: Wparam, l_param: Lparam) -> Lresult {
+unsafe extern "system" fn window_proc(
+    hwnd: Hwnd,
+    message: u32,
+    w_param: Wparam,
+    l_param: Lparam,
+) -> Lresult {
     match message {
         WM_CREATE => {
             create_label(hwnd, "Appointment PMS", 34, 24, 420, 42);
-            create_label(hwnd, "Application Windows native — Rust / Win32", 36, 72, 600, 26);
+            create_label(
+                hwnd,
+                "Application Windows native — Rust / Win32",
+                36,
+                72,
+                600,
+                26,
+            );
             create_label(hwnd, "Modules", 36, 142, 240, 28);
             create_button(hwnd, "Dashboard", ID_DASHBOARD, 36, 184, 190, 42);
             create_button(hwnd, "Planning", ID_PLANNING, 36, 236, 190, 42);
             create_button(hwnd, "Reservations", ID_RESERVATIONS, 36, 288, 190, 42);
             create_button(hwnd, "Settings", ID_SETTINGS, 36, 340, 190, 42);
             create_label(hwnd, "Native foundation initialized. PMS modules are migrated incrementally; this build is not yet feature-parity.", 270, 190, 820, 54);
-            create_label(hwnd, "Runtime: Win32 | Browser: none | WebView: none", 270, 250, 820, 30);
-            create_label(hwnd, "Storage and synchronization adapters are not enabled in this foundation build.", 270, 292, 820, 42);
+            create_label(
+                hwnd,
+                "Runtime: Win32 | Browser: none | WebView: none",
+                270,
+                250,
+                820,
+                30,
+            );
+            create_label(
+                hwnd,
+                "Storage and synchronization adapters are not enabled in this foundation build.",
+                270,
+                292,
+                820,
+                42,
+            );
             create_label(hwnd, "Status: native shell", 36, 660, 360, 28);
             0
         }
@@ -156,7 +217,10 @@ unsafe extern "system" fn window_proc(hwnd: Hwnd, message: u32, w_param: Wparam,
             }
             0
         }
-        WM_CLOSE | WM_DESTROY => { PostQuitMessage(0); 0 }
+        WM_CLOSE | WM_DESTROY => {
+            PostQuitMessage(0);
+            0
+        }
         _ => DefWindowProcW(hwnd, message, w_param, l_param),
     }
 }
@@ -164,16 +228,47 @@ unsafe extern "system" fn window_proc(hwnd: Hwnd, message: u32, w_param: Wparam,
 unsafe fn create_label(parent: Hwnd, text: &str, x: i32, y: i32, width: i32, height: i32) {
     let class = wide("STATIC");
     let text = wide(text);
-    CreateWindowExW(0, class.as_ptr(), text.as_ptr(), WS_CHILD | WS_VISIBLE,
-        x, y, width, height, parent, null_mut(), GetModuleHandleW(null()), null_mut());
+    CreateWindowExW(
+        0,
+        class.as_ptr(),
+        text.as_ptr(),
+        WS_CHILD | WS_VISIBLE,
+        x,
+        y,
+        width,
+        height,
+        parent,
+        null_mut(),
+        GetModuleHandleW(null()),
+        null_mut(),
+    );
 }
 
-unsafe fn create_button(parent: Hwnd, text: &str, id: usize, x: i32, y: i32, width: i32, height: i32) {
+unsafe fn create_button(
+    parent: Hwnd,
+    text: &str,
+    id: usize,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+) {
     let class = wide("BUTTON");
     let text = wide(text);
-    CreateWindowExW(WS_EX_CLIENTEDGE, class.as_ptr(), text.as_ptr(),
-        WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_BORDER, x, y, width, height,
-        parent, id as Hmenu, GetModuleHandleW(null()), null_mut());
+    CreateWindowExW(
+        WS_EX_CLIENTEDGE,
+        class.as_ptr(),
+        text.as_ptr(),
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_BORDER,
+        x,
+        y,
+        width,
+        height,
+        parent,
+        id as Hmenu,
+        GetModuleHandleW(null()),
+        null_mut(),
+    );
 }
 
 #[cfg(test)]
