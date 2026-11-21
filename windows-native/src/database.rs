@@ -103,6 +103,10 @@ impl PmsDatabase {
         let payload = serde_json::to_string(booking).map_err(|e| e.to_string())?;
         let tx = self.connection.transaction().map_err(|e| e.to_string())?;
         ensure_workspace_exists(&tx, workspace_id)?;
+        if check_idempotency(&tx, idempotency_key, workspace_id, "booking", &booking.id, "upsert", Some(&payload))? {
+            tx.commit().map_err(|e| e.to_string())?;
+            return Ok(());
+        }
         let version: i64 = tx.query_row(
             "SELECT COALESCE(MAX(version), 0) + 1 FROM bookings WHERE workspace_id=?1 AND id=?2",
             params![workspace_id, booking.id], |row| row.get(0)
@@ -131,6 +135,10 @@ impl PmsDatabase {
     ) -> Result<bool, String> {
         if idempotency_key.trim().is_empty() { return Err("idempotency_key is required".into()); }
         let tx = self.connection.transaction().map_err(|e| e.to_string())?;
+        if check_idempotency(&tx, idempotency_key, workspace_id, "booking", booking_id, "delete", None)? {
+            tx.commit().map_err(|e| e.to_string())?;
+            return Ok(true);
+        }
         let version: Option<i64> = tx.query_row(
             "SELECT version + 1 FROM bookings WHERE workspace_id=?1 AND id=?2",
             params![workspace_id, booking_id], |row| row.get(0)
@@ -175,6 +183,33 @@ impl PmsDatabase {
         rows.collect()
     }
 
+    pub fn mark_outbox_synced(&self, workspace_id: &str, outbox_id: &str) -> rusqlite::Result<bool> {
+        let changed = self.connection.execute(
+            "UPDATE outbox SET status='synced', last_error=NULL WHERE workspace_id=?1 AND id=?2 AND status='pending'",
+            params![workspace_id, outbox_id],
+        )?;
+        Ok(changed == 1)
+    }
+
+    pub fn mark_outbox_failed(&self, workspace_id: &str, outbox_id: &str, error: &str) -> rusqlite::Result<bool> {
+        let changed = self.connection.execute(
+            "UPDATE outbox SET status='failed', attempts=attempts+1, last_error=?3,
+             next_attempt_at=datetime('now', '+' || MIN(21600, (30 * (1 << MIN(attempts, 10)))) || ' seconds')
+             WHERE workspace_id=?1 AND id=?2 AND status IN ('pending','failed')",
+            params![workspace_id, outbox_id, error],
+        )?;
+        Ok(changed == 1)
+    }
+
+    pub fn retry_outbox(&self, workspace_id: &str, outbox_id: &str) -> rusqlite::Result<bool> {
+        let changed = self.connection.execute(
+            "UPDATE outbox SET status='pending', next_attempt_at=CURRENT_TIMESTAMP, last_error=NULL
+             WHERE workspace_id=?1 AND id=?2 AND status='failed'",
+            params![workspace_id, outbox_id],
+        )?;
+        Ok(changed == 1)
+    }
+
     pub fn pending_outbox(&self, workspace_id: &str, limit: u32) -> rusqlite::Result<Vec<OutboxEntry>> {
         let mut statement = self.connection.prepare(
             "SELECT id,idempotency_key,workspace_id,entity,entity_id,operation,version,payload,status,attempts,created_at
@@ -190,6 +225,24 @@ impl PmsDatabase {
             })
         })?;
         rows.collect()
+    }
+}
+
+fn check_idempotency(
+    tx: &Transaction<'_>, key: &str, workspace_id: &str, entity: &str,
+    entity_id: &str, operation: &str, payload: Option<&str>,
+) -> Result<bool, String> {
+    let existing: Option<(String, String, String, String, Option<String>)> = tx.query_row(
+        "SELECT workspace_id,entity,entity_id,operation,payload FROM outbox WHERE idempotency_key=?1",
+        params![key],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+    ).optional().map_err(|e| e.to_string())?;
+    match existing {
+        None => Ok(false),
+        Some((ws, kind, id, op, body))
+            if ws == workspace_id && kind == entity && id == entity_id && op == operation
+                && body.as_deref() == payload => Ok(true),
+        Some(_) => Err("idempotency_key has already been used for a different mutation".into()),
     }
 }
 
@@ -252,9 +305,24 @@ mod tests {
     }
 
     #[test]
-    fn idempotency_key_is_unique() {
+    fn idempotent_retry_does_not_duplicate_outbox() {
         let mut db = database();
-        db.upsert_booking("w-1", &booking("b-1"), "same-key").unwrap();
+        let item = booking("b-1");
+        db.upsert_booking("w-1", &item, "same-key").unwrap();
+        db.upsert_booking("w-1", &item, "same-key").unwrap();
+        assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 1);
         assert!(db.upsert_booking("w-1", &booking("b-2"), "same-key").is_err());
+    }
+
+    #[test]
+    fn outbox_retry_state_is_workspace_scoped() {
+        let mut db = database();
+        db.upsert_booking("w-1", &booking("b-1"), "idem-1").unwrap();
+        let entry = db.pending_outbox("w-1", 1).unwrap().remove(0);
+        assert!(!db.mark_outbox_synced("w-2", &entry.id).unwrap());
+        assert!(db.mark_outbox_failed("w-1", &entry.id, "network timeout").unwrap());
+        assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 0);
+        assert!(db.retry_outbox("w-1", &entry.id).unwrap());
+        assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 1);
     }
 }
