@@ -74,7 +74,13 @@ jobs:
         run: |
           $exe = "target\release\appointment-pms-native.exe"
           if (!(Test-Path $exe)) { throw "Native executable missing" }
-          $imports = (dumpbin /dependents $exe 2>&1 | Out-String)
+          $vswhere = Join-Path "${env:ProgramFiles(x86)}" "Microsoft Visual Studio\Installer\vswhere.exe"
+          if (!(Test-Path $vswhere)) { throw "vswhere.exe not found; cannot inspect native imports" }
+          $vsPath = & $vswhere -latest -products "*" -property installationPath
+          if (!$vsPath) { throw "Visual Studio installation not found; cannot inspect native imports" }
+          $devcmd = Join-Path $vsPath "Common7\Tools\VsDevCmd.bat"
+          $imports = (cmd /c "`"$devcmd`" -arch=amd64 >nul && dumpbin /dependents `"$exe`"" 2>&1 | Out-String)
+          if ($LASTEXITCODE -ne 0) { throw "dumpbin import inspection failed: $imports" }
           if ($imports -match "WebView2|msedge|chrome|node") {
             throw "Browser/WebView/Node dependency detected in native executable"
           }
