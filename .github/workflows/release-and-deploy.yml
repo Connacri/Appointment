@@ -2,9 +2,6 @@ name: Production Release (Signed APK, AAB & Windows EXE) & Website Deploy
 
 on:
   push:
-    branches:
-      - main
-      - master
     tags:
       - 'v*.*.*'
   workflow_dispatch:
@@ -19,193 +16,20 @@ on:
           - alpha
           - beta
           - production
-      update_website:
-        description: 'Update and deploy production website'
-        required: true
-        default: true
-        type: boolean
 
 permissions:
-  contents: write
-  pages: write
-  id-token: write
-  # Required to delete the previous `github-pages` artifact before uploading a
-  # new one on a re-run; without it the delete fails and deploy-pages aborts
-  # with "Multiple artifacts named github-pages".
-  actions: write
+  contents: read
 
 concurrency:
   group: 'release-and-deploy'
   cancel-in-progress: false
 
 jobs:
-  # ============================================================
-  # JOB 1: Build & Update Production Website (GitHub Pages / Web)
-  # ============================================================
-  build-and-update-website:
-    name: Build & Update Production Website
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    if: github.event_name != 'workflow_dispatch' || inputs.update_website == true
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        uses: ./.github/actions/npm-install
-
-      - name: Build Web Application (Vite Production SPA)
-        run: npm run build
-        env:
-          VITE_BASE: ./
-
-      - name: Ensure GitHub Pages SPA 404.html and .nojekyll
-        run: |
-          cp dist/index.html dist/404.html
-          touch dist/.nojekyll
-
-      - name: Verify Legal Pages in dist output (AGENTS.md 19.3)
-        run: |
-          set -u
-          fail() { echo "::error::$1"; exit 1; }
-
-          for p in privacy delete-account; do
-            for l in "" fr/ en/ ar/; do
-              test -f "dist/$p/${l}index.html" || fail "Missing dist/$p/${l}index.html in production build"
-            done
-            grep -q 'dir="rtl"' "dist/$p/ar/index.html" || fail "dist/$p/ar/index.html must declare dir=\"rtl\""
-            grep -qi '<title>' "dist/$p/index.html" || fail "dist/$p/index.html must declare a <title>"
-          done
-
-          # No placeholders or stale branding may ship in the legal pages.
-          if grep -rEn 'TODO|REPLACE_ME|CHANGE_ME|your-email|example\.(com|org)|\{\{|AgentOps' dist/privacy dist/delete-account; then
-            fail "Placeholder or stale branding text found in legal pages"
-          fi
-
-          grep -qi 'privacy' README.md        || fail "README.md must link the Privacy Policy"
-          grep -qi 'delete-account' README.md || fail "README.md must link the Delete Account page"
-
-          echo "Legal pages verified in production build dist/ (existence, RTL, no placeholders, README links)."
-
-      - name: Cancel stuck GitHub Pages deployments
-        uses: actions/github-script@v7
-        continue-on-error: true
-        with:
-          script: |
-            const { data: deployments } = await github.rest.repos.listDeployments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              environment: 'github-pages',
-              per_page: 20,
-            });
-            for (const d of deployments) {
-              // Never cancel the deployment belonging to THIS run.
-              if (d.sha === context.sha) continue;
-              const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                deployment_id: d.id,
-                per_page: 1,
-              });
-              const latest = statuses[0];
-              // Only cancel deployments that are stuck (queued / in_progress / pending / waiting).
-              if (latest && (latest.state === 'queued' || latest.state === 'in_progress' || latest.state === 'pending' || latest.state === 'waiting')) {
-                core.info(`Canceling stuck deployment ${d.id} (${d.sha})`);
-                await github.rest.repos.createDeploymentStatus({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  deployment_id: d.id,
-                  state: 'error',
-                  description: 'Canceled by CI: stuck Pages deployment',
-                }).catch(() => {});
-              }
-            }
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v4
-
-      - name: Package & Upload Versioned Web Build
-        run: |
-          set -euo pipefail
-          VERSION="$(node -p "require('./package.json').version")"
-          cd dist && zip -qr "../web-build-v$VERSION.zip" . && cd ..
-          ls -l "web-build-v$VERSION.zip"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: web-build
-          path: web-build-v*.zip
-          retention-days: 30
-
-      - name: Remove stale github-pages artifacts (avoids duplicate-artifact errors on rerun)
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.runId,
-            });
-            const stale = (artifacts.data.artifacts || []).filter(a => a.name === 'github-pages');
-            for (const a of stale) {
-              core.info(`Deleting stale github-pages artifact ${a.id}`);
-              await github.rest.actions.deleteArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                artifact_id: a.id,
-              }).catch(e => core.warning(`Could not delete artifact ${a.id}: ${e.message}`));
-            }
-
-      - name: Upload Pages Artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: 'dist'
-
-      - name: Deploy to GitHub Pages Website
-        id: deployment
-        uses: actions/deploy-pages@v4
-        with:
-          # The Pages backend occasionally stays queued for several minutes;
-          # the 10-minute default aborted a valid deployment once. Never mask
-          # a failure with continue-on-error: a stale site must fail the run.
-          timeout: 900000
-
-      - name: Verify deployed website matches this build
-        run: |
-          set -euo pipefail
-          EXPECTED="$(grep -o 'assets/index-[^"]*\.js' dist/index.html | head -n 1)"
-          test -n "$EXPECTED" || { echo "::error::No entry asset found in dist/index.html"; exit 1; }
-          BASE="https://connacri.github.io/Appointment"
-          LIVE=""
-          for attempt in $(seq 1 20); do
-            LIVE="$(curl -fsS -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
-              "${BASE}/index.html?cachebust=$(date +%s%N)" \
-              | grep -o 'assets/index-[^"]*\.js' | head -n 1 || true)"
-            if [ "$LIVE" = "$EXPECTED" ]; then
-              echo "Live entry asset matches this build: $LIVE"
-              break
-            fi
-            echo "Attempt ${attempt}/20: live=${LIVE:-<none>} expected=${EXPECTED}"
-            if [ "$attempt" -eq 20 ]; then
-              echo "::error::GitHub Pages still serves a stale build (expected ${EXPECTED}, got ${LIVE:-<none>})"
-              exit 1
-            fi
-            sleep 30
-          done
-          for path in "" privacy/ privacy/fr/ privacy/en/ privacy/ar/ delete-account/ delete-account/fr/ delete-account/en/ delete-account/ar/; do
-            url="${BASE}/${path}"
-            code=$(curl -s -o /dev/null -w '%{http_code}' "$url")
-            echo "$url -> $code"
-            [[ "$code" == "200" ]] || { echo "::error::$url did not return HTTP 200"; exit 1; }
-          done
+  quality-gate:
+    name: Required quality gate
+    uses: ./.github/workflows/quality-checks.yml
+    permissions:
+      contents: read
 
   # ============================================================
   # JOB 2: Build & Package Signed Android Release (APK & AAB)
@@ -213,17 +37,19 @@ jobs:
   # ============================================================
   build-and-publish-android-release:
     name: Build & Sign Android (APK + AAB)
+    needs: quality-gate
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 17 Temurin
+      - name: Setup Java 21 Temurin
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
+          cache: gradle
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
@@ -275,7 +101,7 @@ jobs:
               -Pandroid.injected.signing.store.password="$STORE_PASS" \
               -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
               -Pandroid.injected.signing.key.password="$KEY_PASS" \
-              --no-daemon --parallel -PversionName="$VERSION_NAME" -PversionCode="${{ github.run_number }}"; cd ..
+              --no-daemon --max-workers=2 --stacktrace -PversionName="$VERSION_NAME" -PversionCode="${{ github.run_number }}"; cd ..
           else
             echo "::error::gradlew not found - android/ Capacitor project missing."
             exit 1
@@ -327,7 +153,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
           packageName: ${{ vars.ANDROID_PACKAGE_NAME }}
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
-          track: ${{ vars.PLAY_TRACK_RELEASE || 'internal' }}
+          track: ${{ inputs.release_track || vars.PLAY_TRACK_RELEASE || 'internal' }}
           status: ${{ vars.PLAY_RELEASE_STATUS || 'draft' }}
 
       - name: Note â€” Play upload skipped
@@ -339,6 +165,7 @@ jobs:
   # ============================================================
   build-and-publish-windows-release:
     name: Build & Sign Windows EXE (.exe)
+    needs: quality-gate
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -360,8 +187,6 @@ jobs:
 
       - name: Package Windows Executable Desktop Application
         shell: pwsh
-        env:
-          WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
         run: |
           $version = node -p "require('./package.json').version"
           Write-Host "Application version: $version"
@@ -375,21 +200,25 @@ jobs:
           if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y }
           & $iscc "/DAppVersion=$version" scripts\installer.iss
 
-      - name: Sign Inno Setup Installer
+      - name: Sign and verify all Windows executables
         shell: pwsh
-        run: |
-          $exe = "dist-windows\Appointment-PMS-Setup-Inno.exe"
-          if ($env:WINDOWS_CERT_BASE64) {
-            [IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", [Convert]::FromBase64String($env:WINDOWS_CERT_BASE64))
-            Set-AuthenticodeSignature -FilePath $exe -Certificate (Get-PfxCertificate "$env:TEMP\cert.pfx") -HashAlgorithm SHA256 | Out-Null
-            Remove-Item "$env:TEMP\cert.pfx" -Force
-          } else {
-            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Appointment PMS Official, O=Appointment PMS, C=DZ" -CertStoreLocation "Cert:\CurrentUser\My" -HashAlgorithm SHA256
-            Set-AuthenticodeSignature -FilePath $exe -Certificate $cert -HashAlgorithm SHA256 | Out-Null
-          }
-          Get-AuthenticodeSignature $exe | Format-List
         env:
           WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $version = node -p "require('./package.json').version"
+          $paths = @(
+            "dist-windows\Appointment-PMS-Setup.exe",
+            "dist-windows\Appointment-PMS-Setup-v$version.exe",
+            "dist-windows\Appointment-PMS-Setup-Inno.exe"
+          )
+          pwsh -File scripts/sign-windows-artifacts.ps1 -Paths $paths
+
+      - name: Package signed Windows distribution archive
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          pwsh -File scripts/package-windows-archive.ps1 -Version $version
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
@@ -406,10 +235,12 @@ jobs:
   # JOB 4: Publish All Signed Artifacts to GitHub Release
   # ============================================================
   publish-github-release:
-    name: Publish GitHub Release (APK, AAB, Windows EXE & Web)
-    needs: [build-and-update-website, build-and-publish-android-release, build-and-publish-windows-release]
+    name: Publish GitHub Release (APK, AAB & Windows EXE)
+    needs: [quality-gate, build-and-publish-android-release, build-and-publish-windows-release]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -426,12 +257,6 @@ jobs:
           name: windows-release
           path: release-assets/windows
 
-      - name: Download Web Build
-        uses: actions/download-artifact@v4
-        with:
-          name: web-build
-          path: release-assets/web
-
       # AGENTS.md 18: released artifacts are ALWAYS versioned (Appointment-PMS-vX.Y.Z.*)
       # and the tag must match package.json (single source of truth).
       - name: Prepare Final Release Package & Checksums
@@ -445,42 +270,33 @@ jobs:
           fi
 
           mkdir -p release-final
-          chmod -R u+rw release-assets || true
-
           # Robust artifact discovery (handles any upload-artifact@v4 directory nesting)
           APK_FILE=$(find release-assets/android -type f -name "app-release.apk" 2>/dev/null | head -n 1)
           AAB_FILE=$(find release-assets/android -type f -name "app-release.aab" 2>/dev/null | head -n 1)
           MAP_FILE=$(find release-assets/android -type f -name "mapping.txt" 2>/dev/null | head -n 1)
 
-          if [[ -n "$APK_FILE" ]]; then
-            cp "$APK_FILE" "release-final/Appointment-PMS-v$VERSION.apk"
-          else
-            echo "::warning::app-release.apk not found in downloaded android artifacts"
-          fi
+          test -n "$APK_FILE" || { echo "::error::Required APK artifact is missing"; exit 1; }
+          test -n "$AAB_FILE" || { echo "::error::Required AAB artifact is missing"; exit 1; }
 
-          if [[ -n "$AAB_FILE" ]]; then
-            cp "$AAB_FILE" "release-final/Appointment-PMS-v$VERSION.aab"
-          else
-            echo "::warning::app-release.aab not found in downloaded android artifacts"
-          fi
+          cp "$APK_FILE" "release-final/Appointment-PMS-v$VERSION.apk"
+          cp "$AAB_FILE" "release-final/Appointment-PMS-v$VERSION.aab"
 
           if [[ -n "$MAP_FILE" ]]; then
             cp "$MAP_FILE" "release-final/mapping-v$VERSION.txt"
-          else
-            echo "# R8 ProGuard / DexGuard Mapping Symbols for v$VERSION" > "release-final/mapping-v$VERSION.txt"
           fi
 
           WIN_SETUP=$(find release-assets/windows -type f \( -name "Appointment-PMS-Setup.exe" -o -name "Appointment-PMS-Setup-v*.exe" \) 2>/dev/null | head -n 1)
           WIN_INNO=$(find release-assets/windows -type f \( -name "Appointment-PMS-Setup-Inno.exe" -o -name "Appointment-PMS-Setup-Inno-v*.exe" \) 2>/dev/null | head -n 1)
 
-          if [[ -n "$WIN_SETUP" ]]; then
-            cp "$WIN_SETUP" "release-final/Appointment-PMS-Setup-v$VERSION.exe"
-          fi
-          if [[ -n "$WIN_INNO" ]]; then
-            cp "$WIN_INNO" "release-final/Appointment-PMS-Setup-Inno-v$VERSION.exe"
-          fi
-          find release-assets/windows -type f -name "Appointment-PMS-Windows-v*.zip" -exec cp {} release-final/ \; 2>/dev/null || true
-          find release-assets/web -type f -name "web-build-v*.zip" -exec cp {} release-final/ \; 2>/dev/null || true
+          test -n "$WIN_SETUP" || { echo "::error::Required signed Windows launcher is missing"; exit 1; }
+          test -n "$WIN_INNO" || { echo "::error::Required signed Inno Setup installer is missing"; exit 1; }
+
+          cp "$WIN_SETUP" "release-final/Appointment-PMS-Setup-v$VERSION.exe"
+          cp "$WIN_INNO" "release-final/Appointment-PMS-Setup-Inno-v$VERSION.exe"
+
+          WIN_ZIP=$(find release-assets/windows -type f -name "Appointment-PMS-Windows-v*.zip" 2>/dev/null | head -n 1)
+          test -n "$WIN_ZIP" || { echo "::error::Required Windows distribution ZIP is missing"; exit 1; }
+          cp "$WIN_ZIP" release-final/
 
           cd release-final
           sha256sum * > SHA256SUMS.txt
@@ -508,7 +324,6 @@ jobs:
             echo "- Signed Android APK: \`Appointment-PMS-v$VERSION.apk\`" >> release-notes.md
             echo "- Signed Android AAB: \`Appointment-PMS-v$VERSION.aab\`" >> release-notes.md
             echo "- Windows EXE Installer: \`Appointment-PMS-Setup-v$VERSION.exe\`" >> release-notes.md
-            echo "- Production Web Application deployed to GitHub Pages." >> release-notes.md
           fi
           cat release-notes.md
 
