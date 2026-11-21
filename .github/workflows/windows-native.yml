@@ -42,6 +42,9 @@ jobs:
         with:
           workspaces: windows-native -> target
 
+      - name: Resolve Rust dependencies and generate lockfile
+        run: cargo generate-lockfile
+
       - name: Format Rust sources
         run: cargo fmt --all
 
