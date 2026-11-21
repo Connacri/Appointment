@@ -12,11 +12,9 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
   throw "Unable to determine the application version (package.json / -Version)."
 }
 $FileVersion = "$Version.0"
-Write-Host "Packaging Windows launcher for version $Version (file version $FileVersion)"
+Write-Host "Packaging Windows application launcher for version $Version (file version $FileVersion)"
 
 New-Item -ItemType Directory -Force -Path "dist-windows" | Out-Null
-
-Compress-Archive -Path "dist\*" -DestinationPath "dist-windows\app-assets.zip" -Force
 
 $launcherScript = @"
 Add-Type -AssemblyName System.Windows.Forms
@@ -73,28 +71,6 @@ $versionedExe = "dist-windows\Appointment-PMS-Setup-v$Version.exe"
 $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 & $csc /nologo /target:winexe /platform:anycpu /out:"$launcherExe" /r:"System.Windows.Forms.dll" "dist-windows\Program.cs"
 Copy-Item -Path $launcherExe -Destination $versionedExe -Force
-
-Write-Host "Cryptographic Code Signing for Windows Binary (.exe)..."
-if ($env:WINDOWS_CERT_BASE64) {
-  Write-Host "Using official WINDOWS_CERT_BASE64 from GitHub Secrets."
-  [IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", [Convert]::FromBase64String($env:WINDOWS_CERT_BASE64))
-  Set-AuthenticodeSignature -FilePath $launcherExe -Certificate (Get-PfxCertificate -FilePath "$env:TEMP\cert.pfx") -HashAlgorithm SHA256 | Out-Null
-  Set-AuthenticodeSignature -FilePath $versionedExe -Certificate (Get-PfxCertificate -FilePath "$env:TEMP\cert.pfx") -HashAlgorithm SHA256 | Out-Null
-  Remove-Item "$env:TEMP\cert.pfx" -Force
-} else {
-  Write-Host "Generation of CI Code-Signing Authenticode Certificate (self-signed)..."
-  $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Appointment PMS Official, O=Appointment PMS, C=DZ" -CertStoreLocation "Cert:\CurrentUser\My" -HashAlgorithm SHA256
-  Set-AuthenticodeSignature -FilePath $launcherExe -Certificate $cert -HashAlgorithm SHA256 | Out-Null
-  Set-AuthenticodeSignature -FilePath $versionedExe -Certificate $cert -HashAlgorithm SHA256 | Out-Null
-}
-
-Get-AuthenticodeSignature $launcherExe | Format-List
-Get-AuthenticodeSignature $versionedExe | Format-List
-
-New-Item -ItemType Directory -Force -Path "dist-windows\package" | Out-Null
-Copy-Item -Path $launcherExe -Destination "dist-windows\package\"
-Copy-Item -Path "dist" -Destination "dist-windows\package\dist" -Recurse
-Compress-Archive -Path "dist-windows\package\*" -DestinationPath "dist-windows\Appointment-PMS-Windows-v$Version.zip" -Force
 
 Write-Host "Windows artifacts:"
 Get-ChildItem "dist-windows" -Filter "Appointment-PMS-*" | Select-Object Name, Length | Format-Table -AutoSize
