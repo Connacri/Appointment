@@ -21,7 +21,7 @@ This matrix tracks parity against the existing TypeScript PMS. A module is not c
 ## Implemented slice
 
 The current Rust core includes:
-- A validated first-slice booking model.
+- A validated first-slice booking model with calendar-valid dates and integer minor-unit money.
 - SQLite schema version 1.
 - Workspace-scoped booking CRUD and bounded reads.
 - Atomic booking mutation + Outbox insertion.
