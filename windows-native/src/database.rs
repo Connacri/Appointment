@@ -382,7 +382,8 @@ mod tests {
             start_date: "2026-11-21".into(),
             end_date: "2026-11-23".into(),
             status: BookingStatus::Confirmed,
-            total_price: 10000.0,
+            total_price_minor: 1_000_000,
+            currency_code: "DZD".into(),
             payment_status: "pending".into(),
             notes: None,
         }
