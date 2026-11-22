@@ -82,6 +82,11 @@ public final class LanDiscoveryPlugin extends Plugin {
             nodeId = getOrCreateNodeId();
             String missingAlias = requiredPermissionAlias();
             if (missingAlias != null && !hasPermission(missingAlias)) {
+                if (!isPermissionDeclared(missingAlias)) {
+                    throw new IllegalStateException(
+                        "Le manifeste Android doit déclarer l'autorisation LAN requise pour le target SDK actuel."
+                    );
+                }
                 permissionGranted = false;
                 requestPermissionForAlias(missingAlias, call, "lanPermissionCallback");
                 return;
