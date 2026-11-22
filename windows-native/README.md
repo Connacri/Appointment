@@ -15,9 +15,9 @@ cargo build --release --locked
 
 - Direct Win32 window and message loop.
 - Rust PMS booking/occupant domain and verified Supabase booking-row mapper.
-- SQLite workspace-scoped booking persistence, atomic Outbox writes and tombstones.
+- SQLite workspace-scoped booking persistence, atomic Outbox writes and tombstones, ordered delivery candidates, due failed-entry retries with exponential backoff, and workspace-scoped status counts.
 - Windows Credential Manager for refresh tokens, with an active-account UUID pointer.
-- Native HTTPS transport through Windows WinHTTP; TLS certificate validation remains at the Windows HTTP stack.
+- Native HTTPS transport through Windows WinHTTP; TLS certificate validation remains at the Windows HTTP stack and automatic redirects are disabled for authenticated requests.
 - Supabase password sign-in, sign-up, refresh-token restore/rotation and logout API client.
 - Access tokens are transient in-memory session data; refresh tokens are persisted only in Windows Credential Manager.
 - Uses only the public Supabase publishable/anon key; never embed a service-role key.
