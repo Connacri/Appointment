@@ -20,6 +20,7 @@ export interface LanDiscoveryError {
 interface LanDiscoveryPlugin {
   startDiscovery(): Promise<LanDiscoveryStartResult>;
   stopDiscovery(): Promise<void>;
+  requestAndroid16CompatibilityPermission(): Promise<LanDiscoveryStartResult>;
   addListener(
     eventName: 'peerFound',
     listener: (peer: DiscoveredLanPeer) => void,
