@@ -2,7 +2,6 @@ package com.planning.oran;
 
 import android.Manifest;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.wifi.WifiManager;
 import android.os.Build;
@@ -17,6 +16,9 @@ import com.getcapacitor.annotation.PermissionCallback;
 
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.net.DatagramPacket;
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -45,8 +47,6 @@ import java.util.UUID;
     }
 )
 public final class LanDiscoveryPlugin extends Plugin {
-    private static final String PREFS = "appointment_p2p";
-    private static final String KEY_NODE_ID = "node_id";
     private static final String MULTICAST_GROUP = "239.255.42.99";
     private static final int DISCOVERY_PORT = 45871;
     private static final int PROTOCOL_VERSION = 1;
@@ -119,18 +119,39 @@ public final class LanDiscoveryPlugin extends Plugin {
         call.resolve();
     }
 
-    private String getOrCreateNodeId() {
-        SharedPreferences preferences = getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        String value = preferences.getString(KEY_NODE_ID, null);
-        if (value != null) {
-            try {
-                return UUID.fromString(value).toString();
-            } catch (IllegalArgumentException ignored) {
-                // Replace a corrupted local identity; no peer is trusted by this identifier alone.
+    private String getOrCreateNodeId() throws Exception {
+        // noBackupFilesDir prevents Android Auto Backup from cloning one node ID
+        // onto multiple installations during device migration or restore.
+        File identityFile = new File(getContext().getNoBackupFilesDir(), "p2p-node-id");
+        if (identityFile.isFile() && identityFile.length() <= 64) {
+            try (FileInputStream input = new FileInputStream(identityFile)) {
+                byte[] bytes = new byte[64];
+                int length = input.read(bytes);
+                if (length > 0) {
+                    try {
+                        return UUID.fromString(new String(bytes, 0, length, StandardCharsets.UTF_8).trim()).toString();
+                    } catch (IllegalArgumentException ignored) {
+                        // Replace a corrupted local identity; it is not an authorization credential.
+                    }
+                }
             }
         }
+
         String created = UUID.randomUUID().toString();
-        preferences.edit().putString(KEY_NODE_ID, created).apply();
+        File temporaryFile = new File(identityFile.getParentFile(), "p2p-node-id.tmp");
+        try (FileOutputStream output = new FileOutputStream(temporaryFile, false)) {
+            output.write(created.getBytes(StandardCharsets.UTF_8));
+            output.flush();
+            output.getFD().sync();
+        }
+        if (identityFile.exists() && !identityFile.delete()) {
+            temporaryFile.delete();
+            throw new IllegalStateException("Impossible de remplacer l'identité P2P locale.");
+        }
+        if (!temporaryFile.renameTo(identityFile)) {
+            temporaryFile.delete();
+            throw new IllegalStateException("Impossible d'enregistrer l'identité P2P locale.");
+        }
         return created;
     }
 
