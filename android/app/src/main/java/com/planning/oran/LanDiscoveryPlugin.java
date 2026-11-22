@@ -51,6 +51,7 @@ public final class LanDiscoveryPlugin extends Plugin {
     private static final int DISCOVERY_PORT = 45871;
     private static final int PROTOCOL_VERSION = 1;
     private static final int MAX_PACKET_BYTES = 1024;
+    private static final int MAX_DISCOVERED_PEERS = 128;
     private static final long ANNOUNCE_INTERVAL_MS = 3000L;
     private static final long PEER_TIMEOUT_MS = 12000L;
     private static final int RECEIVE_TIMEOUT_MS = 250;
@@ -293,6 +294,7 @@ public final class LanDiscoveryPlugin extends Plugin {
                     }
 
                     String remoteIp = remoteAddress.getHostAddress();
+                    if (!lastSeen.containsKey(remoteId) && lastSeen.size() >= MAX_DISCOVERED_PEERS) continue;
                     long seenAt = System.currentTimeMillis();
                     PeerSeen previous = lastSeen.put(remoteId, new PeerSeen(remoteIp, seenAt));
                     if (previous == null || !previous.address.equals(remoteIp)) {
@@ -304,6 +306,8 @@ public final class LanDiscoveryPlugin extends Plugin {
                     }
                 } catch (java.net.SocketTimeoutException timeout) {
                     // Periodic tick: send announcements and expire stale peer entries.
+                } catch (org.json.JSONException malformedPacket) {
+                    // Malformed or forged multicast datagrams are discarded, not fatal to discovery.
                 }
 
                 long expiryNow = System.currentTimeMillis();
