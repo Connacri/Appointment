@@ -368,11 +368,12 @@ impl PmsDatabase {
         outbox_id: &str,
         error: &str,
     ) -> rusqlite::Result<bool> {
+        let safe_error: String = error.chars().take(1024).collect();
         let changed = self.connection.execute(
             "UPDATE outbox SET status='failed', attempts=attempts+1, last_error=?3,
              next_attempt_at=datetime('now', '+' || MIN(21600, (30 * (1 << MIN(attempts, 10)))) || ' seconds')
              WHERE workspace_id=?1 AND id=?2 AND status IN ('pending','failed')",
-            params![workspace_id, outbox_id, error],
+            params![workspace_id, outbox_id, safe_error],
         )?;
         Ok(changed == 1)
     }
@@ -807,6 +808,102 @@ mod tests {
                 synced: 0,
             }
         );
+    }
+
+    #[test]
+    fn migration_v2_preserves_pending_outbox_and_bookings() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(
+                "PRAGMA foreign_keys=ON;
+                 CREATE TABLE schema_migrations (
+                   version INTEGER PRIMARY KEY,
+                   applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                 );
+                 INSERT INTO schema_migrations(version) VALUES (1),(2);
+                 CREATE TABLE workspaces (
+                   id TEXT PRIMARY KEY,
+                   owner_user_id TEXT NOT NULL,
+                   name TEXT NOT NULL,
+                   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                 );
+                 INSERT INTO workspaces(id,owner_user_id,name)
+                   VALUES ('w-migrate','u-migrate','Migration test');
+                 CREATE TABLE bookings (
+                   workspace_id TEXT NOT NULL,
+                   id TEXT NOT NULL,
+                   resource_id TEXT NOT NULL,
+                   payload TEXT NOT NULL,
+                   version INTEGER NOT NULL DEFAULT 1,
+                   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                   PRIMARY KEY(workspace_id,id),
+                   FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+                 );
+                 INSERT INTO bookings(workspace_id,id,resource_id,payload,version)
+                   VALUES ('w-migrate','b-migrate','r-migrate','{}',4);
+                 CREATE TABLE outbox (
+                   id TEXT PRIMARY KEY,
+                   idempotency_key TEXT NOT NULL UNIQUE,
+                   workspace_id TEXT NOT NULL,
+                   entity TEXT NOT NULL,
+                   entity_id TEXT NOT NULL,
+                   operation TEXT NOT NULL CHECK(operation IN ('upsert','delete')),
+                   version INTEGER NOT NULL,
+                   payload TEXT,
+                   status TEXT NOT NULL DEFAULT 'pending'
+                     CHECK(status IN ('pending','synced','failed')),
+                   attempts INTEGER NOT NULL DEFAULT 0,
+                   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                   next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                   last_error TEXT,
+                   FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+                 );
+                 INSERT INTO outbox(
+                   id,idempotency_key,workspace_id,entity,entity_id,operation,version,
+                   payload,status,attempts,last_error
+                 ) VALUES (
+                   'o-migrate','idem-migrate','w-migrate','booking','b-migrate','upsert',4,
+                   '{""id"":""b-migrate""}','failed',2,'temporary'
+                 );
+                 CREATE TABLE tombstones (
+                   workspace_id TEXT NOT NULL,
+                   entity TEXT NOT NULL,
+                   entity_id TEXT NOT NULL,
+                   version INTEGER NOT NULL,
+                   deleted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                   PRIMARY KEY(workspace_id,entity,entity_id),
+                   FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+                 );
+                 INSERT INTO tombstones(workspace_id,entity,entity_id,version)
+                   VALUES ('w-migrate','booking','b-deleted',8);"
+            )
+            .unwrap();
+
+        let db = PmsDatabase::from_connection(connection).unwrap();
+        let outbox = db.pending_outbox("w-migrate", 10).unwrap();
+        assert_eq!(outbox.len(), 1);
+        assert_eq!(outbox[0].id, "o-migrate");
+        assert_eq!(outbox[0].status, "failed");
+        assert_eq!(outbox[0].attempts, 2);
+        assert_eq!(outbox[0].base_server_version, 0);
+        let booking_server_version: i64 = db
+            .connection
+            .query_row(
+                "SELECT server_version FROM bookings WHERE workspace_id='w-migrate' AND id='b-migrate'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let tombstone_server_version: i64 = db
+            .connection
+            .query_row(
+                "SELECT server_version FROM tombstones WHERE workspace_id='w-migrate' AND entity_id='b-deleted'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(booking_server_version, 0);
+        assert_eq!(tombstone_server_version, 0);
     }
 
     #[test]
