@@ -8,6 +8,7 @@ pub mod credential_vault;
 pub mod database;
 pub mod domain;
 pub mod p2p;
+pub mod p2p_discovery;
 pub mod supabase_auth;
 pub mod supabase_sync;
 mod win32;
