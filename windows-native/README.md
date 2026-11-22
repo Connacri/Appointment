@@ -22,13 +22,15 @@ cargo build --release --locked
 - Access tokens are transient in-memory session data; refresh tokens are persisted only in Windows Credential Manager.
 - Uses only the public Supabase publishable/anon key; never embed a service-role key.
 
-## Not yet implemented
+## Native authentication and tenant boundary
 
-The auth client is a native service layer but is not yet connected to a login screen or application startup/session UI. Server-side workspace membership resolution, HTTP data synchronization, conflict resolution, full PMS screens, CardLock MDB import, USB/HID, printing and reports remain unimplemented. Do not treat a valid auth session as proof that a workspace membership or any data sync is ready.
+The Win32 client provides native Supabase sign-in/sign-up, startup refresh-token restoration and sign-out over WinHTTP. Network operations run off the UI thread. Refresh tokens are stored in the current Windows user's Credential Manager and scoped to the configured HTTPS project; access tokens remain in memory. The password edit control is cleared immediately after submission.
+
+After authentication, the client resolves the deterministic personal workspace (`workspace_id = auth user UUID`), creates it if absent, repairs its owner membership when permitted, and re-reads the workspace through the PostgREST relationship under RLS. A valid Auth session or local UUID is not treated as workspace authorization. If the RLS-backed read fails, the UI remains local-only and reports the reason. Shared workspaces are not auto-selected.
 
 ## Configuration
 
-The native client reads APPOINTMENT_SUPABASE_URL and APPOINTMENT_SUPABASE_PUBLISHABLE_KEY when set. Otherwise it uses the same public project defaults as the TypeScript client. A publishable key is public client configuration, not a service credential.
+The default public Supabase project configuration matches the TypeScript client. For a custom project, set both `APPOINTMENT_SUPABASE_URL` and its matching `APPOINTMENT_SUPABASE_PUBLISHABLE_KEY`; overriding only the URL is rejected. A publishable key is public client configuration, not a service credential.
 
 ## Credential handling
 
