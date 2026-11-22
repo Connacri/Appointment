@@ -344,11 +344,7 @@ fn delete_remote_booking(
         "/rest/v1/bookings?id=eq.{booking_id}&workspace_id=eq.{workspace_id}&version=eq.{base_server_version}&deleted_at=is.null"
     );
     let response = client
-        .authenticated_patch_with_prefer(
-            &patch_path,
-            REST_PREFER_REPRESENTATION,
-            &body,
-        )
+        .authenticated_patch_with_prefer(&patch_path, REST_PREFER_REPRESENTATION, &body)
         .map_err(PushFailure::Retry)?;
     let response = require_success(response)?;
     returned_version(&response)
