@@ -18,6 +18,7 @@ import { WorkspaceProvider } from './services/supabase/WorkspaceContext';
 import { VideoBubble } from './services/VideoBubbleBridge';
 import { LanDiscovery, startNativeLanDiscovery, supportsNativeLanDiscovery } from './services/p2p/LanDiscoveryBridge';
 import { PullToRefresh } from './components/PullToRefresh';
+import { LanDiscoveryStatus } from './components/LanDiscoveryStatus';
 import { useBrandIconSync } from './hooks/useBrandIconSync';
 
 /**
@@ -421,6 +422,7 @@ const MainLayout: React.FC = () => {
       </div>
 
       {/* Bottom-docked evidence-based Supabase sync terminal */}
+      <LanDiscoveryStatus />
       <SyncTerminal />
 
       {/* Global Interactive Modals — mounted on demand */}
