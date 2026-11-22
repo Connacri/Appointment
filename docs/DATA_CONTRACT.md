@@ -379,9 +379,9 @@ cannot open raw UDP sockets and are not directly discoverable.
 Discovery is not a trusted connection. It does not authenticate the peer, prove
 workspace membership, authorize a user, create a secure channel, exchange events or
 mark any data as synchronized. Android discovery pauses when the Activity is
-backgrounded. On Android 16 compatibility-mode tests, local-network access can be
-granted via Nearby devices; Android 17+ requires the runtime
-ACCESS_LOCAL_NETWORK permission.
+backgrounded. Android 16 normally permits target-SDK-36 LAN access; if its opt-in
+compatibility restriction blocks multicast, the plugin requests Nearby devices.
+ACCESS_LOCAL_NETWORK is required only when the app targets SDK 37 or higher.
 
 Before enabling P2P data synchronization in production, the implementation still
 requires encrypted and authenticated peer pairing, workspace-level authorization,
