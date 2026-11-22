@@ -28,7 +28,9 @@ fn main() {
 fn initialize_local_database() -> Result<database::PmsDatabase, String> {
     let local_app_data = std::env::var_os("LOCALAPPDATA")
         .ok_or_else(|| "Windows LOCALAPPDATA environment variable is unavailable".to_string())?;
-    let data_dir = std::path::PathBuf::from(local_app_data).join("Connacri").join("Appointment");
+    let data_dir = std::path::PathBuf::from(local_app_data)
+        .join("Connacri")
+        .join("Appointment");
     std::fs::create_dir_all(&data_dir)
         .map_err(|error| format!("Cannot create local data directory: {error}"))?;
     let database_path = data_dir.join("appointment.sqlite3");
