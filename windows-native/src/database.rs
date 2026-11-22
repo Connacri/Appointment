@@ -4,6 +4,9 @@ use uuid::Uuid;
 
 use crate::domain::Booking;
 
+#[path = "database_entities.rs"]
+mod database_entities;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutboxEntry {
     pub id: String,
@@ -197,6 +200,7 @@ impl PmsDatabase {
                  COMMIT;",
             )?;
         }
+        database_entities::migrate(&self.connection)?;
         Ok(())
     }
 
