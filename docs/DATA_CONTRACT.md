@@ -279,3 +279,47 @@ records, purchase orders and room-consumable deductions:
 The productivity charts and staff notifications are derived from the currently available
 local task, room and stock state; they do not imply a remote event stream, server-side audit
 trail, push-notification delivery or synchronized HR system.
+
+
+## 10. Native booking and occupant contract mapping (2026-11-22)
+
+The Rust domain now models the canonical TypeScript booking payload rather than treating
+occupants and payment details only as opaque extension fields:
+
+- `windows-native/src/domain.rs` defines typed booking occupants, extras, payments,
+  valuables, forgotten items, guest alerts, modification history, guest identity,
+  check-in/out metadata, dietary preferences and the existing booking scalar fields.
+  Unknown future fields remain in a flattened extension map. CamelCase is the canonical
+  serialized shape; the original shared snake_case booking keys remain readable.
+- `Booking::normalize_occupants` applies the TypeScript count precedence: explicit
+  `adults` / `children`, then sector-specific `customMetadata` counts, then the same
+  defaults as the Web client. The primary slot is synchronized from the booking guest
+  fields; additional adults are merged from `adultGuests` and `occupantsList`; children
+  are read from child entries in `occupantsList` or the legacy adult list. Empty contact
+  and identity fields stay empty; normalization does not fabricate user data.
+- Native validation follows the current TypeScript rules: a single-person booking needs
+  a valid primary name and syntax-checks contacts only when supplied. A multi-person
+  booking requires a full name and identity document for every occupant, a valid phone
+  for the primary guest, and validates optional companion contacts only when present.
+  A special-authorization booking also requires its description.
+- Booking amounts remain in major units as supplied by TypeScript. Conversion is available
+  only for the explicit exponent table: `DA` aliases to `DZD`, `RMB` aliases to `CNY`,
+  and `DZD`, `EUR`, `USD`, `CNY`, `GBP`, and `SAR` currently use exponent 2.
+  Positive values are rounded to the nearest minor unit using Rust's half-away-from-zero
+  rounding. Unknown currency strings are preserved, but minor-unit conversion returns an
+  explicit unsupported-currency error. Legacy native `totalPriceMinor` / `currencyCode`
+  pairs remain readable for existing local records.
+- `windows-native/src/booking_mapper.rs` maps to and from the verified
+  `public.bookings` columns in `src/services/supabase/database.types.ts`: scalar booking
+  columns, `currency`, `payments_summary`, `extras`, `occupants`,
+  `guest_metadata` and its internal `_pms` envelope. `workspace_id` and
+  `establishment_id` are mandatory mapper arguments; there is no default tenant.
+- SQLite upsert and Outbox serialization now use the normalized booking representation.
+  Unit tests cover occupant normalization, validation, money aliases/exponents,
+  Supabase-row round-trips, metadata separation and tenant-scope requirements.
+
+This is a local contract and deterministic mapping milestone only. It does not implement
+Supabase authentication, HTTP requests, server ACK handling, remote pull/push, conflict
+resolution, workspace membership resolution or live RLS verification. No SQL migration
+or remote schema mutation is part of this step. The native application must not expose a
+successful sync state until a future sync engine has received a verified server ACK.

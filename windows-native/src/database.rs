@@ -432,6 +432,42 @@ mod tests {
     }
 
     #[test]
+    fn sqlite_and_outbox_store_the_normalized_occupant_contract() {
+        let mut db = database();
+        let mut item = booking("b-family");
+        item.guest_phone.clear();
+        item.adults = Some(2);
+        item.adult_guests = Some(vec![
+            crate::domain::BookingOccupant {
+                full_name: "Primary Guest".into(),
+                phone: "+213 550 11 22 33".into(),
+                document_type: "cni".into(),
+                document_number: "12345678".into(),
+                ..crate::domain::BookingOccupant::default()
+            },
+            crate::domain::BookingOccupant {
+                full_name: "Second Guest".into(),
+                document_type: "passport".into(),
+                document_number: "P887766".into(),
+                ..crate::domain::BookingOccupant::default()
+            },
+        ]);
+
+        db.upsert_booking("w-1", &item, "idem-family").unwrap();
+        let restored = db.get_booking("w-1", "b-family").unwrap().unwrap();
+        assert_eq!(restored.adults, Some(2));
+        assert_eq!(restored.occupants_list.as_ref().unwrap().len(), 2);
+        assert_eq!(restored.guest_name, "Guest"); // Existing non-empty primary scalar remains authoritative.
+        assert_eq!(restored.guest_phone, "+213 550 11 22 33");
+
+        let outbox = db.pending_outbox("w-1", 10).unwrap();
+        let payload: serde_json::Value = serde_json::from_str(outbox[0].payload.as_deref().unwrap()).unwrap();
+        assert_eq!(payload["adults"], 2);
+        assert_eq!(payload["occupantsList"].as_array().unwrap().len(), 2);
+        assert_eq!(payload["occupantsList"][1]["documentNumber"], "P887766");
+    }
+
+    #[test]
     fn workspace_queries_never_leak_rows() {
         let mut db = database();
         db.upsert_booking("w-1", &booking("b-1"), "idem-1").unwrap();
