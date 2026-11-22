@@ -1143,7 +1143,7 @@ mod tests {
     }
 
     #[test]
-    fn local_schema_v4_tracks_server_versions_cursors_and_conflicts() {
+    fn local_schema_v5_tracks_pms_entities_server_versions_cursors_and_conflicts() {
         let db = database();
         let outbox_sql: String = db
             .connection
@@ -1159,8 +1159,26 @@ mod tests {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(version, 4);
+        let entity_records_exists: bool = db
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='entity_records')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let entity_page_index_exists: bool = db
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_entity_records_page')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, 5);
         assert!(outbox_sql.contains("'conflict'"));
+        assert!(entity_records_exists, "v5 must create the generic PMS entity store");
+        assert!(entity_page_index_exists, "v5 must create the workspace-scoped keyset index");
     }
 
     #[test]
