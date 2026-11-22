@@ -9,7 +9,7 @@ A module is not migrated merely because a Rust type or placeholder screen exists
 | Durable Outbox | Partial — transactional writes, tombstones, idempotency, FIFO due-entry selection, exponential retry scheduling and workspace-scoped counters | Real remote ACK, replay and conflict convergence |
 | Supabase authentication | Partial — Win32 sign-in/sign-up, async startup restore, refresh and logout; Credential Manager token persistence scoped by Supabase endpoint; access token memory-only | Live Supabase auth tests and periodic refresh scheduling |
 | Workspace identity | Partial — deterministic personal workspace bootstrap and PostgREST owner-membership verification through RLS | Live RLS integration tests, shared workspace selection and server-side authorization evidence |
-| Remote sync | Not started | HTTP pull/push, server ACKs, tombstones, retries, conflicts and observable status |
+| Remote sync | Partial — sequential booking-only Outbox push, workspace/RLS gate, resource tenant validation, optimistic server-version updates, idempotent lost-ACK recovery and terminal conflict state; engine not yet wired to UI | Remote pull/cursors, tombstone reconciliation, multi-workspace selection, live integration tests and observable native status |
 | Establishments / buildings / floors / rooms | Not started | Fixture parity and stable parent-child identifiers |
 | Planning / Gantt | Not started | Date/timezone parity, overlap and availability tests |
 | Billing / payments | Partial — booking amount mapping and currency rules | Native invoices, payment capture and reconciliation |
