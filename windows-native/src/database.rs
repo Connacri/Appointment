@@ -178,6 +178,22 @@ impl PmsDatabase {
         Ok(())
     }
 
+    pub fn workspace_is_owned_by(
+        &self,
+        workspace_id: &str,
+        owner_user_id: &str,
+    ) -> rusqlite::Result<bool> {
+        let owner: Option<String> = self
+            .connection
+            .query_row(
+                "SELECT owner_user_id FROM workspaces WHERE id=?1",
+                params![workspace_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(owner.as_deref() == Some(owner_user_id))
+    }
+
     pub fn upsert_booking(
         &mut self,
         workspace_id: &str,
@@ -956,6 +972,15 @@ mod tests {
             )
             .unwrap();
         assert_eq!(server_version, 13);
+    }
+
+    #[test]
+    fn local_workspace_owner_must_match_authenticated_account() {
+        let db = database();
+        db.ensure_workspace("w-owner", "u-owner", "Personal").unwrap();
+        assert!(db.workspace_is_owned_by("w-owner", "u-owner").unwrap());
+        assert!(!db.workspace_is_owned_by("w-owner", "u-other").unwrap());
+        assert!(!db.workspace_is_owned_by("w-missing", "u-owner").unwrap());
     }
 
     #[test]
