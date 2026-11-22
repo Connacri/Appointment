@@ -848,6 +848,67 @@ mod tests {
     }
 
     #[test]
+    fn composite_booking_cursor_encodes_timezone_and_tie_breaker() {
+        let cursor = crate::database::SyncCursor {
+            updated_at: "2026-11-22T12:30:00.123456+00:00".into(),
+            entity_id: "a1b2c3d4-e5f6-47a8-9012-1234567890ab".into(),
+        };
+        let path = booking_pull_path(
+            "b1b2c3d4-e5f6-47a8-9012-1234567890ab",
+            Some(&cursor),
+            200,
+        );
+        assert!(path.contains("order=updated_at.asc,id.asc"));
+        assert!(path.contains("limit=200"));
+        assert!(path.contains("updated_at.gt.2026-11-22T12%3A30%3A00%2E123456%2B00%3A00"));
+        assert!(path.contains("id.gt.a1b2c3d4-e5f6-47a8-9012-1234567890ab"));
+    }
+
+    #[test]
+    fn composite_cursor_orders_same_timestamp_by_id() {
+        assert!(cursor_is_after("2026-11-22T12:00:00+00:00", "b", "2026-11-22T12:00:00+00:00", "a"));
+        assert!(!cursor_is_after("2026-11-22T12:00:00+00:00", "a", "2026-11-22T12:00:00+00:00", "b"));
+        assert!(cursor_is_after("2026-11-22T12:00:01+00:00", "a", "2026-11-22T12:00:00+00:00", "z"));
+    }
+
+    #[test]
+    fn remote_pull_parser_requires_tenant_identity_and_version() {
+        let workspace_id = "b1b2c3d4-e5f6-47a8-9012-1234567890ab";
+        let booking_id = "a1b2c3d4-e5f6-47a8-9012-1234567890ab";
+        let mut booking = Booking {
+            id: booking_id.into(),
+            resource_id: "c1b2c3d4-e5f6-47a8-9012-1234567890ab".into(),
+            resource_name: "101".into(),
+            sector: "hotel".into(),
+            guest_name: "Remote Guest".into(),
+            guest_email: "guest@example.test".into(),
+            guest_phone: "+213555000000".into(),
+            start_date: "2026-11-22".into(),
+            end_date: "2026-11-24".into(),
+            status: crate::domain::BookingStatus::Confirmed,
+            total_price: Some(12_000.0),
+            payment_currency: Some("DZD".into()),
+            payment_status: "pending".into(),
+            ..Booking::default()
+        };
+        booking.normalize_occupants();
+        let mut row = to_supabase_booking_row(&booking, workspace_id, "d1b2c3d4-e5f6-47a8-9012-1234567890ab", None).unwrap();
+        row["version"] = json!(9);
+        row["updated_at"] = json!("2026-11-22T12:00:00+00:00");
+        row["deleted_at"] = Value::Null;
+
+        let parsed = parse_remote_booking(&row, workspace_id).unwrap();
+        assert_eq!(parsed.id, booking_id);
+        assert_eq!(parsed.server_version, 9);
+        assert_eq!(parsed.booking.guest_name, "Remote Guest");
+        assert!(parsed.deleted_at.is_none());
+
+        assert!(parse_remote_booking(&row, "e1b2c3d4-e5f6-47a8-9012-1234567890ab").is_err());
+        row["version"] = json!(0);
+        assert!(parse_remote_booking(&row, workspace_id).is_err());
+    }
+
+    #[test]
     fn row_match_ignores_server_managed_fields() {
         let expected = json!({
             "id":"a1b2c3d4-e5f6-47a8-9012-1234567890ab",
