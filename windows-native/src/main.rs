@@ -107,7 +107,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn p2p_installation_identity_is_stable_across_database_reopens() {
+    fn p2p_installation_identity_is_stable_across_initializations() {
         let directory = tempfile::tempdir().unwrap();
         let first = initialize_node_identity(directory.path()).unwrap();
         let second = initialize_node_identity(directory.path()).unwrap();
