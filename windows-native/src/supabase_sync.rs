@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::sync::Mutex;
 use uuid::Uuid;
 
 use crate::booking_mapper::to_supabase_booking_row;
@@ -47,7 +48,7 @@ struct RemoteReturnedVersion {
 /// operations themselves are synchronous; run this function on a worker thread.
 pub fn push_due_bookings(
     client: &mut SupabaseAuthClient,
-    database: &PmsDatabase,
+    database: &Mutex<PmsDatabase>,
     workspace_id: &str,
     limit: u32,
 ) -> Result<PushSummary, String> {
@@ -63,6 +64,20 @@ pub fn push_due_bookings(
         .session()
         .map(|session| session.user_id.clone())
         .ok_or_else(|| "An authenticated Supabase session is required.".to_string())?;
+    {
+        let local = database
+            .lock()
+            .map_err(|_| "Local database lock is poisoned.".to_string())?;
+        let owner_matches = local
+            .workspace_is_owned_by(&expected_workspace, &user_id)
+            .map_err(|error| format!("Could not verify local workspace ownership: {error}"))?;
+        if !owner_matches {
+            return Err(
+                "Local SQLite workspace owner does not match the authenticated Supabase account."
+                    .into(),
+            );
+        }
+    }
 
     let mut summary = PushSummary::default();
     let batch_limit = limit.min(500);
@@ -71,18 +86,25 @@ pub fn push_due_bookings(
     // version and rebase later events for the same booking in SQLite; processing
     // a previously fetched Vec would keep stale base_server_version values.
     for _ in 0..batch_limit {
-        let Some(entry) = database
-            .pending_outbox(&expected_workspace, 1)
-            .map_err(|error| format!("Could not read the local Outbox: {error}"))?
-            .into_iter()
-            .next()
-        else {
+        let entry = {
+            let local = database
+                .lock()
+                .map_err(|_| "Local database lock is poisoned.".to_string())?;
+            local
+                .pending_outbox(&expected_workspace, 1)
+                .map_err(|error| format!("Could not read the local Outbox: {error}"))?
+                .into_iter()
+                .next()
+        };
+        let Some(entry) = entry else {
             break;
         };
 
         match push_one(client, &user_id, &expected_workspace, &entry) {
             Ok(server_version) => {
                 let acknowledged = database
+                    .lock()
+                    .map_err(|_| "Local database lock is poisoned.".to_string())?
                     .acknowledge_outbox(&expected_workspace, &entry.id, server_version)
                     .map_err(|error| {
                         format!("Could not persist server acknowledgement: {error}")
@@ -97,12 +119,16 @@ pub fn push_due_bookings(
             }
             Err(PushFailure::Conflict(reason)) => {
                 database
+                    .lock()
+                    .map_err(|_| "Local database lock is poisoned.".to_string())?
                     .mark_outbox_conflict(&expected_workspace, &entry.id, &reason)
                     .map_err(|error| format!("Could not persist Outbox conflict: {error}"))?;
                 summary.conflicts += 1;
             }
             Err(PushFailure::Retry(reason)) => {
                 database
+                    .lock()
+                    .map_err(|_| "Local database lock is poisoned.".to_string())?
                     .mark_outbox_failed(&expected_workspace, &entry.id, &reason)
                     .map_err(|error| format!("Could not schedule Outbox retry: {error}"))?;
                 summary.retry_scheduled += 1;
