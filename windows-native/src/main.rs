@@ -101,3 +101,21 @@ fn initialize_node_identity(data_dir: &std::path::Path) -> Result<String, String
         Err(error) => Err(format!("Cannot create P2P node identity: {error}")),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn p2p_installation_identity_is_stable_across_database_reopens() {
+        let directory = tempfile::tempdir().unwrap();
+        let first = initialize_node_identity(directory.path()).unwrap();
+        let second = initialize_node_identity(directory.path()).unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(
+            uuid::Uuid::parse_str(&first).unwrap().hyphenated().to_string(),
+            first
+        );
+    }
+}
