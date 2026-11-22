@@ -28,6 +28,12 @@ The Win32 client provides native Supabase sign-in/sign-up, startup refresh-token
 
 After authentication, the client resolves the deterministic personal workspace (`workspace_id = auth user UUID`), creates it if absent, repairs its owner membership when permitted, and re-reads the workspace through the PostgREST relationship under RLS. A valid Auth session or local UUID is not treated as workspace authorization. If the RLS-backed read fails, the UI remains local-only and reports the reason. Shared workspaces are not auto-selected.
 
+## Native booking Outbox push
+
+The Rust sync service can push due local booking Outbox entries sequentially after re-verifying the personal workspace. It resolves each booking's resource under the authenticated JWT and refuses the push unless that resource is active, not deleted, and belongs to the verified workspace. Inserts are idempotently recovered after a lost response; updates and soft deletes use conditional `version` filters. The local Outbox is marked `synced` only after a returned server version is validated and committed to SQLite. Version mismatches and unsupported entities become terminal conflicts rather than blind overwrites.
+
+The Win32 shell exposes a manual **Synchroniser les réservations** action after the authenticated user and local SQLite workspace owner have both been verified. The worker pushes due Outbox entries sequentially, then pulls remote booking pages using a persisted composite `(updated_at,id,version)` cursor. The cursor advances only after a complete page has been merged; a crash replays the page safely. Remote soft deletes become local tombstones, stale rows are ignored, and local pending/failed/conflicted mutations or local tombstones are never overwritten by a pull. The worker runs off the UI thread and holds the SQLite mutex only for local reads and transactions. This remains booking-only: shared-workspace selection, conflict-resolution UI, background scheduling, full PMS entity sync and live Supabase integration tests are not implemented.
+
 ## Configuration
 
 The default public Supabase project configuration matches the TypeScript client. For a custom project, set both `APPOINTMENT_SUPABASE_URL` and its matching `APPOINTMENT_SUPABASE_PUBLISHABLE_KEY`; overriding only the URL is rejected. A publishable key is public client configuration, not a service credential.

@@ -3,10 +3,12 @@
 use std::ffi::c_void;
 use std::mem::zeroed;
 use std::ptr::{null, null_mut};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 
+use crate::database::PmsDatabase;
 use crate::supabase_auth::{AuthOutcome, SupabaseAuthClient};
+use crate::supabase_sync::{sync_bookings, BookingSyncSummary};
 
 type Hwnd = *mut c_void;
 type Hinstance = *mut c_void;
@@ -41,6 +43,7 @@ const ID_SIGN_IN: usize = 103;
 const ID_SIGN_UP: usize = 104;
 const ID_SIGN_OUT: usize = 105;
 const ID_STATUS: usize = 106;
+const ID_PUSH_SYNC: usize = 107;
 
 #[repr(C)]
 struct Point {
@@ -113,6 +116,8 @@ unsafe extern "system" {
 
 struct AppState {
     client: Option<SupabaseAuthClient>,
+    database: Option<Arc<Mutex<PmsDatabase>>>,
+    workspace_id: Option<String>,
     busy: bool,
     authenticated: bool,
 }
@@ -123,6 +128,7 @@ enum AuthTask {
     SignIn { email: String, password: String },
     SignUp { email: String, password: String },
     SignOut,
+    SyncBookings { workspace_id: String, limit: u32 },
 }
 enum AuthUiOutcome {
     NoSession,
@@ -142,6 +148,10 @@ enum AuthUiOutcome {
         email: String,
     },
     SignedOut,
+    SyncCompleted(BookingSyncSummary),
+    SyncFailed {
+        error: String,
+    },
 }
 struct WorkerCompletion {
     client: Option<SupabaseAuthClient>,
@@ -152,6 +162,8 @@ fn app_state() -> &'static Mutex<AppState> {
     APP_STATE.get_or_init(|| {
         Mutex::new(AppState {
             client: None,
+            database: None,
+            workspace_id: None,
             busy: false,
             authenticated: false,
         })
@@ -170,7 +182,11 @@ pub fn show_error(message: &str) {
     }
 }
 
-pub fn run() -> Result<(), String> {
+pub fn run(database: PmsDatabase) -> Result<(), String> {
+    {
+        let mut state = app_state().lock().unwrap_or_else(|e| e.into_inner());
+        state.database = Some(Arc::new(Mutex::new(database)));
+    }
     unsafe {
         let instance = GetModuleHandleW(null());
         if instance.is_null() {
@@ -255,8 +271,18 @@ unsafe extern "system" fn window_proc(
             create_button(hwnd, "Se connecter", ID_SIGN_IN, 44, 318, 180, 42);
             create_button(hwnd, "Créer un compte", ID_SIGN_UP, 238, 318, 196, 42);
             create_button(hwnd, "Se déconnecter", ID_SIGN_OUT, 44, 318, 180, 42);
-            create_status_label(hwnd, 44, 394, 760, 58);
+            create_button(
+                hwnd,
+                "Synchroniser les réservations",
+                ID_PUSH_SYNC,
+                238,
+                318,
+                240,
+                42,
+            );
+            create_status_label(hwnd, 44, 382, 800, 78);
             show_control(hwnd, ID_SIGN_OUT, false);
+            show_control(hwnd, ID_PUSH_SYNC, false);
             {
                 let mut state = app_state().lock().unwrap_or_else(|e| e.into_inner());
                 state.busy = true;
@@ -282,6 +308,22 @@ unsafe extern "system" fn window_proc(
                     start_auth_task_from_state(hwnd, task);
                 }
                 ID_SIGN_OUT => start_auth_task_from_state(hwnd, AuthTask::SignOut),
+                ID_PUSH_SYNC => {
+                    let workspace_id = app_state()
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .workspace_id
+                        .clone();
+                    if let Some(workspace_id) = workspace_id {
+                        start_auth_task_from_state(
+                            hwnd,
+                            AuthTask::SyncBookings {
+                                workspace_id,
+                                limit: 50,
+                            },
+                        );
+                    }
+                }
                 _ => {}
             }
             0
@@ -296,11 +338,23 @@ unsafe extern "system" fn window_proc(
                 let mut state = app_state().lock().unwrap_or_else(|e| e.into_inner());
                 state.client = completion.client;
                 state.busy = false;
-                state.authenticated = matches!(
-                    &completion.result,
-                    Ok(AuthUiOutcome::Authenticated { .. }
-                        | AuthUiOutcome::WorkspaceUnavailable { .. })
-                );
+                match &completion.result {
+                    Ok(AuthUiOutcome::Authenticated { workspace_id, .. }) => {
+                        state.workspace_id = Some(workspace_id.clone());
+                        state.authenticated = true;
+                    }
+                    Ok(AuthUiOutcome::WorkspaceUnavailable { .. }) => {
+                        state.workspace_id = None;
+                        state.authenticated = true;
+                    }
+                    Ok(AuthUiOutcome::SyncCompleted(_) | AuthUiOutcome::SyncFailed { .. }) => {
+                        state.authenticated = true;
+                    }
+                    _ => {
+                        state.workspace_id = None;
+                        state.authenticated = false;
+                    }
+                }
             }
             set_busy(hwnd, false);
             match completion.result {
@@ -320,6 +374,7 @@ unsafe extern "system" fn window_proc(
                 }) => {
                     show_login(hwnd, false);
                     show_control(hwnd, ID_SIGN_OUT, true);
+                    show_control(hwnd, ID_PUSH_SYNC, true);
                     let identity = email.unwrap_or(user_id);
                     set_status(
                         hwnd,
@@ -335,6 +390,7 @@ unsafe extern "system" fn window_proc(
                 }) => {
                     show_login(hwnd, false);
                     show_control(hwnd, ID_SIGN_OUT, true);
+                    show_control(hwnd, ID_PUSH_SYNC, false);
                     let identity = email.unwrap_or(user_id);
                     set_status(
                         hwnd,
@@ -357,6 +413,55 @@ unsafe extern "system" fn window_proc(
                     set_status(
                         hwnd,
                         "Session fermée. Les données locales restent sur cet appareil.",
+                    );
+                }
+                Ok(AuthUiOutcome::SyncCompleted(summary)) => {
+                    show_login(hwnd, false);
+                    show_control(hwnd, ID_SIGN_OUT, true);
+                    show_control(hwnd, ID_PUSH_SYNC, true);
+                    let pull_status = match summary.pull_error.as_deref() {
+                        Some(error) => format!("Pull en erreur : {error}"),
+                        None => format!(
+                            "Pull : {} reçues, {} appliquées, {} protégées par Outbox, {} tombstones conservés, {} déjà à jour.",
+                            summary.pull.received,
+                            summary.pull.applied,
+                            summary.pull.skipped_pending,
+                            summary.pull.skipped_tombstone,
+                            summary.pull.stale
+                        ),
+                    };
+                    if summary.push.acknowledged == 0
+                        && summary.push.retry_scheduled == 0
+                        && summary.push.conflicts == 0
+                        && summary.pull.received == 0
+                        && summary.pull_error.is_none()
+                    {
+                        set_status(
+                            hwnd,
+                            "Réservations : aucun changement à envoyer ni nouvelle ligne distante à importer.",
+                        );
+                    } else {
+                        set_status(
+                            hwnd,
+                            &format!(
+                                "Réservations — Push ACK : {}, réessais : {}, conflits : {}. {}",
+                                summary.push.acknowledged,
+                                summary.push.retry_scheduled,
+                                summary.push.conflicts,
+                                pull_status
+                            ),
+                        );
+                    }
+                }
+                Ok(AuthUiOutcome::SyncFailed { error }) => {
+                    show_login(hwnd, false);
+                    show_control(hwnd, ID_SIGN_OUT, true);
+                    show_control(hwnd, ID_PUSH_SYNC, true);
+                    set_status(
+                        hwnd,
+                        &format!(
+                            "Synchronisation des réservations interrompue : {error}\nSession conservée. Les autres domaines PMS ne sont pas synchronisés."
+                        ),
                     );
                 }
                 Err(error) => {
@@ -390,6 +495,11 @@ fn start_auth_task_from_state(hwnd: Hwnd, task: AuthTask) {
 
 fn start_auth_task(hwnd: Hwnd, task: AuthTask, client: Option<SupabaseAuthClient>) {
     let hwnd_value = hwnd as usize;
+    let database = app_state()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .database
+        .clone();
     let spawn = thread::Builder::new()
         .name("appointment-auth".into())
         .spawn(move || {
@@ -415,33 +525,43 @@ fn start_auth_task(hwnd: Hwnd, task: AuthTask, client: Option<SupabaseAuthClient
                     Ok(Some(session)) => {
                         let user_id = session.user_id.clone();
                         let email = session.email.clone();
-                        match client.resolve_personal_workspace() {
-                            Ok(workspace) => Ok(AuthUiOutcome::Authenticated {
-                                user_id,
-                                email,
-                                workspace_id: workspace.id,
-                                workspace_name: workspace.name,
-                                role: workspace.role,
-                            }),
-                            Err(error) => Ok(AuthUiOutcome::WorkspaceUnavailable {
-                                user_id,
-                                email,
-                                error,
-                            }),
-                        }
+                        Ok(resolve_authenticated_outcome(
+                            &mut client,
+                            &database,
+                            user_id,
+                            email,
+                        ))
                     }
                     Ok(None) => Ok(AuthUiOutcome::NoSession),
                     Err(error) => Err(error),
                 },
                 AuthTask::SignIn { email, password } => {
                     let result = client.sign_in(&email, &password);
-                    map_auth_outcome(&mut client, result, &email)
+                    map_auth_outcome(&mut client, &database, result, &email)
                 }
                 AuthTask::SignUp { email, password } => {
                     let result = client.sign_up(&email, &password);
-                    map_auth_outcome(&mut client, result, &email)
+                    map_auth_outcome(&mut client, &database, result, &email)
                 }
                 AuthTask::SignOut => client.sign_out().map(|_| AuthUiOutcome::SignedOut),
+                AuthTask::SyncBookings {
+                    workspace_id,
+                    limit,
+                } => match database.as_ref() {
+                    Some(database) => match sync_bookings(
+                        &mut client,
+                        database.as_ref(),
+                        &workspace_id,
+                        limit,
+                        200,
+                    ) {
+                        Ok(summary) => Ok(AuthUiOutcome::SyncCompleted(summary)),
+                        Err(error) => Ok(AuthUiOutcome::SyncFailed { error }),
+                    },
+                    None => Ok(AuthUiOutcome::SyncFailed {
+                        error: "La base SQLite locale n’est pas disponible.".into(),
+                    }),
+                },
             };
             post_completion(
                 hwnd_value,
@@ -466,28 +586,69 @@ fn start_auth_task(hwnd: Hwnd, task: AuthTask, client: Option<SupabaseAuthClient
     }
 }
 
-fn map_auth_outcome(
+fn resolve_authenticated_outcome(
     client: &mut SupabaseAuthClient,
-    result: Result<AuthOutcome, String>,
-    submitted_email: &str,
-) -> Result<AuthUiOutcome, String> {
-    match result? {
-        AuthOutcome::Authenticated { user_id, email } => {
-            match client.resolve_personal_workspace() {
-                Ok(workspace) => Ok(AuthUiOutcome::Authenticated {
+    database: &Option<Arc<Mutex<PmsDatabase>>>,
+    user_id: String,
+    email: Option<String>,
+) -> AuthUiOutcome {
+    match client.resolve_personal_workspace() {
+        Ok(workspace) => {
+            let local_result = (|| -> Result<(), String> {
+                let database = database
+                    .as_ref()
+                    .ok_or_else(|| "La base SQLite locale n’est pas disponible.".to_string())?;
+                let local = database
+                    .lock()
+                    .map_err(|_| "Le verrou SQLite local est indisponible.".to_string())?;
+                local
+                    .ensure_workspace(&workspace.id, &user_id, &workspace.name)
+                    .map_err(|error| {
+                        format!("Impossible d’initialiser le workspace local : {error}")
+                    })?;
+                let owner_matches = local
+                    .workspace_is_owned_by(&workspace.id, &user_id)
+                    .map_err(|error| {
+                        format!("Impossible de vérifier le propriétaire local : {error}")
+                    })?;
+                if !owner_matches {
+                    return Err("Le workspace SQLite local appartient à un autre compte.".into());
+                }
+                Ok(())
+            })();
+            match local_result {
+                Ok(()) => AuthUiOutcome::Authenticated {
                     user_id,
                     email,
                     workspace_id: workspace.id,
                     workspace_name: workspace.name,
                     role: workspace.role,
-                }),
-                Err(error) => Ok(AuthUiOutcome::WorkspaceUnavailable {
+                },
+                Err(error) => AuthUiOutcome::WorkspaceUnavailable {
                     user_id,
                     email,
                     error,
-                }),
+                },
             }
         }
+        Err(error) => AuthUiOutcome::WorkspaceUnavailable {
+            user_id,
+            email,
+            error,
+        },
+    }
+}
+
+fn map_auth_outcome(
+    client: &mut SupabaseAuthClient,
+    database: &Option<Arc<Mutex<PmsDatabase>>>,
+    result: Result<AuthOutcome, String>,
+    submitted_email: &str,
+) -> Result<AuthUiOutcome, String> {
+    match result? {
+        AuthOutcome::Authenticated { user_id, email } => Ok(resolve_authenticated_outcome(
+            client, database, user_id, email,
+        )),
         AuthOutcome::EmailConfirmationRequired { .. } => Ok(AuthUiOutcome::ConfirmationRequired {
             email: submitted_email.to_string(),
         }),
@@ -635,12 +796,20 @@ fn show_login(hwnd: Hwnd, visible: bool) {
     }
     if visible {
         show_control(hwnd, ID_SIGN_OUT, false);
+        show_control(hwnd, ID_PUSH_SYNC, false);
     }
 }
 
 fn set_busy(hwnd: Hwnd, busy: bool) {
     unsafe {
-        for id in [ID_EMAIL, ID_PASSWORD, ID_SIGN_IN, ID_SIGN_UP, ID_SIGN_OUT] {
+        for id in [
+            ID_EMAIL,
+            ID_PASSWORD,
+            ID_SIGN_IN,
+            ID_SIGN_UP,
+            ID_SIGN_OUT,
+            ID_PUSH_SYNC,
+        ] {
             let control = GetDlgItem(hwnd, id as i32);
             if !control.is_null() {
                 EnableWindow(control, i32::from(!busy));

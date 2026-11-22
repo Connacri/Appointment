@@ -8,18 +8,19 @@ pub mod credential_vault;
 pub mod database;
 pub mod domain;
 pub mod supabase_auth;
+pub mod supabase_sync;
 mod win32;
 mod winhttp;
 
 fn main() {
-    let _database = match initialize_local_database() {
+    let database = match initialize_local_database() {
         Ok(database) => database,
         Err(error) => {
             win32::show_error(&format!("Local database initialization failed:\n{error}"));
             std::process::exit(1);
         }
     };
-    if let Err(error) = win32::run() {
+    if let Err(error) = win32::run(database) {
         win32::show_error(&error);
         std::process::exit(1);
     }
