@@ -28,6 +28,12 @@ The Win32 client provides native Supabase sign-in/sign-up, startup refresh-token
 
 After authentication, the client resolves the deterministic personal workspace (`workspace_id = auth user UUID`), creates it if absent, repairs its owner membership when permitted, and re-reads the workspace through the PostgREST relationship under RLS. A valid Auth session or local UUID is not treated as workspace authorization. If the RLS-backed read fails, the UI remains local-only and reports the reason. Shared workspaces are not auto-selected.
 
+## Native booking Outbox push
+
+The Rust sync service can push due local booking Outbox entries sequentially after re-verifying the personal workspace. It resolves each booking's resource under the authenticated JWT and refuses the push unless that resource is active, not deleted, and belongs to the verified workspace. Inserts are idempotently recovered after a lost response; updates and soft deletes use conditional `version` filters. The local Outbox is marked `synced` only after a returned server version is validated and committed to SQLite. Version mismatches and unsupported entities become terminal conflicts rather than blind overwrites.
+
+This is a push-only engine and is not yet connected to a native sync button or background scheduler. Remote pull, cursor persistence, tombstone reconciliation, multi-workspace selection and live Supabase integration tests remain incomplete.
+
 ## Configuration
 
 The default public Supabase project configuration matches the TypeScript client. For a custom project, set both `APPOINTMENT_SUPABASE_URL` and its matching `APPOINTMENT_SUPABASE_PUBLISHABLE_KEY`; overriding only the URL is rejected. A publishable key is public client configuration, not a service credential.
