@@ -42,7 +42,7 @@ export function supportsNativeLanDiscovery(): boolean {
 }
 
 /**
- * The Android bridge owns a stable installation UUID in SharedPreferences.
+ * The Android bridge owns a stable installation UUID in app-private noBackupFilesDir storage.
  * It shares only protocolVersion + peerId over IPv4 multicast; workspace data,
  * credentials and business records are never included in discovery packets.
  */
