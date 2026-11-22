@@ -233,9 +233,6 @@ impl Booking {
     pub fn validate(&self) -> Result<(), String> {
         if self.id.trim().is_empty() { return Err("booking.id is required".into()); }
         if self.resource_id.trim().is_empty() { return Err("booking.resource_id is required".into()); }
-        if self.guest_name.trim().chars().count() < 2 {
-            return Err("booking.guest_name must contain at least two characters".into());
-        }
         if !valid_date(&self.start_date) || !valid_date(&self.end_date) {
             return Err("booking dates must use YYYY-MM-DD".into());
         }
@@ -259,6 +256,9 @@ impl Booking {
         }
         let mut normalized = self.clone();
         normalized.normalize_occupants();
+        if normalized.guest_name.trim().chars().count() < 2 {
+            return Err("booking.guest_name must contain at least two characters".into());
+        }
         normalized.validate_occupants()
     }
 
@@ -301,8 +301,12 @@ impl Booking {
             json_count(metadata, "hotelAdults").or_else(|| json_count(metadata, "resortOccupants"))
         };
         let adults_count = self.adults.or(meta_adults).unwrap_or(1).max(1) as usize;
-        let children_count = self.children.or_else(|| json_count(metadata, "hotelChildren"))
-            .unwrap_or(0).max(0) as usize;
+        let children_count = if self.sector == "resort" {
+            self.children.unwrap_or(0).max(0) as usize
+        } else {
+            self.children.or_else(|| json_count(metadata, "hotelChildren"))
+                .unwrap_or(0).max(0) as usize
+        };
 
         let raw_adults = self.adult_guests.clone().unwrap_or_default();
         let raw_occupants = self.occupants_list.clone().unwrap_or_default();
@@ -358,6 +362,11 @@ impl Booking {
                 child_source.get(index).cloned().unwrap_or_default(),
                 adults_count + index, "child", false,
             ));
+        }
+        if let Some(primary) = adults.first() {
+            self.guest_name = first_nonempty(&[Some(self.guest_name.as_str()), Some(primary.full_name.as_str())]);
+            self.guest_phone = first_nonempty(&[Some(self.guest_phone.as_str()), Some(primary.phone.as_str())]);
+            self.guest_email = first_nonempty(&[Some(self.guest_email.as_str()), Some(primary.email.as_str())]);
         }
         self.adults = Some(adults_count as i64);
         self.children = Some(children_count as i64);
