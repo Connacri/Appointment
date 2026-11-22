@@ -121,8 +121,49 @@ public final class LanDiscoveryPlugin extends Plugin {
             result.put("discoveryOnly", true);
             call.resolve(result);
         } catch (Exception error) {
+            if (Build.VERSION.SDK_INT == 36
+                && !hasPermission("nearbyDevices")
+                && isLocalNetworkPermissionError(error)) {
+                permissionGranted = false;
+                requestPermissionForAlias("nearbyDevices", call, "nearbyDevicesCompatCallback");
+                return;
+            }
+            discoveryRequested = false;
+            permissionGranted = false;
             call.reject("La découverte LAN Appointment n'a pas pu démarrer : " + error.getMessage());
         }
+    }
+
+    @PermissionCallback
+    private void nearbyDevicesCompatCallback(PluginCall call) {
+        if (!discoveryRequested) {
+            call.reject("La découverte LAN a été annulée.");
+            return;
+        }
+        if (!hasPermission("nearbyDevices")) {
+            discoveryRequested = false;
+            permissionGranted = false;
+            call.reject("Autorisez Appareils à proximité pour rétablir l'accès LAN sur Android 16 en mode de compatibilité.");
+            return;
+        }
+        permissionGranted = true;
+        startForCall(call);
+    }
+
+    private boolean isLocalNetworkPermissionError(Exception error) {
+        Throwable current = error;
+        while (current != null) {
+            String message = current.getMessage();
+            if (current instanceof SecurityException
+                || (message != null
+                    && (message.toLowerCase().contains("eperm")
+                        || message.toLowerCase().contains("operation not permitted")
+                        || message.toLowerCase().contains("permission denied")))) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     @PluginMethod
@@ -174,11 +215,8 @@ public final class LanDiscoveryPlugin extends Plugin {
             && getContext().getApplicationInfo().targetSdkVersion >= 37) {
             return "localNetwork";
         }
-        // Android 16's opt-in local-network protection uses Nearby devices
-        // permission as the compatibility grant. Earlier releases do not gate LAN sockets.
-        if (Build.VERSION.SDK_INT >= 36) {
-            return "nearbyDevices";
-        }
+        // Android 16 normally grants local-network access to target SDK 36 apps.
+        // Its opt-in compatibility restriction is handled only after a socket denial.
         return null;
     }
 
