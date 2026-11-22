@@ -878,23 +878,35 @@ mod tests {
         let cursor = crate::database::SyncCursor {
             updated_at: "2026-11-22T12:30:00.123456+00:00".into(),
             entity_id: "a1b2c3d4-e5f6-47a8-9012-1234567890ab".into(),
+            server_version: 7,
         };
         let path = booking_pull_path(
             "b1b2c3d4-e5f6-47a8-9012-1234567890ab",
             Some(&cursor),
             200,
         );
-        assert!(path.contains("order=updated_at.asc,id.asc"));
+        assert!(path.contains("order=updated_at.asc,id.asc,version.asc"));
         assert!(path.contains("limit=200"));
         assert!(path.contains("updated_at.gt.2026-11-22T12%3A30%3A00%2E123456%2B00%3A00"));
         assert!(path.contains("id.gt.a1b2c3d4-e5f6-47a8-9012-1234567890ab"));
+        assert!(path.contains("version.gt.7"));
     }
 
     #[test]
-    fn composite_cursor_orders_same_timestamp_by_id() {
-        assert!(cursor_is_after("2026-11-22T12:00:00+00:00", "b", "2026-11-22T12:00:00+00:00", "a"));
-        assert!(!cursor_is_after("2026-11-22T12:00:00+00:00", "a", "2026-11-22T12:00:00+00:00", "b"));
-        assert!(cursor_is_after("2026-11-22T12:00:01+00:00", "a", "2026-11-22T12:00:00+00:00", "z"));
+    fn composite_cursor_orders_timestamp_id_and_server_version() {
+        let timestamp = "2026-11-22T12:00:00+00:00";
+        assert!(cursor_is_after(timestamp, "b", 1, timestamp, "a", 1));
+        assert!(!cursor_is_after(timestamp, "a", 1, timestamp, "b", 1));
+        assert!(cursor_is_after(timestamp, "a", 2, timestamp, "a", 1));
+        assert!(!cursor_is_after(timestamp, "a", 1, timestamp, "a", 2));
+        assert!(cursor_is_after(
+            "2026-11-22T12:00:01+00:00",
+            "a",
+            1,
+            timestamp,
+            "z",
+            99
+        ));
     }
 
     #[test]
