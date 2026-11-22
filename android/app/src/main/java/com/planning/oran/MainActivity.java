@@ -15,6 +15,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         captureIncomingIntent(getIntent());
         registerPlugin(VideoBubblePlugin.class);
+        registerPlugin(LanDiscoveryPlugin.class);
         super.onCreate(savedInstanceState);
     }
 
