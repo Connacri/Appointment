@@ -369,11 +369,25 @@ remain a conflict. No last-write-wins rule may silently discard concurrent booki
 stock or financial mutations. Concurrent delete/update operations are also conflicts,
 not automatic resurrection or deletion.
 
-This is a protocol foundation, not a claim that the LAN mesh is already operational.
-Durable event-log persistence must be atomic with local business writes; transport
-must authenticate node identities; discovery, anti-entropy, replay protection,
-workspace authorization, retention/checkpointing and UI conflict resolution must be
-implemented and tested before enabling P2P as a production sync mode.
+LAN discovery is implemented for the native Windows EXE and Android APK. Both
+endpoints advertise the same IPv4 multicast protocol (239.255.42.99:45871,
+protocol version 1, JSON fields protocolVersion and peerId). The announcement
+contains only a persisted installation UUID. It must never carry a workspace ID,
+user identity, credentials, access token or business payload. Browser-only web builds
+cannot open raw UDP sockets and are not directly discoverable.
+
+Discovery is not a trusted connection. It does not authenticate the peer, prove
+workspace membership, authorize a user, create a secure channel, exchange events or
+mark any data as synchronized. Android discovery pauses when the Activity is
+backgrounded. On Android 16 compatibility-mode tests, local-network access can be
+granted via Nearby devices; Android 17+ requires the runtime
+ACCESS_LOCAL_NETWORK permission.
+
+Before enabling P2P data synchronization in production, the implementation still
+requires encrypted and authenticated peer pairing, workspace-level authorization,
+durable event-log persistence atomic with local business writes, replay protection,
+bounded anti-entropy/checkpointing, tombstone retention, and domain-specific conflict
+resolution with UI workflows. Every one of these gates must be implemented and tested.
 
 **Partition invariant:** with no coordinator or quorum, independent peers may accept
 conflicting operations while disconnected. Appointment cannot guarantee globally
