@@ -294,9 +294,13 @@ public final class LanDiscoveryPlugin extends Plugin {
         } finally {
             activeSocket.close();
             synchronized (workerLock) {
-                if (socket == activeSocket) socket = null;
-                if (worker == Thread.currentThread()) worker = null;
-                releaseMulticastLock();
+                // A pause/resume can replace the socket before this worker exits.
+                // An obsolete worker must never release the new worker's multicast lock.
+                if (socket == activeSocket) {
+                    socket = null;
+                    if (worker == Thread.currentThread()) worker = null;
+                    releaseMulticastLock();
+                }
             }
         }
     }
