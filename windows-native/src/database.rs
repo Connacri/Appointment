@@ -141,7 +141,7 @@ impl PmsDatabase {
             idempotency_key,
             workspace_id,
             "booking",
-            &normalized_booking.id,
+            &normalized_normalized_booking.id,
             "upsert",
             Some(&payload),
         )? {
@@ -154,7 +154,7 @@ impl PmsDatabase {
                UNION ALL
                SELECT version FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2
              )",
-            params![workspace_id, normalized_booking.id], |row| row.get(0)
+            params![workspace_id, normalized_normalized_booking.id], |row| row.get(0)
         ).map_err(|e| e.to_string())?;
         tx.execute(
             "INSERT INTO bookings(workspace_id,id,resource_id,payload,version,updated_at)
@@ -163,7 +163,7 @@ impl PmsDatabase {
              payload=excluded.payload, version=excluded.version, updated_at=CURRENT_TIMESTAMP",
             params![
                 workspace_id,
-                normalized_booking.id,
+                normalized_normalized_booking.id,
                 normalized_booking.resource_id,
                 payload,
                 version
@@ -172,13 +172,13 @@ impl PmsDatabase {
         .map_err(|e| e.to_string())?;
         tx.execute(
             "DELETE FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2",
-            params![workspace_id, booking.id],
+            params![workspace_id, normalized_booking.id],
         )
         .map_err(|e| e.to_string())?;
         tx.execute(
             "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,payload)
              VALUES (?1,?2,?3,'booking',?4,'upsert',?5,?6)",
-            params![Uuid::new_v4().to_string(), idempotency_key, workspace_id, booking.id, version, payload],
+            params![Uuid::new_v4().to_string(), idempotency_key, workspace_id, normalized_booking.id, version, payload],
         ).map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())
     }
