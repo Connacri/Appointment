@@ -55,9 +55,7 @@ impl P2pEvent {
             (P2pOperation::Upsert, Some(Value::Object(_))) => {}
             (P2pOperation::Upsert, _) => return Err("P2P upsert requires an object payload"),
             (P2pOperation::Delete, None) => {}
-            (P2pOperation::Delete, Some(_)) => {
-                return Err("P2P delete must not contain a payload")
-            }
+            (P2pOperation::Delete, Some(_)) => return Err("P2P delete must not contain a payload"),
         }
         if self.clock.get(&self.node_id).copied() != Some(self.sequence) {
             return Err("P2P event clock must contain its own node sequence");
