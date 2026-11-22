@@ -1,11 +1,11 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { supportsNativeLanDiscovery } from '../services/p2p/LanDiscoveryBridge';
-
-interface PeerDetail {
-  peerId: string;
-  address: string;
-}
+import {
+  LanDiscovery,
+  startNativeLanDiscovery,
+  supportsNativeLanDiscovery,
+  type DiscoveredLanPeer,
+} from '../services/p2p/LanDiscoveryBridge';
 
 export const LanDiscoveryStatus: React.FC = () => {
   const { language } = useApp();
@@ -16,42 +16,64 @@ export const LanDiscoveryStatus: React.FC = () => {
   React.useEffect(() => {
     if (!supportsNativeLanDiscovery()) return;
 
-    const onStarted = () => {
-      setActive(true);
-      setError(null);
-    };
-    const onPeerFound = (event: Event) => {
-      const peer = (event as CustomEvent<PeerDetail>).detail;
-      if (!peer?.peerId || !peer.address) return;
-      setPeers((current) => ({ ...current, [peer.peerId]: peer.address }));
-    };
-    const onPeerExpired = (event: Event) => {
-      const detail = (event as CustomEvent<{ peerId: string }>).detail;
-      if (!detail?.peerId) return;
-      setPeers((current) => {
-        const next = { ...current };
-        delete next[detail.peerId];
-        return next;
-      });
-    };
-    const onError = (event: Event) => {
-      const detail = (event as CustomEvent<{ message?: string }>).detail;
-      setActive(false);
-      setError(detail?.message || 'LAN discovery is unavailable.');
-    };
+    let cancelled = false;
+    const subscriptions: Array<{ remove: () => Promise<void> }> = [];
 
-    window.addEventListener('appointment-p2p-discovery-started', onStarted);
-    window.addEventListener('appointment-p2p-peer-found', onPeerFound);
-    window.addEventListener('appointment-p2p-peer-expired', onPeerExpired);
-    window.addEventListener('appointment-p2p-discovery-error', onError);
+    void Promise.all([
+      LanDiscovery.addListener('peerFound', (peer: DiscoveredLanPeer) => {
+        if (!cancelled) {
+          setPeers((current) => ({ ...current, [peer.peerId]: peer.address }));
+        }
+      }),
+      LanDiscovery.addListener('peerExpired', (event) => {
+        if (!cancelled) {
+          setPeers((current) => {
+            const next = { ...current };
+            delete next[event.peerId];
+            return next;
+          });
+        }
+      }),
+      LanDiscovery.addListener('discoveryError', (detail) => {
+        if (!cancelled) {
+          setActive(false);
+          setError(detail.message || 'LAN discovery is unavailable.');
+        }
+      }),
+    ]).then(async (handles) => {
+      subscriptions.push(...handles);
+      if (cancelled) {
+        await Promise.all(handles.map((handle) => handle.remove()));
+        return;
+      }
+      try {
+        await startNativeLanDiscovery();
+        if (!cancelled) {
+          setActive(true);
+          setError(null);
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setActive(false);
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      }
+    }).catch((cause: unknown) => {
+      if (!cancelled) {
+        setActive(false);
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    });
 
     return () => {
-      window.removeEventListener('appointment-p2p-discovery-started', onStarted);
-      window.removeEventListener('appointment-p2p-peer-found', onPeerFound);
-      window.removeEventListener('appointment-p2p-peer-expired', onPeerExpired);
-      window.removeEventListener('appointment-p2p-discovery-error', onError);
+      cancelled = true;
+      subscriptions.forEach((handle) => { void handle.remove(); });
+      void LanDiscovery.stopDiscovery().catch(() => {
+        // The native plugin may already be shutting down with the Android activity.
+      });
     };
   }, []);
+
 
   if (!supportsNativeLanDiscovery()) return null;
 
