@@ -638,7 +638,10 @@ impl PmsDatabase {
         } else {
             None
         };
-        let tx = self.connection.unchecked_transaction().map_err(|e| e.to_string())?;
+        let tx = self
+            .connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
         ensure_workspace_exists(&tx, workspace_id)?;
 
         let has_local_outbox: bool = tx
@@ -711,8 +714,13 @@ impl PmsDatabase {
             )
             .map_err(|e| e.to_string())?;
         } else {
-            let payload = payload.as_deref().expect("live remote row payload was serialized");
-            let local_version = local_booking.map(|(version, _)| version).unwrap_or(1).max(1);
+            let payload = payload
+                .as_deref()
+                .expect("live remote row payload was serialized");
+            let local_version = local_booking
+                .map(|(version, _)| version)
+                .unwrap_or(1)
+                .max(1);
             tx.execute(
                 "INSERT INTO bookings(workspace_id,id,resource_id,payload,version,updated_at,server_version)
                  VALUES (?1,?2,?3,?4,?5,CURRENT_TIMESTAMP,?6)
@@ -1217,7 +1225,10 @@ mod tests {
             RemoteBookingApply::Stale
         );
         assert_eq!(
-            db.get_booking("w-1", "b-remote").unwrap().unwrap().guest_name,
+            db.get_booking("w-1", "b-remote")
+                .unwrap()
+                .unwrap()
+                .guest_name,
             "Remote Guest"
         );
     }
@@ -1254,19 +1265,11 @@ mod tests {
             RemoteBookingApply::Applied
         );
         assert_eq!(
-            db.apply_remote_booking(
-                "w-1",
-                &remote,
-                5,
-                Some("2026-11-22T12:00:00+00:00")
-            )
-            .unwrap(),
+            db.apply_remote_booking("w-1", &remote, 5, Some("2026-11-22T12:00:00+00:00"))
+                .unwrap(),
             RemoteBookingApply::Applied
         );
-        assert!(db
-            .get_booking("w-1", "b-remote-delete")
-            .unwrap()
-            .is_none());
+        assert!(db.get_booking("w-1", "b-remote-delete").unwrap().is_none());
 
         let resurrected = booking("b-remote-delete");
         assert_eq!(
@@ -1293,38 +1296,14 @@ mod tests {
     #[test]
     fn sync_cursor_is_monotonic_for_timestamp_and_id_ties() {
         let db = database();
-        db.store_sync_cursor(
-            "w-1",
-            "bookings",
-            "2026-11-22T12:00:00+00:00",
-            "a1",
-            5,
-        )
-        .unwrap();
-        db.store_sync_cursor(
-            "w-1",
-            "bookings",
-            "2026-11-22T12:00:00+00:00",
-            "a1",
-            7,
-        )
-        .unwrap();
-        db.store_sync_cursor(
-            "w-1",
-            "bookings",
-            "2026-11-22T12:00:00+00:00",
-            "a3",
-            1,
-        )
-        .unwrap();
-        db.store_sync_cursor(
-            "w-1",
-            "bookings",
-            "2026-11-22T11:59:59+00:00",
-            "zz",
-            99,
-        )
-        .unwrap();
+        db.store_sync_cursor("w-1", "bookings", "2026-11-22T12:00:00+00:00", "a1", 5)
+            .unwrap();
+        db.store_sync_cursor("w-1", "bookings", "2026-11-22T12:00:00+00:00", "a1", 7)
+            .unwrap();
+        db.store_sync_cursor("w-1", "bookings", "2026-11-22T12:00:00+00:00", "a3", 1)
+            .unwrap();
+        db.store_sync_cursor("w-1", "bookings", "2026-11-22T11:59:59+00:00", "zz", 99)
+            .unwrap();
         let cursor = db.sync_cursor("w-1", "bookings").unwrap().unwrap();
         assert_eq!(cursor.updated_at, "2026-11-22T12:00:00+00:00");
         assert_eq!(cursor.entity_id, "a3");
@@ -1336,21 +1315,14 @@ mod tests {
     fn remote_delete_is_not_allowed_to_override_pending_local_update() {
         let mut db = database();
         let local = booking("b-delete-pending");
-        db.upsert_booking("w-1", &local, "idem-pending-delete").unwrap();
+        db.upsert_booking("w-1", &local, "idem-pending-delete")
+            .unwrap();
         assert_eq!(
-            db.apply_remote_booking(
-                "w-1",
-                &local,
-                99,
-                Some("2026-11-22T13:00:00+00:00")
-            )
-            .unwrap(),
+            db.apply_remote_booking("w-1", &local, 99, Some("2026-11-22T13:00:00+00:00"))
+                .unwrap(),
             RemoteBookingApply::SkippedPending
         );
-        assert!(db
-            .get_booking("w-1", "b-delete-pending")
-            .unwrap()
-            .is_some());
+        assert!(db.get_booking("w-1", "b-delete-pending").unwrap().is_some());
     }
 
     #[test]
