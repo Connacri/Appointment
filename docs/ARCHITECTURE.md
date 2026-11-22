@@ -134,8 +134,9 @@ exchange, not database-file sharing.
   must be surfaced as conflicts for explicit business resolution; the product
   must not report them as globally conflict-free.
 
-The protocol foundation is covered by `tests/p2pProtocol.test.ts` and Rust unit
-tests. LAN discovery, authenticated peer transport, durable event persistence,
-anti-entropy, domain-specific conflict workflows and browser companion integration
-remain separate implementation gates; do not label P2P synchronization operational
-until those gates are verified.
+The event protocol is covered by `tests/p2pProtocol.test.ts` and Rust unit tests;
+the cross-platform discovery envelope is covered by Rust unit tests and the Android
+native build gate. Authenticated peer transport, encrypted pairing, durable event
+persistence, anti-entropy, domain-specific conflict workflows and browser companion
+integration remain implementation gates. Do not label P2P data synchronization
+operational until those gates are implemented and verified.
