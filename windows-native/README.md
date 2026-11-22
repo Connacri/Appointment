@@ -6,29 +6,34 @@ Independent Windows desktop client built with Rust and Win32. No browser, Edge, 
 
 Install the Rust MSVC toolchain and Visual Studio Build Tools C++ workload:
 
-```powershell
+~~~powershell
 cargo fmt --all -- --check
 cargo test --locked
 cargo clippy --all-targets --locked -- -D warnings
 cargo build --release --locked
-```
+~~~
 
-The committed `Cargo.lock` pins the dependency graph; the Windows pipeline uses `--locked` for tests, Clippy and release builds. The MSVC runtime is statically linked. The output is `target/release/appointment-pms-native.exe`; Inno Setup produces the installer.
+The committed Cargo.lock pins the dependency graph; the Windows pipeline uses --locked for tests, Clippy and release builds. The MSVC runtime is statically linked. The output is target/release/appointment-pms-native.exe; Inno Setup produces the installer.
 
 ## Implemented native foundation
 
 - Direct Win32 window and message loop.
 - Rust domain model for PMS bookings, with input validation.
-- SQLite database migrations and workspace-scoped booking persistence under `%LOCALAPPDATA%\\Connacri\\Appointment`.
-- Exact money representation using integer minor units plus a validated ISO currency code.
+- SQLite database migrations and workspace-scoped booking persistence under %LOCALAPPDATA%\Connacri\Appointment.
+- TypeScript-compatible booking amounts retained in major units, with explicit currency-exponent conversion to integer minor units.
 - Atomic booking + Outbox writes; atomic delete + tombstone + Outbox writes.
 - Unique idempotency keys and bounded, workspace-scoped pagination.
-- Automated tests for validation, atomicity, workspace isolation, tombstones and idempotency.
+- Windows Credential Manager vault for Supabase refresh tokens, scoped to the authenticated user UUID.
+- Automated tests for validation, atomicity, workspace isolation, tombstones, idempotency, and credential-target/token constraints.
 
 ## Not yet implemented
 
-Supabase authentication/remote synchronization, conflict resolution, full PMS entities and screens, CardLock MDB import, USB/HID hardware, printing and reports. The current Win32 shell remains a foundation and does not claim feature parity with the React client.
+Supabase login/refresh HTTP flows, access-token lifecycle, authenticated workspace membership resolution, remote synchronization, conflict resolution, full PMS entities and screens, CardLock MDB import, USB/HID hardware, printing and reports. The current Win32 shell remains a foundation and does not claim feature parity with the React client.
 
 ## Data compatibility
 
-The Rust booking model is a deliberately explicit first slice of the existing TypeScript `TimelineBooking` contract. Do not import/export production records until a versioned compatibility mapper covers all existing optional booking fields, occupant identity fields, payments, extras, currencies, modification history and legacy aliases. Never sync demo records.
+The Rust booking model is a deliberately explicit first slice of the existing TypeScript TimelineBooking contract. Do not import/export production records until a versioned compatibility mapper covers all existing optional booking fields, occupant identity fields, payments, extras, currencies, modification history and legacy aliases. Never sync demo records.
+
+## Credential handling
+
+Only the Supabase refresh token is eligible for persistent credential storage, and it is stored through the current Windows user's Credential Manager generic-credential API. The refresh-token target is namespaced by the Supabase auth user UUID. Access tokens remain transient runtime data; passwords, Supabase service-role keys and database connection strings must never be persisted by this vault. The native client must continue to use only a public publishable/anon key for client-side Supabase requests.

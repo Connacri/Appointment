@@ -3,6 +3,8 @@
 #[cfg(not(target_os = "windows"))]
 compile_error!("Appointment Native is a Windows-only application.");
 
+pub mod booking_mapper;
+pub mod credential_vault;
 pub mod database;
 pub mod domain;
 mod win32;

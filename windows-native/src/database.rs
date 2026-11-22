@@ -127,11 +127,13 @@ impl PmsDatabase {
         booking: &Booking,
         idempotency_key: &str,
     ) -> Result<(), String> {
-        booking.validate()?;
+        let mut normalized_booking = booking.clone();
+        normalized_booking.normalize_occupants();
+        normalized_booking.validate()?;
         if idempotency_key.trim().is_empty() {
             return Err("idempotency_key is required".into());
         }
-        let payload = serde_json::to_string(booking).map_err(|e| e.to_string())?;
+        let payload = serde_json::to_string(&normalized_booking).map_err(|e| e.to_string())?;
         let tx = self.connection.transaction().map_err(|e| e.to_string())?;
         ensure_workspace_exists(&tx, workspace_id)?;
         if check_idempotency(
@@ -139,7 +141,7 @@ impl PmsDatabase {
             idempotency_key,
             workspace_id,
             "booking",
-            &booking.id,
+            &normalized_booking.id,
             "upsert",
             Some(&payload),
         )? {
@@ -152,7 +154,7 @@ impl PmsDatabase {
                UNION ALL
                SELECT version FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2
              )",
-            params![workspace_id, booking.id], |row| row.get(0)
+            params![workspace_id, normalized_booking.id], |row| row.get(0)
         ).map_err(|e| e.to_string())?;
         tx.execute(
             "INSERT INTO bookings(workspace_id,id,resource_id,payload,version,updated_at)
@@ -161,8 +163,8 @@ impl PmsDatabase {
              payload=excluded.payload, version=excluded.version, updated_at=CURRENT_TIMESTAMP",
             params![
                 workspace_id,
-                booking.id,
-                booking.resource_id,
+                normalized_booking.id,
+                normalized_booking.resource_id,
                 payload,
                 version
             ],
@@ -170,13 +172,13 @@ impl PmsDatabase {
         .map_err(|e| e.to_string())?;
         tx.execute(
             "DELETE FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2",
-            params![workspace_id, booking.id],
+            params![workspace_id, normalized_booking.id],
         )
         .map_err(|e| e.to_string())?;
         tx.execute(
             "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,payload)
              VALUES (?1,?2,?3,'booking',?4,'upsert',?5,?6)",
-            params![Uuid::new_v4().to_string(), idempotency_key, workspace_id, booking.id, version, payload],
+            params![Uuid::new_v4().to_string(), idempotency_key, workspace_id, normalized_booking.id, version, payload],
         ).map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())
     }
@@ -407,11 +409,10 @@ mod tests {
             start_date: "2026-11-21".into(),
             end_date: "2026-11-23".into(),
             status: BookingStatus::Confirmed,
-            total_price_minor: Some(1_000_000),
-            currency_code: Some("DZD".into()),
+            total_price: Some(10_000.0),
+            payment_currency: Some("DZD".into()),
             payment_status: "pending".into(),
-            notes: None,
-            extra_fields: std::collections::BTreeMap::new(),
+            ..Booking::default()
         }
     }
 
@@ -428,6 +429,43 @@ mod tests {
         db.upsert_booking("w-1", &booking("b-1"), "idem-1").unwrap();
         assert!(db.get_booking("w-1", "b-1").unwrap().is_some());
         assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn sqlite_and_outbox_store_the_normalized_occupant_contract() {
+        let mut db = database();
+        let mut item = booking("b-family");
+        item.guest_phone.clear();
+        item.adults = Some(2);
+        item.adult_guests = Some(vec![
+            crate::domain::BookingOccupant {
+                full_name: "Primary Guest".into(),
+                phone: "+213 550 11 22 33".into(),
+                document_type: "cni".into(),
+                document_number: "12345678".into(),
+                ..crate::domain::BookingOccupant::default()
+            },
+            crate::domain::BookingOccupant {
+                full_name: "Second Guest".into(),
+                document_type: "passport".into(),
+                document_number: "P887766".into(),
+                ..crate::domain::BookingOccupant::default()
+            },
+        ]);
+
+        db.upsert_booking("w-1", &item, "idem-family").unwrap();
+        let restored = db.get_booking("w-1", "b-family").unwrap().unwrap();
+        assert_eq!(restored.adults, Some(2));
+        assert_eq!(restored.occupants_list.as_ref().unwrap().len(), 2);
+        assert_eq!(restored.guest_name, "Guest"); // Existing non-empty primary scalar remains authoritative.
+        assert_eq!(restored.guest_phone, "+213 550 11 22 33");
+
+        let outbox = db.pending_outbox("w-1", 10).unwrap();
+        let payload: serde_json::Value =
+            serde_json::from_str(outbox[0].payload.as_deref().unwrap()).unwrap();
+        assert_eq!(payload["adults"], 2);
+        assert_eq!(payload["occupantsList"].as_array().unwrap().len(), 2);
+        assert_eq!(payload["occupantsList"][1]["documentNumber"], "P887766");
     }
 
     #[test]
