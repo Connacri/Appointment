@@ -77,6 +77,7 @@ impl HttpsEndpoint {
     }
 }
 
+#[derive(Debug)]
 pub struct HttpResponse { pub status: u32, pub body: Vec<u8> }
 pub struct WinHttpTransport { endpoint: HttpsEndpoint }
 impl WinHttpTransport {

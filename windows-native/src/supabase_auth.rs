@@ -7,9 +7,8 @@ use crate::credential_vault;
 use crate::winhttp::{HttpResponse, WinHttpTransport};
 
 pub const DEFAULT_SUPABASE_URL: &str = "https://vkmgakmujipnpjlawjqm.supabase.co";
-pub const DEFAULT_SUPABASE_PUBLISHABLE_KEY: &str = "sb_publishable_yIVkxo_x--f6FWt5zua1w_GzqI5XNv";
+pub const DEFAULT_SUPABASE_PUBLISHABLE_KEY: &str = "sb_publishable_yIVkxXo_x--f6FWt5zua1w_GzqI5XNv";
 
-#[derive(Clone)]
 pub struct AuthSession {
     pub user_id: String,
     pub email: Option<String>,
@@ -22,7 +21,7 @@ impl AuthSession {
     }
 }
 pub enum AuthOutcome {
-    Authenticated(AuthSession),
+    Authenticated { user_id: String, email: Option<String> },
     EmailConfirmationRequired { user_id: Option<String> },
 }
 
@@ -74,7 +73,7 @@ impl SupabaseAuthClient {
         let body = json!({ "refresh_token": refresh_token });
         let response = self.post("/auth/v1/token?grant_type=refresh_token", &body, None)?;
         match self.install_token_response(response, Some(&user_id))? {
-            AuthOutcome::Authenticated(_) => Ok(self.session.as_ref()),
+            AuthOutcome::Authenticated { .. } => Ok(self.session.as_ref()),
             AuthOutcome::EmailConfirmationRequired { .. } => Err("Supabase refresh returned no authenticated session.".into()),
         }
     }
@@ -88,8 +87,10 @@ impl SupabaseAuthClient {
             .ok_or_else(|| "The active Supabase refresh token is missing.".to_string())?;
         let body = json!({ "refresh_token": refresh_token });
         let response = self.post("/auth/v1/token?grant_type=refresh_token", &body, None)?;
-        self.install_token_response(response, Some(&user_id))?;
-        Ok(true)
+        match self.install_token_response(response, Some(&user_id))? {
+            AuthOutcome::Authenticated { .. } => Ok(true),
+            AuthOutcome::EmailConfirmationRequired { .. } => Err("Supabase refresh returned no authenticated session.".into()),
+        }
     }
     pub fn sign_out(&mut self) -> Result<(), String> {
         let user_id = self.session.as_ref().map(|session| session.user_id.clone())
@@ -131,7 +132,7 @@ impl SupabaseAuthClient {
         credential_vault::store_active_user_id(&user_id)?;
         let session = AuthSession { user_id, email: user.email, access_token, expires_at };
         self.session = Some(session.clone());
-        Ok(AuthOutcome::Authenticated(session))
+        Ok(AuthOutcome::Authenticated { user_id: session.user_id, email: session.email })
     }
     fn post(&self, path: &str, body: &serde_json::Value, bearer: Option<&str>) -> Result<HttpResponse, String> {
         let bytes = serde_json::to_vec(body).map_err(|error| format!("Could not serialize Supabase request: {error}"))?;
