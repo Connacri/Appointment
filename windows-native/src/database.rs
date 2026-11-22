@@ -83,7 +83,28 @@ impl PmsDatabase {
              );
              INSERT OR IGNORE INTO schema_migrations(version) VALUES (1);
              COMMIT;"
-        )
+        )?;
+
+        // Version 2 indexes canonical camelCase payloads while retaining
+        // compatibility with rows written by the original snake_case slice.
+        let has_v2: bool = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 2)",
+            [],
+            |row| row.get(0),
+        )?;
+        if !has_v2 {
+            self.connection.execute_batch(
+                "BEGIN IMMEDIATE;
+                 DROP INDEX IF EXISTS idx_bookings_workspace_start;
+                 CREATE INDEX idx_bookings_workspace_start
+                   ON bookings(workspace_id,
+                     COALESCE(json_extract(payload, '$.startDate'),
+                              json_extract(payload, '$.start_date')));
+                 INSERT OR IGNORE INTO schema_migrations(version) VALUES (2);
+                 COMMIT;"
+            )?;
+        }
+        Ok(())
     }
 
     pub fn ensure_workspace(
@@ -246,7 +267,7 @@ impl PmsDatabase {
         limit: u32,
     ) -> rusqlite::Result<Vec<Booking>> {
         let mut statement = self.connection.prepare(
-            "SELECT payload FROM bookings WHERE workspace_id=?1 ORDER BY json_extract(payload, '$.start_date'), id LIMIT ?2 OFFSET ?3"
+            "SELECT payload FROM bookings WHERE workspace_id=?1 ORDER BY COALESCE(json_extract(payload, '$.startDate'), json_extract(payload, '$.start_date')), id LIMIT ?2 OFFSET ?3"
         )?;
         let rows = statement.query_map(params![workspace_id, limit.min(500), offset], |row| {
             let payload: String = row.get(0)?;
@@ -390,6 +411,7 @@ mod tests {
             currency_code: "DZD".into(),
             payment_status: "pending".into(),
             notes: None,
+            extra_fields: std::collections::BTreeMap::new(),
         }
     }
 
