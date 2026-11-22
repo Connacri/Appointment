@@ -977,7 +977,8 @@ mod tests {
     #[test]
     fn local_workspace_owner_must_match_authenticated_account() {
         let db = database();
-        db.ensure_workspace("w-owner", "u-owner", "Personal").unwrap();
+        db.ensure_workspace("w-owner", "u-owner", "Personal")
+            .unwrap();
         assert!(db.workspace_is_owned_by("w-owner", "u-owner").unwrap());
         assert!(!db.workspace_is_owned_by("w-owner", "u-other").unwrap());
         assert!(!db.workspace_is_owned_by("w-missing", "u-owner").unwrap());
