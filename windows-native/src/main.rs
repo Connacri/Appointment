@@ -91,7 +91,9 @@ fn initialize_node_identity(data_dir: &std::path::Path) -> Result<String, String
         }
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
             let value = std::fs::read_to_string(&identity_path)
-                .map_err(|read_error| format!("Cannot read concurrently created P2P identity: {read_error}"))?;
+                .map_err(|read_error| {
+                    format!("Cannot read concurrently created P2P identity: {read_error}")
+                })?;
             let normalized = uuid::Uuid::parse_str(value.trim())
                 .map_err(|_| "Concurrently created P2P node identity is invalid.".to_string())?;
             Ok(normalized.hyphenated().to_string())
