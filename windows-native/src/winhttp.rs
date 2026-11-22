@@ -214,6 +214,20 @@ impl WinHttpTransport {
         self.request("POST", path, api_key, bearer_token, Some(prefer), body)
     }
 
+    pub fn patch_with_prefer(
+        &self,
+        path: &str,
+        api_key: &str,
+        bearer_token: Option<&str>,
+        prefer: &str,
+        body: &[u8],
+    ) -> Result<HttpResponse, String> {
+        if prefer.contains('\r') || prefer.contains('\n') {
+            return Err("Invalid Supabase Prefer header.".into());
+        }
+        self.request("PATCH", path, api_key, bearer_token, Some(prefer), body)
+    }
+
     pub fn get(
         &self,
         path: &str,
