@@ -810,6 +810,62 @@ mod tests {
     }
 
     #[test]
+    fn local_schema_v3_tracks_server_versions_and_conflicts() {
+        let db = database();
+        let outbox_sql: String = db
+            .connection
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='outbox'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let version: i64 = db
+            .connection
+            .query_row(
+                "SELECT MAX(version) FROM schema_migrations",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, 3);
+        assert!(outbox_sql.contains("'conflict'"));
+    }
+
+    #[test]
+    fn delete_outbox_carries_the_last_acknowledged_server_version() {
+        let mut db = database();
+        db.upsert_booking("w-1", &booking("b-server-version"), "idem-create")
+            .unwrap();
+        let created = db.pending_outbox("w-1", 1).unwrap().remove(0);
+        assert_eq!(created.base_server_version, 0);
+        assert!(db
+            .acknowledge_outbox("w-1", &created.id, 12)
+            .unwrap());
+
+        assert!(db
+            .delete_booking("w-1", "b-server-version", "idem-delete")
+            .unwrap());
+        let deleted = db.pending_outbox("w-1", 1).unwrap().remove(0);
+        assert_eq!(deleted.operation, "delete");
+        assert_eq!(deleted.base_server_version, 12);
+
+        assert!(db
+            .acknowledge_outbox("w-1", &deleted.id, 13)
+            .unwrap());
+        let server_version: i64 = db
+            .connection
+            .query_row(
+                "SELECT server_version FROM tombstones
+                 WHERE workspace_id='w-1' AND entity='booking' AND entity_id='b-server-version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(server_version, 13);
+    }
+
+    #[test]
     fn recreation_keeps_version_monotonic_after_tombstone() {
         let mut db = database();
         let item = booking("b-1");
