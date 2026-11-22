@@ -89,7 +89,9 @@ impl SupabaseAuthClient {
             self.session = None;
             return Ok(None);
         };
-        let Some(refresh_token) = credential_vault::read_refresh_token(&self.project_scope, &user_id)? else {
+        let Some(refresh_token) =
+            credential_vault::read_refresh_token(&self.project_scope, &user_id)?
+        else {
             credential_vault::delete_active_user_id(&self.project_scope)?;
             self.session = None;
             return Ok(None);
