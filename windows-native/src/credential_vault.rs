@@ -7,7 +7,7 @@ const CRED_PERSIST_LOCAL_MACHINE: u32 = 2;
 const ERROR_NOT_FOUND: u32 = 1168;
 const CRED_MAX_CREDENTIAL_BLOB_SIZE: usize = 5 * 512;
 const TARGET_PREFIX: &str = "Connacri/Appointment/Supabase/refresh-token";
-const ACTIVE_USER_TARGET: &str = "Connacri/Appointment/Supabase/active-user-id";
+const ACTIVE_USER_PREFIX: &str = "Connacri/Appointment/Supabase/active-user-id";
 
 #[repr(C)]
 #[derive(Default)]
@@ -56,15 +56,15 @@ impl Drop for CredentialGuard {
     }
 }
 
-pub fn store_refresh_token(user_id: &str, refresh_token: &str) -> Result<(), String> {
-    let target = credential_target(user_id)?;
+pub fn store_refresh_token(project_scope: &str, user_id: &str, refresh_token: &str) -> Result<(), String> {
+    let target = credential_target(project_scope, user_id)?;
     write_credential(
         &target,
         validate_blob(refresh_token.as_bytes(), "refresh token")?,
     )
 }
-pub fn read_refresh_token(user_id: &str) -> Result<Option<String>, String> {
-    let target = credential_target(user_id)?;
+pub fn read_refresh_token(project_scope: &str, user_id: &str) -> Result<Option<String>, String> {
+    let target = credential_target(project_scope, user_id)?;
     let Some(bytes) = read_credential(&target)? else {
         return Ok(None);
     };
@@ -73,25 +73,26 @@ pub fn read_refresh_token(user_id: &str) -> Result<Option<String>, String> {
     validate_blob(token.as_bytes(), "refresh token")?;
     Ok(Some(token))
 }
-pub fn delete_refresh_token(user_id: &str) -> Result<(), String> {
-    delete_credential(&credential_target(user_id)?)
+pub fn delete_refresh_token(project_scope: &str, user_id: &str) -> Result<(), String> {
+    delete_credential(&credential_target(project_scope, user_id)?)
 }
 
 /// Stores only the non-secret UUID of the account selected for session restoration.
-pub fn store_active_user_id(user_id: &str) -> Result<(), String> {
+pub fn store_active_user_id(project_scope: &str, user_id: &str) -> Result<(), String> {
     let normalized = normalize_user_id(user_id)?;
-    write_credential(ACTIVE_USER_TARGET, normalized.as_bytes())
+    write_credential(&active_user_target(project_scope)?, normalized.as_bytes())
 }
-pub fn read_active_user_id() -> Result<Option<String>, String> {
-    let Some(bytes) = read_credential(ACTIVE_USER_TARGET)? else {
+pub fn read_active_user_id(project_scope: &str) -> Result<Option<String>, String> {
+    let target = active_user_target(project_scope)?;
+    let Some(bytes) = read_credential(&target)? else {
         return Ok(None);
     };
     let value = String::from_utf8(bytes)
         .map_err(|_| "Stored active Supabase user id is not valid UTF-8.".to_string())?;
     normalize_user_id(&value).map(Some)
 }
-pub fn delete_active_user_id() -> Result<(), String> {
-    delete_credential(ACTIVE_USER_TARGET)
+pub fn delete_active_user_id(project_scope: &str) -> Result<(), String> {
+    delete_credential(&active_user_target(project_scope)?)
 }
 
 fn write_credential(target: &str, bytes: &[u8]) -> Result<(), String> {
@@ -159,8 +160,19 @@ fn delete_credential(target: &str) -> Result<(), String> {
         "Windows Credential Manager could not delete the credential (Win32 error {error})."
     ))
 }
-fn credential_target(user_id: &str) -> Result<String, String> {
-    Ok(format!("{TARGET_PREFIX}/{}", normalize_user_id(user_id)?))
+fn credential_target(project_scope: &str, user_id: &str) -> Result<String, String> {
+    validate_project_scope(project_scope)?;
+    Ok(format!("{TARGET_PREFIX}/{project_scope}/{}", normalize_user_id(user_id)?))
+}
+fn active_user_target(project_scope: &str) -> Result<String, String> {
+    validate_project_scope(project_scope)?;
+    Ok(format!("{ACTIVE_USER_PREFIX}/{project_scope}"))
+}
+fn validate_project_scope(project_scope: &str) -> Result<(), String> {
+    if project_scope.len() != 16 || !project_scope.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) {
+        return Err("A normalized 16-character Supabase project scope is required.".into());
+    }
+    Ok(())
 }
 fn normalize_user_id(user_id: &str) -> Result<String, String> {
     Uuid::parse_str(user_id)
@@ -185,11 +197,21 @@ mod tests {
     use super::*;
     const USER_ID: &str = "A1B2C3D4-E5F6-47A8-9012-1234567890AB";
     #[test]
-    fn credential_target_is_scoped_and_normalized_by_user_uuid() {
+    fn credential_target_is_scoped_by_project_and_user_uuid() {
         assert_eq!(
-            credential_target(USER_ID).unwrap(),
-            "Connacri/Appointment/Supabase/refresh-token/a1b2c3d4-e5f6-47a8-9012-1234567890ab"
+            credential_target("0123456789abcdef", USER_ID).unwrap(),
+            "Connacri/Appointment/Supabase/refresh-token/0123456789abcdef/a1b2c3d4-e5f6-47a8-9012-1234567890ab"
         );
+        assert_ne!(
+            credential_target("fedcba9876543210", USER_ID).unwrap(),
+            credential_target("0123456789abcdef", USER_ID).unwrap()
+        );
+    }
+    #[test]
+    fn project_scope_must_be_normalized_hex() {
+        assert!(validate_project_scope("0123456789abcdef").is_ok());
+        assert!(validate_project_scope("not-a-project").is_err());
+        assert!(validate_project_scope("ABCDEF0123456789").is_err());
     }
     #[test]
     fn active_user_id_is_normalized_without_exposing_a_secret() {
