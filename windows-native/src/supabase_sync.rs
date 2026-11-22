@@ -271,9 +271,7 @@ pub fn pull_bookings(
                 .map_err(|error| format!("Could not merge remote booking: {error}"))?;
             match outcome {
                 crate::database::RemoteBookingApply::Applied => summary.applied += 1,
-                crate::database::RemoteBookingApply::SkippedPending => {
-                    summary.skipped_pending += 1
-                }
+                crate::database::RemoteBookingApply::SkippedPending => summary.skipped_pending += 1,
                 crate::database::RemoteBookingApply::SkippedTombstone => {
                     summary.skipped_tombstone += 1
                 }
@@ -880,11 +878,7 @@ mod tests {
             entity_id: "a1b2c3d4-e5f6-47a8-9012-1234567890ab".into(),
             server_version: 7,
         };
-        let path = booking_pull_path(
-            "b1b2c3d4-e5f6-47a8-9012-1234567890ab",
-            Some(&cursor),
-            200,
-        );
+        let path = booking_pull_path("b1b2c3d4-e5f6-47a8-9012-1234567890ab", Some(&cursor), 200);
         assert!(path.contains("order=updated_at.asc,id.asc,version.asc"));
         assert!(path.contains("limit=200"));
         assert!(path.contains("updated_at.gt.2026-11-22T12%3A30%3A00%2E123456%2B00%3A00"));
@@ -930,7 +924,13 @@ mod tests {
             ..Booking::default()
         };
         booking.normalize_occupants();
-        let mut row = to_supabase_booking_row(&booking, workspace_id, "d1b2c3d4-e5f6-47a8-9012-1234567890ab", None).unwrap();
+        let mut row = to_supabase_booking_row(
+            &booking,
+            workspace_id,
+            "d1b2c3d4-e5f6-47a8-9012-1234567890ab",
+            None,
+        )
+        .unwrap();
         row["version"] = json!(9);
         row["updated_at"] = json!("2026-11-22T12:00:00+00:00");
         row["deleted_at"] = Value::Null;
