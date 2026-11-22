@@ -344,6 +344,7 @@ public final class LanDiscoveryPlugin extends Plugin {
         final byte[] receiveBuffer = new byte[MAX_PACKET_BYTES + 1];
         final Map<String, PeerSeen> lastSeen = new HashMap<>();
         long nextAnnouncement = 0L;
+        String failureMessage = null;
 
         try {
             while (workerGeneration == generation && !activeSocket.isClosed()) {
@@ -407,9 +408,7 @@ public final class LanDiscoveryPlugin extends Plugin {
             }
         } catch (Exception error) {
             if (workerGeneration == generation) {
-                JSObject detail = new JSObject();
-                detail.put("message", error.getMessage() == null ? "Erreur socket LAN." : error.getMessage());
-                notifyListeners("discoveryError", detail);
+                failureMessage = error.getMessage() == null ? "Erreur socket LAN." : error.getMessage();
             }
         } finally {
             activeSocket.close();
@@ -422,6 +421,14 @@ public final class LanDiscoveryPlugin extends Plugin {
                     releaseMulticastLock();
                 }
             }
+        }
+
+        // Notify only after the failed worker has fully released its socket and lock.
+        // The UI may immediately retry/request Android 16 compatibility permission.
+        if (failureMessage != null && workerGeneration == generation) {
+            JSObject detail = new JSObject();
+            detail.put("message", failureMessage);
+            notifyListeners("discoveryError", detail);
         }
     }
 
