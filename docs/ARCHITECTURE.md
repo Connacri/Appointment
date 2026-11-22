@@ -110,6 +110,10 @@ exchange, not database-file sharing.
   every 3 seconds; peers expire after 12 seconds without a heartbeat. Installation
   UUIDs are persisted locally (Windows under the user's Appointment AppData folder,
   Android in app-private noBackupFilesDir storage, excluded from Android Auto Backup).
+- Discovery is link-local by design: TTL 1 prevents router traversal. Both
+  devices must be on the same IPv4 multicast-capable LAN segment; guest Wi-Fi
+  client isolation, VLAN separation, multicast filtering or host firewalls can
+  block discovery and must be addressed by the network administrator.
 - Discovery publishes no workspace ID, account, credential, business data or
   listening port. A found address is an untrusted candidate only: it does not
   establish pairing, membership, authorization, encryption or a data connection.
