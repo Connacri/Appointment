@@ -238,7 +238,7 @@ fn upsert_remote_booking(
     let path = format!(
         "/rest/v1/bookings?select=*&id=eq.{booking_id}&workspace_id=eq.{workspace_id}&limit=1"
     );
-    let current = fetch_booking_row(client, &path)?;
+    let current = fetch_booking_row(client, &path, workspace_id, booking_id)?;
 
     if base_server_version == 0 {
         if let Some(row) = current.as_ref() {
@@ -269,7 +269,7 @@ fn upsert_remote_booking(
         if response.status == 409 {
             // The first POST may have committed even though its response was lost,
             // or another device may have inserted the same primary key.
-            let raced = fetch_booking_row(client, &path)?;
+            let raced = fetch_booking_row(client, &path, workspace_id, booking_id)?;
             if let Some(row) = raced.as_ref() {
                 if row_matches_expected(row, &insert)
                     && row.get("deleted_at").is_some_and(Value::is_null)
@@ -339,7 +339,7 @@ fn delete_remote_booking(
     let path = format!(
         "/rest/v1/bookings?select=id,workspace_id,version,deleted_at&id=eq.{booking_id}&workspace_id=eq.{workspace_id}&limit=1"
     );
-    let Some(row) = fetch_booking_row(client, &path)? else {
+    let Some(row) = fetch_booking_row(client, &path, workspace_id, booking_id)? else {
         // A physical remote deletion already satisfies the requested final state.
         return Ok(0);
     };
@@ -373,6 +373,8 @@ fn delete_remote_booking(
 fn fetch_booking_row(
     client: &mut SupabaseAuthClient,
     path: &str,
+    expected_workspace_id: &str,
+    expected_booking_id: &str,
 ) -> Result<Option<Value>, PushFailure> {
     let response = client
         .authenticated_get(path)
@@ -380,7 +382,41 @@ fn fetch_booking_row(
     let response = require_success(response)?;
     let rows: Vec<Value> = serde_json::from_slice(&response.body)
         .map_err(|_| PushFailure::Retry("Supabase returned an invalid booking response.".into()))?;
-    Ok(rows.into_iter().next())
+    if rows.len() > 1 {
+        return Err(PushFailure::Conflict(
+            "Supabase returned multiple rows for a unique booking ID.".into(),
+        ));
+    }
+    let Some(row) = rows.into_iter().next() else {
+        return Ok(None);
+    };
+    validate_remote_booking_identity(&row, expected_workspace_id, expected_booking_id)?;
+    Ok(Some(row))
+}
+
+fn validate_remote_booking_identity(
+    row: &Value,
+    expected_workspace_id: &str,
+    expected_booking_id: &str,
+) -> Result<(), PushFailure> {
+    let actual_id = row
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| PushFailure::Retry("Remote booking response has no ID.".into()))?;
+    let actual_workspace = row
+        .get("workspace_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| PushFailure::Retry("Remote booking response has no workspace ID.".into()))?;
+    let actual_id = normalize_uuid(actual_id, "remote booking.id")
+        .map_err(PushFailure::Retry)?;
+    let actual_workspace = normalize_uuid(actual_workspace, "remote booking.workspace_id")
+        .map_err(PushFailure::Retry)?;
+    if actual_id != expected_booking_id || actual_workspace != expected_workspace_id {
+        return Err(PushFailure::Conflict(
+            "Supabase returned a booking outside the requested identity/tenant scope.".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn require_success(response: HttpResponse) -> Result<HttpResponse, PushFailure> {
@@ -495,6 +531,32 @@ mod tests {
         )
         .is_ok());
         assert!(normalize_uuid("room-101", "resource_id").is_err());
+    }
+
+    #[test]
+    fn remote_booking_identity_must_match_both_id_and_workspace() {
+        let row = json!({
+            "id":"a1b2c3d4-e5f6-47a8-9012-1234567890ab",
+            "workspace_id":"b1b2c3d4-e5f6-47a8-9012-1234567890ab"
+        });
+        assert!(validate_remote_booking_identity(
+            &row,
+            "b1b2c3d4-e5f6-47a8-9012-1234567890ab",
+            "a1b2c3d4-e5f6-47a8-9012-1234567890ab"
+        )
+        .is_ok());
+        assert!(validate_remote_booking_identity(
+            &row,
+            "c1b2c3d4-e5f6-47a8-9012-1234567890ab",
+            "a1b2c3d4-e5f6-47a8-9012-1234567890ab"
+        )
+        .is_err());
+        assert!(validate_remote_booking_identity(
+            &row,
+            "b1b2c3d4-e5f6-47a8-9012-1234567890ab",
+            "c1b2c3d4-e5f6-47a8-9012-1234567890ab"
+        )
+        .is_err());
     }
 
     #[test]
