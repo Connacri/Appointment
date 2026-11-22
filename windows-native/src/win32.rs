@@ -273,11 +273,11 @@ unsafe extern "system" fn window_proc(
             create_button(hwnd, "Se déconnecter", ID_SIGN_OUT, 44, 318, 180, 42);
             create_button(
                 hwnd,
-                "Pousser les réservations",
+                "Synchroniser les réservations",
                 ID_PUSH_SYNC,
                 238,
                 318,
-                220,
+                240,
                 42,
             );
             create_status_label(hwnd, 44, 382, 800, 78);
