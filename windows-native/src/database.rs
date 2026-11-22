@@ -19,12 +19,14 @@ pub struct OutboxEntry {
     pub created_at: String,
     pub next_attempt_at: String,
     pub last_error: Option<String>,
+    pub base_server_version: i64,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct OutboxStats {
     pub pending: u64,
     pub failed: u64,
+    pub conflict: u64,
     pub synced: u64,
 }
 
@@ -113,6 +115,52 @@ impl PmsDatabase {
                  COMMIT;",
             )?;
         }
+        let has_v3: bool = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 3)",
+            [],
+            |row| row.get(0),
+        )?;
+        if !has_v3 {
+            self.connection.execute_batch(
+                "BEGIN IMMEDIATE;
+                 ALTER TABLE bookings ADD COLUMN server_version INTEGER NOT NULL DEFAULT 0;
+                 ALTER TABLE tombstones ADD COLUMN server_version INTEGER NOT NULL DEFAULT 0;
+                 CREATE TABLE outbox_v3 (
+                   id TEXT PRIMARY KEY,
+                   idempotency_key TEXT NOT NULL UNIQUE,
+                   workspace_id TEXT NOT NULL,
+                   entity TEXT NOT NULL,
+                   entity_id TEXT NOT NULL,
+                   operation TEXT NOT NULL CHECK(operation IN ('upsert','delete')),
+                   version INTEGER NOT NULL,
+                   base_server_version INTEGER NOT NULL DEFAULT 0,
+                   payload TEXT,
+                   status TEXT NOT NULL DEFAULT 'pending'
+                     CHECK(status IN ('pending','synced','failed','conflict')),
+                   attempts INTEGER NOT NULL DEFAULT 0,
+                   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                   next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                   last_error TEXT,
+                   FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+                 );
+                 INSERT INTO outbox_v3 (
+                   id,idempotency_key,workspace_id,entity,entity_id,operation,version,
+                   base_server_version,payload,status,attempts,created_at,next_attempt_at,last_error
+                 )
+                 SELECT
+                   id,idempotency_key,workspace_id,entity,entity_id,operation,version,
+                   0,payload,status,attempts,created_at,next_attempt_at,last_error
+                 FROM outbox;
+                 DROP TABLE outbox;
+                 ALTER TABLE outbox_v3 RENAME TO outbox;
+                 CREATE INDEX idx_outbox_due
+                   ON outbox(status, next_attempt_at, created_at);
+                 CREATE INDEX idx_outbox_workspace
+                   ON outbox(workspace_id, created_at);
+                 INSERT OR IGNORE INTO schema_migrations(version) VALUES (3);
+                 COMMIT;"
+            )?;
+        }
         Ok(())
     }
 
@@ -165,6 +213,15 @@ impl PmsDatabase {
              )",
             params![workspace_id, normalized_booking.id], |row| row.get(0)
         ).map_err(|e| e.to_string())?;
+        let base_server_version: i64 = tx.query_row(
+            "SELECT COALESCE(MAX(server_version), 0) FROM (
+               SELECT server_version FROM bookings WHERE workspace_id=?1 AND id=?2
+               UNION ALL
+               SELECT server_version FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2
+             )",
+            params![workspace_id, normalized_booking.id],
+            |row| row.get(0),
+        ).map_err(|e| e.to_string())?;
         tx.execute(
             "INSERT INTO bookings(workspace_id,id,resource_id,payload,version,updated_at)
              VALUES (?1,?2,?3,?4,?5,CURRENT_TIMESTAMP)
@@ -185,9 +242,9 @@ impl PmsDatabase {
         )
         .map_err(|e| e.to_string())?;
         tx.execute(
-            "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,payload)
-             VALUES (?1,?2,?3,'booking',?4,'upsert',?5,?6)",
-            params![Uuid::new_v4().to_string(), idempotency_key, workspace_id, normalized_booking.id, version, payload],
+            "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,base_server_version,payload)
+             VALUES (?1,?2,?3,'booking',?4,'upsert',?5,?6,?7)",
+            params![Uuid::new_v4().to_string(), idempotency_key, workspace_id, normalized_booking.id, version, base_server_version, payload],
         ).map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())
     }
@@ -214,15 +271,15 @@ impl PmsDatabase {
             tx.commit().map_err(|e| e.to_string())?;
             return Ok(true);
         }
-        let version: Option<i64> = tx
+        let existing: Option<(i64, i64)> = tx
             .query_row(
-                "SELECT version + 1 FROM bookings WHERE workspace_id=?1 AND id=?2",
+                "SELECT version + 1, server_version FROM bookings WHERE workspace_id=?1 AND id=?2",
                 params![workspace_id, booking_id],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()
             .map_err(|e| e.to_string())?;
-        let Some(version) = version else {
+        let Some((version, base_server_version)) = existing else {
             tx.commit().map_err(|e| e.to_string())?;
             return Ok(false);
         };
@@ -232,14 +289,14 @@ impl PmsDatabase {
         )
         .map_err(|e| e.to_string())?;
         tx.execute(
-            "INSERT INTO tombstones(workspace_id,entity,entity_id,version) VALUES (?1,'booking',?2,?3)
-             ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET version=excluded.version, deleted_at=CURRENT_TIMESTAMP",
-            params![workspace_id, booking_id, version],
+            "INSERT INTO tombstones(workspace_id,entity,entity_id,version,server_version) VALUES (?1,'booking',?2,?3,?4)
+             ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET version=excluded.version, server_version=excluded.server_version, deleted_at=CURRENT_TIMESTAMP",
+            params![workspace_id, booking_id, version, base_server_version],
         ).map_err(|e| e.to_string())?;
         tx.execute(
-            "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,payload)
-             VALUES (?1,?2,?3,'booking',?4,'delete',?5,NULL)",
-            params![Uuid::new_v4().to_string(), idempotency_key, workspace_id, booking_id, version],
+            "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,base_server_version,payload)
+             VALUES (?1,?2,?3,'booking',?4,'delete',?5,?6,NULL)",
+            params![Uuid::new_v4().to_string(), idempotency_key, workspace_id, booking_id, version, base_server_version],
         ).map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
         Ok(true)
@@ -320,6 +377,78 @@ impl PmsDatabase {
         Ok(changed == 1)
     }
 
+    pub fn mark_outbox_conflict(
+        &self,
+        workspace_id: &str,
+        outbox_id: &str,
+        reason: &str,
+    ) -> rusqlite::Result<bool> {
+        let changed = self.connection.execute(
+            "UPDATE outbox SET status='conflict', last_error=?3
+             WHERE workspace_id=?1 AND id=?2 AND status IN ('pending','failed')",
+            params![workspace_id, outbox_id, reason.chars().take(1024).collect::<String>()],
+        )?;
+        Ok(changed == 1)
+    }
+
+    /// Commits a local acknowledgement only after the caller has validated a server response.
+    /// Newer queued mutations for the same entity are rebased onto this server version.
+    pub fn acknowledge_outbox(
+        &self,
+        workspace_id: &str,
+        outbox_id: &str,
+        server_version: i64,
+    ) -> rusqlite::Result<bool> {
+        if server_version < 0 {
+            return Err(rusqlite::Error::InvalidParameterName(
+                "server_version cannot be negative".into(),
+            ));
+        }
+        let tx = self.connection.unchecked_transaction()?;
+        let entry: Option<(String, String, String, i64)> = tx
+            .query_row(
+                "SELECT entity,entity_id,operation,version FROM outbox
+                 WHERE workspace_id=?1 AND id=?2 AND status IN ('pending','failed')",
+                params![workspace_id, outbox_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()?;
+        let Some((entity, entity_id, operation, local_version)) = entry else {
+            tx.rollback()?;
+            return Ok(false);
+        };
+        let changed = tx.execute(
+            "UPDATE outbox SET status='synced', last_error=NULL
+             WHERE workspace_id=?1 AND id=?2 AND status IN ('pending','failed')",
+            params![workspace_id, outbox_id],
+        )?;
+        if changed != 1 {
+            tx.rollback()?;
+            return Ok(false);
+        }
+        if entity == "booking" {
+            tx.execute(
+                "UPDATE bookings SET server_version=?3
+                 WHERE workspace_id=?1 AND id=?2",
+                params![workspace_id, entity_id, server_version],
+            )?;
+            tx.execute(
+                "UPDATE tombstones SET server_version=?3
+                 WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2",
+                params![workspace_id, entity_id, server_version],
+            )?;
+            tx.execute(
+                "UPDATE outbox SET base_server_version=?4
+                 WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2
+                   AND version>?3 AND status IN ('pending','failed')",
+                params![workspace_id, entity_id, local_version, server_version],
+            )?;
+        }
+        tx.commit()?;
+        let _ = operation;
+        Ok(true)
+    }
+
     pub fn retry_outbox(&self, workspace_id: &str, outbox_id: &str) -> rusqlite::Result<bool> {
         let changed = self.connection.execute(
             "UPDATE outbox SET status='pending', next_attempt_at=CURRENT_TIMESTAMP, last_error=NULL
@@ -335,7 +464,7 @@ impl PmsDatabase {
         limit: u32,
     ) -> rusqlite::Result<Vec<OutboxEntry>> {
         let mut statement = self.connection.prepare(
-            "SELECT id,idempotency_key,workspace_id,entity,entity_id,operation,version,payload,status,attempts,created_at,next_attempt_at,last_error
+            "SELECT id,idempotency_key,workspace_id,entity,entity_id,operation,version,payload,status,attempts,created_at,next_attempt_at,last_error,base_server_version
              FROM outbox
              WHERE workspace_id=?1
                AND status IN ('pending','failed')
@@ -358,24 +487,27 @@ impl PmsDatabase {
                 created_at: row.get(10)?,
                 next_attempt_at: row.get(11)?,
                 last_error: row.get(12)?,
+                base_server_version: row.get(13)?,
             })
         })?;
         rows.collect()
     }
 
     pub fn outbox_stats(&self, workspace_id: &str) -> rusqlite::Result<OutboxStats> {
-        let (pending, failed, synced): (u64, u64, u64) = self.connection.query_row(
+        let (pending, failed, conflict, synced): (u64, u64, u64, u64) = self.connection.query_row(
             "SELECT
                 COALESCE(SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END), 0),
                 COALESCE(SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN status='conflict' THEN 1 ELSE 0 END), 0),
                 COALESCE(SUM(CASE WHEN status='synced' THEN 1 ELSE 0 END), 0)
              FROM outbox WHERE workspace_id=?1",
             params![workspace_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )?;
         Ok(OutboxStats {
             pending,
             failed,
+            conflict,
             synced,
         })
     }
