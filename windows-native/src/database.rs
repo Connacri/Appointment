@@ -34,6 +34,7 @@ pub struct OutboxStats {
 pub struct SyncCursor {
     pub updated_at: String,
     pub entity_id: String,
+    pub server_version: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,6 +189,7 @@ impl PmsDatabase {
                    entity TEXT NOT NULL,
                    updated_at TEXT NOT NULL,
                    entity_id TEXT NOT NULL,
+                   server_version INTEGER NOT NULL,
                    PRIMARY KEY(workspace_id, entity),
                    FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
                  );
@@ -573,13 +575,14 @@ impl PmsDatabase {
     ) -> rusqlite::Result<Option<SyncCursor>> {
         self.connection
             .query_row(
-                "SELECT updated_at,entity_id FROM sync_cursors
+                "SELECT updated_at,entity_id,server_version FROM sync_cursors
                  WHERE workspace_id=?1 AND entity=?2",
                 params![workspace_id, entity],
                 |row| {
                     Ok(SyncCursor {
                         updated_at: row.get(0)?,
                         entity_id: row.get(1)?,
+                        server_version: row.get(2)?,
                     })
                 },
             )
@@ -594,17 +597,22 @@ impl PmsDatabase {
         entity: &str,
         updated_at: &str,
         entity_id: &str,
+        server_version: i64,
     ) -> rusqlite::Result<()> {
         self.connection.execute(
-            "INSERT INTO sync_cursors(workspace_id,entity,updated_at,entity_id)
-             VALUES (?1,?2,?3,?4)
+            "INSERT INTO sync_cursors(workspace_id,entity,updated_at,entity_id,server_version)
+             VALUES (?1,?2,?3,?4,?5)
              ON CONFLICT(workspace_id,entity) DO UPDATE SET
                updated_at=excluded.updated_at,
-               entity_id=excluded.entity_id
+               entity_id=excluded.entity_id,
+               server_version=excluded.server_version
              WHERE excluded.updated_at > sync_cursors.updated_at
                 OR (excluded.updated_at = sync_cursors.updated_at
-                    AND excluded.entity_id > sync_cursors.entity_id)",
-            params![workspace_id, entity, updated_at, entity_id],
+                    AND excluded.entity_id > sync_cursors.entity_id)
+                OR (excluded.updated_at = sync_cursors.updated_at
+                    AND excluded.entity_id = sync_cursors.entity_id
+                    AND excluded.server_version > sync_cursors.server_version)",
+            params![workspace_id, entity, updated_at, entity_id, server_version],
         )?;
         Ok(())
     }
