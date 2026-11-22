@@ -230,3 +230,17 @@ a write-enabled migration environment is available.
 
 Update this section only after verifying local schema, migrations, live remote schema,
 generated types, repositories, RLS and tests together.
+
+
+## 8. Native Windows migration alignment
+
+The independent Rust/Win32 client is a separate implementation target, not a wrapper around the React application. Its booking persistence contract must remain compatible with the current TypeScript `TimelineBooking` payload:
+
+- Shared identity, resource, guest, date, status and payment-status fields serialize using TypeScript camelCase names. Legacy snake_case payloads remain readable during the staged migration.
+- The Rust booking extension map preserves unmodeled optional fields (including occupants, extras, payment metadata, guest-age/client-segment metadata and future additions) verbatim through serialization. This compatibility mechanism does **not** mean those fields already have native validation, UI, analytics or sync behavior.
+- The local date-only invariant is `endDate >= startDate`; same-day bookings are accepted by the current TypeScript validator and native Rust domain. Check-in/check-out time semantics remain a separate acceptance gate. The live Supabase constraint must still be verified independently before claiming cloud acceptance.
+- Rust money is stored in integer minor units. A conversion from TypeScript floating-point `totalPrice`, extras, invoices or payments requires an explicit ISO currency exponent and rounding policy; never multiply by 100 indiscriminately.
+- SQLite schema version 2 indexes both camelCase and legacy snake_case start-date payloads without dropping existing booking rows.
+- The latest mainline capabilities added role-based access control, role management, staff HR/career history, staff notifications, task productivity analytics, bulk dynamic pricing, housekeeping utilities and stock procurement/replenishment. These remain **not migrated** to native Windows unless separately marked implemented in `windows-native/docs/PORTING_MATRIX.md`.
+
+The React Web and Android clients remain authoritative for their existing workflows until native fixture parity, persistence parity, sync convergence and Windows runtime tests pass. A passing native build is not a claim of functional parity.
