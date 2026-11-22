@@ -773,6 +773,10 @@ fn update_discovery_status(hwnd: Hwnd) {
                 DiscoveryEvent::PeerExpired { peer_id } => {
                     state.discovered_peers.remove(&peer_id);
                 }
+                DiscoveryEvent::Failed { message } => {
+                    state.discovery_error = Some(message);
+                    state.discovered_peers.clear();
+                }
             }
         }
         (state.discovered_peers.len(), state.discovery_error.clone())
