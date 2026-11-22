@@ -7,9 +7,9 @@ pub mod booking_mapper;
 pub mod credential_vault;
 pub mod database;
 pub mod domain;
+pub mod p2p;
 pub mod supabase_auth;
 pub mod supabase_sync;
-pub mod p2p;
 mod win32;
 mod winhttp;
 

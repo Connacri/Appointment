@@ -29,7 +29,7 @@ export type P2pRecordState<TPayload = Record<string, unknown>> =
   | { kind: 'resolved'; event: P2pEvent<TPayload> }
   | { kind: 'conflict'; events: P2pEvent<TPayload>[] };
 
-export function validateP2pEvent(event: P2pEvent): void {
+export function validateP2pEvent<TPayload>(event: P2pEvent<TPayload>): void {
   if (event.protocolVersion !== 1) throw new Error('Unsupported P2P protocol version.');
   if (!event.nodeId.trim() || !event.workspaceId.trim() || !event.entity.trim() || !event.entityId.trim()) {
     throw new Error('P2P event identity and scope fields are required.');
@@ -60,7 +60,7 @@ export function validateP2pEvent(event: P2pEvent): void {
   }
 }
 
-export function happensBefore(a: P2pEvent, b: P2pEvent): boolean {
+export function happensBefore<TPayload>(a: P2pEvent<TPayload>, b: P2pEvent<TPayload>): boolean {
   return a.eventId !== b.eventId && (b.clock[a.nodeId] ?? 0) >= a.sequence;
 }
 

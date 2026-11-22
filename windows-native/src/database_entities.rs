@@ -64,7 +64,7 @@ pub(super) fn migrate(connection: &Connection) -> rusqlite::Result<()> {
            ON entity_records(workspace_id, category)
            WHERE category IS NOT NULL;
          INSERT OR IGNORE INTO schema_migrations(version) VALUES (5);
-         COMMIT;"
+         COMMIT;",
     )?;
     Ok(())
 }
@@ -130,19 +130,23 @@ impl PmsDatabase {
         entity: &str,
         entity_id: &str,
     ) -> rusqlite::Result<Option<EntityRecord>> {
-        self.connection.query_row(
-            "SELECT workspace_id,entity,entity_id,payload,version,updated_at
-             FROM entity_records WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
-            params![workspace_id, entity, entity_id],
-            |row| Ok(EntityRecord {
-                workspace_id: row.get(0)?,
-                entity: row.get(1)?,
-                entity_id: row.get(2)?,
-                payload: row.get(3)?,
-                version: row.get(4)?,
-                updated_at: row.get(5)?,
-            }),
-        ).optional()
+        self.connection
+            .query_row(
+                "SELECT workspace_id,entity,entity_id,payload,version,updated_at
+                 FROM entity_records WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+                params![workspace_id, entity, entity_id],
+                |row| {
+                    Ok(EntityRecord {
+                        workspace_id: row.get(0)?,
+                        entity: row.get(1)?,
+                        entity_id: row.get(2)?,
+                        payload: row.get(3)?,
+                        version: row.get(4)?,
+                        updated_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
     }
 
     /// Keyset pagination avoids loading whole stores and remains stable for equal timestamps.
@@ -158,25 +162,31 @@ impl PmsDatabase {
              FROM entity_records
              WHERE workspace_id=?1 AND entity=?2
                AND (?3 IS NULL OR updated_at > ?3 OR (updated_at = ?3 AND entity_id > ?4))
-             ORDER BY updated_at,entity_id LIMIT ?5"
+             ORDER BY updated_at,entity_id LIMIT ?5",
         )?;
         let (after_updated_at, after_id) = after.unwrap_or(("", ""));
         let rows = statement.query_map(
             params![
                 workspace_id,
                 entity,
-                if after.is_some() { Some(after_updated_at) } else { None },
+                if after.is_some() {
+                    Some(after_updated_at)
+                } else {
+                    None
+                },
                 after_id,
                 limit.clamp(1, 500)
             ],
-            |row| Ok(EntityRecord {
-                workspace_id: row.get(0)?,
-                entity: row.get(1)?,
-                entity_id: row.get(2)?,
-                payload: row.get(3)?,
-                version: row.get(4)?,
-                updated_at: row.get(5)?,
-            }),
+            |row| {
+                Ok(EntityRecord {
+                    workspace_id: row.get(0)?,
+                    entity: row.get(1)?,
+                    entity_id: row.get(2)?,
+                    payload: row.get(3)?,
+                    version: row.get(4)?,
+                    updated_at: row.get(5)?,
+                })
+            },
         )?;
         rows.collect()
     }
@@ -210,10 +220,24 @@ mod tests {
     fn entity_payload_preserves_unknown_fields_and_workspace_scope() {
         let db = db();
         let payload = r#"{"id":"r-1","sector":"hotel","customFutureField":{"enabled":true}}"#;
-        db.upsert_entity_record("ws-a", "resources", "r-1", payload, 1, "2026-11-22T10:00:00Z").unwrap();
-        let stored = db.get_entity_record("ws-a", "resources", "r-1").unwrap().unwrap();
+        db.upsert_entity_record(
+            "ws-a",
+            "resources",
+            "r-1",
+            payload,
+            1,
+            "2026-11-22T10:00:00Z",
+        )
+        .unwrap();
+        let stored = db
+            .get_entity_record("ws-a", "resources", "r-1")
+            .unwrap()
+            .unwrap();
         assert_eq!(stored.payload, payload);
-        assert!(db.get_entity_record("ws-b", "resources", "r-1").unwrap().is_none());
+        assert!(db
+            .get_entity_record("ws-b", "resources", "r-1")
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -221,20 +245,67 @@ mod tests {
         let db = db();
         for id in ["a", "b", "c"] {
             let payload = format!(r#"{{"id":"{id}","status":"active"}}"#);
-            db.upsert_entity_record("ws-a", "issuedCards", id, &payload, 1, "2026-11-22T10:00:00Z").unwrap();
+            db.upsert_entity_record(
+                "ws-a",
+                "issuedCards",
+                id,
+                &payload,
+                1,
+                "2026-11-22T10:00:00Z",
+            )
+            .unwrap();
         }
-        let first = db.list_entity_records("ws-a", "issuedCards", None, 2).unwrap();
-        assert_eq!(first.iter().map(|row| row.entity_id.as_str()).collect::<Vec<_>>(), vec!["a", "b"]);
-        let next = db.list_entity_records("ws-a", "issuedCards", Some((&first[1].updated_at, &first[1].entity_id)), 2).unwrap();
-        assert_eq!(next.iter().map(|row| row.entity_id.as_str()).collect::<Vec<_>>(), vec!["c"]);
+        let first = db
+            .list_entity_records("ws-a", "issuedCards", None, 2)
+            .unwrap();
+        assert_eq!(
+            first
+                .iter()
+                .map(|row| row.entity_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a", "b"]
+        );
+        let next = db
+            .list_entity_records(
+                "ws-a",
+                "issuedCards",
+                Some((&first[1].updated_at, &first[1].entity_id)),
+                2,
+            )
+            .unwrap();
+        assert_eq!(
+            next.iter()
+                .map(|row| row.entity_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["c"]
+        );
     }
 
     #[test]
     fn entity_upsert_does_not_replace_a_newer_version() {
         let db = db();
-        db.upsert_entity_record("ws-a", "invoices", "i-1", r#"{"id":"i-1","status":"paid"}"#, 8, "2026-11-22T10:00:00Z").unwrap();
-        db.upsert_entity_record("ws-a", "invoices", "i-1", r#"{"id":"i-1","status":"draft"}"#, 7, "2026-11-22T09:00:00Z").unwrap();
-        let stored = db.get_entity_record("ws-a", "invoices", "i-1").unwrap().unwrap();
+        db.upsert_entity_record(
+            "ws-a",
+            "invoices",
+            "i-1",
+            r#"{"id":"i-1","status":"paid"}"#,
+            8,
+            "2026-11-22T10:00:00Z",
+        )
+        .unwrap();
+        db.upsert_entity_record(
+            "ws-a",
+            "invoices",
+            "i-1",
+            r#"{"id":"i-1","status":"draft"}"#,
+            7,
+            "2026-11-22T09:00:00Z",
+        )
+        .unwrap();
+        let stored = db
+            .get_entity_record("ws-a", "invoices", "i-1")
+            .unwrap()
+            .unwrap();
         assert_eq!(stored.version, 8);
         assert!(stored.payload.contains("paid"));
     }

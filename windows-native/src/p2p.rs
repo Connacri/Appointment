@@ -55,12 +55,18 @@ impl P2pEvent {
             (P2pOperation::Upsert, Some(Value::Object(_))) => {}
             (P2pOperation::Upsert, _) => return Err("P2P upsert requires an object payload"),
             (P2pOperation::Delete, None) => {}
-            (P2pOperation::Delete, Some(_)) => return Err("P2P delete must not contain a payload"),
+            (P2pOperation::Delete, Some(_)) => {
+                return Err("P2P delete must not contain a payload")
+            }
         }
         if self.clock.get(&self.node_id).copied() != Some(self.sequence) {
             return Err("P2P event clock must contain its own node sequence");
         }
-        if self.clock.iter().any(|(node, sequence)| node.trim().is_empty() || *sequence == 0) {
+        if self
+            .clock
+            .iter()
+            .any(|(node, sequence)| node.trim().is_empty() || *sequence == 0)
+        {
             return Err("P2P event clock contains an invalid node or sequence");
         }
         Ok(())
@@ -112,10 +118,9 @@ pub fn record_state(events: &[P2pEvent]) -> P2pRecordState {
     }
     let frontier = maximal_events(events);
     if frontier.len() == 1 {
-        P2pRecordState::Resolved(frontier.into_iter().next().expect("one event"))
-    } else {
-        P2pRecordState::Conflict(frontier)
+        return P2pRecordState::Resolved(frontier.into_iter().next().expect("one event"));
     }
+    P2pRecordState::Conflict(frontier)
 }
 
 #[cfg(test)]
@@ -132,17 +137,28 @@ mod tests {
             workspace_id: "workspace-1".into(),
             entity: "booking".into(),
             entity_id: "booking-1".into(),
-            operation: if payload.is_some() { P2pOperation::Upsert } else { P2pOperation::Delete },
+            operation: if payload.is_some() {
+                P2pOperation::Upsert
+            } else {
+                P2pOperation::Delete
+            },
             payload,
-            clock: clock.iter().map(|(node, seq)| ((*node).to_string(), *seq)).collect(),
+            clock: clock
+                .iter()
+                .map(|(node, seq)| ((*node).to_string(), *seq))
+                .collect(),
             created_at: "2026-11-22T12:00:00.000Z".into(),
         }
     }
 
     #[test]
     fn validates_event_identity_and_clock() {
-        assert!(event("a", 1, &[("a", 1)], Some(json!({"x": 1}))).validate().is_ok());
-        assert!(event("a", 1, &[("a", 2)], Some(json!({"x": 1}))).validate().is_err());
+        assert!(event("a", 1, &[("a", 1)], Some(json!({"x": 1})))
+            .validate()
+            .is_ok());
+        assert!(event("a", 1, &[("a", 2)], Some(json!({"x": 1})))
+            .validate()
+            .is_err());
     }
 
     #[test]
@@ -158,12 +174,19 @@ mod tests {
         let first = event("a", 1, &[("a", 1)], Some(json!({"x": 1})));
         let second = event("b", 1, &[("a", 1), ("b", 1)], Some(json!({"x": 2})));
         assert!(happens_before(&first, &second));
-        assert!(matches!(record_state(&[first, second.clone()]), P2pRecordState::Resolved(found) if found == second));
+        assert!(
+            matches!(record_state(&[first, second.clone()]), P2pRecordState::Resolved(found) if found == second)
+        );
     }
 
     #[test]
     fn concurrent_updates_remain_a_deterministic_conflict() {
-        let a = event("a", 2, &[("a", 2), ("b", 1)], Some(json!({"guest": "Alice"})));
+        let a = event(
+            "a",
+            2,
+            &[("a", 2), ("b", 1)],
+            Some(json!({"guest": "Alice"})),
+        );
         let b = event("b", 2, &[("a", 1), ("b", 2)], Some(json!({"guest": "Bob"})));
         let ab = merge_events(&[a.clone()], &[b.clone()]).unwrap();
         let ba = merge_events(&[b], &[a]).unwrap();
@@ -174,7 +197,15 @@ mod tests {
     #[test]
     fn concurrent_delete_and_update_are_not_silently_resolved() {
         let delete = event("a", 2, &[("a", 2), ("b", 1)], None);
-        let update = event("b", 2, &[("a", 1), ("b", 2)], Some(json!({"guest": "Updated"})));
-        assert!(matches!(record_state(&[delete, update]), P2pRecordState::Conflict(_)));
+        let update = event(
+            "b",
+            2,
+            &[("a", 1), ("b", 2)],
+            Some(json!({"guest": "Updated"})),
+        );
+        assert!(matches!(
+            record_state(&[delete, update]),
+            P2pRecordState::Conflict(_)
+        ));
     }
 }
