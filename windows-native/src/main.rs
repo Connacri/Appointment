@@ -37,5 +37,3 @@ fn initialize_local_database() -> Result<database::PmsDatabase, String> {
     database::PmsDatabase::open(&database_path)
         .map_err(|error| format!("Cannot initialize SQLite database: {error}"))
 }
-
-// Formatting automation trigger.
