@@ -218,7 +218,7 @@ pub fn pull_bookings(
             return Err("Supabase returned more booking rows than the requested page size.".into());
         }
 
-        let mut page_cursor = cursor;
+        let page_cursor = cursor;
         let mut last_cursor: Option<(String, String, i64)> = None;
 
         for row in &rows {
