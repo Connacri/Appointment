@@ -102,7 +102,8 @@ exchange, not database-file sharing.
 - Local IndexedDB/SQLite remain authoritative for immediate local reads and writes.
   The event log and materialized projections must be committed atomically by each
   storage adapter before a mutation is advertised to peers.
-- LAN peer discovery is implemented on both supported native endpoints:
+- The shared wire contract is specified in `docs/P2P_DISCOVERY_PROTOCOL.md`.
+  LAN peer discovery is implemented on both supported native endpoints:
   Windows Rust (windows-native/src/p2p_discovery.rs) and the Android APK
   Capacitor plugin (android/app/src/main/java/com/planning/oran/LanDiscoveryPlugin.java).
   Both use IPv4 multicast 239.255.42.99:45871, protocol version 1 and the same
