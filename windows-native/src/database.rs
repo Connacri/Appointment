@@ -1298,6 +1298,15 @@ mod tests {
             "bookings",
             "2026-11-22T12:00:00+00:00",
             "a1",
+            5,
+        )
+        .unwrap();
+        db.store_sync_cursor(
+            "w-1",
+            "bookings",
+            "2026-11-22T12:00:00+00:00",
+            "a1",
+            7,
         )
         .unwrap();
         db.store_sync_cursor(
@@ -1305,6 +1314,7 @@ mod tests {
             "bookings",
             "2026-11-22T12:00:00+00:00",
             "a3",
+            1,
         )
         .unwrap();
         db.store_sync_cursor(
@@ -1312,11 +1322,13 @@ mod tests {
             "bookings",
             "2026-11-22T11:59:59+00:00",
             "zz",
+            99,
         )
         .unwrap();
         let cursor = db.sync_cursor("w-1", "bookings").unwrap().unwrap();
         assert_eq!(cursor.updated_at, "2026-11-22T12:00:00+00:00");
         assert_eq!(cursor.entity_id, "a3");
+        assert_eq!(cursor.server_version, 1);
         assert!(db.sync_cursor("w-2", "bookings").unwrap().is_none());
     }
 
