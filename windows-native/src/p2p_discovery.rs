@@ -132,7 +132,9 @@ fn discovery_loop(
             Ok((length, source)) if length <= MAX_DATAGRAM_BYTES => {
                 if let Ok(message) = serde_json::from_slice::<Announcement>(&buffer[..length]) {
                     if let Some(peer) = validate_announcement(message, &own_peer_id, source) {
-                        if !peers.contains_key(&peer.peer_id) && peers.len() >= MAX_DISCOVERED_PEERS {
+                        if !peers.contains_key(&peer.peer_id)
+                            && peers.len() >= MAX_DISCOVERED_PEERS
+                        {
                             continue;
                         }
                         let now = Instant::now();
