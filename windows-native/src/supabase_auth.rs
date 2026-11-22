@@ -96,6 +96,56 @@ impl SupabaseAuthClient {
         self.session.as_ref()
     }
 
+    fn fresh_access_token(&mut self) -> Result<String, String> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| "System clock is before the Unix epoch.".to_string())?
+            .as_secs();
+        self.refresh_if_expiring(now)?;
+        self.session
+            .as_ref()
+            .map(|session| session.access_token.clone())
+            .ok_or_else(|| "An authenticated Supabase session is required.".into())
+    }
+
+    pub fn authenticated_get(&mut self, path: &str) -> Result<HttpResponse, String> {
+        let token = self.fresh_access_token()?;
+        self.transport
+            .get(path, &self.publishable_key, Some(&token))
+    }
+
+    pub fn authenticated_post_with_prefer(
+        &mut self,
+        path: &str,
+        prefer: &str,
+        body: &[u8],
+    ) -> Result<HttpResponse, String> {
+        let token = self.fresh_access_token()?;
+        self.transport.post_with_prefer(
+            path,
+            &self.publishable_key,
+            Some(&token),
+            prefer,
+            body,
+        )
+    }
+
+    pub fn authenticated_patch_with_prefer(
+        &mut self,
+        path: &str,
+        prefer: &str,
+        body: &[u8],
+    ) -> Result<HttpResponse, String> {
+        let token = self.fresh_access_token()?;
+        self.transport.patch_with_prefer(
+            path,
+            &self.publishable_key,
+            Some(&token),
+            prefer,
+            body,
+        )
+    }
+
     /// Resolve and verify this account's personal workspace through PostgREST + RLS.
     /// The personal workspace ID is the authenticated Supabase user UUID, matching
     /// the existing web client contract. Shared workspaces are never auto-selected.
