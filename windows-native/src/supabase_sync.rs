@@ -32,14 +32,6 @@ struct RemoteResource {
 }
 
 #[derive(Deserialize)]
-struct RemoteBookingVersion {
-    id: String,
-    workspace_id: String,
-    version: i64,
-    deleted_at: Option<String>,
-}
-
-#[derive(Deserialize)]
 struct RemoteReturnedVersion {
     version: i64,
 }
@@ -137,19 +129,30 @@ fn push_one(
             let mut booking: Booking = serde_json::from_str(payload).map_err(|_| {
                 PushFailure::Conflict("Booking Outbox payload is invalid JSON.".into())
             })?;
-            if booking.id != booking_id {
+            if normalize_uuid(&booking.id, "booking_id")
+                .map_err(PushFailure::Conflict)?
+                != booking_id
+            {
                 return Err(PushFailure::Conflict(
                     "Booking payload ID does not match its Outbox entity ID.".into(),
                 ));
             }
+            booking.id = booking_id.clone();
             booking.normalize_occupants();
             booking
                 .validate()
                 .map_err(PushFailure::Conflict)?;
 
-            let resource = fetch_resource(client, workspace_id, &booking.resource_id)?;
-            if resource.workspace_id != workspace_id
-                || resource.id != booking.resource_id
+            let resource_id =
+                normalize_uuid(&booking.resource_id, "resource_id").map_err(PushFailure::Conflict)?;
+            booking.resource_id = resource_id.clone();
+            let resource = fetch_resource(client, workspace_id, &resource_id)?;
+            let resource_workspace = normalize_uuid(&resource.workspace_id, "resource.workspace_id")
+                .map_err(PushFailure::Conflict)?;
+            let returned_resource_id = normalize_uuid(&resource.id, "resource.id")
+                .map_err(PushFailure::Conflict)?;
+            if resource_workspace != workspace_id
+                || returned_resource_id != resource_id
                 || !resource.is_active
                 || resource.deleted_at.is_some()
             {
@@ -158,13 +161,14 @@ fn push_one(
                         .into(),
                 ));
             }
-            normalize_uuid(&resource.establishment_id, "establishment_id")
-                .map_err(PushFailure::Conflict)?;
+            let establishment_id =
+                normalize_uuid(&resource.establishment_id, "establishment_id")
+                    .map_err(PushFailure::Conflict)?;
 
             let expected = to_supabase_booking_row(
                 &booking,
                 workspace_id,
-                &resource.establishment_id,
+                &establishment_id,
                 Some(user_id),
             )
             .map_err(PushFailure::Conflict)?;
@@ -457,7 +461,9 @@ fn civil_from_days(days_since_epoch: i64) -> (i64, i64, i64) {
     let month_prime = (5 * day_of_year + 2) / 153;
     let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
     let month = month_prime + if month_prime < 10 { 3 } else { -9 };
-    year += i64::from(month <= 2);
+    if month <= 2 {
+        year += 1;
+    }
     (year, month, day)
 }
 
