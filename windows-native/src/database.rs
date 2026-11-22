@@ -1123,7 +1123,7 @@ mod tests {
     }
 
     #[test]
-    fn local_schema_v3_tracks_server_versions_and_conflicts() {
+    fn local_schema_v4_tracks_server_versions_cursors_and_conflicts() {
         let db = database();
         let outbox_sql: String = db
             .connection
@@ -1139,7 +1139,7 @@ mod tests {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
         assert!(outbox_sql.contains("'conflict'"));
     }
 
@@ -1180,6 +1180,157 @@ mod tests {
         assert!(db.workspace_is_owned_by("w-owner", "u-owner").unwrap());
         assert!(!db.workspace_is_owned_by("w-owner", "u-other").unwrap());
         assert!(!db.workspace_is_owned_by("w-missing", "u-owner").unwrap());
+    }
+
+    #[test]
+    fn remote_booking_merge_applies_newer_rows_and_ignores_stale_versions() {
+        let db = database();
+        let mut remote = booking("b-remote");
+        remote.guest_name = "Remote Guest".into();
+        assert_eq!(
+            db.apply_remote_booking("w-1", &remote, 8, None).unwrap(),
+            RemoteBookingApply::Applied
+        );
+        let restored = db.get_booking("w-1", "b-remote").unwrap().unwrap();
+        assert_eq!(restored.guest_name, "Remote Guest");
+        let version: i64 = db
+            .connection
+            .query_row(
+                "SELECT server_version FROM bookings WHERE workspace_id='w-1' AND id='b-remote'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, 8);
+
+        remote.guest_name = "Stale Guest".into();
+        assert_eq!(
+            db.apply_remote_booking("w-1", &remote, 7, None).unwrap(),
+            RemoteBookingApply::Stale
+        );
+        assert_eq!(
+            db.get_booking("w-1", "b-remote").unwrap().unwrap().guest_name,
+            "Remote Guest"
+        );
+    }
+
+    #[test]
+    fn remote_pull_never_overwrites_pending_local_outbox_mutations() {
+        let mut db = database();
+        let mut local = booking("b-pending-remote");
+        local.guest_name = "Local Pending".into();
+        db.upsert_booking("w-1", &local, "idem-local-pending")
+            .unwrap();
+
+        let mut remote = booking("b-pending-remote");
+        remote.guest_name = "Remote Newer".into();
+        assert_eq!(
+            db.apply_remote_booking("w-1", &remote, 42, None).unwrap(),
+            RemoteBookingApply::SkippedPending
+        );
+        assert_eq!(
+            db.get_booking("w-1", "b-pending-remote")
+                .unwrap()
+                .unwrap()
+                .guest_name,
+            "Local Pending"
+        );
+    }
+
+    #[test]
+    fn remote_pull_applies_soft_deletes_and_never_resurrects_local_tombstones() {
+        let db = database();
+        let remote = booking("b-remote-delete");
+        assert_eq!(
+            db.apply_remote_booking("w-1", &remote, 4, None).unwrap(),
+            RemoteBookingApply::Applied
+        );
+        assert_eq!(
+            db.apply_remote_booking(
+                "w-1",
+                &remote,
+                5,
+                Some("2026-11-22T12:00:00+00:00")
+            )
+            .unwrap(),
+            RemoteBookingApply::Applied
+        );
+        assert!(db
+            .get_booking("w-1", "b-remote-delete")
+            .unwrap()
+            .is_none());
+
+        let resurrected = booking("b-remote-delete");
+        assert_eq!(
+            db.apply_remote_booking("w-1", &resurrected, 6, None)
+                .unwrap(),
+            RemoteBookingApply::SkippedTombstone
+        );
+        assert!(db
+            .get_booking("w-1", "b-remote-delete")
+            .unwrap()
+            .is_none());
+        let server_version: i64 = db
+            .connection
+            .query_row(
+                "SELECT server_version FROM tombstones
+                 WHERE workspace_id='w-1' AND entity='booking' AND entity_id='b-remote-delete'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(server_version, 5);
+    }
+
+    #[test]
+    fn sync_cursor_is_monotonic_for_timestamp_and_id_ties() {
+        let db = database();
+        db.store_sync_cursor(
+            "w-1",
+            "bookings",
+            "2026-11-22T12:00:00+00:00",
+            "a1",
+        )
+        .unwrap();
+        db.store_sync_cursor(
+            "w-1",
+            "bookings",
+            "2026-11-22T12:00:00+00:00",
+            "a3",
+        )
+        .unwrap();
+        db.store_sync_cursor(
+            "w-1",
+            "bookings",
+            "2026-11-22T11:59:59+00:00",
+            "zz",
+        )
+        .unwrap();
+        let cursor = db.sync_cursor("w-1", "bookings").unwrap().unwrap();
+        assert_eq!(cursor.updated_at, "2026-11-22T12:00:00+00:00");
+        assert_eq!(cursor.entity_id, "a3");
+        assert!(db.sync_cursor("w-2", "bookings").unwrap().is_none());
+    }
+
+    #[test]
+    fn remote_delete_is_not_allowed_to_override_pending_local_update() {
+        let mut db = database();
+        let local = booking("b-delete-pending");
+        db.upsert_booking("w-1", &local, "idem-pending-delete").unwrap();
+        assert_eq!(
+            db.apply_remote_booking(
+                "w-1",
+                &local,
+                99,
+                Some("2026-11-22T13:00:00+00:00")
+            )
+            .unwrap(),
+            RemoteBookingApply::SkippedPending
+        );
+        assert!(db
+            .get_booking("w-1", "b-delete-pending")
+            .unwrap()
+            .is_some());
     }
 
     #[test]
