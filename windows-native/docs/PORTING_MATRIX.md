@@ -6,7 +6,7 @@ A module is not migrated merely because a Rust type or placeholder screen exists
 |---|---|---|
 | Booking / occupants | Partial — typed contract, validation, normalization and Supabase row mapper | Full reservation workflows and fixture parity |
 | Local booking store | Partial — SQLite, workspace isolation, bounded reads and atomic mutations | Complete entities and migration fixtures |
-| Durable Outbox | Partial — transactional writes, tombstones, idempotency and retry state | Real remote ACK, replay and conflict convergence |
+| Durable Outbox | Partial — transactional writes, tombstones, idempotency, FIFO due-entry selection, exponential retry scheduling and workspace-scoped counters | Real remote ACK, replay and conflict convergence |
 | Supabase authentication | Partial — Win32 sign-in/sign-up, async startup restore, refresh and logout; Credential Manager token persistence scoped by Supabase endpoint; access token memory-only | Live Supabase auth tests and periodic refresh scheduling |
 | Workspace identity | Partial — deterministic personal workspace bootstrap and PostgREST owner-membership verification through RLS | Live RLS integration tests, shared workspace selection and server-side authorization evidence |
 | Remote sync | Not started | HTTP pull/push, server ACKs, tombstones, retries, conflicts and observable status |
