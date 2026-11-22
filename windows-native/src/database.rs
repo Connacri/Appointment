@@ -863,7 +863,7 @@ mod tests {
                    payload,status,attempts,last_error
                  ) VALUES (
                    'o-migrate','idem-migrate','w-migrate','booking','b-migrate','upsert',4,
-                   '{""id"":""b-migrate""}','failed',2,'temporary'
+                   'legacy-payload','failed',2,'temporary'
                  );
                  CREATE TABLE tombstones (
                    workspace_id TEXT NOT NULL,
