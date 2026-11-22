@@ -415,38 +415,52 @@ unsafe extern "system" fn window_proc(
                         "Session fermée. Les données locales restent sur cet appareil.",
                     );
                 }
-                Ok(AuthUiOutcome::PushCompleted(summary)) => {
+                Ok(AuthUiOutcome::SyncCompleted(summary)) => {
                     show_login(hwnd, false);
                     show_control(hwnd, ID_SIGN_OUT, true);
                     show_control(hwnd, ID_PUSH_SYNC, true);
-                    if summary.acknowledged == 0
-                        && summary.retry_scheduled == 0
-                        && summary.conflicts == 0
+                    let pull_status = match summary.pull_error.as_deref() {
+                        Some(error) => format!("Pull en erreur : {error}"),
+                        None => format!(
+                            "Pull : {} reçues, {} appliquées, {} protégées par Outbox, {} tombstones conservés, {} déjà à jour.",
+                            summary.pull.received,
+                            summary.pull.applied,
+                            summary.pull.skipped_pending,
+                            summary.pull.skipped_tombstone,
+                            summary.pull.stale
+                        ),
+                    };
+                    if summary.push.acknowledged == 0
+                        && summary.push.retry_scheduled == 0
+                        && summary.push.conflicts == 0
+                        && summary.pull.received == 0
+                        && summary.pull_error.is_none()
                     {
                         set_status(
                             hwnd,
-                            "Aucune réservation locale en attente de push. Aucun pull distant n’a été effectué.",
+                            "Réservations : aucun changement à envoyer ni nouvelle ligne distante à importer.",
                         );
                     } else {
                         set_status(
                             hwnd,
                             &format!(
-                                "Push terminé — ACK : {}, à réessayer : {}, conflits : {}. Aucun pull distant n’a été effectué.",
-                                summary.acknowledged,
-                                summary.retry_scheduled,
-                                summary.conflicts
+                                "Réservations — Push ACK : {}, réessais : {}, conflits : {}. {}",
+                                summary.push.acknowledged,
+                                summary.push.retry_scheduled,
+                                summary.push.conflicts,
+                                pull_status
                             ),
                         );
                     }
                 }
-                Ok(AuthUiOutcome::PushFailed { error }) => {
+                Ok(AuthUiOutcome::SyncFailed { error }) => {
                     show_login(hwnd, false);
                     show_control(hwnd, ID_SIGN_OUT, true);
                     show_control(hwnd, ID_PUSH_SYNC, true);
                     set_status(
                         hwnd,
                         &format!(
-                            "Push interrompu : {error}\nSession conservée. Aucun statut de synchronisation complète n’est déclaré."
+                            "Synchronisation des réservations interrompue : {error}\nSession conservée. Les autres domaines PMS ne sont pas synchronisés."
                         ),
                     );
                 }
