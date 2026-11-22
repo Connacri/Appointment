@@ -135,7 +135,8 @@ public final class LanDiscoveryPlugin extends Plugin {
     }
 
     private String requiredPermissionAlias() {
-        if (Build.VERSION.SDK_INT >= 37) {
+        if (Build.VERSION.SDK_INT >= 37
+            && getContext().getApplicationInfo().targetSdkVersion >= 37) {
             return "localNetwork";
         }
         // Android 16's opt-in local-network protection uses Nearby devices
