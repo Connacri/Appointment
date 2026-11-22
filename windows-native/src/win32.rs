@@ -268,6 +268,8 @@ unsafe extern "system" fn window_proc(
                 ID_SIGN_IN | ID_SIGN_UP => {
                     let email = control_text(hwnd, ID_EMAIL);
                     let password = control_text(hwnd, ID_PASSWORD);
+                    let empty = wide("");
+                    SetWindowTextW(GetDlgItem(hwnd, ID_PASSWORD as i32), empty.as_ptr());
                     let task = if control_id == ID_SIGN_IN {
                         AuthTask::SignIn { email, password }
                     } else {
