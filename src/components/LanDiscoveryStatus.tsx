@@ -12,8 +12,10 @@ export const LanDiscoveryStatus: React.FC = () => {
   const [peers, setPeers] = React.useState<Record<string, string>>({});
   const [active, setActive] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const compatibilityRecoveryAttempted = React.useRef(false);
 
   const startDiscovery = React.useCallback(async () => {
+    compatibilityRecoveryAttempted.current = false;
     setError(null);
     try {
       await startNativeLanDiscovery();
@@ -56,7 +58,11 @@ export const LanDiscoveryStatus: React.FC = () => {
         // Android 16's opt-in local-network protection reports EPERM from the
         // UDP worker after startDiscovery has already resolved. Request the
         // compatibility grant only for that concrete socket failure.
-        if (/eperm|operation not permitted/i.test(message)) {
+        if (
+          /eperm|operation not permitted/i.test(message)
+          && !compatibilityRecoveryAttempted.current
+        ) {
+          compatibilityRecoveryAttempted.current = true;
           void LanDiscovery.requestAndroid16CompatibilityPermission()
             .then(() => {
               if (!cancelled) {
