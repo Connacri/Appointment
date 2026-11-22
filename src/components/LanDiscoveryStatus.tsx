@@ -13,6 +13,18 @@ export const LanDiscoveryStatus: React.FC = () => {
   const [active, setActive] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  const startDiscovery = React.useCallback(async () => {
+    setError(null);
+    try {
+      await startNativeLanDiscovery();
+      setActive(true);
+    } catch (cause) {
+      setActive(false);
+      setError(cause instanceof Error ? cause.message : String(cause));
+      await LanDiscovery.stopDiscovery().catch(() => undefined);
+    }
+  }, []);
+
   React.useEffect(() => {
     if (!supportsNativeLanDiscovery()) return;
 
@@ -46,18 +58,7 @@ export const LanDiscoveryStatus: React.FC = () => {
         await Promise.all(handles.map((handle) => handle.remove()));
         return;
       }
-      try {
-        await startNativeLanDiscovery();
-        if (!cancelled) {
-          setActive(true);
-          setError(null);
-        }
-      } catch (cause) {
-        if (!cancelled) {
-          setActive(false);
-          setError(cause instanceof Error ? cause.message : String(cause));
-        }
-      }
+      await startDiscovery();
     }).catch((cause: unknown) => {
       if (!cancelled) {
         setActive(false);
@@ -98,6 +99,15 @@ export const LanDiscoveryStatus: React.FC = () => {
       <span className={`h-2 w-2 shrink-0 rounded-full ${error ? 'bg-amber-500' : active ? 'bg-emerald-500' : 'animate-pulse bg-slate-400'}`} aria-hidden="true" />
       <span className="min-w-0 truncate">{label}</span>
       {count > 0 && <span className="ms-auto shrink-0 font-semibold tabular-nums">{count}</span>}
+      {error && (
+        <button
+          type="button"
+          onClick={() => { void startDiscovery(); }}
+          className="ms-auto shrink-0 rounded border border-slate-300 px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+        >
+          {isArabic ? 'إعادة المحاولة' : isFrench ? 'Réessayer' : 'Retry'}
+        </button>
+      )}
     </div>
   );
 };
