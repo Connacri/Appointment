@@ -30,6 +30,32 @@ pub enum AuthOutcome {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceAccess {
+    pub id: String,
+    pub name: String,
+    pub role: String,
+}
+
+#[derive(Deserialize)]
+struct WorkspaceOwnerRow {
+    id: String,
+    owner_id: String,
+}
+
+#[derive(Deserialize)]
+struct WorkspaceMemberRole {
+    role: String,
+}
+
+#[derive(Deserialize)]
+struct WorkspaceAccessRow {
+    id: String,
+    name: String,
+    owner_id: String,
+    workspace_members: Vec<WorkspaceMemberRole>,
+}
+
 pub struct SupabaseAuthClient {
     transport: WinHttpTransport,
     project_scope: String,
@@ -68,6 +94,103 @@ impl SupabaseAuthClient {
     }
     pub fn session(&self) -> Option<&AuthSession> {
         self.session.as_ref()
+    }
+
+    /// Resolve and verify this account's personal workspace through PostgREST + RLS.
+    /// The personal workspace ID is the authenticated Supabase user UUID, matching
+    /// the existing web client contract. Shared workspaces are never auto-selected.
+    pub fn resolve_personal_workspace(&mut self) -> Result<WorkspaceAccess, String> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| "System clock is before the Unix epoch.".to_string())?
+            .as_secs();
+        self.refresh_if_expiring(now)?;
+        let session = self
+            .session
+            .as_ref()
+            .ok_or_else(|| "An authenticated Supabase session is required.".to_string())?;
+        let user_id = session.user_id.clone();
+        let access_token = session.access_token.clone();
+
+        let existing = self.read_owned_workspace(&user_id, &access_token)?;
+        if let Some(workspace) = existing {
+            if workspace.owner_id != user_id || workspace.id != user_id {
+                return Err("The personal workspace identity does not match the authenticated account.".into());
+            }
+        } else {
+            let payload = json!({
+                "id": user_id,
+                "name": "Espace personnel",
+                "owner_id": user_id
+            });
+            let body = serde_json::to_vec(&payload)
+                .map_err(|error| format!("Could not serialize personal workspace: {error}"))?;
+            let response = self.transport.post(
+                "/rest/v1/workspaces",
+                &self.publishable_key,
+                Some(&access_token),
+                &body,
+            )?;
+            if response.status == 409 {
+                // Another device may have created the deterministic personal workspace.
+                let raced = self.read_owned_workspace(&user_id, &access_token)?;
+                if raced.as_ref().map(|row| row.owner_id.as_str()) != Some(user_id.as_str()) {
+                    return Err("A conflicting workspace exists for this account; no workspace was selected.".into());
+                }
+            } else {
+                ensure_success(response)?;
+            }
+        }
+
+        let membership = json!({
+            "workspace_id": user_id,
+            "user_id": user_id,
+            "role": "owner"
+        });
+        let membership_body = serde_json::to_vec(&membership)
+            .map_err(|error| format!("Could not serialize workspace membership: {error}"))?;
+        let membership_response = self.transport.post_with_prefer(
+            "/rest/v1/workspace_members?on_conflict=workspace_id,user_id",
+            &self.publishable_key,
+            Some(&access_token),
+            "resolution=merge-duplicates,return=minimal",
+            &membership_body,
+        )?;
+        ensure_success(membership_response)?;
+
+        // This read is the authorization gate. RLS must return the current user's
+        // owner membership; a local UUID or successful Auth response is not enough.
+        let path = format!(
+            "/rest/v1/workspaces?select=id,name,owner_id,workspace_members!inner(role)&id=eq.{user_id}&limit=1"
+        );
+        let response = self.transport.get(
+            &path,
+            &self.publishable_key,
+            Some(&access_token),
+        )?;
+        let response = ensure_success(response)?;
+        let rows: Vec<WorkspaceAccessRow> = serde_json::from_slice(&response.body)
+            .map_err(|_| "Supabase returned an invalid workspace authorization response.".to_string())?;
+        validate_personal_workspace(rows, &user_id)
+    }
+
+    fn read_owned_workspace(
+        &self,
+        user_id: &str,
+        access_token: &str,
+    ) -> Result<Option<WorkspaceOwnerRow>, String> {
+        let path = format!(
+            "/rest/v1/workspaces?select=id,owner_id&id=eq.{user_id}&limit=1"
+        );
+        let response = self.transport.get(
+            &path,
+            &self.publishable_key,
+            Some(access_token),
+        )?;
+        let response = ensure_success(response)?;
+        let rows: Vec<WorkspaceOwnerRow> = serde_json::from_slice(&response.body)
+            .map_err(|_| "Supabase returned an invalid workspace lookup response.".to_string())?;
+        Ok(rows.into_iter().next())
     }
 
     pub fn sign_in(&mut self, email: &str, password: &str) -> Result<AuthOutcome, String> {
@@ -245,6 +368,29 @@ struct ErrorResponse {
     msg: Option<String>,
     error: Option<String>,
 }
+fn validate_personal_workspace(
+    rows: Vec<WorkspaceAccessRow>,
+    expected_user_id: &str,
+) -> Result<WorkspaceAccess, String> {
+    let Some(row) = rows.into_iter().next() else {
+        return Err("No personal workspace membership is visible under the authenticated user's RLS policies.".into());
+    };
+    if row.id != expected_user_id || row.owner_id != expected_user_id {
+        return Err("The returned workspace is not owned by the authenticated account.".into());
+    }
+    let role = row
+        .workspace_members
+        .into_iter()
+        .find(|membership| membership.role == "owner")
+        .map(|membership| membership.role)
+        .ok_or_else(|| "The personal workspace owner membership could not be verified through RLS.".to_string())?;
+    Ok(WorkspaceAccess {
+        id: row.id,
+        name: row.name,
+        role,
+    })
+}
+
 fn ensure_success(response: HttpResponse) -> Result<HttpResponse, String> {
     if (200..300).contains(&response.status) {
         return Ok(response);
