@@ -431,11 +431,9 @@ fn map_auth_outcome(
         AuthOutcome::Authenticated { user_id, email } => {
             Ok(AuthUiOutcome::Authenticated { user_id, email })
         }
-        AuthOutcome::EmailConfirmationRequired { .. } => {
-            Ok(AuthUiOutcome::ConfirmationRequired {
-                email: email.to_string(),
-            })
-        }
+        AuthOutcome::EmailConfirmationRequired { .. } => Ok(AuthUiOutcome::ConfirmationRequired {
+            email: email.to_string(),
+        }),
     }
 }
 
