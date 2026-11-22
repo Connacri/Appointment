@@ -1269,7 +1269,10 @@ mod tests {
                 .unwrap(),
             RemoteBookingApply::Applied
         );
-        assert!(db.get_booking("w-1", "b-remote-delete").unwrap().is_none());
+        assert!(db
+            .get_booking("w-1", "b-remote-delete")
+            .unwrap()
+            .is_none());
 
         let resurrected = booking("b-remote-delete");
         assert_eq!(
