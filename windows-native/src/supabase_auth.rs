@@ -133,7 +133,14 @@ impl SupabaseAuthClient {
     pub fn sign_out(&mut self) -> Result<(), String> {
         let user_id = match self.session.as_ref() {
             Some(session) => Some(session.user_id.clone()),
-            None => credential_vault::read_active_user_id(&self.project_scope)?,
+            None => match credential_vault::read_active_user_id(&self.project_scope) {
+                Ok(user_id) => user_id,
+                Err(error) => {
+                    self.session = None;
+                    let _ = credential_vault::delete_active_user_id(&self.project_scope);
+                    return Err(error);
+                }
+            },
         };
         let remote_result = if let Some(session) = self.session.as_ref() {
             self.post_empty("/auth/v1/logout", Some(&session.access_token))
@@ -141,15 +148,13 @@ impl SupabaseAuthClient {
         } else {
             Ok(())
         };
-        let local_result = (|| -> Result<(), String> {
-            if let Some(id) = user_id {
-                credential_vault::delete_refresh_token(&self.project_scope, &id)?;
-            }
-            credential_vault::delete_active_user_id(&self.project_scope)?;
-            Ok(())
-        })();
+        let refresh_result = match user_id {
+            Some(id) => credential_vault::delete_refresh_token(&self.project_scope, &id),
+            None => Ok(()),
+        };
+        let pointer_result = credential_vault::delete_active_user_id(&self.project_scope);
         self.session = None;
-        remote_result.and(local_result)
+        remote_result.and(refresh_result).and(pointer_result)
     }
 
     fn install_token_response(
