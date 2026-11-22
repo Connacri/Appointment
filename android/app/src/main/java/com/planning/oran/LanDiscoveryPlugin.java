@@ -282,16 +282,29 @@ public final class LanDiscoveryPlugin extends Plugin {
             Enumeration<InetAddress> addresses = candidate.getInetAddresses();
             while (addresses.hasMoreElements()) {
                 InetAddress address = addresses.nextElement();
-                if (address instanceof Inet4Address
-                    && !address.isAnyLocalAddress()
-                    && !address.isLoopbackAddress()
-                    && !address.isMulticastAddress()
-                    && (address.isSiteLocalAddress() || address.isLinkLocalAddress())) {
+                if (isLanIpv4Address(address)) {
                     return candidate;
                 }
             }
         }
         throw new SocketException("Aucune interface Wi-Fi ou Ethernet IPv4 compatible multicast n'est active.");
+    }
+
+    private boolean isLanIpv4Address(InetAddress address) {
+        if (!(address instanceof Inet4Address)
+            || address.isAnyLocalAddress()
+            || address.isLoopbackAddress()
+            || address.isMulticastAddress()) {
+            return false;
+        }
+        if (address.isSiteLocalAddress() || address.isLinkLocalAddress()) return true;
+
+        // RFC 6598 shared address space (100.64.0.0/10) is also used by
+        // some local ISP/Wi-Fi networks; cellular rmnet interfaces are filtered above.
+        byte[] octets = address.getAddress();
+        int first = octets[0] & 0xff;
+        int second = octets[1] & 0xff;
+        return first == 100 && (second & 0xc0) == 0x40;
     }
 
     private void acquireMulticastLock() {
@@ -343,9 +356,7 @@ public final class LanDiscoveryPlugin extends Plugin {
                         continue;
                     }
                     InetAddress remoteAddress = incoming.getAddress();
-                    if (remoteId.equals(nodeId) || !(remoteAddress instanceof Inet4Address)
-                        || remoteAddress.isAnyLocalAddress() || remoteAddress.isLoopbackAddress()
-                        || remoteAddress.isMulticastAddress()) {
+                    if (remoteId.equals(nodeId) || !isLanIpv4Address(remoteAddress)) {
                         continue;
                     }
 
