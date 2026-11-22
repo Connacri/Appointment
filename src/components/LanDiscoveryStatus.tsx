@@ -47,10 +47,30 @@ export const LanDiscoveryStatus: React.FC = () => {
         }
       }),
       LanDiscovery.addListener('discoveryError', (detail) => {
-        if (!cancelled) {
-          setActive(false);
-          setPeers({});
-          setError(detail.message || 'LAN discovery is unavailable.');
+        if (cancelled) return;
+        const message = detail.message || 'LAN discovery is unavailable.';
+        setActive(false);
+        setPeers({});
+        setError(message);
+
+        // Android 16's opt-in local-network protection reports EPERM from the
+        // UDP worker after startDiscovery has already resolved. Request the
+        // compatibility grant only for that concrete socket failure.
+        if (/eperm|operation not permitted/i.test(message)) {
+          void LanDiscovery.requestAndroid16CompatibilityPermission()
+            .then(() => {
+              if (!cancelled) {
+                setActive(true);
+                setError(null);
+              }
+            })
+            .catch(async (cause: unknown) => {
+              await LanDiscovery.stopDiscovery().catch(() => undefined);
+              if (!cancelled) {
+                setActive(false);
+                setError(cause instanceof Error ? cause.message : String(cause));
+              }
+            });
         }
       }),
     ]).then(async (handles) => {
