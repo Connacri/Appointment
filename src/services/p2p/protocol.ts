@@ -61,7 +61,20 @@ export function validateP2pEvent<TPayload>(event: P2pEvent<TPayload>): void {
 }
 
 export function happensBefore<TPayload>(a: P2pEvent<TPayload>, b: P2pEvent<TPayload>): boolean {
-  return a.eventId !== b.eventId && (b.clock[a.nodeId] ?? 0) >= a.sequence;
+  if (a.eventId === b.eventId) return false;
+
+  let strictlyAfter = false;
+  for (const [nodeId, aSequence] of Object.entries(a.clock)) {
+    const bSequence = b.clock[nodeId] ?? 0;
+    if (bSequence < aSequence) return false;
+    if (bSequence > aSequence) strictlyAfter = true;
+  }
+  for (const [nodeId, bSequence] of Object.entries(b.clock)) {
+    if (!Object.prototype.hasOwnProperty.call(a.clock, nodeId) && bSequence > 0) {
+      strictlyAfter = true;
+    }
+  }
+  return strictlyAfter;
 }
 
 function stableJson(value: unknown): string {
