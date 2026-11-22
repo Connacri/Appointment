@@ -58,6 +58,13 @@ unsafe extern "system" {
         bytes_read: *mut u32,
     ) -> i32;
     fn WinHttpCloseHandle(handle: HInternet) -> i32;
+    fn WinHttpSetTimeouts(
+        handle: HInternet,
+        resolve_timeout: i32,
+        connect_timeout: i32,
+        send_timeout: i32,
+        receive_timeout: i32,
+    ) -> i32;
 }
 #[link(name = "kernel32")]
 unsafe extern "system" {
@@ -205,6 +212,12 @@ impl WinHttpTransport {
                 ),
                 "WinHttpOpen",
             )?;
+            if WinHttpSetTimeouts(session.0, 10_000, 10_000, 20_000, 30_000) == 0 {
+                return Err(format!(
+                    "WinHttpSetTimeouts failed (Win32 error {}).",
+                    GetLastError()
+                ));
+            }
             let connect = Handle::new(
                 WinHttpConnect(session.0, host.as_ptr(), self.endpoint.port, 0),
                 "WinHttpConnect",
