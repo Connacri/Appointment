@@ -271,7 +271,15 @@ unsafe extern "system" fn window_proc(
             create_button(hwnd, "Se connecter", ID_SIGN_IN, 44, 318, 180, 42);
             create_button(hwnd, "Créer un compte", ID_SIGN_UP, 238, 318, 196, 42);
             create_button(hwnd, "Se déconnecter", ID_SIGN_OUT, 44, 318, 180, 42);
-            create_button(hwnd, "Pousser les réservations", ID_PUSH_SYNC, 238, 318, 220, 42);
+            create_button(
+                hwnd,
+                "Pousser les réservations",
+                ID_PUSH_SYNC,
+                238,
+                318,
+                220,
+                42,
+            );
             create_status_label(hwnd, 44, 382, 800, 78);
             show_control(hwnd, ID_SIGN_OUT, false);
             show_control(hwnd, ID_PUSH_SYNC, false);
@@ -522,22 +530,23 @@ fn start_auth_task(hwnd: Hwnd, task: AuthTask, client: Option<SupabaseAuthClient
                     map_auth_outcome(&mut client, &database, result, &email)
                 }
                 AuthTask::SignOut => client.sign_out().map(|_| AuthUiOutcome::SignedOut),
-                AuthTask::PushBookings { workspace_id, limit } => {
-                    match database.as_ref() {
-                        Some(database) => match push_due_bookings(
-                            &mut client,
-                            database.as_ref(),
-                            &workspace_id,
-                            limit,
-                        ) {
-                            Ok(summary) => Ok(AuthUiOutcome::PushCompleted(summary)),
-                            Err(error) => Ok(AuthUiOutcome::PushFailed { error }),
-                        },
-                        None => Ok(AuthUiOutcome::PushFailed {
-                            error: "La base SQLite locale n’est pas disponible.".into(),
-                        }),
-                    }
-                }
+                AuthTask::PushBookings {
+                    workspace_id,
+                    limit,
+                } => match database.as_ref() {
+                    Some(database) => match push_due_bookings(
+                        &mut client,
+                        database.as_ref(),
+                        &workspace_id,
+                        limit,
+                    ) {
+                        Ok(summary) => Ok(AuthUiOutcome::PushCompleted(summary)),
+                        Err(error) => Ok(AuthUiOutcome::PushFailed { error }),
+                    },
+                    None => Ok(AuthUiOutcome::PushFailed {
+                        error: "La base SQLite locale n’est pas disponible.".into(),
+                    }),
+                },
             };
             post_completion(
                 hwnd_value,
@@ -579,10 +588,14 @@ fn resolve_authenticated_outcome(
                     .map_err(|_| "Le verrou SQLite local est indisponible.".to_string())?;
                 local
                     .ensure_workspace(&workspace.id, &user_id, &workspace.name)
-                    .map_err(|error| format!("Impossible d’initialiser le workspace local : {error}"))?;
+                    .map_err(|error| {
+                        format!("Impossible d’initialiser le workspace local : {error}")
+                    })?;
                 let owner_matches = local
                     .workspace_is_owned_by(&workspace.id, &user_id)
-                    .map_err(|error| format!("Impossible de vérifier le propriétaire local : {error}"))?;
+                    .map_err(|error| {
+                        format!("Impossible de vérifier le propriétaire local : {error}")
+                    })?;
                 if !owner_matches {
                     return Err("Le workspace SQLite local appartient à un autre compte.".into());
                 }
@@ -618,14 +631,9 @@ fn map_auth_outcome(
     submitted_email: &str,
 ) -> Result<AuthUiOutcome, String> {
     match result? {
-        AuthOutcome::Authenticated { user_id, email } => {
-            Ok(resolve_authenticated_outcome(
-                client,
-                database,
-                user_id,
-                email,
-            ))
-        }
+        AuthOutcome::Authenticated { user_id, email } => Ok(resolve_authenticated_outcome(
+            client, database, user_id, email,
+        )),
         AuthOutcome::EmailConfirmationRequired { .. } => Ok(AuthUiOutcome::ConfirmationRequired {
             email: submitted_email.to_string(),
         }),
