@@ -172,6 +172,22 @@ public final class LanDiscoveryPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void requestAndroid16CompatibilityPermission(PluginCall call) {
+        if (Build.VERSION.SDK_INT != 36) {
+            call.reject("Cette autorisation de compatibilité ne concerne qu'Android 16.");
+            return;
+        }
+        discoveryRequested = true;
+        if (hasPermission("nearbyDevices")) {
+            permissionGranted = true;
+            startForCall(call);
+            return;
+        }
+        permissionGranted = false;
+        requestPermissionForAlias("nearbyDevices", call, "nearbyDevicesCompatCallback");
+    }
+
+    @PluginMethod
     public void stopDiscovery(PluginCall call) {
         discoveryRequested = false;
         permissionGranted = false;
