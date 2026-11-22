@@ -101,7 +101,7 @@ impl PmsDatabase {
                      COALESCE(json_extract(payload, '$.startDate'),
                               json_extract(payload, '$.start_date')));
                  INSERT OR IGNORE INTO schema_migrations(version) VALUES (2);
-                 COMMIT;"
+                 COMMIT;",
             )?;
         }
         Ok(())
