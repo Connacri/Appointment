@@ -153,7 +153,7 @@ impl SupabaseAuthClient {
             "/rest/v1/workspace_members?on_conflict=workspace_id,user_id",
             &self.publishable_key,
             Some(&access_token),
-            "resolution=merge-duplicates,return=minimal",
+            "resolution=ignore-duplicates,return=minimal",
             &membership_body,
         )?;
         ensure_success(membership_response)?;
