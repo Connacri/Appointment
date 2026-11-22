@@ -52,9 +52,11 @@ pub struct Booking {
     pub end_date: String,
     pub status: BookingStatus,
     #[serde(rename = "totalPriceMinor", alias = "total_price_minor")]
-    pub total_price_minor: i64,
+    #[serde(default)]
+    pub total_price_minor: Option<i64>,
     #[serde(rename = "currencyCode", alias = "currency_code")]
-    pub currency_code: String,
+    #[serde(default)]
+    pub currency_code: Option<String>,
     #[serde(rename = "paymentStatus", alias = "payment_status")]
     pub payment_status: String,
     pub notes: Option<String>,
@@ -84,16 +86,20 @@ impl Booking {
         if self.end_date < self.start_date {
             return Err("booking.end_date must not be before booking.start_date".into());
         }
-        if self.total_price_minor < 0 {
-            return Err("booking.total_price_minor must be non-negative".into());
-        }
-        if self.currency_code.len() != 3
-            || !self
-                .currency_code
-                .bytes()
-                .all(|byte| byte.is_ascii_uppercase())
-        {
-            return Err("booking.currency_code must be a three-letter uppercase ISO code".into());
+        match (self.total_price_minor, self.currency_code.as_deref()) {
+            (Some(amount), Some(code)) => {
+                if amount < 0 {
+                    return Err("booking.total_price_minor must be non-negative".into());
+                }
+                if code.len() != 3 || !code.bytes().all(|byte| byte.is_ascii_uppercase()) {
+                    return Err("booking.currency_code must be a three-letter uppercase ISO code".into());
+                }
+            }
+            (None, None) => {
+                // TypeScript totalPrice/paymentCurrency remain in extra_fields
+                // until a currency-exponent-aware mapper exists.
+            }
+            _ => return Err("booking minor-unit amount and currency code must be provided together".into()),
         }
         if !matches!(self.sector.as_str(), "hotel" | "resort") {
             return Err("booking.sector must be hotel or resort".into());
@@ -147,8 +153,8 @@ mod tests {
             start_date: "2026-11-21".into(),
             end_date: "2026-11-23".into(),
             status: BookingStatus::Confirmed,
-            total_price_minor: 1_200_000,
-            currency_code: "DZD".into(),
+            total_price_minor: Some(1_200_000),
+            currency_code: Some("DZD".into()),
             payment_status: "pending".into(),
             notes: None,
             extra_fields: BTreeMap::new(),
@@ -212,9 +218,43 @@ mod tests {
     }
 
     #[test]
+    fn preserves_typescript_money_until_currency_conversion_is_defined() {
+        let source = serde_json::json!({
+            "id": "b-3",
+            "resourceId": "r-3",
+            "resourceName": "303",
+            "sector": "resort",
+            "guestName": "Guest",
+            "guestEmail": "",
+            "guestPhone": "",
+            "startDate": "2026-11-21",
+            "endDate": "2026-11-22",
+            "status": "confirmed",
+            "paymentStatus": "pending",
+            "totalPrice": 123.45,
+            "paymentCurrency": "EUR",
+            "notes": null
+        });
+        let booking: Booking = serde_json::from_value(source).unwrap();
+        assert!(booking.validate().is_ok());
+        assert_eq!(booking.total_price_minor, None);
+        assert_eq!(booking.currency_code, None);
+        let round_trip = serde_json::to_value(booking).unwrap();
+        assert_eq!(round_trip["totalPrice"], 123.45);
+        assert_eq!(round_trip["paymentCurrency"], "EUR");
+    }
+
+    #[test]
+    fn rejects_partial_native_money_pair() {
+        let mut booking = sample();
+        booking.currency_code = None;
+        assert!(booking.validate().unwrap_err().contains("provided together"));
+    }
+
+    #[test]
     fn rejects_negative_money() {
         let mut booking = sample();
-        booking.total_price_minor = -1;
+        booking.total_price_minor = Some(-1);
         assert!(booking.validate().unwrap_err().contains("non-negative"));
     }
 
