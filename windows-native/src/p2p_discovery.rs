@@ -20,6 +20,7 @@ const ANNOUNCE_INTERVAL: Duration = Duration::from_secs(3);
 const PEER_TIMEOUT: Duration = Duration::from_secs(12);
 const RECEIVE_TIMEOUT: Duration = Duration::from_millis(250);
 const MAX_DATAGRAM_BYTES: usize = 1024;
+const MAX_DISCOVERED_PEERS: usize = 128;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -131,6 +132,9 @@ fn discovery_loop(
             Ok((length, source)) if length <= MAX_DATAGRAM_BYTES => {
                 if let Ok(message) = serde_json::from_slice::<Announcement>(&buffer[..length]) {
                     if let Some(peer) = validate_announcement(message, &own_peer_id, source) {
+                        if !peers.contains_key(&peer.peer_id) && peers.len() >= MAX_DISCOVERED_PEERS {
+                            continue;
+                        }
                         let now = Instant::now();
                         let changed = peers
                             .get(&peer.peer_id)
