@@ -432,6 +432,49 @@ fn normalize_user_id(user_id: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn workspace_row(
+        id: &str,
+        owner_id: &str,
+        roles: &[&str],
+    ) -> WorkspaceAccessRow {
+        WorkspaceAccessRow {
+            id: id.to_string(),
+            name: "Espace personnel".into(),
+            owner_id: owner_id.to_string(),
+            workspace_members: roles
+                .iter()
+                .map(|role| WorkspaceMemberRole {
+                    role: (*role).to_string(),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn workspace_access_requires_matching_owner_and_rls_owner_membership() {
+        let user_id = "a1b2c3d4-e5f6-47a8-9012-1234567890ab";
+        let access = validate_personal_workspace(
+            vec![workspace_row(user_id, user_id, &["owner"])],
+            user_id,
+        )
+        .unwrap();
+        assert_eq!(access.id, user_id);
+        assert_eq!(access.role, "owner");
+
+        assert!(validate_personal_workspace(
+            vec![workspace_row(user_id, "b1b2c3d4-e5f6-47a8-9012-1234567890ab", &["owner"])],
+            user_id,
+        )
+        .is_err());
+        assert!(validate_personal_workspace(
+            vec![workspace_row(user_id, user_id, &["member"])],
+            user_id,
+        )
+        .is_err());
+        assert!(validate_personal_workspace(Vec::new(), user_id).is_err());
+    }
+
     #[test]
     fn credentials_are_validated_before_network_access() {
         assert!(validate_email(" user@example.com ").is_ok());
