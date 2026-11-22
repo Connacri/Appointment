@@ -834,6 +834,44 @@ mod tests {
     }
 
     #[test]
+    fn disk_database_reopens_with_workspace_outbox_and_generic_entities() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("appointment.sqlite3");
+        {
+            let mut local = PmsDatabase::open(&path).unwrap();
+            local.ensure_workspace("w-disk", "u-disk", "Disk workspace").unwrap();
+            local.upsert_booking("w-disk", &booking("b-disk"), "idem-disk").unwrap();
+            local
+                .upsert_entity_record(
+                    "w-disk",
+                    "resources",
+                    "r-disk",
+                    r#"{"id":"r-disk","status":"active"}"#,
+                    1,
+                    "2026-11-22T12:00:00Z",
+                )
+                .unwrap();
+        }
+
+        let reopened = PmsDatabase::open(&path).unwrap();
+        assert!(reopened.get_booking("w-disk", "b-disk").unwrap().is_some());
+        assert_eq!(reopened.pending_outbox("w-disk", 10).unwrap().len(), 1);
+        assert_eq!(
+            reopened
+                .get_entity_record("w-disk", "resources", "r-disk")
+                .unwrap()
+                .unwrap()
+                .payload,
+            r#"{"id":"r-disk","status":"active"}"#
+        );
+        let schema_version: i64 = reopened
+            .connection
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(schema_version, 5);
+    }
+
+    #[test]
     fn sqlite_and_outbox_store_the_normalized_occupant_contract() {
         let mut db = database();
         let mut item = booking("b-family");
