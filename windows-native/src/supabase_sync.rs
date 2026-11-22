@@ -1,0 +1,512 @@
+use serde::Deserialize;
+use serde_json::{json, Value};
+use uuid::Uuid;
+
+use crate::booking_mapper::to_supabase_booking_row;
+use crate::database::{OutboxEntry, PmsDatabase};
+use crate::domain::Booking;
+use crate::supabase_auth::SupabaseAuthClient;
+use crate::winhttp::HttpResponse;
+
+const REST_PREFER_REPRESENTATION: &str = "return=representation";
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PushSummary {
+    pub acknowledged: u32,
+    pub retry_scheduled: u32,
+    pub conflicts: u32,
+}
+
+enum PushFailure {
+    Retry(String),
+    Conflict(String),
+}
+
+#[derive(Deserialize)]
+struct RemoteResource {
+    id: String,
+    workspace_id: String,
+    establishment_id: String,
+    is_active: bool,
+    deleted_at: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RemoteBookingVersion {
+    id: String,
+    workspace_id: String,
+    version: i64,
+    deleted_at: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RemoteReturnedVersion {
+    version: i64,
+}
+
+/// Pushes due booking Outbox events sequentially.
+///
+/// A workspace must first pass the native Supabase Auth + RLS membership gate.
+/// Inserts, updates and soft deletes use conditional server versions. A local
+/// Outbox row is acknowledged only after a successful server representation
+/// (or an idempotent read proving the same operation already committed).
+///
+/// Calls for a given workspace must be serialized by the caller. The HTTP
+/// operations themselves are synchronous; run this function on a worker thread.
+pub fn push_due_bookings(
+    client: &mut SupabaseAuthClient,
+    database: &PmsDatabase,
+    workspace_id: &str,
+    limit: u32,
+) -> Result<PushSummary, String> {
+    let expected_workspace = normalize_uuid(workspace_id, "workspace_id")?;
+    let access = client.resolve_personal_workspace()?;
+    if access.id != expected_workspace {
+        return Err(
+            "The requested local workspace is not the authenticated account's verified personal workspace."
+                .into(),
+        );
+    }
+    let user_id = client
+        .session()
+        .map(|session| session.user_id.clone())
+        .ok_or_else(|| "An authenticated Supabase session is required.".to_string())?;
+
+    let due_entries = database
+        .pending_outbox(&expected_workspace, limit.min(500))
+        .map_err(|error| format!("Could not read the local Outbox: {error}"))?;
+    let mut summary = PushSummary::default();
+
+    for entry in due_entries {
+        match push_one(client, &user_id, &expected_workspace, &entry) {
+            Ok(server_version) => {
+                let acknowledged = database
+                    .acknowledge_outbox(&expected_workspace, &entry.id, server_version)
+                    .map_err(|error| format!("Could not persist server acknowledgement: {error}"))?;
+                if !acknowledged {
+                    return Err(
+                        "The server accepted a booking mutation, but its local Outbox row changed before acknowledgement. The operation will be retried idempotently."
+                            .into(),
+                    );
+                }
+                summary.acknowledged += 1;
+            }
+            Err(PushFailure::Conflict(reason)) => {
+                database
+                    .mark_outbox_conflict(&expected_workspace, &entry.id, &reason)
+                    .map_err(|error| format!("Could not persist Outbox conflict: {error}"))?;
+                summary.conflicts += 1;
+            }
+            Err(PushFailure::Retry(reason)) => {
+                database
+                    .mark_outbox_failed(&expected_workspace, &entry.id, &reason)
+                    .map_err(|error| format!("Could not schedule Outbox retry: {error}"))?;
+                summary.retry_scheduled += 1;
+            }
+        }
+    }
+
+    Ok(summary)
+}
+
+fn push_one(
+    client: &mut SupabaseAuthClient,
+    user_id: &str,
+    workspace_id: &str,
+    entry: &OutboxEntry,
+) -> Result<i64, PushFailure> {
+    if entry.workspace_id != workspace_id {
+        return Err(PushFailure::Conflict(
+            "Outbox workspace does not match the verified workspace.".into(),
+        ));
+    }
+    if entry.entity != "booking" {
+        return Err(PushFailure::Conflict(format!(
+            "Unsupported Outbox entity '{}'; no remote mutation was attempted.",
+            entry.entity
+        )));
+    }
+    let booking_id = normalize_uuid(&entry.entity_id, "booking_id")
+        .map_err(PushFailure::Conflict)?;
+
+    match entry.operation.as_str() {
+        "upsert" => {
+            let payload = entry.payload.as_deref().ok_or_else(|| {
+                PushFailure::Conflict("Booking upsert has no local payload.".into())
+            })?;
+            let mut booking: Booking = serde_json::from_str(payload).map_err(|_| {
+                PushFailure::Conflict("Booking Outbox payload is invalid JSON.".into())
+            })?;
+            if booking.id != booking_id {
+                return Err(PushFailure::Conflict(
+                    "Booking payload ID does not match its Outbox entity ID.".into(),
+                ));
+            }
+            booking.normalize_occupants();
+            booking
+                .validate()
+                .map_err(PushFailure::Conflict)?;
+
+            let resource = fetch_resource(client, workspace_id, &booking.resource_id)?;
+            if resource.workspace_id != workspace_id
+                || resource.id != booking.resource_id
+                || !resource.is_active
+                || resource.deleted_at.is_some()
+            {
+                return Err(PushFailure::Conflict(
+                    "Booking resource is inactive, deleted, or outside the verified workspace."
+                        .into(),
+                ));
+            }
+            normalize_uuid(&resource.establishment_id, "establishment_id")
+                .map_err(PushFailure::Conflict)?;
+
+            let expected = to_supabase_booking_row(
+                &booking,
+                workspace_id,
+                &resource.establishment_id,
+                Some(user_id),
+            )
+            .map_err(PushFailure::Conflict)?;
+            upsert_remote_booking(
+                client,
+                workspace_id,
+                &booking_id,
+                entry.base_server_version,
+                expected,
+            )
+        }
+        "delete" => delete_remote_booking(
+            client,
+            workspace_id,
+            &booking_id,
+            entry.base_server_version,
+        ),
+        _ => Err(PushFailure::Conflict(format!(
+            "Unsupported booking Outbox operation '{}'.",
+            entry.operation
+        ))),
+    }
+}
+
+fn fetch_resource(
+    client: &mut SupabaseAuthClient,
+    workspace_id: &str,
+    resource_id: &str,
+) -> Result<RemoteResource, PushFailure> {
+    let resource_id =
+        normalize_uuid(resource_id, "resource_id").map_err(PushFailure::Conflict)?;
+    let path = format!(
+        "/rest/v1/resources?select=id,workspace_id,establishment_id,is_active,deleted_at&id=eq.{resource_id}&workspace_id=eq.{workspace_id}&limit=1"
+    );
+    let response = client
+        .authenticated_get(&path)
+        .map_err(PushFailure::Retry)?;
+    let response = require_success(response)?;
+    let rows: Vec<RemoteResource> = serde_json::from_slice(&response.body).map_err(|_| {
+        PushFailure::Retry("Supabase returned an invalid resource lookup response.".into())
+    })?;
+    let Some(resource) = rows.into_iter().next() else {
+        return Err(PushFailure::Conflict(
+            "The booking resource is not visible in this workspace under RLS.".into(),
+        ));
+    };
+    Ok(resource)
+}
+
+fn upsert_remote_booking(
+    client: &mut SupabaseAuthClient,
+    workspace_id: &str,
+    booking_id: &str,
+    base_server_version: i64,
+    expected: Value,
+) -> Result<i64, PushFailure> {
+    let path = format!(
+        "/rest/v1/bookings?select=*&id=eq.{booking_id}&workspace_id=eq.{workspace_id}&limit=1"
+    );
+    let current = fetch_booking_row(client, &path)?;
+
+    if base_server_version == 0 {
+        if let Some(row) = current.as_ref() {
+            if row_matches_expected(row, &expected) && row.get("deleted_at").is_some_and(Value::is_null)
+            {
+                return remote_version(row);
+            }
+            return Err(PushFailure::Conflict(
+                "A remote booking with this ID already exists and has no matching local server-version history."
+                    .into(),
+            ));
+        }
+
+        let mut insert = expected;
+        insert
+            .as_object_mut()
+            .ok_or_else(|| PushFailure::Conflict("Booking mapper returned a non-object.".into()))?
+            .insert("deleted_at".into(), Value::Null);
+        let body = serde_json::to_vec(&insert)
+            .map_err(|_| PushFailure::Conflict("Could not serialize booking insert.".into()))?;
+        let response = client
+            .authenticated_post_with_prefer(
+                "/rest/v1/bookings",
+                REST_PREFER_REPRESENTATION,
+                &body,
+            )
+            .map_err(PushFailure::Retry)?;
+        if response.status == 409 {
+            // The first POST may have committed even though its response was lost,
+            // or another device may have inserted the same primary key.
+            let raced = fetch_booking_row(client, &path)?;
+            if let Some(row) = raced.as_ref() {
+                if row_matches_expected(row, &insert)
+                    && row.get("deleted_at").is_some_and(Value::is_null)
+                {
+                    return remote_version(row);
+                }
+            }
+            return Err(PushFailure::Conflict(
+                "The booking ID was inserted remotely with different data.".into(),
+            ));
+        }
+        let response = require_success(response)?;
+        return returned_version(&response);
+    }
+
+    let Some(row) = current else {
+        return Err(PushFailure::Conflict(
+            "The remote booking no longer exists; a local update cannot recreate it silently."
+                .into(),
+        ));
+    };
+    let current_version = remote_version(&row)?;
+    if current_version > base_server_version
+        && row_matches_expected(&row, &expected)
+        && row.get("deleted_at").is_some_and(Value::is_null)
+    {
+        // Idempotent recovery after a successful server write with a lost response.
+        return Ok(current_version);
+    }
+    if current_version != base_server_version {
+        return Err(PushFailure::Conflict(format!(
+            "Booking version conflict: local base {base_server_version}, remote version {current_version}."
+        )));
+    }
+
+    let mut patch = expected;
+    patch
+        .as_object_mut()
+        .ok_or_else(|| PushFailure::Conflict("Booking mapper returned a non-object.".into()))?
+        .remove("created_by");
+    patch
+        .as_object_mut()
+        .expect("object shape was checked")
+        .insert("deleted_at".into(), Value::Null);
+    let body = serde_json::to_vec(&patch)
+        .map_err(|_| PushFailure::Conflict("Could not serialize booking update.".into()))?;
+    let patch_path = format!(
+        "/rest/v1/bookings?id=eq.{booking_id}&workspace_id=eq.{workspace_id}&version=eq.{base_server_version}"
+    );
+    let response = client
+        .authenticated_patch_with_prefer(
+            &patch_path,
+            REST_PREFER_REPRESENTATION,
+            &body,
+        )
+        .map_err(PushFailure::Retry)?;
+    let response = require_success(response)?;
+    returned_version(&response)
+}
+
+fn delete_remote_booking(
+    client: &mut SupabaseAuthClient,
+    workspace_id: &str,
+    booking_id: &str,
+    base_server_version: i64,
+) -> Result<i64, PushFailure> {
+    let path = format!(
+        "/rest/v1/bookings?select=id,workspace_id,version,deleted_at&id=eq.{booking_id}&workspace_id=eq.{workspace_id}&limit=1"
+    );
+    let Some(row) = fetch_booking_row(client, &path)? else {
+        // A physical remote deletion already satisfies the requested final state.
+        return Ok(0);
+    };
+    let current_version = remote_version(&row)?;
+    if row.get("deleted_at").is_some_and(|value| !value.is_null()) {
+        // Soft deletion is monotonic; retries after a lost ACK converge here.
+        return Ok(current_version);
+    }
+    if base_server_version == 0 || current_version != base_server_version {
+        return Err(PushFailure::Conflict(format!(
+            "Booking delete conflict: local base {base_server_version}, remote version {current_version}."
+        )));
+    }
+
+    let body = serde_json::to_vec(&json!({ "deleted_at": utc_timestamp() }))
+        .map_err(|_| PushFailure::Conflict("Could not serialize booking tombstone.".into()))?;
+    let patch_path = format!(
+        "/rest/v1/bookings?id=eq.{booking_id}&workspace_id=eq.{workspace_id}&version=eq.{base_server_version}&deleted_at=is.null"
+    );
+    let response = client
+        .authenticated_patch_with_prefer(
+            &patch_path,
+            REST_PREFER_REPRESENTATION,
+            &body,
+        )
+        .map_err(PushFailure::Retry)?;
+    let response = require_success(response)?;
+    returned_version(&response)
+}
+
+fn fetch_booking_row(
+    client: &mut SupabaseAuthClient,
+    path: &str,
+) -> Result<Option<Value>, PushFailure> {
+    let response = client
+        .authenticated_get(path)
+        .map_err(PushFailure::Retry)?;
+    let response = require_success(response)?;
+    let rows: Vec<Value> = serde_json::from_slice(&response.body)
+        .map_err(|_| PushFailure::Retry("Supabase returned an invalid booking response.".into()))?;
+    Ok(rows.into_iter().next())
+}
+
+fn require_success(response: HttpResponse) -> Result<HttpResponse, PushFailure> {
+    if (200..300).contains(&response.status) {
+        return Ok(response);
+    }
+    let message = format!("Supabase REST request failed with HTTP {}.", response.status);
+    if response.status == 401 || response.status == 403 || response.status >= 500 {
+        Err(PushFailure::Retry(message))
+    } else {
+        Err(PushFailure::Conflict(message))
+    }
+}
+
+fn returned_version(response: &HttpResponse) -> Result<i64, PushFailure> {
+    let rows: Vec<RemoteReturnedVersion> = serde_json::from_slice(&response.body).map_err(|_| {
+        PushFailure::Retry(
+            "Supabase did not return a booking representation; the server ACK is unverified."
+                .into(),
+        )
+    })?;
+    let Some(row) = rows.into_iter().next() else {
+        return Err(PushFailure::Conflict(
+            "The conditional booking update matched no remote row; the operation was not acknowledged."
+                .into(),
+        ));
+    };
+    if row.version <= 0 {
+        return Err(PushFailure::Retry(
+            "Supabase returned a non-positive booking version; the server ACK is invalid.".into(),
+        ));
+    }
+    Ok(row.version)
+}
+
+fn remote_version(row: &Value) -> Result<i64, PushFailure> {
+    row.get("version")
+        .and_then(Value::as_i64)
+        .filter(|version| *version > 0)
+        .ok_or_else(|| {
+            PushFailure::Retry("Remote booking row has no valid server version.".into())
+        })
+}
+
+fn row_matches_expected(remote: &Value, expected: &Value) -> bool {
+    let Some(expected) = expected.as_object() else {
+        return false;
+    };
+    let Some(remote) = remote.as_object() else {
+        return false;
+    };
+    expected
+        .iter()
+        .filter(|(key, _)| key.as_str() != "created_by")
+        .all(|(key, value)| remote.get(key) == Some(value))
+}
+
+fn normalize_uuid(value: &str, field: &str) -> Result<String, String> {
+    Uuid::parse_str(value)
+        .map(|id| id.hyphenated().to_string())
+        .map_err(|_| format!("{field} must be a valid UUID before cloud synchronization."))
+}
+
+fn utc_timestamp() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let days = (seconds / 86_400) as i64;
+    let day_seconds = seconds % 86_400;
+    let (year, month, day) = civil_from_days(days);
+    let hour = day_seconds / 3_600;
+    let minute = (day_seconds % 3_600) / 60;
+    let second = day_seconds % 60;
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
+}
+
+fn civil_from_days(days_since_epoch: i64) -> (i64, i64, i64) {
+    let z = days_since_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let day_of_era = z - era * 146_097;
+    let year_of_era = (day_of_era - day_of_era / 1_460 + day_of_era / 36_524
+        - day_of_era / 146_096)
+        / 365;
+    let mut year = year_of_era + era * 400;
+    let day_of_year = day_of_era
+        - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_prime = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
+    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
+    year += i64::from(month <= 2);
+    (year, month, day)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resource_and_booking_ids_must_be_uuids_before_query_construction() {
+        assert!(normalize_uuid(
+            "a1b2c3d4-e5f6-47a8-9012-1234567890ab",
+            "booking_id"
+        )
+        .is_ok());
+        assert!(normalize_uuid("room-101", "resource_id").is_err());
+    }
+
+    #[test]
+    fn row_match_ignores_server_managed_fields() {
+        let expected = json!({
+            "id":"a1b2c3d4-e5f6-47a8-9012-1234567890ab",
+            "workspace_id":"b1b2c3d4-e5f6-47a8-9012-1234567890ab",
+            "guest_name":"Guest",
+            "created_by":"user-a"
+        });
+        let remote = json!({
+            "id":"a1b2c3d4-e5f6-47a8-9012-1234567890ab",
+            "workspace_id":"b1b2c3d4-e5f6-47a8-9012-1234567890ab",
+            "guest_name":"Guest",
+            "created_by":"user-b",
+            "version":3,
+            "updated_at":"2026-11-22T11:00:00Z",
+            "deleted_at":null
+        });
+        assert!(row_matches_expected(&remote, &expected));
+    }
+
+    #[test]
+    fn timestamp_is_utc_and_uses_rfc3339_shape() {
+        let value = utc_timestamp();
+        assert!(value.ends_with('Z'));
+        assert_eq!(value.len(), 20);
+        assert_eq!(&value[4..5], "-");
+        assert_eq!(&value[10..11], "T");
+    }
+
+    #[test]
+    fn civil_date_conversion_handles_unix_epoch_and_leap_day() {
+        assert_eq!(civil_from_days(0), (1970, 1, 1));
+        assert_eq!(civil_from_days(20_000), (2024, 10, 4));
+    }
+}
