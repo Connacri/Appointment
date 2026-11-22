@@ -39,6 +39,7 @@ pub struct DiscoveredPeer {
 pub enum DiscoveryEvent {
     PeerFound(DiscoveredPeer),
     PeerExpired { peer_id: String },
+    Failed { message: String },
 }
 
 pub struct LanDiscovery {
@@ -124,7 +125,12 @@ fn discovery_loop(
 
     while !stop.load(Ordering::Acquire) {
         if last_announcement.elapsed() >= ANNOUNCE_INTERVAL {
-            let _ = socket.send_to(&packet, destination);
+            if let Err(error) = socket.send_to(&packet, destination) {
+                let _ = sender.send(DiscoveryEvent::Failed {
+                    message: format!("LAN discovery announcement failed: {error}"),
+                });
+                break;
+            }
             last_announcement = Instant::now();
         }
 
@@ -157,7 +163,12 @@ fn discovery_loop(
                     error.kind(),
                     std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
                 ) => {}
-            Err(_) => break,
+            Err(error) => {
+                let _ = sender.send(DiscoveryEvent::Failed {
+                    message: format!("LAN discovery receive failed: {error}"),
+                });
+                break;
+            }
         }
 
         let now = Instant::now();
