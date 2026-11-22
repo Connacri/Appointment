@@ -1269,10 +1269,7 @@ mod tests {
                 .unwrap(),
             RemoteBookingApply::Applied
         );
-        assert!(db
-            .get_booking("w-1", "b-remote-delete")
-            .unwrap()
-            .is_none());
+        assert!(db.get_booking("w-1", "b-remote-delete").unwrap().is_none());
 
         let resurrected = booking("b-remote-delete");
         assert_eq!(
@@ -1280,10 +1277,7 @@ mod tests {
                 .unwrap(),
             RemoteBookingApply::SkippedTombstone
         );
-        assert!(db
-            .get_booking("w-1", "b-remote-delete")
-            .unwrap()
-            .is_none());
+        assert!(db.get_booking("w-1", "b-remote-delete").unwrap().is_none());
         let server_version: i64 = db
             .connection
             .query_row(
