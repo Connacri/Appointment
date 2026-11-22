@@ -30,6 +30,20 @@ pub struct OutboxStats {
     pub synced: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncCursor {
+    pub updated_at: String,
+    pub entity_id: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteBookingApply {
+    Applied,
+    SkippedPending,
+    SkippedTombstone,
+    Stale,
+}
+
 pub struct PmsDatabase {
     connection: Connection,
 }
@@ -158,6 +172,26 @@ impl PmsDatabase {
                  CREATE INDEX idx_outbox_workspace
                    ON outbox(workspace_id, created_at);
                  INSERT OR IGNORE INTO schema_migrations(version) VALUES (3);
+                 COMMIT;",
+            )?;
+        }
+        let has_v4: bool = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 4)",
+            [],
+            |row| row.get(0),
+        )?;
+        if !has_v4 {
+            self.connection.execute_batch(
+                "BEGIN IMMEDIATE;
+                 CREATE TABLE sync_cursors (
+                   workspace_id TEXT NOT NULL,
+                   entity TEXT NOT NULL,
+                   updated_at TEXT NOT NULL,
+                   entity_id TEXT NOT NULL,
+                   PRIMARY KEY(workspace_id, entity),
+                   FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+                 );
+                 INSERT OR IGNORE INTO schema_migrations(version) VALUES (4);
                  COMMIT;",
             )?;
         }
@@ -530,6 +564,170 @@ impl PmsDatabase {
             conflict,
             synced,
         })
+    }
+
+    pub fn sync_cursor(
+        &self,
+        workspace_id: &str,
+        entity: &str,
+    ) -> rusqlite::Result<Option<SyncCursor>> {
+        self.connection
+            .query_row(
+                "SELECT updated_at,entity_id FROM sync_cursors
+                 WHERE workspace_id=?1 AND entity=?2",
+                params![workspace_id, entity],
+                |row| {
+                    Ok(SyncCursor {
+                        updated_at: row.get(0)?,
+                        entity_id: row.get(1)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
+    /// Cursor updates are monotonic. A replayed or out-of-order page cannot move
+    /// the incremental pull position backwards.
+    pub fn store_sync_cursor(
+        &self,
+        workspace_id: &str,
+        entity: &str,
+        updated_at: &str,
+        entity_id: &str,
+    ) -> rusqlite::Result<()> {
+        self.connection.execute(
+            "INSERT INTO sync_cursors(workspace_id,entity,updated_at,entity_id)
+             VALUES (?1,?2,?3,?4)
+             ON CONFLICT(workspace_id,entity) DO UPDATE SET
+               updated_at=excluded.updated_at,
+               entity_id=excluded.entity_id
+             WHERE excluded.updated_at > sync_cursors.updated_at
+                OR (excluded.updated_at = sync_cursors.updated_at
+                    AND excluded.entity_id > sync_cursors.entity_id)",
+            params![workspace_id, entity, updated_at, entity_id],
+        )?;
+        Ok(())
+    }
+
+    /// Merge one authenticated remote row without overwriting local Outbox work
+    /// or resurrecting a local tombstone. The caller validates the remote tenant
+    /// identity before invoking this method.
+    pub fn apply_remote_booking(
+        &self,
+        workspace_id: &str,
+        booking: &Booking,
+        server_version: i64,
+        deleted_at: Option<&str>,
+    ) -> Result<RemoteBookingApply, String> {
+        if server_version <= 0 {
+            return Err("Remote booking server_version must be positive.".into());
+        }
+        if booking.id.trim().is_empty() {
+            return Err("Remote booking ID is required.".into());
+        }
+        let payload = if deleted_at.is_none() {
+            Some(serde_json::to_string(booking).map_err(|error| error.to_string())?)
+        } else {
+            None
+        };
+        let tx = self.connection.unchecked_transaction().map_err(|e| e.to_string())?;
+        ensure_workspace_exists(&tx, workspace_id)?;
+
+        let has_local_outbox: bool = tx
+            .query_row(
+                "SELECT EXISTS(
+                   SELECT 1 FROM outbox
+                   WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2
+                     AND status IN ('pending','failed','conflict')
+                 )",
+                params![workspace_id, booking.id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if has_local_outbox {
+            tx.commit().map_err(|e| e.to_string())?;
+            return Ok(RemoteBookingApply::SkippedPending);
+        }
+
+        let local_booking: Option<(i64, i64)> = tx
+            .query_row(
+                "SELECT version,server_version FROM bookings WHERE workspace_id=?1 AND id=?2",
+                params![workspace_id, booking.id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        let local_tombstone: Option<(i64, i64)> = tx
+            .query_row(
+                "SELECT version,server_version FROM tombstones
+                 WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2",
+                params![workspace_id, booking.id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+
+        if deleted_at.is_none() && local_tombstone.is_some() {
+            tx.commit().map_err(|e| e.to_string())?;
+            return Ok(RemoteBookingApply::SkippedTombstone);
+        }
+
+        let current_server_version = local_booking
+            .map(|(_, version)| version)
+            .unwrap_or(0)
+            .max(local_tombstone.map(|(_, version)| version).unwrap_or(0));
+        if server_version <= current_server_version {
+            tx.commit().map_err(|e| e.to_string())?;
+            return Ok(RemoteBookingApply::Stale);
+        }
+
+        if let Some(deleted_at) = deleted_at {
+            let local_version = local_booking
+                .map(|(version, _)| version)
+                .unwrap_or(0)
+                .max(local_tombstone.map(|(version, _)| version).unwrap_or(0))
+                + 1;
+            tx.execute(
+                "DELETE FROM bookings WHERE workspace_id=?1 AND id=?2",
+                params![workspace_id, booking.id],
+            )
+            .map_err(|e| e.to_string())?;
+            tx.execute(
+                "INSERT INTO tombstones(workspace_id,entity,entity_id,version,server_version,deleted_at)
+                 VALUES (?1,'booking',?2,?3,?4,?5)
+                 ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
+                   version=excluded.version,
+                   server_version=excluded.server_version,
+                   deleted_at=excluded.deleted_at",
+                params![workspace_id, booking.id, local_version, server_version, deleted_at],
+            )
+            .map_err(|e| e.to_string())?;
+        } else {
+            let payload = payload.as_deref().expect("live remote row payload was serialized");
+            let local_version = local_booking.map(|(version, _)| version).unwrap_or(1).max(1);
+            tx.execute(
+                "INSERT INTO bookings(workspace_id,id,resource_id,payload,version,updated_at,server_version)
+                 VALUES (?1,?2,?3,?4,?5,CURRENT_TIMESTAMP,?6)
+                 ON CONFLICT(workspace_id,id) DO UPDATE SET
+                   resource_id=excluded.resource_id,
+                   payload=excluded.payload,
+                   version=MAX(bookings.version,excluded.version),
+                   updated_at=CURRENT_TIMESTAMP,
+                   server_version=excluded.server_version",
+                params![
+                    workspace_id,
+                    booking.id,
+                    booking.resource_id,
+                    payload,
+                    local_version,
+                    server_version
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(RemoteBookingApply::Applied)
     }
 }
 
