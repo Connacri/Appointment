@@ -338,3 +338,17 @@ The implementation:
 - Does not yet implement sign-in, token refresh, in-memory access-token lifecycle, Supabase HTTP transport or authenticated workspace membership resolution.
 
 A stored refresh token is a bearer credential: it must only be loaded for the matching authenticated user and cleared on sign-out or account removal. The next auth integration slice must refresh through Supabase Auth over HTTPS, keep access tokens in memory, and establish user/workspace identity from the authenticated server response rather than a local workspace selector.
+
+## 12. Native Supabase authentication transport (2026-11-22)
+
+The native client adds a WinHTTP HTTPS transport and an Auth service matching the existing TypeScript password sign-in/sign-up contract:
+- POST /auth/v1/token?grant_type=password
+- POST /auth/v1/signup
+- POST /auth/v1/token?grant_type=refresh_token
+- POST /auth/v1/logout
+
+The transport requires an HTTPS Supabase URL, uses the Windows WinHTTP stack and does not disable TLS certificate validation. The public publishable key is sent as the apikey header. No service-role key is supported.
+
+Refresh tokens are rotated and stored in Windows Credential Manager. A separate non-secret active-user UUID pointer identifies which account to restore after restart. Access tokens are held only by the in-memory AuthSession and are not serialized to SQLite or files. Passwords are not persisted.
+
+This service layer is not yet wired to a native login screen or application startup lifecycle. It does not resolve workspace membership, enforce business-data RLS, or implement remote data synchronization. Authentication success must not be interpreted as workspace authorization or sync success.

@@ -4,8 +4,6 @@ Independent Windows desktop client built with Rust and Win32. No browser, Edge, 
 
 ## Build
 
-Install the Rust MSVC toolchain and Visual Studio Build Tools C++ workload:
-
 ~~~powershell
 cargo fmt --all -- --check
 cargo test --locked
@@ -13,27 +11,25 @@ cargo clippy --all-targets --locked -- -D warnings
 cargo build --release --locked
 ~~~
 
-The committed Cargo.lock pins the dependency graph; the Windows pipeline uses --locked for tests, Clippy and release builds. The MSVC runtime is statically linked. The output is target/release/appointment-pms-native.exe; Inno Setup produces the installer.
-
-## Implemented native foundation
+## Native foundations
 
 - Direct Win32 window and message loop.
-- Rust domain model for PMS bookings, with input validation.
-- SQLite database migrations and workspace-scoped booking persistence under %LOCALAPPDATA%\Connacri\Appointment.
-- TypeScript-compatible booking amounts retained in major units, with explicit currency-exponent conversion to integer minor units.
-- Atomic booking + Outbox writes; atomic delete + tombstone + Outbox writes.
-- Unique idempotency keys and bounded, workspace-scoped pagination.
-- Windows Credential Manager vault for Supabase refresh tokens, scoped to the authenticated user UUID.
-- Automated tests for validation, atomicity, workspace isolation, tombstones, idempotency, and credential-target/token constraints.
+- Rust PMS booking/occupant domain and verified Supabase booking-row mapper.
+- SQLite workspace-scoped booking persistence, atomic Outbox writes and tombstones.
+- Windows Credential Manager for refresh tokens, with an active-account UUID pointer.
+- Native HTTPS transport through Windows WinHTTP; TLS certificate validation remains at the Windows HTTP stack.
+- Supabase password sign-in, sign-up, refresh-token restore/rotation and logout API client.
+- Access tokens are transient in-memory session data; refresh tokens are persisted only in Windows Credential Manager.
+- Uses only the public Supabase publishable/anon key; never embed a service-role key.
 
 ## Not yet implemented
 
-Supabase login/refresh HTTP flows, access-token lifecycle, authenticated workspace membership resolution, remote synchronization, conflict resolution, full PMS entities and screens, CardLock MDB import, USB/HID hardware, printing and reports. The current Win32 shell remains a foundation and does not claim feature parity with the React client.
+The auth client is a native service layer but is not yet connected to a login screen or application startup/session UI. Server-side workspace membership resolution, HTTP data synchronization, conflict resolution, full PMS screens, CardLock MDB import, USB/HID, printing and reports remain unimplemented. Do not treat a valid auth session as proof that a workspace membership or any data sync is ready.
 
-## Data compatibility
+## Configuration
 
-The Rust booking model is a deliberately explicit first slice of the existing TypeScript TimelineBooking contract. Do not import/export production records until a versioned compatibility mapper covers all existing optional booking fields, occupant identity fields, payments, extras, currencies, modification history and legacy aliases. Never sync demo records.
+The native client reads APPOINTMENT_SUPABASE_URL and APPOINTMENT_SUPABASE_PUBLISHABLE_KEY when set. Otherwise it uses the same public project defaults as the TypeScript client. A publishable key is public client configuration, not a service credential.
 
 ## Credential handling
 
-Only the Supabase refresh token is eligible for persistent credential storage, and it is stored through the current Windows user's Credential Manager generic-credential API. The refresh-token target is namespaced by the Supabase auth user UUID. Access tokens remain transient runtime data; passwords, Supabase service-role keys and database connection strings must never be persisted by this vault. The native client must continue to use only a public publishable/anon key for client-side Supabase requests.
+Only refresh tokens are persisted, in the current Windows user's Credential Manager. The active account UUID is also stored there as a non-secret pointer so the client can locate the corresponding refresh token after restart. Access tokens remain memory-only. Passwords are never persisted. The client must clear the active pointer and refresh token during sign-out, including when the remote logout endpoint is unavailable.
