@@ -7,8 +7,8 @@ A module is not migrated merely because a Rust type or placeholder screen exists
 | Booking / occupants | Partial — typed contract, validation, normalization and Supabase row mapper | Full reservation workflows and fixture parity |
 | Local booking store | Partial — SQLite, workspace isolation, bounded reads and atomic mutations | Complete entities and migration fixtures |
 | Durable Outbox | Partial — transactional writes, tombstones, idempotency and retry state | Real remote ACK, replay and conflict convergence |
-| Supabase authentication | Partial — native WinHTTP HTTPS transport; password sign-in/sign-up; refresh and logout service; Credential Manager token persistence; access token memory-only | Login UI, startup restore integration, refresh scheduling and live Supabase auth tests |
-| Workspace identity | Not started — no membership lookup or authorization context yet | Resolve memberships from authenticated server responses; verify owner/member RLS |
+| Supabase authentication | Partial — Win32 sign-in/sign-up, async startup restore, refresh and logout; Credential Manager token persistence scoped by Supabase endpoint; access token memory-only | Live Supabase auth tests and periodic refresh scheduling |
+| Workspace identity | Partial — deterministic personal workspace bootstrap and PostgREST owner-membership verification through RLS | Live RLS integration tests, shared workspace selection and server-side authorization evidence |
 | Remote sync | Not started | HTTP pull/push, server ACKs, tombstones, retries, conflicts and observable status |
 | Establishments / buildings / floors / rooms | Not started | Fixture parity and stable parent-child identifiers |
 | Planning / Gantt | Not started | Date/timezone parity, overlap and availability tests |
@@ -21,13 +21,13 @@ A module is not migrated merely because a Rust type or placeholder screen exists
 | USB / HID | Not started | Device enumeration, reconnect and protocol fixtures |
 | Reports / printing | Not started | Native print/PDF output and regression fixtures |
 
-## Authentication milestone
+## Authentication and workspace milestone
 
 - WinHTTP sends HTTPS requests directly through the Windows networking stack; no browser, WebView, Node runtime or third-party HTTP dependency is used.
-- TLS verification is not disabled or bypassed.
-- Password sign-in and sign-up follow the Supabase Auth endpoints used by the TypeScript client.
-- Refresh-token rotation is persisted to Credential Manager, scoped by Supabase auth user UUID.
-- A non-secret active-user UUID pointer allows session restoration after process restart.
-- Access tokens remain only in the in-memory AuthSession and are not serialized to SQLite or files.
-- Sign-out clears local refresh-token material even if the remote logout request fails.
-- This milestone does not resolve workspaces or perform data synchronization. Authenticated identity is necessary but insufficient for tenant authorization.
+- TLS verification is not disabled or bypassed; request and response sizes/timeouts are bounded.
+- Sign-in, sign-up, startup refresh restoration and sign-out are exposed through a native Win32 UI; network work runs on a background thread.
+- Refresh-token rotation is persisted to Credential Manager, scoped by a stable identifier derived from the configured HTTPS endpoint. A non-secret active-user UUID pointer is project-scoped.
+- Access tokens remain only in the in-memory AuthSession and are not serialized to SQLite or files. The password edit control is cleared after submission.
+- The personal workspace uses the authenticated user UUID as its stable ID, matching the TypeScript client. Missing workspace and owner membership are created/repaired through RLS-authorized PostgREST operations.
+- Workspace access is accepted only after a fresh `workspaces` query with `workspace_members!inner(role)` returns the expected owner row under the authenticated JWT. Failed verification leaves the native client local-only.
+- Shared workspace selection, live Supabase/RLS integration tests and business-data synchronization remain pending.
