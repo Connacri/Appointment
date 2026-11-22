@@ -1,5 +1,5 @@
 use std::ffi::c_void;
-use std::ptr::{null, null_mut};
+use std::ptr::null_mut;
 
 use uuid::Uuid;
 
