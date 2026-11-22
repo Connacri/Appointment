@@ -219,7 +219,7 @@ pub fn pull_bookings(
         }
 
         let mut page_cursor = cursor;
-        let mut last_cursor: Option<(String, String)> = None;
+        let mut last_cursor: Option<(String, String, i64)> = None;
 
         for row in &rows {
             let remote = parse_remote_booking(row, &expected_workspace)?;
