@@ -144,7 +144,6 @@ impl SupabaseAuthClient {
                 credential_vault::delete_refresh_token(&self.project_scope, &id)?;
             }
             credential_vault::delete_active_user_id(&self.project_scope)?;
-            }
             Ok(())
         })();
         self.session = None;
