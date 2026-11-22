@@ -126,13 +126,17 @@ enum AuthTask {
 }
 enum AuthUiOutcome {
     NoSession,
-    Restored {
-        user_id: String,
-        email: Option<String>,
-    },
     Authenticated {
         user_id: String,
         email: Option<String>,
+        workspace_id: String,
+        workspace_name: String,
+        role: String,
+    },
+    WorkspaceUnavailable {
+        user_id: String,
+        email: Option<String>,
+        error: String,
     },
     ConfirmationRequired {
         email: String,
@@ -294,7 +298,10 @@ unsafe extern "system" fn window_proc(
                 state.busy = false;
                 state.authenticated = matches!(
                     &completion.result,
-                    Ok(AuthUiOutcome::Restored { .. } | AuthUiOutcome::Authenticated { .. })
+                    Ok(
+                        AuthUiOutcome::Authenticated { .. }
+                            | AuthUiOutcome::WorkspaceUnavailable { .. }
+                    )
                 );
             }
             set_busy(hwnd, false);
@@ -306,15 +313,35 @@ unsafe extern "system" fn window_proc(
                         "Aucune session enregistrée. Connectez-vous pour continuer.",
                     );
                 }
-                Ok(AuthUiOutcome::Restored { user_id, email })
-                | Ok(AuthUiOutcome::Authenticated { user_id, email }) => {
+                Ok(AuthUiOutcome::Authenticated {
+                    user_id,
+                    email,
+                    workspace_id,
+                    workspace_name,
+                    role,
+                }) => {
                     show_login(hwnd, false);
                     show_control(hwnd, ID_SIGN_OUT, true);
                     let identity = email.unwrap_or(user_id);
                     set_status(
                         hwnd,
                         &format!(
-                            "Authentifié : {identity}\nAccès espace de travail non vérifié. Données locales uniquement."
+                            "Authentifié : {identity}\nWorkspace vérifié par RLS : {workspace_name} ({workspace_id}) — rôle {role}."
+                        ),
+                    );
+                }
+                Ok(AuthUiOutcome::WorkspaceUnavailable {
+                    user_id,
+                    email,
+                    error,
+                }) => {
+                    show_login(hwnd, false);
+                    show_control(hwnd, ID_SIGN_OUT, true);
+                    let identity = email.unwrap_or(user_id);
+                    set_status(
+                        hwnd,
+                        &format!(
+                            "Compte authentifié : {identity}\nWorkspace non vérifié : {error}\nDonnées locales uniquement."
                         ),
                     );
                 }
@@ -387,18 +414,34 @@ fn start_auth_task(hwnd: Hwnd, task: AuthTask, client: Option<SupabaseAuthClient
 
             let result = match task {
                 AuthTask::Restore => match client.restore_session() {
-                    Ok(Some(session)) => Ok(AuthUiOutcome::Restored {
-                        user_id: session.user_id.clone(),
-                        email: session.email.clone(),
-                    }),
+                    Ok(Some(session)) => {
+                        let user_id = session.user_id.clone();
+                        let email = session.email.clone();
+                        match client.resolve_personal_workspace() {
+                            Ok(workspace) => Ok(AuthUiOutcome::Authenticated {
+                                user_id,
+                                email,
+                                workspace_id: workspace.id,
+                                workspace_name: workspace.name,
+                                role: workspace.role,
+                            }),
+                            Err(error) => Ok(AuthUiOutcome::WorkspaceUnavailable {
+                                user_id,
+                                email,
+                                error,
+                            }),
+                        }
+                    }
                     Ok(None) => Ok(AuthUiOutcome::NoSession),
                     Err(error) => Err(error),
                 },
                 AuthTask::SignIn { email, password } => {
-                    map_auth_outcome(client.sign_in(&email, &password), &email)
+                    let result = client.sign_in(&email, &password);
+                    map_auth_outcome(&mut client, result, &email)
                 }
                 AuthTask::SignUp { email, password } => {
-                    map_auth_outcome(client.sign_up(&email, &password), &email)
+                    let result = client.sign_up(&email, &password);
+                    map_auth_outcome(&mut client, result, &email)
                 }
                 AuthTask::SignOut => client.sign_out().map(|_| AuthUiOutcome::SignedOut),
             };
@@ -426,16 +469,32 @@ fn start_auth_task(hwnd: Hwnd, task: AuthTask, client: Option<SupabaseAuthClient
 }
 
 fn map_auth_outcome(
+    client: &mut SupabaseAuthClient,
     result: Result<AuthOutcome, String>,
-    email: &str,
+    submitted_email: &str,
 ) -> Result<AuthUiOutcome, String> {
     match result? {
         AuthOutcome::Authenticated { user_id, email } => {
-            Ok(AuthUiOutcome::Authenticated { user_id, email })
+            match client.resolve_personal_workspace() {
+                Ok(workspace) => Ok(AuthUiOutcome::Authenticated {
+                    user_id,
+                    email,
+                    workspace_id: workspace.id,
+                    workspace_name: workspace.name,
+                    role: workspace.role,
+                }),
+                Err(error) => Ok(AuthUiOutcome::WorkspaceUnavailable {
+                    user_id,
+                    email,
+                    error,
+                }),
+            }
         }
-        AuthOutcome::EmailConfirmationRequired { .. } => Ok(AuthUiOutcome::ConfirmationRequired {
-            email: email.to_string(),
-        }),
+        AuthOutcome::EmailConfirmationRequired { .. } => {
+            Ok(AuthUiOutcome::ConfirmationRequired {
+                email: submitted_email.to_string(),
+            })
+        }
     }
 }
 
