@@ -49,6 +49,7 @@ export const LanDiscoveryStatus: React.FC = () => {
       LanDiscovery.addListener('discoveryError', (detail) => {
         if (!cancelled) {
           setActive(false);
+          setPeers({});
           setError(detail.message || 'LAN discovery is unavailable.');
         }
       }),
@@ -86,7 +87,7 @@ export const LanDiscoveryStatus: React.FC = () => {
       ? isArabic ? 'جارٍ بدء اكتشاف الشبكة المحلية…' : isFrench ? 'Démarrage de la découverte LAN…' : 'Starting LAN discovery…'
       : count === 0
         ? isArabic ? 'الشبكة المحلية نشطة — لم يُكتشف أي جهاز' : isFrench ? 'Réseau local actif — aucun appareil détecté' : 'LAN active — no devices found'
-        : isArabic ? `تم اكتشاف ${count} جهاز(أجهزة) Appointment` : isFrench ? `${count} appareil(s) Appointment détecté(s)` : `${count} Appointment device(s) discovered`;
+        : isArabic ? 'تم اكتشاف أجهزة Appointment' : isFrench ? 'Appareils Appointment détectés' : 'Appointment devices discovered';
 
   return (
     <div
