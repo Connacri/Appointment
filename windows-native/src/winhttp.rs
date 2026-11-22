@@ -189,6 +189,41 @@ impl WinHttpTransport {
         bearer_token: Option<&str>,
         body: &[u8],
     ) -> Result<HttpResponse, String> {
+        self.request("POST", path, api_key, bearer_token, None, body)
+    }
+
+    pub fn post_with_prefer(
+        &self,
+        path: &str,
+        api_key: &str,
+        bearer_token: Option<&str>,
+        prefer: &str,
+        body: &[u8],
+    ) -> Result<HttpResponse, String> {
+        if prefer.contains('\r') || prefer.contains('\n') {
+            return Err("Invalid Supabase Prefer header.".into());
+        }
+        self.request("POST", path, api_key, bearer_token, Some(prefer), body)
+    }
+
+    pub fn get(
+        &self,
+        path: &str,
+        api_key: &str,
+        bearer_token: Option<&str>,
+    ) -> Result<HttpResponse, String> {
+        self.request("GET", path, api_key, bearer_token, None, &[])
+    }
+
+    fn request(
+        &self,
+        method: &str,
+        path: &str,
+        api_key: &str,
+        bearer_token: Option<&str>,
+        prefer: Option<&str>,
+        body: &[u8],
+    ) -> Result<HttpResponse, String> {
         if api_key.is_empty() || api_key.contains('\r') || api_key.contains('\n') {
             return Err("Supabase publishable key is missing or invalid.".into());
         }
@@ -204,13 +239,16 @@ impl WinHttpTransport {
         let object_name = self.endpoint.request_path(path)?;
         let user_agent = wide("Appointment PMS Native/1.2");
         let host = wide(&self.endpoint.host);
-        let verb = wide("POST");
+        let verb = wide(method);
         let object_name = wide(&object_name);
         let mut header_text = format!(
             "Content-Type: application/json\r\nAccept: application/json\r\napikey: {api_key}\r\n"
         );
         if let Some(token) = bearer_token {
             header_text.push_str(&format!("Authorization: Bearer {token}\r\n"));
+        }
+        if let Some(prefer) = prefer {
+            header_text.push_str(&format!("Prefer: {prefer}\r\n"));
         }
         let headers = wide(&header_text);
 
