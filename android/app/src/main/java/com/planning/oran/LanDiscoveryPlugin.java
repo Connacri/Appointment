@@ -25,7 +25,6 @@ import java.net.MulticastSocket;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -55,6 +54,16 @@ public final class LanDiscoveryPlugin extends Plugin {
     private static final long ANNOUNCE_INTERVAL_MS = 3000L;
     private static final long PEER_TIMEOUT_MS = 12000L;
     private static final int RECEIVE_TIMEOUT_MS = 250;
+
+    private static final class PeerSeen {
+        final String address;
+        final long lastSeenAt;
+
+        PeerSeen(String address, long lastSeenAt) {
+            this.address = address;
+            this.lastSeenAt = lastSeenAt;
+        }
+    }
 
     private final Object workerLock = new Object();
     private volatile boolean stopRequested;
@@ -225,7 +234,7 @@ public final class LanDiscoveryPlugin extends Plugin {
 
     private void discoveryLoop(MulticastSocket activeSocket, InetAddress group) {
         final byte[] receiveBuffer = new byte[MAX_PACKET_BYTES + 1];
-        final Map<String, Long> lastSeen = new HashMap<>();
+        final Map<String, PeerSeen> lastSeen = new HashMap<>();
         long nextAnnouncement = 0L;
 
         try {
@@ -261,11 +270,13 @@ public final class LanDiscoveryPlugin extends Plugin {
                         continue;
                     }
 
-                    Long previous = lastSeen.put(remoteId, System.currentTimeMillis());
-                    if (previous == null) {
+                    String remoteIp = remoteAddress.getHostAddress();
+                    long seenAt = System.currentTimeMillis();
+                    PeerSeen previous = lastSeen.put(remoteId, new PeerSeen(remoteIp, seenAt));
+                    if (previous == null || !previous.address.equals(remoteIp)) {
                         JSObject peer = new JSObject();
                         peer.put("peerId", remoteId);
-                        peer.put("address", remoteAddress.getHostAddress());
+                        peer.put("address", remoteIp);
                         peer.put("protocolVersion", PROTOCOL_VERSION);
                         notifyListeners("peerFound", peer);
                     }
@@ -274,10 +285,10 @@ public final class LanDiscoveryPlugin extends Plugin {
                 }
 
                 long expiryNow = System.currentTimeMillis();
-                Iterator<Map.Entry<String, Long>> iterator = lastSeen.entrySet().iterator();
+                Iterator<Map.Entry<String, PeerSeen>> iterator = lastSeen.entrySet().iterator();
                 while (iterator.hasNext()) {
-                    Map.Entry<String, Long> peer = iterator.next();
-                    if (expiryNow - peer.getValue() > PEER_TIMEOUT_MS) {
+                    Map.Entry<String, PeerSeen> peer = iterator.next();
+                    if (expiryNow - peer.getValue().lastSeenAt > PEER_TIMEOUT_MS) {
                         JSObject expired = new JSObject();
                         expired.put("peerId", peer.getKey());
                         notifyListeners("peerExpired", expired);
