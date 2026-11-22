@@ -73,8 +73,7 @@ export const LanDiscoveryStatus: React.FC = () => {
         // The native plugin may already be shutting down with the Android activity.
       });
     };
-  }, []);
-
+  }, [startDiscovery]);
 
   if (!supportsNativeLanDiscovery()) return null;
 
