@@ -405,15 +405,15 @@ impl PmsDatabase {
             ));
         }
         let tx = self.connection.unchecked_transaction()?;
-        let entry: Option<(String, String, String, i64)> = tx
+        let entry: Option<(String, String, i64)> = tx
             .query_row(
-                "SELECT entity,entity_id,operation,version FROM outbox
+                "SELECT entity,entity_id,version FROM outbox
                  WHERE workspace_id=?1 AND id=?2 AND status IN ('pending','failed')",
                 params![workspace_id, outbox_id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .optional()?;
-        let Some((entity, entity_id, operation, local_version)) = entry else {
+        let Some((entity, entity_id, local_version)) = entry else {
             tx.rollback()?;
             return Ok(false);
         };
@@ -445,7 +445,6 @@ impl PmsDatabase {
             )?;
         }
         tx.commit()?;
-        let _ = operation;
         Ok(true)
     }
 
