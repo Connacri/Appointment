@@ -1,9 +1,8 @@
-//! Coordinator-free IPv4 multicast discovery for Appointment LAN peers.
+//! Coordinator-free IPv4 multicast discovery shared by Windows native and Android APK.
 //!
-//! Discovery carries identity and a future TCP listener port only. It never
-//! carries booking data, credentials, workspace IDs, or authorization claims.
-//! A discovered peer is NOT trusted until a separate authenticated pairing
-//! handshake has completed.
+//! Discovery advertises only a stable installation UUID. It does not advertise a
+//! listening port until an authenticated peer transport exists. A discovered peer
+//! is not trusted, paired, authorized, or synchronized by discovery alone.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -27,14 +26,12 @@ const MAX_DATAGRAM_BYTES: usize = 1024;
 struct Announcement {
     protocol_version: u16,
     peer_id: String,
-    tcp_port: u16,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DiscoveredPeer {
     pub peer_id: String,
     pub address: SocketAddr,
-    pub tcp_port: u16,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -50,16 +47,12 @@ pub struct LanDiscovery {
 }
 
 impl LanDiscovery {
-    /// Starts multicast discovery. Call once per running Appointment process.
-    /// The TCP port is advertised but no TCP listener is opened by this module.
-    pub fn start(peer_id: &str, tcp_port: u16) -> Result<Self, String> {
+    /// Starts discovery using the same JSON announcement consumed by the Android plugin.
+    pub fn start(peer_id: &str) -> Result<Self, String> {
         let peer_id = Uuid::parse_str(peer_id)
             .map_err(|_| "LAN peer identity must be a UUID.".to_string())?
             .hyphenated()
             .to_string();
-        if tcp_port == 0 {
-            return Err("LAN peer TCP port must be between 1 and 65535.".into());
-        }
 
         let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, DISCOVERY_PORT))
             .map_err(|error| format!("Cannot bind LAN discovery socket: {error}"))?;
@@ -79,7 +72,6 @@ impl LanDiscovery {
         let announcement = Announcement {
             protocol_version: DISCOVERY_PROTOCOL_VERSION,
             peer_id: peer_id.clone(),
-            tcp_port,
         };
         let packet = serde_json::to_vec(&announcement)
             .map_err(|error| format!("Cannot serialize LAN announcement: {error}"))?;
@@ -92,9 +84,7 @@ impl LanDiscovery {
         let worker_stop = Arc::clone(&stop);
         let worker = thread::Builder::new()
             .name("appointment-lan-discovery".into())
-            .spawn(move || {
-                discovery_loop(socket, packet, peer_id, sender, worker_stop);
-            })
+            .spawn(move || discovery_loop(socket, packet, peer_id, sender, worker_stop))
             .map_err(|error| format!("Cannot start LAN discovery worker: {error}"))?;
 
         Ok(Self {
@@ -154,7 +144,7 @@ fn discovery_loop(
                 }
             }
             Ok(_) => {
-                // Oversized datagrams are discarded; never allocate from peer input.
+                // Oversized datagrams are discarded; peer input never controls allocation.
             }
             Err(error)
                 if matches!(
@@ -188,10 +178,10 @@ fn validate_announcement(
     source: SocketAddr,
 ) -> Option<DiscoveredPeer> {
     if message.protocol_version != DISCOVERY_PROTOCOL_VERSION
-        || message.tcp_port == 0
         || source.ip().is_unspecified()
         || source.ip().is_multicast()
         || source.ip().is_broadcast()
+        || source.ip().is_loopback()
     {
         return None;
     }
@@ -202,7 +192,6 @@ fn validate_announcement(
     Some(DiscoveredPeer {
         peer_id,
         address: source,
-        tcp_port: message.tcp_port,
     })
 }
 
@@ -214,12 +203,11 @@ mod tests {
         Announcement {
             protocol_version: DISCOVERY_PROTOCOL_VERSION,
             peer_id: peer_id.into(),
-            tcp_port: 45_872,
         }
     }
 
     #[test]
-    fn discovery_rejects_invalid_identity_wrong_protocol_and_invalid_ports() {
+    fn discovery_rejects_invalid_identity_and_wrong_protocol() {
         let own = "a1b2c3d4-e5f6-47a8-9012-1234567890ab";
         let source = SocketAddr::from(([192, 168, 1, 10], DISCOVERY_PORT));
         assert!(validate_announcement(announcement("not-a-uuid"), own, source).is_none());
@@ -227,10 +215,6 @@ mod tests {
         let mut wrong_protocol = announcement("b1b2c3d4-e5f6-47a8-9012-1234567890ab");
         wrong_protocol.protocol_version = 99;
         assert!(validate_announcement(wrong_protocol, own, source).is_none());
-
-        let mut no_tcp = announcement("b1b2c3d4-e5f6-47a8-9012-1234567890ab");
-        no_tcp.tcp_port = 0;
-        assert!(validate_announcement(no_tcp, own, source).is_none());
     }
 
     #[test]
@@ -243,37 +227,32 @@ mod tests {
         let peer = validate_announcement(announcement(remote), own, source).unwrap();
         assert_eq!(peer.peer_id, remote);
         assert_eq!(peer.address.ip(), source.ip());
-        assert_eq!(peer.tcp_port, 45_872);
     }
 
     #[test]
-    fn discovery_rejects_multicast_and_unspecified_sources() {
+    fn discovery_rejects_multicast_unspecified_and_loopback_sources() {
         let own = "a1b2c3d4-e5f6-47a8-9012-1234567890ab";
         let remote = "b1b2c3d4-e5f6-47a8-9012-1234567890ab";
-        assert!(validate_announcement(
-            announcement(remote),
-            own,
-            SocketAddr::from(([0, 0, 0, 0], DISCOVERY_PORT))
-        )
-        .is_none());
-        assert!(validate_announcement(
-            announcement(remote),
-            own,
-            SocketAddr::from(([239, 255, 42, 99], DISCOVERY_PORT))
-        )
-        .is_none());
+        for address in [[0, 0, 0, 0], [239, 255, 42, 99], [127, 0, 0, 1]] {
+            assert!(validate_announcement(
+                announcement(remote),
+                own,
+                SocketAddr::from((address, DISCOVERY_PORT))
+            )
+            .is_none());
+        }
     }
 
     #[test]
-    fn announcement_packet_is_bounded_and_contains_no_workspace_or_credentials() {
+    fn announcement_packet_is_bounded_and_contains_no_tenant_or_credentials() {
         let packet = serde_json::to_vec(&announcement(
             "b1b2c3d4-e5f6-47a8-9012-1234567890ab",
         ))
         .unwrap();
         assert!(packet.len() <= MAX_DATAGRAM_BYTES);
-        let text = String::from_utf8(packet).unwrap();
-        assert!(!text.contains("workspace"));
-        assert!(!text.contains("token"));
-        assert!(!text.contains("password"));
+        assert_eq!(
+            String::from_utf8(packet).unwrap(),
+            r#"{"protocolVersion":1,"peerId":"b1b2c3d4-e5f6-47a8-9012-1234567890ab"}"#
+        );
     }
 }
