@@ -92,14 +92,20 @@ impl Booking {
                     return Err("booking.total_price_minor must be non-negative".into());
                 }
                 if code.len() != 3 || !code.bytes().all(|byte| byte.is_ascii_uppercase()) {
-                    return Err("booking.currency_code must be a three-letter uppercase ISO code".into());
+                    return Err(
+                        "booking.currency_code must be a three-letter uppercase ISO code".into(),
+                    );
                 }
             }
             (None, None) => {
                 // TypeScript totalPrice/paymentCurrency remain in extra_fields
                 // until a currency-exponent-aware mapper exists.
             }
-            _ => return Err("booking minor-unit amount and currency code must be provided together".into()),
+            _ => {
+                return Err(
+                    "booking minor-unit amount and currency code must be provided together".into(),
+                )
+            }
         }
         if !matches!(self.sector.as_str(), "hotel" | "resort") {
             return Err("booking.sector must be hotel or resort".into());
@@ -208,7 +214,10 @@ mod tests {
         assert!(booking.validate().is_ok());
         assert_eq!(booking.extra_fields["adults"], 2);
         assert_eq!(booking.extra_fields["children"], 1);
-        assert_eq!(booking.extra_fields["occupantsList"][0]["fullName"], "Guest");
+        assert_eq!(
+            booking.extra_fields["occupantsList"][0]["fullName"],
+            "Guest"
+        );
         let round_trip = serde_json::to_value(booking).unwrap();
         assert_eq!(round_trip["resourceId"], "r-2");
         assert_eq!(round_trip["startDate"], "2026-11-21");
@@ -248,7 +257,10 @@ mod tests {
     fn rejects_partial_native_money_pair() {
         let mut booking = sample();
         booking.currency_code = None;
-        assert!(booking.validate().unwrap_err().contains("provided together"));
+        assert!(booking
+            .validate()
+            .unwrap_err()
+            .contains("provided together"));
     }
 
     #[test]
