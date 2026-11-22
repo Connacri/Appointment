@@ -115,7 +115,10 @@ impl SupabaseAuthClient {
         let existing = self.read_owned_workspace(&user_id, &access_token)?;
         if let Some(workspace) = existing {
             if workspace.owner_id != user_id || workspace.id != user_id {
-                return Err("The personal workspace identity does not match the authenticated account.".into());
+                return Err(
+                    "The personal workspace identity does not match the authenticated account."
+                        .into(),
+                );
             }
         } else {
             let payload = json!({
@@ -163,14 +166,14 @@ impl SupabaseAuthClient {
         let path = format!(
             "/rest/v1/workspaces?select=id,name,owner_id,workspace_members!inner(role)&id=eq.{user_id}&limit=1"
         );
-        let response = self.transport.get(
-            &path,
-            &self.publishable_key,
-            Some(&access_token),
-        )?;
+        let response = self
+            .transport
+            .get(&path, &self.publishable_key, Some(&access_token))?;
         let response = ensure_success(response)?;
-        let rows: Vec<WorkspaceAccessRow> = serde_json::from_slice(&response.body)
-            .map_err(|_| "Supabase returned an invalid workspace authorization response.".to_string())?;
+        let rows: Vec<WorkspaceAccessRow> =
+            serde_json::from_slice(&response.body).map_err(|_| {
+                "Supabase returned an invalid workspace authorization response.".to_string()
+            })?;
         validate_personal_workspace(rows, &user_id)
     }
 
@@ -179,14 +182,10 @@ impl SupabaseAuthClient {
         user_id: &str,
         access_token: &str,
     ) -> Result<Option<WorkspaceOwnerRow>, String> {
-        let path = format!(
-            "/rest/v1/workspaces?select=id,owner_id&id=eq.{user_id}&limit=1"
-        );
-        let response = self.transport.get(
-            &path,
-            &self.publishable_key,
-            Some(access_token),
-        )?;
+        let path = format!("/rest/v1/workspaces?select=id,owner_id&id=eq.{user_id}&limit=1");
+        let response = self
+            .transport
+            .get(&path, &self.publishable_key, Some(access_token))?;
         let response = ensure_success(response)?;
         let rows: Vec<WorkspaceOwnerRow> = serde_json::from_slice(&response.body)
             .map_err(|_| "Supabase returned an invalid workspace lookup response.".to_string())?;
@@ -383,7 +382,9 @@ fn validate_personal_workspace(
         .into_iter()
         .find(|membership| membership.role == "owner")
         .map(|membership| membership.role)
-        .ok_or_else(|| "The personal workspace owner membership could not be verified through RLS.".to_string())?;
+        .ok_or_else(|| {
+            "The personal workspace owner membership could not be verified through RLS.".to_string()
+        })?;
     Ok(WorkspaceAccess {
         id: row.id,
         name: row.name,
@@ -433,11 +434,7 @@ fn normalize_user_id(user_id: &str) -> Result<String, String> {
 mod tests {
     use super::*;
 
-    fn workspace_row(
-        id: &str,
-        owner_id: &str,
-        roles: &[&str],
-    ) -> WorkspaceAccessRow {
+    fn workspace_row(id: &str, owner_id: &str, roles: &[&str]) -> WorkspaceAccessRow {
         WorkspaceAccessRow {
             id: id.to_string(),
             name: "Espace personnel".into(),
@@ -454,16 +451,18 @@ mod tests {
     #[test]
     fn workspace_access_requires_matching_owner_and_rls_owner_membership() {
         let user_id = "a1b2c3d4-e5f6-47a8-9012-1234567890ab";
-        let access = validate_personal_workspace(
-            vec![workspace_row(user_id, user_id, &["owner"])],
-            user_id,
-        )
-        .unwrap();
+        let access =
+            validate_personal_workspace(vec![workspace_row(user_id, user_id, &["owner"])], user_id)
+                .unwrap();
         assert_eq!(access.id, user_id);
         assert_eq!(access.role, "owner");
 
         assert!(validate_personal_workspace(
-            vec![workspace_row(user_id, "b1b2c3d4-e5f6-47a8-9012-1234567890ab", &["owner"])],
+            vec![workspace_row(
+                user_id,
+                "b1b2c3d4-e5f6-47a8-9012-1234567890ab",
+                &["owner"]
+            )],
             user_id,
         )
         .is_err());

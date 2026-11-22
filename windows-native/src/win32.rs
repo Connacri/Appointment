@@ -298,10 +298,8 @@ unsafe extern "system" fn window_proc(
                 state.busy = false;
                 state.authenticated = matches!(
                     &completion.result,
-                    Ok(
-                        AuthUiOutcome::Authenticated { .. }
-                            | AuthUiOutcome::WorkspaceUnavailable { .. }
-                    )
+                    Ok(AuthUiOutcome::Authenticated { .. }
+                        | AuthUiOutcome::WorkspaceUnavailable { .. })
                 );
             }
             set_busy(hwnd, false);
@@ -490,11 +488,9 @@ fn map_auth_outcome(
                 }),
             }
         }
-        AuthOutcome::EmailConfirmationRequired { .. } => {
-            Ok(AuthUiOutcome::ConfirmationRequired {
-                email: submitted_email.to_string(),
-            })
-        }
+        AuthOutcome::EmailConfirmationRequired { .. } => Ok(AuthUiOutcome::ConfirmationRequired {
+            email: submitted_email.to_string(),
+        }),
     }
 }
 

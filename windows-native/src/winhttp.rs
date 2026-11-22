@@ -5,6 +5,8 @@ const WINHTTP_ACCESS_TYPE_DEFAULT_PROXY: u32 = 0;
 const WINHTTP_FLAG_SECURE: u32 = 0x0080_0000;
 const WINHTTP_QUERY_STATUS_CODE: u32 = 19;
 const WINHTTP_QUERY_FLAG_NUMBER: u32 = 0x2000_0000;
+const WINHTTP_OPTION_REDIRECT_POLICY: u32 = 88;
+const WINHTTP_OPTION_REDIRECT_POLICY_NEVER: u32 = 0;
 const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 type HInternet = *mut c_void;
 
@@ -64,6 +66,12 @@ unsafe extern "system" {
         connect_timeout: i32,
         send_timeout: i32,
         receive_timeout: i32,
+    ) -> i32;
+    fn WinHttpSetOption(
+        handle: HInternet,
+        option: u32,
+        buffer: *const c_void,
+        buffer_length: u32,
     ) -> i32;
 }
 #[link(name = "kernel32")]
@@ -269,6 +277,19 @@ impl WinHttpTransport {
                     GetLastError()
                 ));
             }
+            let redirect_policy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
+            if WinHttpSetOption(
+                session.0,
+                WINHTTP_OPTION_REDIRECT_POLICY,
+                (&redirect_policy as *const u32).cast(),
+                std::mem::size_of::<u32>() as u32,
+            ) == 0
+            {
+                return Err(format!(
+                    "WinHTTP could not disable automatic redirects (Win32 error {}).",
+                    GetLastError()
+                ));
+            }
             let connect = Handle::new(
                 WinHttpConnect(session.0, host.as_ptr(), self.endpoint.port, 0),
                 "WinHttpConnect",
@@ -401,6 +422,12 @@ mod tests {
         assert!(HttpsEndpoint::parse("https://project.supabase.co:0").is_err());
         assert!(HttpsEndpoint::parse("https://project.supabase.co:bad").is_err());
     }
+    #[test]
+    fn authenticated_transport_disallows_automatic_redirects() {
+        assert_eq!(WINHTTP_OPTION_REDIRECT_POLICY, 88);
+        assert_eq!(WINHTTP_OPTION_REDIRECT_POLICY_NEVER, 0);
+    }
+
     #[test]
     fn project_scope_is_stable_and_changes_with_endpoint() {
         let a = HttpsEndpoint::parse("https://project.supabase.co").unwrap();

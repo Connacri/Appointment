@@ -17,6 +17,15 @@ pub struct OutboxEntry {
     pub status: String,
     pub attempts: i64,
     pub created_at: String,
+    pub next_attempt_at: String,
+    pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct OutboxStats {
+    pub pending: u64,
+    pub failed: u64,
+    pub synced: u64,
 }
 
 pub struct PmsDatabase {
@@ -326,9 +335,13 @@ impl PmsDatabase {
         limit: u32,
     ) -> rusqlite::Result<Vec<OutboxEntry>> {
         let mut statement = self.connection.prepare(
-            "SELECT id,idempotency_key,workspace_id,entity,entity_id,operation,version,payload,status,attempts,created_at
-             FROM outbox WHERE workspace_id=?1 AND status='pending' AND next_attempt_at<=CURRENT_TIMESTAMP
-             ORDER BY created_at,id LIMIT ?2"
+            "SELECT id,idempotency_key,workspace_id,entity,entity_id,operation,version,payload,status,attempts,created_at,next_attempt_at,last_error
+             FROM outbox
+             WHERE workspace_id=?1
+               AND status IN ('pending','failed')
+               AND next_attempt_at<=CURRENT_TIMESTAMP
+             ORDER BY rowid
+             LIMIT ?2"
         )?;
         let rows = statement.query_map(params![workspace_id, limit.min(500)], |row| {
             Ok(OutboxEntry {
@@ -343,9 +356,28 @@ impl PmsDatabase {
                 status: row.get(8)?,
                 attempts: row.get(9)?,
                 created_at: row.get(10)?,
+                next_attempt_at: row.get(11)?,
+                last_error: row.get(12)?,
             })
         })?;
         rows.collect()
+    }
+
+    pub fn outbox_stats(&self, workspace_id: &str) -> rusqlite::Result<OutboxStats> {
+        let (pending, failed, synced): (u64, u64, u64) = self.connection.query_row(
+            "SELECT
+                COALESCE(SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN status='synced' THEN 1 ELSE 0 END), 0)
+             FROM outbox WHERE workspace_id=?1",
+            params![workspace_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+        Ok(OutboxStats {
+            pending,
+            failed,
+            synced,
+        })
     }
 }
 
@@ -518,6 +550,77 @@ mod tests {
             .unwrap());
         assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 0);
         assert!(db.mark_outbox_synced("w-1", &entry.id).unwrap());
+    }
+
+    #[test]
+    fn failed_outbox_entries_become_due_again_after_backoff() {
+        let mut db = database();
+        db.upsert_booking("w-1", &booking("b-retry"), "idem-retry")
+            .unwrap();
+        let entry = db.pending_outbox("w-1", 1).unwrap().remove(0);
+        assert!(db
+            .mark_outbox_failed("w-1", &entry.id, "temporary network failure")
+            .unwrap());
+        assert!(db.pending_outbox("w-1", 10).unwrap().is_empty());
+
+        db.connection
+            .execute(
+                "UPDATE outbox SET next_attempt_at=datetime('now', '-1 second') WHERE id=?1",
+                params![entry.id],
+            )
+            .unwrap();
+
+        let due = db.pending_outbox("w-1", 10).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].id, entry.id);
+        assert_eq!(due[0].status, "failed");
+        assert_eq!(
+            due[0].last_error.as_deref(),
+            Some("temporary network failure")
+        );
+    }
+
+    #[test]
+    fn outbox_order_preserves_mutation_order_even_with_same_second_timestamps() {
+        let mut db = database();
+        db.upsert_booking("w-1", &booking("b-ordered"), "idem-upsert")
+            .unwrap();
+        db.delete_booking("w-1", "b-ordered", "idem-delete")
+            .unwrap();
+
+        let entries = db.pending_outbox("w-1", 10).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].operation, "upsert");
+        assert_eq!(entries[1].operation, "delete");
+    }
+
+    #[test]
+    fn outbox_stats_are_isolated_by_workspace_and_status() {
+        let mut db = database();
+        db.upsert_booking("w-1", &booking("b-pending"), "idem-pending")
+            .unwrap();
+        db.upsert_booking("w-2", &booking("b-synced"), "idem-synced")
+            .unwrap();
+
+        let pending_w2 = db.pending_outbox("w-2", 1).unwrap().remove(0);
+        db.mark_outbox_synced("w-2", &pending_w2.id).unwrap();
+
+        assert_eq!(
+            db.outbox_stats("w-1").unwrap(),
+            OutboxStats {
+                pending: 1,
+                failed: 0,
+                synced: 0
+            }
+        );
+        assert_eq!(
+            db.outbox_stats("w-2").unwrap(),
+            OutboxStats {
+                pending: 0,
+                failed: 0,
+                synced: 1
+            }
+        );
     }
 
     #[test]
