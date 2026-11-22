@@ -109,7 +109,7 @@ exchange, not database-file sharing.
   bounded JSON announcement {protocolVersion, peerId}. Announcements repeat
   every 3 seconds; peers expire after 12 seconds without a heartbeat. Installation
   UUIDs are persisted locally (Windows under the user's Appointment AppData folder,
-  Android in app-private SharedPreferences).
+  Android in app-private noBackupFilesDir storage, excluded from Android Auto Backup).
 - Discovery publishes no workspace ID, account, credential, business data or
   listening port. A found address is an untrusted candidate only: it does not
   establish pairing, membership, authorization, encryption or a data connection.
