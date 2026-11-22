@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use std::sync::Mutex;
 use uuid::Uuid;
 
-use crate::booking_mapper::to_supabase_booking_row;
+use crate::booking_mapper::{from_supabase_booking_row, to_supabase_booking_row};
 use crate::database::{OutboxEntry, PmsDatabase};
 use crate::domain::Booking;
 use crate::supabase_auth::SupabaseAuthClient;
@@ -16,6 +16,23 @@ pub struct PushSummary {
     pub acknowledged: u32,
     pub retry_scheduled: u32,
     pub conflicts: u32,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PullSummary {
+    pub pages: u32,
+    pub received: u32,
+    pub applied: u32,
+    pub skipped_pending: u32,
+    pub skipped_tombstone: u32,
+    pub stale: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BookingSyncSummary {
+    pub push: PushSummary,
+    pub pull: PullSummary,
+    pub pull_error: Option<String>,
 }
 
 enum PushFailure {
@@ -137,6 +154,275 @@ pub fn push_due_bookings(
     }
 
     Ok(summary)
+}
+
+/// Pulls authenticated booking rows incrementally using the composite
+/// (updated_at,id) cursor. The cursor is persisted only after a whole page has
+/// been merged, so a crash replays that page instead of losing unseen rows.
+/// Remote tombstones are included; local pending/conflicted Outbox events and
+/// local tombstones always win over a pull.
+pub fn pull_bookings(
+    client: &mut SupabaseAuthClient,
+    database: &Mutex<PmsDatabase>,
+    workspace_id: &str,
+    page_size: u32,
+) -> Result<PullSummary, String> {
+    let expected_workspace = normalize_uuid(workspace_id, "workspace_id")?;
+    let access = client.resolve_personal_workspace()?;
+    if access.id != expected_workspace {
+        return Err(
+            "The requested local workspace is not the authenticated account's verified personal workspace."
+                .into(),
+        );
+    }
+    let user_id = client
+        .session()
+        .map(|session| session.user_id.clone())
+        .ok_or_else(|| "An authenticated Supabase session is required.".to_string())?;
+    {
+        let local = database
+            .lock()
+            .map_err(|_| "Local database lock is poisoned.".to_string())?;
+        let owner_matches = local
+            .workspace_is_owned_by(&expected_workspace, &user_id)
+            .map_err(|error| format!("Could not verify local workspace ownership: {error}"))?;
+        if !owner_matches {
+            return Err(
+                "Local SQLite workspace owner does not match the authenticated Supabase account."
+                    .into(),
+            );
+        }
+    }
+
+    let limit = page_size.clamp(1, 200);
+    let mut summary = PullSummary::default();
+    const MAX_PAGES_PER_RUN: u32 = 500;
+
+    for _ in 0..MAX_PAGES_PER_RUN {
+        let cursor = database
+            .lock()
+            .map_err(|_| "Local database lock is poisoned.".to_string())?
+            .sync_cursor(&expected_workspace, "bookings")
+            .map_err(|error| format!("Could not read the booking sync cursor: {error}"))?;
+        let path = booking_pull_path(&expected_workspace, cursor.as_ref(), limit);
+        let response = client
+            .authenticated_get(&path)
+            .map_err(|error| format!("Booking pull request failed: {error}"))?;
+        let response = require_success(response).map_err(push_failure_message)?;
+        let rows: Vec<Value> = serde_json::from_slice(&response.body)
+            .map_err(|_| "Supabase returned an invalid booking pull page.".to_string())?;
+        if rows.is_empty() {
+            break;
+        }
+        if rows.len() > limit as usize {
+            return Err("Supabase returned more booking rows than the requested page size.".into());
+        }
+
+        let mut page_cursor = cursor;
+        let mut last_cursor: Option<(String, String)> = None;
+
+        for row in &rows {
+            let remote = parse_remote_booking(row, &expected_workspace)?;
+            let tuple = (remote.updated_at.clone(), remote.id.clone());
+            if let Some(previous) = page_cursor.as_ref() {
+                if !cursor_is_after(&tuple.0, &tuple.1, &previous.updated_at, &previous.entity_id) {
+                    return Err(
+                        "Supabase booking pull page is not strictly ordered after the saved cursor."
+                            .into(),
+                    );
+                }
+            }
+            if let Some(previous) = last_cursor.as_ref() {
+                if !cursor_is_after(&tuple.0, &tuple.1, &previous.0, &previous.1) {
+                    return Err(
+                        "Supabase booking pull page contains duplicate or out-of-order rows."
+                            .into(),
+                    );
+                }
+            }
+
+            let outcome = database
+                .lock()
+                .map_err(|_| "Local database lock is poisoned.".to_string())?
+                .apply_remote_booking(
+                    &expected_workspace,
+                    &remote.booking,
+                    remote.server_version,
+                    remote.deleted_at.as_deref(),
+                )
+                .map_err(|error| format!("Could not merge remote booking: {error}"))?;
+            match outcome {
+                crate::database::RemoteBookingApply::Applied => summary.applied += 1,
+                crate::database::RemoteBookingApply::SkippedPending => {
+                    summary.skipped_pending += 1
+                }
+                crate::database::RemoteBookingApply::SkippedTombstone => {
+                    summary.skipped_tombstone += 1
+                }
+                crate::database::RemoteBookingApply::Stale => summary.stale += 1,
+            }
+            summary.received += 1;
+            last_cursor = Some(tuple);
+        }
+
+        let Some((updated_at, entity_id)) = last_cursor else {
+            break;
+        };
+        database
+            .lock()
+            .map_err(|_| "Local database lock is poisoned.".to_string())?
+            .store_sync_cursor(
+                &expected_workspace,
+                "bookings",
+                &updated_at,
+                &entity_id,
+            )
+            .map_err(|error| format!("Could not persist the booking sync cursor: {error}"))?;
+        summary.pages += 1;
+
+        if rows.len() < limit as usize {
+            break;
+        }
+    }
+
+    if summary.pages == MAX_PAGES_PER_RUN {
+        return Err(
+            "Booking pull reached the per-run page safety limit. Run it again to continue from the saved cursor."
+                .into(),
+        );
+    }
+    Ok(summary)
+}
+
+/// Push first, then pull. A pull failure is reported alongside the successful
+/// push summary because push ACKs are already committed and must not be hidden.
+pub fn sync_bookings(
+    client: &mut SupabaseAuthClient,
+    database: &Mutex<PmsDatabase>,
+    workspace_id: &str,
+    push_limit: u32,
+    pull_page_size: u32,
+) -> Result<BookingSyncSummary, String> {
+    let push = push_due_bookings(client, database, workspace_id, push_limit)?;
+    match pull_bookings(client, database, workspace_id, pull_page_size) {
+        Ok(pull) => Ok(BookingSyncSummary {
+            push,
+            pull,
+            pull_error: None,
+        }),
+        Err(error) => Ok(BookingSyncSummary {
+            push,
+            pull: PullSummary::default(),
+            pull_error: Some(error),
+        }),
+    }
+}
+
+struct ParsedRemoteBooking {
+    id: String,
+    updated_at: String,
+    server_version: i64,
+    deleted_at: Option<String>,
+    booking: Booking,
+}
+
+fn parse_remote_booking(
+    row: &Value,
+    expected_workspace_id: &str,
+) -> Result<ParsedRemoteBooking, String> {
+    let object = row
+        .as_object()
+        .ok_or_else(|| "Supabase booking row must be a JSON object.".to_string())?;
+    let id = object
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "Supabase booking row has no ID.".to_string())?;
+    let workspace_id = object
+        .get("workspace_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "Supabase booking row has no workspace ID.".to_string())?;
+    let id = normalize_uuid(id, "remote booking.id")?;
+    let workspace_id = normalize_uuid(workspace_id, "remote booking.workspace_id")?;
+    if workspace_id != expected_workspace_id {
+        return Err("Supabase returned a booking outside the verified workspace.".into());
+    }
+    let updated_at = object
+        .get("updated_at")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty() && !value.contains('\r') && !value.contains('\n'))
+        .ok_or_else(|| "Supabase booking row has no valid updated_at cursor.".to_string())?
+        .to_string();
+    let server_version = object
+        .get("version")
+        .and_then(Value::as_i64)
+        .filter(|version| *version > 0)
+        .ok_or_else(|| "Supabase booking row has no positive server version.".to_string())?;
+    let deleted_at = match object.get("deleted_at") {
+        Some(Value::String(value)) if !value.is_empty() => Some(value.clone()),
+        Some(Value::Null) | None => None,
+        _ => return Err("Supabase booking deleted_at field is invalid.".into()),
+    };
+    let booking = from_supabase_booking_row(row)
+        .map_err(|error| format!("Could not map remote booking {id}: {error}"))?;
+    if booking.id != id {
+        return Err("Mapped remote booking ID does not match the server row ID.".into());
+    }
+    Ok(ParsedRemoteBooking {
+        id,
+        updated_at,
+        server_version,
+        deleted_at,
+        booking,
+    })
+}
+
+fn booking_pull_path(
+    workspace_id: &str,
+    cursor: Option<&crate::database::SyncCursor>,
+    limit: u32,
+) -> String {
+    let mut path = format!(
+        "/rest/v1/bookings?select=*&workspace_id=eq.{workspace_id}&order=updated_at.asc,id.asc&limit={}",
+        limit.clamp(1, 200)
+    );
+    if let Some(cursor) = cursor {
+        let updated_at = encode_query_component(&cursor.updated_at);
+        path.push_str(&format!(
+            "&or=%28updated_at.gt.{updated_at},and%28updated_at.eq.{updated_at},id.gt.{}%29%29",
+            cursor.entity_id
+        ));
+    }
+    path
+}
+
+fn encode_query_component(value: &str) -> String {
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'~') {
+            encoded.push(byte as char);
+        } else {
+            use std::fmt::Write as _;
+            let _ = write!(encoded, "%{byte:02X}");
+        }
+    }
+    encoded
+}
+
+fn cursor_is_after(
+    candidate_updated_at: &str,
+    candidate_id: &str,
+    previous_updated_at: &str,
+    previous_id: &str,
+) -> bool {
+    candidate_updated_at > previous_updated_at
+        || (candidate_updated_at == previous_updated_at && candidate_id > previous_id)
+}
+
+fn push_failure_message(failure: PushFailure) -> String {
+    match failure {
+        PushFailure::Retry(message) => message,
+        PushFailure::Conflict(message) => message,
+    }
 }
 
 fn push_one(
