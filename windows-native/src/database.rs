@@ -127,11 +127,13 @@ impl PmsDatabase {
         booking: &Booking,
         idempotency_key: &str,
     ) -> Result<(), String> {
-        booking.validate()?;
+        let mut normalized_booking = booking.clone();
+        normalized_booking.normalize_occupants();
+        normalized_booking.validate()?;
         if idempotency_key.trim().is_empty() {
             return Err("idempotency_key is required".into());
         }
-        let payload = serde_json::to_string(booking).map_err(|e| e.to_string())?;
+        let payload = serde_json::to_string(&normalized_booking).map_err(|e| e.to_string())?;
         let tx = self.connection.transaction().map_err(|e| e.to_string())?;
         ensure_workspace_exists(&tx, workspace_id)?;
         if check_idempotency(
@@ -139,7 +141,7 @@ impl PmsDatabase {
             idempotency_key,
             workspace_id,
             "booking",
-            &booking.id,
+            &normalized_booking.id,
             "upsert",
             Some(&payload),
         )? {
@@ -152,7 +154,7 @@ impl PmsDatabase {
                UNION ALL
                SELECT version FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2
              )",
-            params![workspace_id, booking.id], |row| row.get(0)
+            params![workspace_id, normalized_booking.id], |row| row.get(0)
         ).map_err(|e| e.to_string())?;
         tx.execute(
             "INSERT INTO bookings(workspace_id,id,resource_id,payload,version,updated_at)
@@ -161,8 +163,8 @@ impl PmsDatabase {
              payload=excluded.payload, version=excluded.version, updated_at=CURRENT_TIMESTAMP",
             params![
                 workspace_id,
-                booking.id,
-                booking.resource_id,
+                normalized_booking.id,
+                normalized_booking.resource_id,
                 payload,
                 version
             ],
@@ -407,11 +409,10 @@ mod tests {
             start_date: "2026-11-21".into(),
             end_date: "2026-11-23".into(),
             status: BookingStatus::Confirmed,
-            total_price_minor: Some(1_000_000),
-            currency_code: Some("DZD".into()),
+            total_price: Some(10_000.0),
+            payment_currency: Some("DZD".into()),
             payment_status: "pending".into(),
-            notes: None,
-            extra_fields: std::collections::BTreeMap::new(),
+            ..Booking::default()
         }
     }
 
