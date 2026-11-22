@@ -8,7 +8,7 @@ use std::thread;
 
 use crate::database::PmsDatabase;
 use crate::supabase_auth::{AuthOutcome, SupabaseAuthClient};
-use crate::supabase_sync::{push_due_bookings, PushSummary};
+use crate::supabase_sync::{sync_bookings, BookingSyncSummary};
 
 type Hwnd = *mut c_void;
 type Hinstance = *mut c_void;
@@ -128,7 +128,7 @@ enum AuthTask {
     SignIn { email: String, password: String },
     SignUp { email: String, password: String },
     SignOut,
-    PushBookings { workspace_id: String, limit: u32 },
+    SyncBookings { workspace_id: String, limit: u32 },
 }
 enum AuthUiOutcome {
     NoSession,
@@ -148,8 +148,8 @@ enum AuthUiOutcome {
         email: String,
     },
     SignedOut,
-    PushCompleted(PushSummary),
-    PushFailed {
+    SyncCompleted(BookingSyncSummary),
+    SyncFailed {
         error: String,
     },
 }
@@ -347,7 +347,7 @@ unsafe extern "system" fn window_proc(
                         state.workspace_id = None;
                         state.authenticated = true;
                     }
-                    Ok(AuthUiOutcome::PushCompleted(_) | AuthUiOutcome::PushFailed { .. }) => {
+                    Ok(AuthUiOutcome::SyncCompleted(_) | AuthUiOutcome::SyncFailed { .. }) => {
                         state.authenticated = true;
                     }
                     _ => {
