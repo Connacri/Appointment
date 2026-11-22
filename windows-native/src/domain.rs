@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -33,19 +35,33 @@ impl BookingStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Booking {
     pub id: String,
+    #[serde(rename = "resourceId", alias = "resource_id")]
     pub resource_id: String,
+    #[serde(rename = "resourceName", alias = "resource_name")]
     pub resource_name: String,
     pub sector: String,
+    #[serde(rename = "guestName", alias = "guest_name")]
     pub guest_name: String,
+    #[serde(rename = "guestEmail", alias = "guest_email")]
     pub guest_email: String,
+    #[serde(rename = "guestPhone", alias = "guest_phone")]
     pub guest_phone: String,
+    #[serde(rename = "startDate", alias = "start_date")]
     pub start_date: String,
+    #[serde(rename = "endDate", alias = "end_date")]
     pub end_date: String,
     pub status: BookingStatus,
+    #[serde(rename = "totalPriceMinor", alias = "total_price_minor")]
     pub total_price_minor: i64,
+    #[serde(rename = "currencyCode", alias = "currency_code")]
     pub currency_code: String,
+    #[serde(rename = "paymentStatus", alias = "payment_status")]
     pub payment_status: String,
     pub notes: Option<String>,
+    /// Fields present in the TypeScript TimelineBooking contract but not yet
+    /// promoted to first-class Rust fields. Flattening preserves them verbatim.
+    #[serde(flatten, default)]
+    pub extra_fields: BTreeMap<String, Value>,
 }
 
 impl Booking {
@@ -62,8 +78,11 @@ impl Booking {
         if !valid_date(&self.start_date) || !valid_date(&self.end_date) {
             return Err("booking dates must use YYYY-MM-DD".into());
         }
-        if self.end_date <= self.start_date {
-            return Err("booking.end_date must be later than booking.start_date".into());
+        // The canonical TypeScript validator and PostgreSQL contract permit
+        // same-day bookings. A strict end-before-start check is the shared
+        // date-only invariant; time-of-day validation belongs to the mapper/UI.
+        if self.end_date < self.start_date {
+            return Err("booking.end_date must not be before booking.start_date".into());
         }
         if self.total_price_minor < 0 {
             return Err("booking.total_price_minor must be non-negative".into());
@@ -132,6 +151,7 @@ mod tests {
             currency_code: "DZD".into(),
             payment_status: "pending".into(),
             notes: None,
+            extra_fields: BTreeMap::new(),
         }
     }
 
@@ -141,10 +161,54 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_positive_stay() {
+    fn accepts_same_day_booking_as_canonical_contract_requires() {
         let mut booking = sample();
         booking.end_date = booking.start_date.clone();
-        assert!(booking.validate().unwrap_err().contains("later"));
+        assert!(booking.validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_end_date_before_start_date() {
+        let mut booking = sample();
+        booking.end_date = "2026-11-20".into();
+        assert!(booking.validate().unwrap_err().contains("before"));
+    }
+
+    #[test]
+    fn preserves_newer_typescript_booking_fields() {
+        let source = serde_json::json!({
+            "id": "b-2",
+            "resourceId": "r-2",
+            "resourceName": "202",
+            "sector": "hotel",
+            "guestName": "Guest",
+            "guestEmail": "",
+            "guestPhone": "",
+            "startDate": "2026-11-21",
+            "endDate": "2026-11-21",
+            "status": "confirmed",
+            "totalPriceMinor": 120000,
+            "currencyCode": "DZD",
+            "paymentStatus": "pending",
+            "notes": null,
+            "adults": 2,
+            "children": 1,
+            "occupantsList": [{"id":"adult-1","fullName":"Guest"}],
+            "extras": [{"label":"Breakfast","amount":1200}],
+            "guestAgeBracket": "adult",
+            "clientSegment": "business"
+        });
+        let booking: Booking = serde_json::from_value(source).unwrap();
+        assert!(booking.validate().is_ok());
+        assert_eq!(booking.extra_fields["adults"], 2);
+        assert_eq!(booking.extra_fields["children"], 1);
+        assert_eq!(booking.extra_fields["occupantsList"][0]["fullName"], "Guest");
+        let round_trip = serde_json::to_value(booking).unwrap();
+        assert_eq!(round_trip["resourceId"], "r-2");
+        assert_eq!(round_trip["startDate"], "2026-11-21");
+        assert_eq!(round_trip["extras"][0]["label"], "Breakfast");
+        assert_eq!(round_trip["guestAgeBracket"], "adult");
+        assert!(round_trip.get("resource_id").is_none());
     }
 
     #[test]
