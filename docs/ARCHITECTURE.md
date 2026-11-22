@@ -102,11 +102,33 @@ exchange, not database-file sharing.
 - Local IndexedDB/SQLite remain authoritative for immediate local reads and writes.
   The event log and materialized projections must be committed atomically by each
   storage adapter before a mutation is advertised to peers.
-- This protocol foundation does not yet enable LAN discovery or wire transport.
-  Browser JavaScript cannot open arbitrary UDP/mDNS sockets; a browser-only peer
-  therefore needs a locally installed native companion or a browser-compatible
+- LAN peer discovery is implemented on both supported native endpoints:
+  Windows Rust (windows-native/src/p2p_discovery.rs) and the Android APK
+  Capacitor plugin (android/app/src/main/java/com/planning/oran/LanDiscoveryPlugin.java).
+  Both use IPv4 multicast 239.255.42.99:45871, protocol version 1 and the same
+  bounded JSON announcement {protocolVersion, peerId}. Announcements repeat
+  every 3 seconds; peers expire after 12 seconds without a heartbeat. Installation
+  UUIDs are persisted locally (Windows under the user's Appointment AppData folder,
+  Android in app-private SharedPreferences).
+- Discovery publishes no workspace ID, account, credential, business data or
+  listening port. A found address is an untrusted candidate only: it does not
+  establish pairing, membership, authorization, encryption or a data connection.
+  Windows displays the discovered-peer count. Android emits native Capacitor
+  peerFound, peerExpired and discoveryError events; discovery pauses while
+  the Android Activity is backgrounded to avoid a persistent battery/network worker.
+- Android discovery requires local-network permission on OS versions that enforce it:
+  Android 16 compatibility-mode testing uses the Nearby devices grant; Android 17+
+  requires the ACCESS_LOCAL_NETWORK runtime permission. The plugin also acquires
+  and releases the Wi-Fi multicast lock only while discovery is active.
+- Browser-only web deployments cannot open arbitrary UDP sockets and are not
+  discoverable directly. They need a native companion or a separate browser-compatible
   peer signaling path. A native companion is a transport bridge, never a database
   server or coordinator.
+- LAN discovery is now implemented, but authenticated peer transport, encrypted
+  pairing, durable event-log persistence atomic with local business writes,
+  anti-entropy/replay protection, workspace authorization, domain conflict workflows
+  and browser companion integration are not yet complete. Do not label P2P data
+  synchronization operational until those gates are verified.
 - Offline multi-writer operation cannot guarantee globally exclusive room
   reservations during a network partition. Concurrent overlapping reservations
   must be surfaced as conflicts for explicit business resolution; the product
