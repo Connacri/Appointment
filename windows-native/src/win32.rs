@@ -500,7 +500,7 @@ unsafe extern "system" fn window_proc(
         WM_CLOSE | WM_DESTROY => {
             KillTimer(hwnd, DISCOVERY_TIMER_ID);
             if let Ok(mut state) = app_state().lock() {
-                state.discovery.take();
+                state.discovery = None;
                 state.discovered_peers.clear();
             }
             PostQuitMessage(0);
