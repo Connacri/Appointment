@@ -17,6 +17,15 @@ pub struct OutboxEntry {
     pub status: String,
     pub attempts: i64,
     pub created_at: String,
+    pub next_attempt_at: String,
+    pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct OutboxStats {
+    pub pending: u64,
+    pub failed: u64,
+    pub synced: u64,
 }
 
 pub struct PmsDatabase {
@@ -326,9 +335,13 @@ impl PmsDatabase {
         limit: u32,
     ) -> rusqlite::Result<Vec<OutboxEntry>> {
         let mut statement = self.connection.prepare(
-            "SELECT id,idempotency_key,workspace_id,entity,entity_id,operation,version,payload,status,attempts,created_at
-             FROM outbox WHERE workspace_id=?1 AND status='pending' AND next_attempt_at<=CURRENT_TIMESTAMP
-             ORDER BY created_at,id LIMIT ?2"
+            "SELECT id,idempotency_key,workspace_id,entity,entity_id,operation,version,payload,status,attempts,created_at,next_attempt_at,last_error
+             FROM outbox
+             WHERE workspace_id=?1
+               AND status IN ('pending','failed')
+               AND next_attempt_at<=CURRENT_TIMESTAMP
+             ORDER BY rowid
+             LIMIT ?2"
         )?;
         let rows = statement.query_map(params![workspace_id, limit.min(500)], |row| {
             Ok(OutboxEntry {
@@ -343,9 +356,28 @@ impl PmsDatabase {
                 status: row.get(8)?,
                 attempts: row.get(9)?,
                 created_at: row.get(10)?,
+                next_attempt_at: row.get(11)?,
+                last_error: row.get(12)?,
             })
         })?;
         rows.collect()
+    }
+
+    pub fn outbox_stats(&self, workspace_id: &str) -> rusqlite::Result<OutboxStats> {
+        let (pending, failed, synced): (u64, u64, u64) = self.connection.query_row(
+            "SELECT
+                COALESCE(SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN status='synced' THEN 1 ELSE 0 END), 0)
+             FROM outbox WHERE workspace_id=?1",
+            params![workspace_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+        Ok(OutboxStats {
+            pending,
+            failed,
+            synced,
+        })
     }
 }
 
