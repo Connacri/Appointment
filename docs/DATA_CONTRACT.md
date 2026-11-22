@@ -352,3 +352,32 @@ The transport requires an HTTPS Supabase URL, uses the Windows WinHTTP stack and
 Refresh tokens are rotated and stored in Windows Credential Manager. A separate non-secret active-user UUID pointer identifies which account to restore after restart. Access tokens are held only by the in-memory AuthSession and are not serialized to SQLite or files. Passwords are not persisted.
 
 This service layer is not yet wired to a native login screen or application startup lifecycle. It does not resolve workspace membership, enforce business-data RLS, or implement remote data synchronization. Authentication success must not be interpreted as workspace authorization or sync success.
+
+
+## 8. Distributed P2P contract — protocol v1 foundation
+
+The P2P event envelope is transport-neutral and shared by TypeScript Web and Rust
+native implementations (`src/services/p2p/protocol.ts`,
+`windows-native/src/p2p.rs`). Each installation has a stable node identity and a
+monotonic per-node sequence. Events are scoped to a workspace and entity and carry
+a causal vector clock.
+
+Replicas merge event sets by idempotent set union. A repeated event ID with
+different content is treated as node equivocation and rejected. Causally dominated
+events are not part of the current materialized frontier; concurrent maximal events
+remain a conflict. No last-write-wins rule may silently discard concurrent booking,
+stock or financial mutations. Concurrent delete/update operations are also conflicts,
+not automatic resurrection or deletion.
+
+This is a protocol foundation, not a claim that the LAN mesh is already operational.
+Durable event-log persistence must be atomic with local business writes; transport
+must authenticate node identities; discovery, anti-entropy, replay protection,
+workspace authorization, retention/checkpointing and UI conflict resolution must be
+implemented and tested before enabling P2P as a production sync mode.
+
+**Partition invariant:** with no coordinator or quorum, independent peers may accept
+conflicting operations while disconnected. Appointment cannot guarantee globally
+exclusive room allocation or globally serializable financial postings during a LAN
+partition. Such concurrent operations must be detected after reconnection and
+presented as explicit conflicts. The application must not display a globally
+consistent/synced status merely because local writes succeeded.

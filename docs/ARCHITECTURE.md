@@ -81,3 +81,39 @@ page.
 
 Production artifacts are built **only** in GitHub Actions. Local release builds are forbidden
 (see `AGENTS.md`).
+
+
+## 6. Distributed LAN mode (P2P, protocol v1 foundation)
+
+Appointment's distributed mode is peer-to-peer: each installation owns its local
+IndexedDB (Web) or SQLite (native Windows) database. No peer is authoritative and
+there is no permanent or elected coordinator. Replication is an immutable event-set
+exchange, not database-file sharing.
+
+- The transport-neutral event contract is implemented in
+  `src/services/p2p/protocol.ts` and `windows-native/src/p2p.rs`.
+- Each event has a stable node/sequence identity, workspace scope, entity identity,
+  operation, payload and causal vector clock.
+- Replicas merge by set union. Replayed events are idempotent; reuse of an event ID
+  with different content is treated as node equivocation.
+- Causally superseded events leave the materialized frontier. Concurrent events
+  remain explicit conflicts. There is deliberately no generic last-write-wins rule:
+  booking, inventory and financial conflicts require domain-specific handling.
+- Local IndexedDB/SQLite remain authoritative for immediate local reads and writes.
+  The event log and materialized projections must be committed atomically by each
+  storage adapter before a mutation is advertised to peers.
+- This protocol foundation does not yet enable LAN discovery or wire transport.
+  Browser JavaScript cannot open arbitrary UDP/mDNS sockets; a browser-only peer
+  therefore needs a locally installed native companion or a browser-compatible
+  peer signaling path. A native companion is a transport bridge, never a database
+  server or coordinator.
+- Offline multi-writer operation cannot guarantee globally exclusive room
+  reservations during a network partition. Concurrent overlapping reservations
+  must be surfaced as conflicts for explicit business resolution; the product
+  must not report them as globally conflict-free.
+
+The protocol foundation is covered by `tests/p2pProtocol.test.ts` and Rust unit
+tests. LAN discovery, authenticated peer transport, durable event persistence,
+anti-entropy, domain-specific conflict workflows and browser companion integration
+remain separate implementation gates; do not label P2P synchronization operational
+until those gates are verified.

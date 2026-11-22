@@ -9,6 +9,7 @@ pub mod database;
 pub mod domain;
 pub mod supabase_auth;
 pub mod supabase_sync;
+pub mod p2p;
 mod win32;
 mod winhttp;
 
