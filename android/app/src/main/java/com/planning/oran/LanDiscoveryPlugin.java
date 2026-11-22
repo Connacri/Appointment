@@ -67,7 +67,7 @@ public final class LanDiscoveryPlugin extends Plugin {
     }
 
     private final Object workerLock = new Object();
-    private volatile boolean stopRequested;
+    private volatile long workerGeneration;
     private volatile MulticastSocket socket;
     private volatile Thread worker;
     private volatile boolean discoveryRequested;
@@ -252,10 +252,10 @@ public final class LanDiscoveryPlugin extends Plugin {
                 acquireMulticastLock();
 
                 socket = newSocket;
-                stopRequested = false;
                 discoveryRequested = true;
+                long generation = ++workerGeneration;
                 worker = new Thread(
-                    () -> discoveryLoop(newSocket, group),
+                    () -> discoveryLoop(newSocket, group, generation),
                     "appointment-lan-discovery"
                 );
                 worker.setDaemon(true);
@@ -311,13 +311,13 @@ public final class LanDiscoveryPlugin extends Plugin {
         }
     }
 
-    private void discoveryLoop(MulticastSocket activeSocket, InetAddress group) {
+    private void discoveryLoop(MulticastSocket activeSocket, InetAddress group, long generation) {
         final byte[] receiveBuffer = new byte[MAX_PACKET_BYTES + 1];
         final Map<String, PeerSeen> lastSeen = new HashMap<>();
         long nextAnnouncement = 0L;
 
         try {
-            while (!stopRequested && !activeSocket.isClosed()) {
+            while (workerGeneration == generation && !activeSocket.isClosed()) {
                 long now = System.currentTimeMillis();
                 if (now >= nextAnnouncement) {
                     byte[] announcement = announcementBytes();
@@ -379,7 +379,7 @@ public final class LanDiscoveryPlugin extends Plugin {
                 }
             }
         } catch (Exception error) {
-            if (!stopRequested) {
+            if (workerGeneration == generation) {
                 JSObject detail = new JSObject();
                 detail.put("message", error.getMessage() == null ? "Erreur socket LAN." : error.getMessage());
                 notifyListeners("discoveryError", detail);
@@ -409,7 +409,7 @@ public final class LanDiscoveryPlugin extends Plugin {
 
     private void stopWorker() {
         synchronized (workerLock) {
-            stopRequested = true;
+            workerGeneration++;
             MulticastSocket activeSocket = socket;
             socket = null;
             if (activeSocket != null) activeSocket.close();
