@@ -1,5 +1,6 @@
 #![allow(dead_code)] // Win32 ABI fields are read by the operating system, not Rust.
 
+use std::collections::HashMap;
 use std::ffi::c_void;
 use std::mem::zeroed;
 use std::ptr::{null, null_mut};
@@ -7,6 +8,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 
 use crate::database::PmsDatabase;
+use crate::p2p_discovery::{DiscoveredPeer, DiscoveryEvent, LanDiscovery};
 use crate::supabase_auth::{AuthOutcome, SupabaseAuthClient};
 use crate::supabase_sync::{sync_bookings, BookingSyncSummary};
 
@@ -36,6 +38,8 @@ const WM_COMMAND: u32 = 0x0111;
 const WM_CREATE: u32 = 0x0001;
 const WM_CLOSE: u32 = 0x0010;
 const WM_APP_AUTH_COMPLETE: u32 = 0x8001;
+const WM_TIMER: u32 = 0x0113;
+const DISCOVERY_TIMER_ID: usize = 1;
 
 const ID_EMAIL: usize = 101;
 const ID_PASSWORD: usize = 102;
@@ -44,6 +48,7 @@ const ID_SIGN_UP: usize = 104;
 const ID_SIGN_OUT: usize = 105;
 const ID_STATUS: usize = 106;
 const ID_PUSH_SYNC: usize = 107;
+const ID_DISCOVERY_STATUS: usize = 108;
 
 #[repr(C)]
 struct Point {
@@ -107,6 +112,8 @@ unsafe extern "system" {
     fn GetWindowTextW(hwnd: Hwnd, text: *mut u16, max_count: i32) -> i32;
     fn SetWindowTextW(hwnd: Hwnd, text: *const u16) -> i32;
     fn EnableWindow(hwnd: Hwnd, enable: i32) -> i32;
+    fn SetTimer(hwnd: Hwnd, timer_id: usize, elapse: u32, callback: *mut c_void) -> usize;
+    fn KillTimer(hwnd: Hwnd, timer_id: usize) -> i32;
 }
 
 #[link(name = "kernel32")]
@@ -120,6 +127,9 @@ struct AppState {
     workspace_id: Option<String>,
     busy: bool,
     authenticated: bool,
+    discovery: Option<LanDiscovery>,
+    discovery_error: Option<String>,
+    discovered_peers: HashMap<String, DiscoveredPeer>,
 }
 static APP_STATE: OnceLock<Mutex<AppState>> = OnceLock::new();
 
@@ -166,6 +176,9 @@ fn app_state() -> &'static Mutex<AppState> {
             workspace_id: None,
             busy: false,
             authenticated: false,
+            discovery: None,
+            discovery_error: None,
+            discovered_peers: HashMap::new(),
         })
     })
 }
@@ -182,7 +195,7 @@ pub fn show_error(message: &str) {
     }
 }
 
-pub fn run(database: PmsDatabase) -> Result<(), String> {
+pub fn run(database: PmsDatabase, node_id: String) -> Result<(), String> {
     {
         let mut state = app_state().lock().unwrap_or_else(|e| e.into_inner());
         state.database = Some(Arc::new(Mutex::new(database)));
@@ -229,6 +242,14 @@ pub fn run(database: PmsDatabase) -> Result<(), String> {
             return Err("CreateWindowExW failed".into());
         }
 
+        {
+            let mut state = app_state().lock().unwrap_or_else(|e| e.into_inner());
+            match LanDiscovery::start(&node_id) {
+                Ok(discovery) => state.discovery = Some(discovery),
+                Err(error) => state.discovery_error = Some(error),
+            }
+        }
+        SetTimer(hwnd, DISCOVERY_TIMER_ID, 1000, null_mut());
         ShowWindow(hwnd, SW_SHOW);
         UpdateWindow(hwnd);
         let mut message: Msg = zeroed();
@@ -281,6 +302,7 @@ unsafe extern "system" fn window_proc(
                 42,
             );
             create_status_label(hwnd, 44, 382, 800, 78);
+            create_discovery_label(hwnd, 44, 510, 800, 28);
             show_control(hwnd, ID_SIGN_OUT, false);
             show_control(hwnd, ID_PUSH_SYNC, false);
             {
@@ -471,7 +493,16 @@ unsafe extern "system" fn window_proc(
             }
             0
         }
+        WM_TIMER if w_param == DISCOVERY_TIMER_ID => {
+            update_discovery_status(hwnd);
+            0
+        }
         WM_CLOSE | WM_DESTROY => {
+            KillTimer(hwnd, DISCOVERY_TIMER_ID);
+            if let Ok(mut state) = app_state().lock() {
+                state.discovery.take();
+                state.discovered_peers.clear();
+            }
             PostQuitMessage(0);
             0
         }
@@ -699,6 +730,67 @@ unsafe fn create_status_label(parent: Hwnd, x: i32, y: i32, width: i32, height: 
         GetModuleHandleW(null()),
         null_mut(),
     );
+}
+
+
+unsafe fn create_discovery_label(parent: Hwnd, x: i32, y: i32, width: i32, height: i32) {
+    let class = wide("STATIC");
+    let text = wide("Réseau local : démarrage de la découverte P2P…");
+    CreateWindowExW(
+        0,
+        class.as_ptr(),
+        text.as_ptr(),
+        WS_CHILD | WS_VISIBLE,
+        x,
+        y,
+        width,
+        height,
+        parent,
+        ID_DISCOVERY_STATUS as Hmenu,
+        GetModuleHandleW(null()),
+        null_mut(),
+    );
+}
+
+fn update_discovery_status(hwnd: Hwnd) {
+    let (peer_count, error) = {
+        let mut state = app_state().lock().unwrap_or_else(|e| e.into_inner());
+        let mut events = Vec::new();
+        if let Some(discovery) = state.discovery.as_ref() {
+            loop {
+                match discovery.try_recv() {
+                    Ok(event) => events.push(event),
+                    Err(std::sync::mpsc::TryRecvError::Empty)
+                    | Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                }
+            }
+        }
+        for event in events {
+            match event {
+                DiscoveryEvent::PeerFound(peer) => {
+                    state.discovered_peers.insert(peer.peer_id.clone(), peer);
+                }
+                DiscoveryEvent::PeerExpired { peer_id } => {
+                    state.discovered_peers.remove(&peer_id);
+                }
+            }
+        }
+        (state.discovered_peers.len(), state.discovery_error.clone())
+    };
+
+    unsafe {
+        let control = GetDlgItem(hwnd, ID_DISCOVERY_STATUS as i32);
+        if !control.is_null() {
+            let text = match error {
+                Some(error) => format!("Réseau local : découverte indisponible — {error}"),
+                None => format!(
+                    "Réseau local : {peer_count} appareil(s) Appointment découvert(s). Découverte seule — aucun échange de données n’est encore activé."
+                ),
+            };
+            let text = wide(&text);
+            SetWindowTextW(control, text.as_ptr());
+        }
+    }
 }
 
 unsafe fn create_edit(
