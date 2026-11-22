@@ -392,12 +392,18 @@ fn returned_version(response: &HttpResponse) -> Result<i64, PushFailure> {
                 .into(),
         )
     })?;
-    let Some(row) = rows.into_iter().next() else {
+    if rows.is_empty() {
         return Err(PushFailure::Conflict(
             "The conditional booking update matched no remote row; the operation was not acknowledged."
                 .into(),
         ));
-    };
+    }
+    if rows.len() != 1 {
+        return Err(PushFailure::Conflict(
+            "The server returned more than one row for a unique booking mutation.".into(),
+        ));
+    }
+    let row = rows.into_iter().next().expect("exactly one row was validated");
     if row.version <= 0 {
         return Err(PushFailure::Retry(
             "Supabase returned a non-positive booking version; the server ACK is invalid.".into(),
