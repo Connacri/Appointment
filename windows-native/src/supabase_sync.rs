@@ -84,7 +84,9 @@ pub fn push_due_bookings(
             Ok(server_version) => {
                 let acknowledged = database
                     .acknowledge_outbox(&expected_workspace, &entry.id, server_version)
-                    .map_err(|error| format!("Could not persist server acknowledgement: {error}"))?;
+                    .map_err(|error| {
+                        format!("Could not persist server acknowledgement: {error}")
+                    })?;
                 if !acknowledged {
                     return Err(
                         "The server accepted a booking mutation, but its local Outbox row changed before acknowledgement. The operation will be retried idempotently."
@@ -128,8 +130,8 @@ fn push_one(
             entry.entity
         )));
     }
-    let booking_id = normalize_uuid(&entry.entity_id, "booking_id")
-        .map_err(PushFailure::Conflict)?;
+    let booking_id =
+        normalize_uuid(&entry.entity_id, "booking_id").map_err(PushFailure::Conflict)?;
 
     match entry.operation.as_str() {
         "upsert" => {
@@ -139,8 +141,7 @@ fn push_one(
             let mut booking: Booking = serde_json::from_str(payload).map_err(|_| {
                 PushFailure::Conflict("Booking Outbox payload is invalid JSON.".into())
             })?;
-            if normalize_uuid(&booking.id, "booking_id")
-                .map_err(PushFailure::Conflict)?
+            if normalize_uuid(&booking.id, "booking_id").map_err(PushFailure::Conflict)?
                 != booking_id
             {
                 return Err(PushFailure::Conflict(
@@ -149,18 +150,17 @@ fn push_one(
             }
             booking.id = booking_id.clone();
             booking.normalize_occupants();
-            booking
-                .validate()
-                .map_err(PushFailure::Conflict)?;
+            booking.validate().map_err(PushFailure::Conflict)?;
 
-            let resource_id =
-                normalize_uuid(&booking.resource_id, "resource_id").map_err(PushFailure::Conflict)?;
+            let resource_id = normalize_uuid(&booking.resource_id, "resource_id")
+                .map_err(PushFailure::Conflict)?;
             booking.resource_id = resource_id.clone();
             let resource = fetch_resource(client, workspace_id, &resource_id)?;
-            let resource_workspace = normalize_uuid(&resource.workspace_id, "resource.workspace_id")
-                .map_err(PushFailure::Conflict)?;
-            let returned_resource_id = normalize_uuid(&resource.id, "resource.id")
-                .map_err(PushFailure::Conflict)?;
+            let resource_workspace =
+                normalize_uuid(&resource.workspace_id, "resource.workspace_id")
+                    .map_err(PushFailure::Conflict)?;
+            let returned_resource_id =
+                normalize_uuid(&resource.id, "resource.id").map_err(PushFailure::Conflict)?;
             if resource_workspace != workspace_id
                 || returned_resource_id != resource_id
                 || !resource.is_active
@@ -171,17 +171,12 @@ fn push_one(
                         .into(),
                 ));
             }
-            let establishment_id =
-                normalize_uuid(&resource.establishment_id, "establishment_id")
-                    .map_err(PushFailure::Conflict)?;
+            let establishment_id = normalize_uuid(&resource.establishment_id, "establishment_id")
+                .map_err(PushFailure::Conflict)?;
 
-            let expected = to_supabase_booking_row(
-                &booking,
-                workspace_id,
-                &establishment_id,
-                Some(user_id),
-            )
-            .map_err(PushFailure::Conflict)?;
+            let expected =
+                to_supabase_booking_row(&booking, workspace_id, &establishment_id, Some(user_id))
+                    .map_err(PushFailure::Conflict)?;
             upsert_remote_booking(
                 client,
                 workspace_id,
@@ -190,12 +185,9 @@ fn push_one(
                 expected,
             )
         }
-        "delete" => delete_remote_booking(
-            client,
-            workspace_id,
-            &booking_id,
-            entry.base_server_version,
-        ),
+        "delete" => {
+            delete_remote_booking(client, workspace_id, &booking_id, entry.base_server_version)
+        }
         _ => Err(PushFailure::Conflict(format!(
             "Unsupported booking Outbox operation '{}'.",
             entry.operation
@@ -208,8 +200,7 @@ fn fetch_resource(
     workspace_id: &str,
     resource_id: &str,
 ) -> Result<RemoteResource, PushFailure> {
-    let resource_id =
-        normalize_uuid(resource_id, "resource_id").map_err(PushFailure::Conflict)?;
+    let resource_id = normalize_uuid(resource_id, "resource_id").map_err(PushFailure::Conflict)?;
     let path = format!(
         "/rest/v1/resources?select=id,workspace_id,establishment_id,is_active,deleted_at&id=eq.{resource_id}&workspace_id=eq.{workspace_id}&limit=1"
     );
@@ -242,7 +233,8 @@ fn upsert_remote_booking(
 
     if base_server_version == 0 {
         if let Some(row) = current.as_ref() {
-            if row_matches_expected(row, &expected) && row.get("deleted_at").is_some_and(Value::is_null)
+            if row_matches_expected(row, &expected)
+                && row.get("deleted_at").is_some_and(Value::is_null)
             {
                 return remote_version(row);
             }
@@ -260,11 +252,7 @@ fn upsert_remote_booking(
         let body = serde_json::to_vec(&insert)
             .map_err(|_| PushFailure::Conflict("Could not serialize booking insert.".into()))?;
         let response = client
-            .authenticated_post_with_prefer(
-                "/rest/v1/bookings",
-                REST_PREFER_REPRESENTATION,
-                &body,
-            )
+            .authenticated_post_with_prefer("/rest/v1/bookings", REST_PREFER_REPRESENTATION, &body)
             .map_err(PushFailure::Retry)?;
         if response.status == 409 {
             // The first POST may have committed even though its response was lost,
@@ -320,11 +308,7 @@ fn upsert_remote_booking(
         "/rest/v1/bookings?id=eq.{booking_id}&workspace_id=eq.{workspace_id}&version=eq.{base_server_version}"
     );
     let response = client
-        .authenticated_patch_with_prefer(
-            &patch_path,
-            REST_PREFER_REPRESENTATION,
-            &body,
-        )
+        .authenticated_patch_with_prefer(&patch_path, REST_PREFER_REPRESENTATION, &body)
         .map_err(PushFailure::Retry)?;
     let response = require_success(response)?;
     returned_version(&response)
@@ -376,9 +360,7 @@ fn fetch_booking_row(
     expected_workspace_id: &str,
     expected_booking_id: &str,
 ) -> Result<Option<Value>, PushFailure> {
-    let response = client
-        .authenticated_get(path)
-        .map_err(PushFailure::Retry)?;
+    let response = client.authenticated_get(path).map_err(PushFailure::Retry)?;
     let response = require_success(response)?;
     let rows: Vec<Value> = serde_json::from_slice(&response.body)
         .map_err(|_| PushFailure::Retry("Supabase returned an invalid booking response.".into()))?;
@@ -407,8 +389,7 @@ fn validate_remote_booking_identity(
         .get("workspace_id")
         .and_then(Value::as_str)
         .ok_or_else(|| PushFailure::Retry("Remote booking response has no workspace ID.".into()))?;
-    let actual_id = normalize_uuid(actual_id, "remote booking.id")
-        .map_err(PushFailure::Retry)?;
+    let actual_id = normalize_uuid(actual_id, "remote booking.id").map_err(PushFailure::Retry)?;
     let actual_workspace = normalize_uuid(actual_workspace, "remote booking.workspace_id")
         .map_err(PushFailure::Retry)?;
     if actual_id != expected_booking_id || actual_workspace != expected_workspace_id {
@@ -423,7 +404,10 @@ fn require_success(response: HttpResponse) -> Result<HttpResponse, PushFailure> 
     if (200..300).contains(&response.status) {
         return Ok(response);
     }
-    let message = format!("Supabase REST request failed with HTTP {}.", response.status);
+    let message = format!(
+        "Supabase REST request failed with HTTP {}.",
+        response.status
+    );
     if response.status == 401 || response.status == 403 || response.status >= 500 {
         Err(PushFailure::Retry(message))
     } else {
@@ -432,12 +416,13 @@ fn require_success(response: HttpResponse) -> Result<HttpResponse, PushFailure> 
 }
 
 fn returned_version(response: &HttpResponse) -> Result<i64, PushFailure> {
-    let rows: Vec<RemoteReturnedVersion> = serde_json::from_slice(&response.body).map_err(|_| {
-        PushFailure::Retry(
-            "Supabase did not return a booking representation; the server ACK is unverified."
-                .into(),
-        )
-    })?;
+    let rows: Vec<RemoteReturnedVersion> =
+        serde_json::from_slice(&response.body).map_err(|_| {
+            PushFailure::Retry(
+                "Supabase did not return a booking representation; the server ACK is unverified."
+                    .into(),
+            )
+        })?;
     if rows.is_empty() {
         return Err(PushFailure::Conflict(
             "The conditional booking update matched no remote row; the operation was not acknowledged."
@@ -449,7 +434,10 @@ fn returned_version(response: &HttpResponse) -> Result<i64, PushFailure> {
             "The server returned more than one row for a unique booking mutation.".into(),
         ));
     }
-    let row = rows.into_iter().next().expect("exactly one row was validated");
+    let row = rows
+        .into_iter()
+        .next()
+        .expect("exactly one row was validated");
     if row.version <= 0 {
         return Err(PushFailure::Retry(
             "Supabase returned a non-positive booking version; the server ACK is invalid.".into(),
@@ -462,9 +450,7 @@ fn remote_version(row: &Value) -> Result<i64, PushFailure> {
     row.get("version")
         .and_then(Value::as_i64)
         .filter(|version| *version > 0)
-        .ok_or_else(|| {
-            PushFailure::Retry("Remote booking row has no valid server version.".into())
-        })
+        .ok_or_else(|| PushFailure::Retry("Remote booking row has no valid server version.".into()))
 }
 
 fn row_matches_expected(remote: &Value, expected: &Value) -> bool {
@@ -504,12 +490,10 @@ fn civil_from_days(days_since_epoch: i64) -> (i64, i64, i64) {
     let z = days_since_epoch + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
     let day_of_era = z - era * 146_097;
-    let year_of_era = (day_of_era - day_of_era / 1_460 + day_of_era / 36_524
-        - day_of_era / 146_096)
-        / 365;
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
     let mut year = year_of_era + era * 400;
-    let day_of_year = day_of_era
-        - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
     let month_prime = (5 * day_of_year + 2) / 153;
     let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
     let month = month_prime + if month_prime < 10 { 3 } else { -9 };
@@ -525,11 +509,7 @@ mod tests {
 
     #[test]
     fn resource_and_booking_ids_must_be_uuids_before_query_construction() {
-        assert!(normalize_uuid(
-            "a1b2c3d4-e5f6-47a8-9012-1234567890ab",
-            "booking_id"
-        )
-        .is_ok());
+        assert!(normalize_uuid("a1b2c3d4-e5f6-47a8-9012-1234567890ab", "booking_id").is_ok());
         assert!(normalize_uuid("room-101", "resource_id").is_err());
     }
 
