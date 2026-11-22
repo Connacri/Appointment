@@ -16,7 +16,6 @@ import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { SupabaseAuthGate } from './services/supabase/SupabaseAuthGate';
 import { WorkspaceProvider } from './services/supabase/WorkspaceContext';
 import { VideoBubble } from './services/VideoBubbleBridge';
-import { LanDiscovery, startNativeLanDiscovery, supportsNativeLanDiscovery } from './services/p2p/LanDiscoveryBridge';
 import { PullToRefresh } from './components/PullToRefresh';
 import { LanDiscoveryStatus } from './components/LanDiscoveryStatus';
 import { useBrandIconSync } from './hooks/useBrandIconSync';
@@ -222,63 +221,6 @@ const MainLayout: React.FC = () => {
   } = useApp();
 
   useBrandIconSync(establishmentProfile?.logoUrl, establishmentProfile?.name);
-
-  // Android APK discovery is native UDP multicast. Browser-only deployments
-  // deliberately do not emulate LAN discovery or claim they are visible to peers.
-  React.useEffect(() => {
-    if (!supportsNativeLanDiscovery()) return;
-
-    let cancelled = false;
-    const subscriptions: Array<{ remove: () => Promise<void> }> = [];
-
-    void Promise.all([
-      LanDiscovery.addListener('peerFound', (peer) => {
-        if (!cancelled) {
-          window.dispatchEvent(new CustomEvent('appointment-p2p-peer-found', { detail: peer }));
-        }
-      }),
-      LanDiscovery.addListener('peerExpired', (event) => {
-        if (!cancelled) {
-          window.dispatchEvent(new CustomEvent('appointment-p2p-peer-expired', { detail: event }));
-        }
-      }),
-      LanDiscovery.addListener('discoveryError', (error) => {
-        if (!cancelled) {
-          window.dispatchEvent(new CustomEvent('appointment-p2p-discovery-error', { detail: error }));
-        }
-      }),
-    ]).then(async (handles) => {
-      subscriptions.push(...handles);
-      if (cancelled) {
-        await Promise.all(handles.map((handle) => handle.remove()));
-        return;
-      }
-      try {
-        const state = await startNativeLanDiscovery();
-        if (!cancelled) {
-          window.dispatchEvent(new CustomEvent('appointment-p2p-discovery-started', { detail: state }));
-        }
-      } catch (error) {
-        if (!cancelled) {
-          const message = error instanceof Error ? error.message : String(error);
-          window.dispatchEvent(new CustomEvent('appointment-p2p-discovery-error', { detail: { message } }));
-        }
-      }
-    }).catch((error: unknown) => {
-      if (!cancelled) {
-        const message = error instanceof Error ? error.message : String(error);
-        window.dispatchEvent(new CustomEvent('appointment-p2p-discovery-error', { detail: { message } }));
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      subscriptions.forEach((handle) => { void handle.remove(); });
-      void LanDiscovery.stopDiscovery().catch(() => {
-        // The native plugin may already be shutting down with the Android activity.
-      });
-    };
-  }, []);
 
   const [hasOpenedVideoHub, setHasOpenedVideoHub] = React.useState(activeView === 'videos');
 
