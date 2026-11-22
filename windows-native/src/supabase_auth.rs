@@ -181,11 +181,12 @@ impl SupabaseAuthClient {
             access_token,
             expires_at,
         };
-        self.session = Some(session.clone());
-        Ok(AuthOutcome::Authenticated {
-            user_id: session.user_id,
-            email: session.email,
-        })
+        let outcome = AuthOutcome::Authenticated {
+            user_id: session.user_id.clone(),
+            email: session.email.clone(),
+        };
+        self.session = Some(session);
+        Ok(outcome)
     }
     fn post(
         &self,
