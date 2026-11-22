@@ -121,13 +121,8 @@ impl SupabaseAuthClient {
         body: &[u8],
     ) -> Result<HttpResponse, String> {
         let token = self.fresh_access_token()?;
-        self.transport.post_with_prefer(
-            path,
-            &self.publishable_key,
-            Some(&token),
-            prefer,
-            body,
-        )
+        self.transport
+            .post_with_prefer(path, &self.publishable_key, Some(&token), prefer, body)
     }
 
     pub fn authenticated_patch_with_prefer(
@@ -137,13 +132,8 @@ impl SupabaseAuthClient {
         body: &[u8],
     ) -> Result<HttpResponse, String> {
         let token = self.fresh_access_token()?;
-        self.transport.patch_with_prefer(
-            path,
-            &self.publishable_key,
-            Some(&token),
-            prefer,
-            body,
-        )
+        self.transport
+            .patch_with_prefer(path, &self.publishable_key, Some(&token), prefer, body)
     }
 
     /// Resolve and verify this account's personal workspace through PostgREST + RLS.
