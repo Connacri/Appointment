@@ -29,7 +29,7 @@ Every native node sends this exact logical object:
 
 `peerId` is a stable, installation-local UUID. Windows stores it under the current user's Appointment directory in `%LOCALAPPDATA%`; Android stores it in `getNoBackupFilesDir()` so it is not copied by Android Auto Backup.
 
-Receivers must reject unsupported protocol versions, malformed UUIDs, their own `peerId`, oversized datagrams and non-LAN source addresses. Duplicate announcements refresh the peer's last-seen time. A peer is removed after 12 seconds without a valid announcement.
+Receivers must reject unsupported protocol versions, malformed UUIDs, their own `peerId`, oversized datagrams and non-LAN source addresses. Accepted IPv4 sources are RFC 1918 private ranges, link-local 169.254.0.0/16 and RFC 6598 shared space 100.64.0.0/10. Duplicate announcements refresh the peer's last-seen time. A peer is removed after 12 seconds without a valid announcement.
 
 ## Security boundary
 
