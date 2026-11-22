@@ -20,7 +20,7 @@ The committed Cargo.lock pins the dependency graph; the Windows pipeline uses --
 - Direct Win32 window and message loop.
 - Rust domain model for PMS bookings, with input validation.
 - SQLite database migrations and workspace-scoped booking persistence under %LOCALAPPDATA%\Connacri\Appointment.
-- Exact money representation using integer minor units plus a validated ISO currency code.
+- TypeScript-compatible booking amounts retained in major units, with explicit currency-exponent conversion to integer minor units.
 - Atomic booking + Outbox writes; atomic delete + tombstone + Outbox writes.
 - Unique idempotency keys and bounded, workspace-scoped pagination.
 - Windows Credential Manager vault for Supabase refresh tokens, scoped to the authenticated user UUID.

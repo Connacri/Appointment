@@ -160,8 +160,9 @@ pub fn delete_refresh_token(user_id: &str) -> Result<(), String> {
 }
 
 fn credential_target(user_id: &str) -> Result<String, String> {
-    let user_id = Uuid::parse_str(user_id)
-        .map_err(|_| "A valid Supabase auth user UUID is required for credential storage.".to_string())?;
+    let user_id = Uuid::parse_str(user_id).map_err(|_| {
+        "A valid Supabase auth user UUID is required for credential storage.".to_string()
+    })?;
     Ok(format!("{TARGET_PREFIX}/{}", user_id.hyphenated()))
 }
 
