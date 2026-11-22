@@ -68,6 +68,18 @@ test('recognizes causal succession and converges to the causally latest event', 
   assert.equal(state.kind === 'resolved' ? state.event.payload?.value : null, 'later');
 });
 
+test('requires all observed vector-clock components for causal succession', () => {
+  const prior = event('node-a', 2, { 'node-a': 2, 'node-c': 5 });
+  const inconsistentSuccessor = event(
+    'node-b',
+    2,
+    { 'node-a': 2, 'node-b': 2, 'node-c': 4 },
+  );
+
+  assert.equal(happensBefore(prior, inconsistentSuccessor), false);
+  assert.equal(getP2pRecordState([prior, inconsistentSuccessor]).kind, 'conflict');
+});
+
 test('preserves concurrent booking edits as a conflict on every replica', () => {
   const left = event('node-a', 2, { 'node-a': 2, 'node-b': 1 }, { guest: 'Alice' });
   const right = event('node-b', 2, { 'node-a': 1, 'node-b': 2 }, { guest: 'Bob' });
