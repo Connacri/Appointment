@@ -6,15 +6,28 @@ use std::collections::BTreeMap;
 #[serde(rename_all = "snake_case")]
 pub enum BookingStatus {
     #[default]
-    New, Confirmed, DueIn, CheckedIn, DueOut, CheckedOut, BookingOffer, OutOfOrder, Cancelled,
+    New,
+    Confirmed,
+    DueIn,
+    CheckedIn,
+    DueOut,
+    CheckedOut,
+    BookingOffer,
+    OutOfOrder,
+    Cancelled,
 }
 
 impl BookingStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::New => "new", Self::Confirmed => "confirmed", Self::DueIn => "due_in",
-            Self::CheckedIn => "checked_in", Self::DueOut => "due_out", Self::CheckedOut => "checked_out",
-            Self::BookingOffer => "booking_offer", Self::OutOfOrder => "out_of_order",
+            Self::New => "new",
+            Self::Confirmed => "confirmed",
+            Self::DueIn => "due_in",
+            Self::CheckedIn => "checked_in",
+            Self::DueOut => "due_out",
+            Self::CheckedOut => "checked_out",
+            Self::BookingOffer => "booking_offer",
+            Self::OutOfOrder => "out_of_order",
             Self::Cancelled => "cancelled",
         }
     }
@@ -129,14 +142,14 @@ pub struct Booking {
     #[serde(alias = "end_date")]
     pub end_date: String,
     pub status: BookingStatus,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "total_price", default, skip_serializing_if = "Option::is_none")]
     pub total_price: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "payment_currency", default, skip_serializing_if = "Option::is_none")]
     pub payment_currency: Option<String>,
     // Legacy native-only fields are retained for already persisted local records.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "total_price_minor", default, skip_serializing_if = "Option::is_none")]
     pub total_price_minor: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "currency_code", default, skip_serializing_if = "Option::is_none")]
     pub currency_code: Option<String>,
     #[serde(alias = "payment_status")]
     pub payment_status: String,
@@ -231,8 +244,12 @@ pub struct MinorMoney {
 
 impl Booking {
     pub fn validate(&self) -> Result<(), String> {
-        if self.id.trim().is_empty() { return Err("booking.id is required".into()); }
-        if self.resource_id.trim().is_empty() { return Err("booking.resource_id is required".into()); }
+        if self.id.trim().is_empty() {
+            return Err("booking.id is required".into());
+        }
+        if self.resource_id.trim().is_empty() {
+            return Err("booking.resource_id is required".into());
+        }
         if !valid_date(&self.start_date) || !valid_date(&self.end_date) {
             return Err("booking dates must use YYYY-MM-DD".into());
         }
@@ -245,14 +262,24 @@ impl Booking {
         if !matches!(self.payment_status.as_str(), "paid" | "pending" | "partial") {
             return Err("booking.payment_status must be paid, pending or partial".into());
         }
-        if self.total_price.is_some_and(|amount| !amount.is_finite() || amount < 0.0) {
+        if self
+            .total_price
+            .is_some_and(|amount| !amount.is_finite() || amount < 0.0)
+        {
             return Err("booking.totalPrice must be finite and non-negative".into());
         }
         match (self.total_price_minor, self.currency_code.as_deref()) {
             (Some(amount), Some(code)) if amount >= 0 && canonical_currency(code).is_some() => {}
             (None, None) => {}
-            (Some(_), Some(_)) => return Err("legacy native minor amount or currency code is invalid".into()),
-            _ => return Err("legacy native minor-unit amount and currency code must be provided together".into()),
+            (Some(_), Some(_)) => {
+                return Err("legacy native minor amount or currency code is invalid".into())
+            }
+            _ => {
+                return Err(
+                    "legacy native minor-unit amount and currency code must be provided together"
+                        .into(),
+                )
+            }
         }
         let mut normalized = self.clone();
         normalized.normalize_occupants();
@@ -278,14 +305,20 @@ impl Booking {
                 return Err("booking.totalPrice exceeds the supported minor-unit range".into());
             }
             return Ok(Some(MinorMoney {
-                amount_minor: scaled as i64, currency_code: code.to_string(), exponent,
+                amount_minor: scaled as i64,
+                currency_code: code.to_string(),
+                exponent,
             }));
         }
         match (self.total_price_minor, self.currency_code.as_deref()) {
             (Some(amount_minor), Some(raw_code)) => {
                 let (code, exponent) = canonical_currency(raw_code)
                     .ok_or_else(|| format!("unsupported legacy currency code '{raw_code}'"))?;
-                Ok(Some(MinorMoney { amount_minor, currency_code: code.to_string(), exponent }))
+                Ok(Some(MinorMoney {
+                    amount_minor,
+                    currency_code: code.to_string(),
+                    exponent,
+                }))
             }
             (None, None) => Ok(None),
             _ => Err("legacy native amount and currency code must be provided together".into()),
@@ -304,69 +337,117 @@ impl Booking {
         let children_count = if self.sector == "resort" {
             self.children.unwrap_or(0).max(0) as usize
         } else {
-            self.children.or_else(|| json_count(metadata, "hotelChildren"))
-                .unwrap_or(0).max(0) as usize
+            self.children
+                .or_else(|| json_count(metadata, "hotelChildren"))
+                .unwrap_or(0)
+                .max(0) as usize
         };
 
         let raw_adults = self.adult_guests.clone().unwrap_or_default();
         let raw_occupants = self.occupants_list.clone().unwrap_or_default();
-        let occupant_adults: Vec<_> = raw_occupants.iter()
+        let occupant_adults: Vec<_> = raw_occupants
+            .iter()
             .filter(|item| item.role.as_deref() != Some("child") && item.is_adult != Some(false))
-            .cloned().collect();
-        let occupant_children: Vec<_> = raw_occupants.iter()
+            .cloned()
+            .collect();
+        let occupant_children: Vec<_> = raw_occupants
+            .iter()
             .filter(|item| item.role.as_deref() == Some("child") || item.is_adult == Some(false))
-            .cloned().collect();
-        let adult_entries: Vec<_> = raw_adults.iter()
+            .cloned()
+            .collect();
+        let adult_entries: Vec<_> = raw_adults
+            .iter()
             .filter(|item| item.role.as_deref() != Some("child") && item.is_adult != Some(false))
-            .cloned().collect();
-        let child_entries: Vec<_> = raw_adults.iter()
+            .cloned()
+            .collect();
+        let child_entries: Vec<_> = raw_adults
+            .iter()
             .filter(|item| item.role.as_deref() == Some("child") || item.is_adult == Some(false))
-            .cloned().collect();
+            .cloned()
+            .collect();
 
         let first = adult_entries.first().or_else(|| occupant_adults.first());
         let mut primary = first.cloned().unwrap_or_default();
         primary.full_name = first_nonempty(&[
-            Some(self.guest_name.as_str()), first.map(|item| item.full_name.as_str()),
+            Some(self.guest_name.as_str()),
+            first.map(|item| item.full_name.as_str()),
             first.and_then(|item| item.name.as_deref()),
         ]);
-        primary.phone = first_nonempty(&[Some(self.guest_phone.as_str()), first.map(|item| item.phone.as_str())]);
-        primary.email = first_nonempty(&[Some(self.guest_email.as_str()), first.map(|item| item.email.as_str())]);
+        primary.phone = first_nonempty(&[
+            Some(self.guest_phone.as_str()),
+            first.map(|item| item.phone.as_str()),
+        ]);
+        primary.email = first_nonempty(&[
+            Some(self.guest_email.as_str()),
+            first.map(|item| item.email.as_str()),
+        ]);
         let primary_doc_number = first_nonempty(&[
-            self.id_piece_number.as_deref(), self.identity_number.as_deref(), self.passport_number.as_deref(),
+            self.id_piece_number.as_deref(),
+            self.identity_number.as_deref(),
+            self.passport_number.as_deref(),
         ]);
         if !primary_doc_number.is_empty() {
-            primary.document_type = self.id_piece_type.as_deref()
-                .filter(|value| !value.trim().is_empty()).unwrap_or("cni").to_string();
+            primary.document_type = self
+                .id_piece_type
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or("cni")
+                .to_string();
             primary.document_number = primary_doc_number;
         } else {
-            primary.document_type = first.map(|item| item.document_type.as_str())
-                .filter(|value| !value.trim().is_empty()).unwrap_or("cni").to_string();
-            primary.document_number = first.map(|item| item.document_number.clone()).unwrap_or_default();
+            primary.document_type = first
+                .map(|item| item.document_type.as_str())
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or("cni")
+                .to_string();
+            primary.document_number = first
+                .map(|item| item.document_number.clone())
+                .unwrap_or_default();
             if primary.document_number.is_empty() {
-                primary.document_number = parse_legacy_id_doc(first.and_then(|item| item.id_doc.as_deref())).1;
+                primary.document_number =
+                    parse_legacy_id_doc(first.and_then(|item| item.id_doc.as_deref())).1;
             }
         }
-        primary.document_expiry_date = self.id_document_expiry_date.clone()
+        primary.document_expiry_date = self
+            .id_document_expiry_date
+            .clone()
             .or_else(|| first.and_then(|item| item.document_expiry_date.clone()));
         let mut adults = vec![normalize_occupant_slot(primary, 0, "adult", true)];
         for index in 1..adults_count {
             adults.push(normalize_occupant_slot(
                 merge_occupants(adult_entries.get(index), occupant_adults.get(index)),
-                index, "adult", false,
+                index,
+                "adult",
+                false,
             ));
         }
-        let child_source = if !occupant_children.is_empty() { &occupant_children } else { &child_entries };
+        let child_source = if !occupant_children.is_empty() {
+            &occupant_children
+        } else {
+            &child_entries
+        };
         let mut children = Vec::with_capacity(children_count);
         for index in 0..children_count {
             children.push(normalize_occupant_slot(
                 child_source.get(index).cloned().unwrap_or_default(),
-                adults_count + index, "child", false,
+                adults_count + index,
+                "child",
+                false,
             ));
         }
         if let Some(primary) = adults.first() {
-            self.guest_name = first_nonempty(&[Some(self.guest_name.as_str()), Some(primary.full_name.as_str())]);
-            self.guest_phone = first_nonempty(&[Some(self.guest_phone.as_str()), Some(primary.phone.as_str())]);
-            self.guest_email = first_nonempty(&[Some(self.guest_email.as_str()), Some(primary.email.as_str())]);
+            self.guest_name = first_nonempty(&[
+                Some(self.guest_name.as_str()),
+                Some(primary.full_name.as_str()),
+            ]);
+            self.guest_phone = first_nonempty(&[
+                Some(self.guest_phone.as_str()),
+                Some(primary.phone.as_str()),
+            ]);
+            self.guest_email = first_nonempty(&[
+                Some(self.guest_email.as_str()),
+                Some(primary.email.as_str()),
+            ]);
         }
         self.adults = Some(adults_count as i64);
         self.children = Some(children_count as i64);
@@ -384,7 +465,9 @@ impl Booking {
 
     fn validate_occupants(&self) -> Result<(), String> {
         let occupants = self.occupants_list.as_deref().unwrap_or(&[]);
-        if occupants.is_empty() { return Err("booking must contain a primary occupant".into()); }
+        if occupants.is_empty() {
+            return Err("booking must contain a primary occupant".into());
+        }
         if occupants.len() == 1 {
             let primary = &occupants[0];
             if primary.full_name.trim().chars().count() < 2 {
@@ -400,27 +483,47 @@ impl Booking {
         }
         for (index, occupant) in occupants.iter().enumerate() {
             if occupant.full_name.trim().chars().count() < 2 {
-                return Err(format!("booking occupant {} requires a full name", index + 1));
+                return Err(format!(
+                    "booking occupant {} requires a full name",
+                    index + 1
+                ));
             }
             if occupant.document_type.trim().is_empty() {
-                return Err(format!("booking occupant {} requires a document type", index + 1));
+                return Err(format!(
+                    "booking occupant {} requires a document type",
+                    index + 1
+                ));
             }
             if occupant.document_number.trim().chars().count() < 2 {
-                return Err(format!("booking occupant {} requires an identity document number", index + 1));
+                return Err(format!(
+                    "booking occupant {} requires an identity document number",
+                    index + 1
+                ));
             }
             if !occupant.email.trim().is_empty() && !valid_email(&occupant.email) {
-                return Err(format!("booking occupant {} has an invalid email", index + 1));
+                return Err(format!(
+                    "booking occupant {} has an invalid email",
+                    index + 1
+                ));
             }
             if index == 0 {
                 if !valid_phone(&occupant.phone) {
                     return Err("multi-person booking requires a valid primary guest phone".into());
                 }
             } else if !occupant.phone.trim().is_empty() && !valid_phone(&occupant.phone) {
-                return Err(format!("booking occupant {} has an invalid phone", index + 1));
+                return Err(format!(
+                    "booking occupant {} has an invalid phone",
+                    index + 1
+                ));
             }
         }
         if self.id_piece_type.as_deref() == Some("special_authorization")
-            && self.special_authorization_desc.as_deref().unwrap_or("").trim().is_empty()
+            && self
+                .special_authorization_desc
+                .as_deref()
+                .unwrap_or("")
+                .trim()
+                .is_empty()
         {
             return Err("special authorization description is required".into());
         }
@@ -430,35 +533,59 @@ impl Booking {
 
 fn canonical_currency(raw: &str) -> Option<(&'static str, u8)> {
     match raw.trim().to_ascii_uppercase().as_str() {
-        "DA" | "DZD" => Some(("DZD", 2)), "EUR" => Some(("EUR", 2)), "USD" => Some(("USD", 2)),
-        "RMB" | "CNY" => Some(("CNY", 2)), "GBP" => Some(("GBP", 2)), "SAR" => Some(("SAR", 2)),
+        "DA" | "DZD" => Some(("DZD", 2)),
+        "EUR" => Some(("EUR", 2)),
+        "USD" => Some(("USD", 2)),
+        "RMB" | "CNY" => Some(("CNY", 2)),
+        "GBP" => Some(("GBP", 2)),
+        "SAR" => Some(("SAR", 2)),
         _ => None,
     }
 }
 
 fn json_count(metadata: Option<&BTreeMap<String, Value>>, key: &str) -> Option<i64> {
     let value = metadata?.get(key)?;
-    value.as_i64()
+    value
+        .as_i64()
         .or_else(|| value.as_f64().map(|number| number.floor() as i64))
-        .or_else(|| value.as_str()?.trim().parse::<f64>().ok().map(|number| number.floor() as i64))
+        .or_else(|| {
+            value
+                .as_str()?
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .map(|number| number.floor() as i64)
+        })
 }
 
 fn first_nonempty(values: &[Option<&str>]) -> String {
-    values.iter().flatten().find(|value| !value.trim().is_empty())
-        .map(|value| value.trim().to_string()).unwrap_or_default()
+    values
+        .iter()
+        .flatten()
+        .find(|value| !value.trim().is_empty())
+        .map(|value| value.trim().to_string())
+        .unwrap_or_default()
 }
 
 fn parse_legacy_id_doc(value: Option<&str>) -> (String, String) {
     let raw = value.unwrap_or("").trim();
     if let Some((prefix, number)) = raw.split_once(':') {
         if !prefix.trim().is_empty() && !number.trim().is_empty() {
-            return (prefix.trim().to_ascii_lowercase(), number.trim().to_string());
+            return (
+                prefix.trim().to_ascii_lowercase(),
+                number.trim().to_string(),
+            );
         }
     }
     ("cni".into(), raw.to_string())
 }
 
-fn normalize_occupant_slot(mut occupant: BookingOccupant, index: usize, role: &str, is_primary: bool) -> BookingOccupant {
+fn normalize_occupant_slot(
+    mut occupant: BookingOccupant,
+    index: usize,
+    role: &str,
+    is_primary: bool,
+) -> BookingOccupant {
     if occupant.full_name.trim().is_empty() {
         occupant.full_name = occupant.name.clone().unwrap_or_default().trim().to_string();
     } else {
@@ -470,9 +597,15 @@ fn normalize_occupant_slot(mut occupant: BookingOccupant, index: usize, role: &s
     if occupant.document_type.trim().is_empty() {
         occupant.document_type = parse_legacy_id_doc(occupant.id_doc.as_deref()).0;
     }
-    if occupant.document_type.trim().is_empty() { occupant.document_type = "cni".into(); }
-    occupant.id = Some(occupant.id.filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| format!("{role}-{}", index + 1)));
+    if occupant.document_type.trim().is_empty() {
+        occupant.document_type = "cni".into();
+    }
+    occupant.id = Some(
+        occupant
+            .id
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| format!("{role}-{}", index + 1)),
+    );
     occupant.role = Some(role.into());
     occupant.is_adult = Some(role == "adult");
     occupant.is_primary = Some(is_primary);
@@ -481,16 +614,24 @@ fn normalize_occupant_slot(mut occupant: BookingOccupant, index: usize, role: &s
     occupant.email = occupant.email.trim().to_string();
     occupant.document_type = occupant.document_type.trim().to_ascii_lowercase();
     occupant.document_number = occupant.document_number.trim().to_string();
-    occupant.document_expiry_date = occupant.document_expiry_date.filter(|value| !value.trim().is_empty());
+    occupant.document_expiry_date = occupant
+        .document_expiry_date
+        .filter(|value| !value.trim().is_empty());
     occupant.id_doc = if !occupant.document_number.is_empty() {
-        Some(format!("{}:{}", occupant.document_type, occupant.document_number))
+        Some(format!(
+            "{}:{}",
+            occupant.document_type, occupant.document_number
+        ))
     } else {
         occupant.id_doc.filter(|value| !value.trim().is_empty())
     };
     occupant
 }
 
-fn merge_occupants(preferred: Option<&BookingOccupant>, fallback: Option<&BookingOccupant>) -> BookingOccupant {
+fn merge_occupants(
+    preferred: Option<&BookingOccupant>,
+    fallback: Option<&BookingOccupant>,
+) -> BookingOccupant {
     let preferred = preferred.cloned().unwrap_or_default();
     let fallback = fallback.cloned().unwrap_or_default();
     BookingOccupant {
@@ -499,37 +640,74 @@ fn merge_occupants(preferred: Option<&BookingOccupant>, fallback: Option<&Bookin
         is_adult: preferred.is_adult.or(fallback.is_adult),
         is_primary: preferred.is_primary.or(fallback.is_primary),
         full_name: first_nonempty(&[
-            Some(preferred.full_name.as_str()), preferred.name.as_deref(),
-            Some(fallback.full_name.as_str()), fallback.name.as_deref(),
+            Some(preferred.full_name.as_str()),
+            preferred.name.as_deref(),
+            Some(fallback.full_name.as_str()),
+            fallback.name.as_deref(),
         ]),
-        phone: first_nonempty(&[Some(preferred.phone.as_str()), Some(fallback.phone.as_str())]),
-        email: first_nonempty(&[Some(preferred.email.as_str()), Some(fallback.email.as_str())]),
-        document_type: first_nonempty(&[Some(preferred.document_type.as_str()), Some(fallback.document_type.as_str())]),
-        document_number: first_nonempty(&[Some(preferred.document_number.as_str()), Some(fallback.document_number.as_str())]),
-        document_expiry_date: preferred.document_expiry_date.or(fallback.document_expiry_date),
+        phone: first_nonempty(&[
+            Some(preferred.phone.as_str()),
+            Some(fallback.phone.as_str()),
+        ]),
+        email: first_nonempty(&[
+            Some(preferred.email.as_str()),
+            Some(fallback.email.as_str()),
+        ]),
+        document_type: first_nonempty(&[
+            Some(preferred.document_type.as_str()),
+            Some(fallback.document_type.as_str()),
+        ]),
+        document_number: first_nonempty(&[
+            Some(preferred.document_number.as_str()),
+            Some(fallback.document_number.as_str()),
+        ]),
+        document_expiry_date: preferred
+            .document_expiry_date
+            .or(fallback.document_expiry_date),
         name: preferred.name.or(fallback.name),
         id_doc: preferred.id_doc.or(fallback.id_doc),
-        extra_fields: fallback.extra_fields.into_iter().chain(preferred.extra_fields).collect(),
+        extra_fields: fallback
+            .extra_fields
+            .into_iter()
+            .chain(preferred.extra_fields)
+            .collect(),
     }
 }
 
 fn valid_email(value: &str) -> bool {
     let value = value.trim();
-    let Some((local, domain)) = value.split_once('@') else { return false };
-    !local.is_empty() && domain.contains('.') && !value.chars().any(char::is_whitespace)
-        && domain.rsplit('.').next().is_some_and(|suffix| suffix.len() >= 2)
+    let Some((local, domain)) = value.split_once('@') else {
+        return false;
+    };
+    !local.is_empty()
+        && domain.contains('.')
+        && !domain.contains('@')
+        && !value.chars().any(char::is_whitespace)
+        && domain
+            .rsplit('.')
+            .next()
+            .is_some_and(|suffix| suffix.len() >= 2)
 }
 
 fn valid_phone(value: &str) -> bool {
     let trimmed = value.trim();
-    let digits = trimmed.chars().filter(|character| character.is_ascii_digit()).count();
+    let digits = trimmed
+        .chars()
+        .filter(|character| character.is_ascii_digit())
+        .count();
     trimmed.chars().count() >= 6 && digits >= 6
 }
 
 fn valid_date(value: &str) -> bool {
     let bytes = value.as_bytes();
-    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' { return false; }
-    if !bytes.iter().enumerate().all(|(index, byte)| index == 4 || index == 7 || byte.is_ascii_digit()) {
+    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
+        return false;
+    }
+    if !bytes
+        .iter()
+        .enumerate()
+        .all(|(index, byte)| index == 4 || index == 7 || byte.is_ascii_digit())
+    {
         return false;
     }
     let year: u32 = value[0..4].parse().unwrap_or(0);
@@ -537,8 +715,11 @@ fn valid_date(value: &str) -> bool {
     let day: u32 = value[8..10].parse().unwrap_or(0);
     let leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
     let days_in_month = match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31, 4 | 6 | 9 | 11 => 30,
-        2 if leap => 29, 2 => 28, _ => return false,
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
     };
     (1..=days_in_month).contains(&day)
 }
@@ -549,11 +730,19 @@ mod tests {
 
     fn sample() -> Booking {
         Booking {
-            id: "b-1".into(), resource_id: "r-1".into(), resource_name: "101".into(),
-            sector: "hotel".into(), guest_name: "Guest".into(), guest_email: "".into(),
-            guest_phone: "".into(), start_date: "2026-11-21".into(), end_date: "2026-11-23".into(),
-            status: BookingStatus::Confirmed, total_price: Some(12_000.0),
-            payment_currency: Some("DZD".into()), payment_status: "pending".into(),
+            id: "b-1".into(),
+            resource_id: "r-1".into(),
+            resource_name: "101".into(),
+            sector: "hotel".into(),
+            guest_name: "Guest".into(),
+            guest_email: "".into(),
+            guest_phone: "".into(),
+            start_date: "2026-11-21".into(),
+            end_date: "2026-11-23".into(),
+            status: BookingStatus::Confirmed,
+            total_price: Some(12_000.0),
+            payment_currency: Some("DZD".into()),
+            payment_status: "pending".into(),
             ..Booking::default()
         }
     }
@@ -561,15 +750,18 @@ mod tests {
     #[test]
     fn accepts_valid_booking_and_same_day_date_range() {
         assert!(sample().validate().is_ok());
-        let mut same_day = sample(); same_day.end_date = same_day.start_date.clone();
+        let mut same_day = sample();
+        same_day.end_date = same_day.start_date.clone();
         assert!(same_day.validate().is_ok());
     }
 
     #[test]
     fn rejects_reversed_and_impossible_dates() {
-        let mut booking = sample(); booking.end_date = "2026-11-20".into();
+        let mut booking = sample();
+        booking.end_date = "2026-11-20".into();
         assert!(booking.validate().unwrap_err().contains("before"));
-        booking.end_date = "2026-11-23".into(); booking.start_date = "2026-02-29".into();
+        booking.end_date = "2026-11-23".into();
+        booking.start_date = "2026-02-29".into();
         assert!(booking.validate().unwrap_err().contains("YYYY-MM-DD"));
     }
 
@@ -599,47 +791,79 @@ mod tests {
         assert_eq!(occupants[2].role.as_deref(), Some("child"));
         assert_eq!(occupants[1].phone, "");
         assert_eq!(occupants[2].email, "");
-        assert_eq!(booking.custom_metadata.as_ref().unwrap()["vipNote"], "sea view");
+        assert_eq!(
+            booking.custom_metadata.as_ref().unwrap()["vipNote"],
+            "sea view"
+        );
     }
 
     #[test]
     fn multi_person_booking_requires_identity_for_every_person_and_primary_phone() {
-        let mut booking = sample(); booking.adults = Some(2);
+        let mut booking = sample();
+        booking.adults = Some(2);
         booking.adult_guests = Some(vec![
             BookingOccupant {
-                full_name:"Primary Guest".into(), phone:"+213 550 11 22 33".into(),
-                document_type:"cni".into(), document_number:"12345678".into(),
+                full_name: "Primary Guest".into(),
+                phone: "+213 550 11 22 33".into(),
+                document_type: "cni".into(),
+                document_number: "12345678".into(),
                 ..BookingOccupant::default()
             },
             BookingOccupant {
-                full_name:"Second Guest".into(), document_type:"cni".into(),
-                document_number:"87654321".into(), ..BookingOccupant::default()
+                full_name: "Second Guest".into(),
+                document_type: "cni".into(),
+                document_number: "87654321".into(),
+                ..BookingOccupant::default()
             },
         ]);
         assert!(booking.validate().is_ok());
-        booking.adult_guests.as_mut().unwrap()[1].document_number.clear();
-        assert!(booking.validate().unwrap_err().contains("identity document"));
+        booking.adult_guests.as_mut().unwrap()[1]
+            .document_number
+            .clear();
+        assert!(booking
+            .validate()
+            .unwrap_err()
+            .contains("identity document"));
     }
 
     #[test]
     fn currency_exponents_and_aliases_are_explicit() {
         for (currency, canonical) in [
-            ("DZD","DZD"),("DA","DZD"),("EUR","EUR"),("USD","USD"),
-            ("RMB","CNY"),("CNY","CNY"),("GBP","GBP"),("SAR","SAR"),
+            ("DZD", "DZD"),
+            ("DA", "DZD"),
+            ("EUR", "EUR"),
+            ("USD", "USD"),
+            ("RMB", "CNY"),
+            ("CNY", "CNY"),
+            ("GBP", "GBP"),
+            ("SAR", "SAR"),
         ] {
-            let mut booking = sample(); booking.payment_currency = Some(currency.into());
+            let mut booking = sample();
+            booking.payment_currency = Some(currency.into());
             let money = booking.normalized_total_money().unwrap().unwrap();
-            assert_eq!(money.currency_code, canonical); assert_eq!(money.exponent, 2);
+            assert_eq!(money.currency_code, canonical);
+            assert_eq!(money.exponent, 2);
             assert_eq!(money.amount_minor, 1_200_000);
         }
     }
 
     #[test]
     fn rounds_major_units_and_refuses_unknown_currency_conversion() {
-        let mut booking = sample(); booking.total_price = Some(12.345);
-        assert_eq!(booking.normalized_total_money().unwrap().unwrap().amount_minor, 1235);
+        let mut booking = sample();
+        booking.total_price = Some(12.345);
+        assert_eq!(
+            booking
+                .normalized_total_money()
+                .unwrap()
+                .unwrap()
+                .amount_minor,
+            1235
+        );
         booking.payment_currency = Some("XYZ".into());
-        assert!(booking.normalized_total_money().unwrap_err().contains("unsupported currency"));
+        assert!(booking
+            .normalized_total_money()
+            .unwrap_err()
+            .contains("unsupported currency"));
         assert!(booking.validate().is_ok());
     }
 
@@ -672,7 +896,14 @@ mod tests {
         });
         let booking: Booking = serde_json::from_value(source).unwrap();
         assert!(booking.validate().is_ok());
-        assert_eq!(booking.normalized_total_money().unwrap().unwrap().amount_minor, 12345);
+        assert_eq!(
+            booking
+                .normalized_total_money()
+                .unwrap()
+                .unwrap()
+                .amount_minor,
+            12345
+        );
         let round_trip = serde_json::to_value(booking).unwrap();
         assert_eq!(round_trip["totalPriceMinor"], 12345);
     }

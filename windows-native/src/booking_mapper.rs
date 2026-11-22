@@ -2,12 +2,31 @@ use crate::domain::Booking;
 use serde_json::{json, Map, Value};
 
 const PMS_FIELDS: &[&str] = &[
-    "color", "checkInTime", "checkOutTime", "actualCheckOutAt", "guestType",
-    "nationality", "idType", "identityType", "identityNumber", "idPieceType",
-    "idPieceNumber", "specialAuthorizationDesc", "wilaya", "wilayaOfOrigin",
-    "passportNumber", "visaNumber", "idDocumentExpiryDate", "visaExpiryDate",
-    "entryDateInCountry", "mealPlanDietPreferences", "valuablesAtReception",
-    "forgottenItems", "guestAlerts", "lastModifiedAt", "lastModifiedBy",
+    "color",
+    "checkInTime",
+    "checkOutTime",
+    "actualCheckOutAt",
+    "guestType",
+    "nationality",
+    "idType",
+    "identityType",
+    "identityNumber",
+    "idPieceType",
+    "idPieceNumber",
+    "specialAuthorizationDesc",
+    "wilaya",
+    "wilayaOfOrigin",
+    "passportNumber",
+    "visaNumber",
+    "idDocumentExpiryDate",
+    "visaExpiryDate",
+    "entryDateInCountry",
+    "mealPlanDietPreferences",
+    "valuablesAtReception",
+    "forgottenItems",
+    "guestAlerts",
+    "lastModifiedAt",
+    "lastModifiedBy",
     "modificationHistory",
 ];
 
@@ -26,7 +45,8 @@ pub fn to_supabase_booking_row(
     let mut booking = raw_booking.clone();
     booking.normalize_occupants();
     booking.validate()?;
-    let total_price = booking.total_price
+    let total_price = booking
+        .total_price
         .ok_or_else(|| "booking.totalPrice is required for Supabase persistence".to_string())?;
     let currency = booking.payment_currency.as_deref().unwrap_or("DA").trim();
     let currency = if currency.is_empty() { "DA" } else { currency };
@@ -67,7 +87,10 @@ pub fn to_supabase_booking_row(
     if let Some(value) = booking.payment_method_type.as_ref() {
         payments_summary.insert("paymentMethodType".into(), json!(value));
     }
-    payments_summary.insert("payments".into(), json!(booking.payments.clone().unwrap_or_default()));
+    payments_summary.insert(
+        "payments".into(),
+        json!(booking.payments.clone().unwrap_or_default()),
+    );
 
     Ok(json!({
         "id": booking.id,
@@ -100,7 +123,8 @@ pub fn to_supabase_booking_row(
 
 /// Restore a TypeScript-compatible local booking from a public.bookings row.
 pub fn from_supabase_booking_row(row: &Value) -> Result<Booking, String> {
-    let row = row.as_object()
+    let row = row
+        .as_object()
         .ok_or_else(|| "Supabase booking row must be an object".to_string())?;
     let guest_metadata = object_or_empty(row.get("guest_metadata"));
     let pms = object_or_empty(guest_metadata.get("_pms"));
@@ -109,11 +133,14 @@ pub fn from_supabase_booking_row(row: &Value) -> Result<Booking, String> {
     let mut custom_metadata = guest_metadata.clone();
     custom_metadata.remove("_pms");
 
-    let payment_currency = payments_summary.get("paymentCurrency")
+    let payment_currency = payments_summary
+        .get("paymentCurrency")
         .and_then(Value::as_str)
         .or_else(|| row.get("currency").and_then(Value::as_str))
         .unwrap_or("DA");
-    let total_price = row.get("total_price").and_then(Value::as_f64)
+    let total_price = row
+        .get("total_price")
+        .and_then(Value::as_f64)
         .ok_or_else(|| "Supabase booking row is missing numeric total_price".to_string())?;
 
     let mut payload = json!({
@@ -151,22 +178,31 @@ pub fn from_supabase_booking_row(row: &Value) -> Result<Booking, String> {
             }
         }
     }
-    let mut booking: Booking = serde_json::from_value(payload).map_err(|error| error.to_string())?;
+    let mut booking: Booking =
+        serde_json::from_value(payload).map_err(|error| error.to_string())?;
     booking.normalize_occupants();
     // Reads remain lossless even for legacy rows that predate multi-occupant validation.
     Ok(booking)
 }
 
 fn nullable_trimmed(value: &str) -> Value {
-    if value.trim().is_empty() { Value::Null } else { Value::String(value.trim().to_string()) }
+    if value.trim().is_empty() {
+        Value::Null
+    } else {
+        Value::String(value.trim().to_string())
+    }
 }
 
 fn object_or_empty(value: Option<&Value>) -> Map<String, Value> {
-    value.and_then(Value::as_object).cloned().unwrap_or_default()
+    value
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default()
 }
 
 fn required_string(row: &Map<String, Value>, key: &str) -> Result<String, String> {
-    row.get(key).and_then(Value::as_str)
+    row.get(key)
+        .and_then(Value::as_str)
         .map(str::to_string)
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| format!("Supabase booking row is missing string field '{key}'"))
@@ -249,7 +285,11 @@ mod tests {
             check_in_time: Some("14:00".into()),
             check_out_time: Some("12:00".into()),
             visa_number: Some("VISA-2026-44".into()),
-            custom_metadata: Some([("vipNote".to_string(), json!("sea view"))].into_iter().collect()),
+            custom_metadata: Some(
+                [("vipNote".to_string(), json!("sea view"))]
+                    .into_iter()
+                    .collect(),
+            ),
             ..Booking::default()
         }
     }
@@ -279,11 +319,21 @@ mod tests {
         assert_eq!(restored.adults, Some(2));
         assert_eq!(restored.children, Some(1));
         assert_eq!(restored.occupants_list.as_ref().unwrap().len(), 3);
-        assert_eq!(restored.occupants_list.as_ref().unwrap()[2].full_name, "Adam Benali");
+        assert_eq!(
+            restored.occupants_list.as_ref().unwrap()[2].full_name,
+            "Adam Benali"
+        );
         assert_eq!(restored.payments.as_ref().unwrap()[0].amount, 200.0);
         assert_eq!(restored.visa_number.as_deref(), Some("VISA-2026-44"));
-        assert_eq!(restored.custom_metadata.as_ref().unwrap()["vipNote"], "sea view");
-        assert!(!restored.custom_metadata.as_ref().unwrap().contains_key("_pms"));
+        assert_eq!(
+            restored.custom_metadata.as_ref().unwrap()["vipNote"],
+            "sea view"
+        );
+        assert!(!restored
+            .custom_metadata
+            .as_ref()
+            .unwrap()
+            .contains_key("_pms"));
     }
 
     #[test]

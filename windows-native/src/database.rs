@@ -461,7 +461,8 @@ mod tests {
         assert_eq!(restored.guest_phone, "+213 550 11 22 33");
 
         let outbox = db.pending_outbox("w-1", 10).unwrap();
-        let payload: serde_json::Value = serde_json::from_str(outbox[0].payload.as_deref().unwrap()).unwrap();
+        let payload: serde_json::Value =
+            serde_json::from_str(outbox[0].payload.as_deref().unwrap()).unwrap();
         assert_eq!(payload["adults"], 2);
         assert_eq!(payload["occupantsList"].as_array().unwrap().len(), 2);
         assert_eq!(payload["occupantsList"][1]["documentNumber"], "P887766");
