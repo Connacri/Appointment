@@ -530,20 +530,21 @@ fn start_auth_task(hwnd: Hwnd, task: AuthTask, client: Option<SupabaseAuthClient
                     map_auth_outcome(&mut client, &database, result, &email)
                 }
                 AuthTask::SignOut => client.sign_out().map(|_| AuthUiOutcome::SignedOut),
-                AuthTask::PushBookings {
+                AuthTask::SyncBookings {
                     workspace_id,
                     limit,
                 } => match database.as_ref() {
-                    Some(database) => match push_due_bookings(
+                    Some(database) => match sync_bookings(
                         &mut client,
                         database.as_ref(),
                         &workspace_id,
                         limit,
+                        200,
                     ) {
-                        Ok(summary) => Ok(AuthUiOutcome::PushCompleted(summary)),
-                        Err(error) => Ok(AuthUiOutcome::PushFailed { error }),
+                        Ok(summary) => Ok(AuthUiOutcome::SyncCompleted(summary)),
+                        Err(error) => Ok(AuthUiOutcome::SyncFailed { error }),
                     },
-                    None => Ok(AuthUiOutcome::PushFailed {
+                    None => Ok(AuthUiOutcome::SyncFailed {
                         error: "La base SQLite locale n’est pas disponible.".into(),
                     }),
                 },
