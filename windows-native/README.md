@@ -32,7 +32,7 @@ After authentication, the client resolves the deterministic personal workspace (
 
 The Rust sync service can push due local booking Outbox entries sequentially after re-verifying the personal workspace. It resolves each booking's resource under the authenticated JWT and refuses the push unless that resource is active, not deleted, and belongs to the verified workspace. Inserts are idempotently recovered after a lost response; updates and soft deletes use conditional `version` filters. The local Outbox is marked `synced` only after a returned server version is validated and committed to SQLite. Version mismatches and unsupported entities become terminal conflicts rather than blind overwrites.
 
-This is a push-only engine and is not yet connected to a native sync button or background scheduler. Remote pull, cursor persistence, tombstone reconciliation, multi-workspace selection and live Supabase integration tests remain incomplete.
+The Win32 shell exposes a manual **Pousser les réservations** action after the authenticated user and local SQLite workspace owner have both been verified. The push worker runs off the UI thread and does not hold the SQLite mutex during network requests. Each database read, ACK, retry or conflict update acquires the lock only for that local operation. This remains push-only: remote pull, cursor persistence, tombstone reconciliation, conflict-resolution UI, multi-workspace selection, background scheduling and live Supabase integration tests are not implemented.
 
 ## Configuration
 
