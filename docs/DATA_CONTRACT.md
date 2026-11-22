@@ -323,3 +323,18 @@ Supabase authentication, HTTP requests, server ACK handling, remote pull/push, c
 resolution, workspace membership resolution or live RLS verification. No SQL migration
 or remote schema mutation is part of this step. The native application must not expose a
 successful sync state until a future sync engine has received a verified server ACK.
+
+## 11. Native Windows credential vault (2026-11-22)
+
+The native Windows client stores Supabase refresh tokens only through the Windows Credential Manager generic-credential APIs. Credential targets are namespaced by the authenticated Supabase user UUID:
+
+Connacri/Appointment/Supabase/refresh-token/{auth-user-uuid}
+
+The implementation:
+- Uses CRED_TYPE_GENERIC and CRED_PERSIST_LOCAL_MACHINE, scoped to the current Windows user's credential set and retained across that user's logon sessions on the same computer.
+- Rejects invalid user UUIDs, empty refresh tokens and tokens larger than the documented CRED_MAX_CREDENTIAL_BLOB_SIZE value of 2,560 bytes.
+- Returns an explicit absent state when a credential is not found; deleting an absent credential is idempotent.
+- Does not put refresh tokens in SQLite, JSON configuration or logs. The vault does not persist passwords, access tokens, service-role keys or database connection strings.
+- Does not yet implement sign-in, token refresh, in-memory access-token lifecycle, Supabase HTTP transport or authenticated workspace membership resolution.
+
+A stored refresh token is a bearer credential: it must only be loaded for the matching authenticated user and cleared on sign-out or account removal. The next auth integration slice must refresh through Supabase Auth over HTTPS, keep access tokens in memory, and establish user/workspace identity from the authenticated server response rather than a local workspace selector.
