@@ -158,7 +158,7 @@ impl PmsDatabase {
                  CREATE INDEX idx_outbox_workspace
                    ON outbox(workspace_id, created_at);
                  INSERT OR IGNORE INTO schema_migrations(version) VALUES (3);
-                 COMMIT;"
+                 COMMIT;",
             )?;
         }
         Ok(())
@@ -387,7 +387,11 @@ impl PmsDatabase {
         let changed = self.connection.execute(
             "UPDATE outbox SET status='conflict', last_error=?3
              WHERE workspace_id=?1 AND id=?2 AND status IN ('pending','failed')",
-            params![workspace_id, outbox_id, reason.chars().take(1024).collect::<String>()],
+            params![
+                workspace_id,
+                outbox_id,
+                reason.chars().take(1024).collect::<String>()
+            ],
         )?;
         Ok(changed == 1)
     }
@@ -770,9 +774,7 @@ mod tests {
         assert_eq!(entries[0].base_server_version, 0);
         assert_eq!(entries[1].base_server_version, 0);
 
-        assert!(db
-            .acknowledge_outbox("w-1", &entries[0].id, 7)
-            .unwrap());
+        assert!(db.acknowledge_outbox("w-1", &entries[0].id, 7).unwrap());
         let later = db.pending_outbox("w-1", 10).unwrap();
         assert_eq!(later.len(), 1);
         assert_eq!(later[0].id, entries[1].id);
@@ -875,7 +877,7 @@ mod tests {
                    FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
                  );
                  INSERT INTO tombstones(workspace_id,entity,entity_id,version)
-                   VALUES ('w-migrate','booking','b-deleted',8);"
+                   VALUES ('w-migrate','booking','b-deleted',8);",
             )
             .unwrap();
 
@@ -919,11 +921,9 @@ mod tests {
             .unwrap();
         let version: i64 = db
             .connection
-            .query_row(
-                "SELECT MAX(version) FROM schema_migrations",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(version, 3);
         assert!(outbox_sql.contains("'conflict'"));
@@ -936,9 +936,7 @@ mod tests {
             .unwrap();
         let created = db.pending_outbox("w-1", 1).unwrap().remove(0);
         assert_eq!(created.base_server_version, 0);
-        assert!(db
-            .acknowledge_outbox("w-1", &created.id, 12)
-            .unwrap());
+        assert!(db.acknowledge_outbox("w-1", &created.id, 12).unwrap());
 
         assert!(db
             .delete_booking("w-1", "b-server-version", "idem-delete")
@@ -947,9 +945,7 @@ mod tests {
         assert_eq!(deleted.operation, "delete");
         assert_eq!(deleted.base_server_version, 12);
 
-        assert!(db
-            .acknowledge_outbox("w-1", &deleted.id, 13)
-            .unwrap());
+        assert!(db.acknowledge_outbox("w-1", &deleted.id, 13).unwrap());
         let server_version: i64 = db
             .connection
             .query_row(
