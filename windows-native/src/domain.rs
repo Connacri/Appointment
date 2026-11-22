@@ -142,14 +142,30 @@ pub struct Booking {
     #[serde(alias = "end_date")]
     pub end_date: String,
     pub status: BookingStatus,
-    #[serde(alias = "total_price", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        alias = "total_price",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub total_price: Option<f64>,
-    #[serde(alias = "payment_currency", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        alias = "payment_currency",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub payment_currency: Option<String>,
     // Legacy native-only fields are retained for already persisted local records.
-    #[serde(alias = "total_price_minor", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        alias = "total_price_minor",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub total_price_minor: Option<i64>,
-    #[serde(alias = "currency_code", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        alias = "currency_code",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub currency_code: Option<String>,
     #[serde(alias = "payment_status")]
     pub payment_status: String,
