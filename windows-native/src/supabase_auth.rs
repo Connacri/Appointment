@@ -170,8 +170,10 @@ impl SupabaseAuthClient {
             .transport
             .get(&path, &self.publishable_key, Some(&access_token))?;
         let response = ensure_success(response)?;
-        let rows: Vec<WorkspaceAccessRow> = serde_json::from_slice(&response.body)
-            .map_err(|_| "Supabase returned an invalid workspace authorization response.".to_string())?;
+        let rows: Vec<WorkspaceAccessRow> =
+            serde_json::from_slice(&response.body).map_err(|_| {
+                "Supabase returned an invalid workspace authorization response.".to_string()
+            })?;
         validate_personal_workspace(rows, &user_id)
     }
 
