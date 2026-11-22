@@ -77,28 +77,48 @@ export const LegendBar: React.FC = () => {
   const { language } = useApp();
   const [isMobileExpanded, setIsMobileExpanded] = React.useState(false);
 
+  React.useEffect(() => {
+    if (!isMobileExpanded) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMobileExpanded(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isMobileExpanded]);
+
   return (
     <>
       {/* Mobile Floating Mini-Toggle Button (accessible touch target >= 44x44px) */}
-      <div className="sm:hidden fixed bottom-3 right-3 rtl:right-auto rtl:left-3 z-40">
-        <button
-          type="button"
-          onClick={() => setIsMobileExpanded(!isMobileExpanded)}
-          className="min-h-[44px] min-w-[44px] px-3 py-2 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 shadow-lg border border-slate-200 dark:border-slate-800 transition-all active:scale-95 cursor-pointer flex items-center gap-2"
-          aria-expanded={isMobileExpanded}
-          aria-label={language === 'fr' ? 'Afficher la légende des statuts' : language === 'ar' ? 'عرض دليل الحالات' : 'Show status legend'}
-        >
-          <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-          <span className="text-[11px] font-bold">{language === 'fr' ? 'Légende' : language === 'ar' ? 'الدليل' : 'Legend'}</span>
-          {isMobileExpanded ? <ChevronDown size={14} className="text-slate-500" /> : <ChevronUp size={14} className="text-slate-500" />}
-        </button>
-      </div>
+      {!isMobileExpanded && (
+        <div className="sm:hidden fixed bottom-3 right-3 rtl:right-auto rtl:left-3 z-[95]">
+          <button
+            type="button"
+            onClick={() => setIsMobileExpanded(true)}
+            className="min-h-[44px] min-w-[44px] px-3 py-2 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 shadow-lg border border-slate-200 dark:border-slate-800 transition-all active:scale-95 cursor-pointer flex items-center gap-2"
+            aria-expanded={false}
+            aria-label={language === 'fr' ? 'Afficher la légende des statuts' : language === 'ar' ? 'عرض دليل الحالات' : 'Show status legend'}
+          >
+            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+            <span className="text-[11px] font-bold">{language === 'fr' ? 'Légende' : language === 'ar' ? 'الدليل' : 'Legend'}</span>
+            <ChevronUp size={14} className="text-slate-500" />
+          </button>
+        </div>
+      )}
+
+      {/* Mobile Backdrop above rooms column (z-[90]) and below drawer (z-[110]) */}
+      {isMobileExpanded && (
+        <div
+          className="sm:hidden fixed inset-0 z-[105] bg-slate-950/25"
+          onClick={() => setIsMobileExpanded(false)}
+          aria-hidden="true"
+        />
+      )}
 
       {/* Desktop Persistent Legend & Mobile Expanded Drawer */}
       <footer
         className={`${
           isMobileExpanded
-            ? 'fixed bottom-0 inset-x-0 z-50 p-3.5 rounded-t-2xl shadow-2xl pms-slide-up flex flex-col gap-2 max-h-56 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800'
+            ? 'fixed bottom-0 inset-x-0 z-[110] p-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] rounded-t-2xl shadow-2xl pms-slide-up flex flex-col gap-2 max-h-60 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800'
             : 'hidden sm:flex h-9'
         } bg-[rgb(var(--pms-surface))] border-t border-[rgb(var(--pms-border))] px-3 items-center gap-2 overflow-x-auto shrink-0 select-none text-[11px] transition-colors`}
       >
@@ -111,10 +131,10 @@ export const LegendBar: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsMobileExpanded(false)}
-              className="sm:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              className="sm:hidden min-w-11 min-h-11 flex items-center justify-center rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
               aria-label={language === 'fr' ? 'Fermer la légende' : language === 'ar' ? 'إغلاق الدليل' : 'Close legend'}
             >
-              <X size={15} />
+              <X size={16} />
             </button>
           )}
         </div>

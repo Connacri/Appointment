@@ -31,7 +31,13 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
-import { isValidBookingDateRange, validateBookingOccupants, type OccupantValidationError } from '../utils/bookingValidation';
+import {
+  isValidBookingDateRange,
+  isValidEmailAddress,
+  isValidPhoneNumber,
+  validateBookingOccupants,
+  type OccupantValidationError,
+} from '../utils/bookingValidation';
 import { buildNormalizedOccupantList, normalizeOccupantEntry } from '../utils/bookingOccupants';
 import { BookingOccupant, BookingStatus, DomainType, TimelineBooking, ResourceItem } from '../types/booking';
 import { domainConfigs } from '../data/mockData';
@@ -47,6 +53,7 @@ import { ALGERIA_69_WILAYAS } from '../data/algeriaWilayas';
 import { HOSPITALITY_MEAL_PLANS, DIETARY_PREFERENCES } from '../data/mealPlans';
 import { KeyRound, Loader2, Utensils, UtensilsCrossed, ShieldAlert, Award, FileSpreadsheet } from 'lucide-react';
 import { normalizeBookingText } from '../utils/bookingText';
+import { resolveGuestAlertSourceForRole } from '../utils/rolePermissions';
 import {
   buildBookingModalSummary,
   buildGuestCheckoutPayload,
@@ -77,6 +84,7 @@ export const BookingModal: React.FC = () => {
     currentBaseDate,
     currentDomain,
     currentRole,
+    activeRoleDefinition,
     clientProfile,
     resourceGroups,
     selectedBuildingGroupId,
@@ -170,7 +178,7 @@ export const BookingModal: React.FC = () => {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   useEffect(() => {
-    if (!isOpen || selectedBooking || currentRole === 'client') return;
+    if (!isOpen || selectedBooking || activeRoleDefinition.permissions.isClientPortal) return;
     const name = guestName.trim().toLocaleLowerCase();
     const email = guestEmail.trim().toLocaleLowerCase();
     if (name.length < 4 && !email.includes('@')) { setMatchedGuestHistory(null); return; }
@@ -207,7 +215,7 @@ export const BookingModal: React.FC = () => {
     setIdDocumentExpiryDate(previous.idDocumentExpiryDate || '');
     setVisaExpiryDate(previous.visaExpiryDate || '');
     setGuestAlertsText((previous.guestAlerts || []).map((alert) => alert?.text ?? '').join('\n'));
-  }, [isOpen, guestName, guestEmail, bookings, activeDomain, currentRole, selectedBooking]);
+  }, [isOpen, guestName, guestEmail, bookings, activeDomain, activeRoleDefinition.permissions.isClientPortal, selectedBooking]);
 
   const documentExpiryWarning = (date?: string) => {
     if (!date) return null;
@@ -221,6 +229,8 @@ export const BookingModal: React.FC = () => {
   const [selectedMealPlanId, setSelectedMealPlanId] = useState<string>('bb');
   const [selectedDietary, setSelectedDietary] = useState<string[]>(['halal']);
   const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
+  const [guestAgeBracket, setGuestAgeBracket] = useState<string>('');
+  const [clientSegment, setClientSegment] = useState<string>('');
 
   // Multi-Currency Payment State (DZD, EUR, USD, RMB, GBP, SAR)
   const [paymentCurrency, setPaymentCurrency] = useState<string>(currency || 'DA');
@@ -364,6 +374,12 @@ export const BookingModal: React.FC = () => {
 
       // Hydrate custom metadata and authoritative occupancy counts
       const meta = selectedBooking.customMetadata || {};
+      const hydratedExtras = Array.isArray(meta.selectedExtras)
+        ? meta.selectedExtras.filter((item: unknown): item is string => typeof item === 'string')
+        : [];
+      setSelectedExtras(hydratedExtras);
+      setGuestAgeBracket(typeof meta.guestAgeBracket === 'string' ? meta.guestAgeBracket : '');
+      setClientSegment(typeof meta.clientSegment === 'string' ? meta.clientSegment : '');
       const resolvedAdults = selectedBooking.adults ?? (selectedBooking.sector === 'resort' ? meta.resortOccupants : meta.hotelAdults);
       const resolvedChildren = selectedBooking.children ?? meta.hotelChildren ?? 0;
       if (selectedBooking.sector === 'hotel') {
@@ -417,7 +433,7 @@ export const BookingModal: React.FC = () => {
         );
       }
 
-      if (currentRole === 'client') {
+      if (activeRoleDefinition.permissions.isClientPortal) {
         setGuestName(clientProfile.name);
         setGuestEmail(clientProfile.email);
         setGuestPhone(clientProfile.phone);
@@ -453,10 +469,12 @@ export const BookingModal: React.FC = () => {
       setSelectedMealPlanId('bb');
       setSelectedDietary(['halal']);
       setSelectedExtras([]);
+      setGuestAgeBracket('');
+      setClientSegment('');
       setPaymentCurrency(currency || 'DA');
       setPaymentMethodType('cash_dzd');
     }
-  }, [isOpen, selectedBooking, newBookingInitialSlot, currentBaseDate, activeDomain, domainResources, currentRole, clientProfile]);
+  }, [isOpen, selectedBooking, newBookingInitialSlot, currentBaseDate, activeDomain, domainResources, activeRoleDefinition.permissions.isClientPortal, clientProfile]);
 
   // Keep adult & child occupant arrays sized to active occupancy and synchronize Person #1 with primary guest fields
   useEffect(() => {
@@ -912,10 +930,34 @@ export const BookingModal: React.FC = () => {
     const totalAdults = normalizedOccupantsPreview.adultsCount;
     const totalChildren = normalizedOccupantsPreview.childrenCount;
 
-    // Build custom domain metadata payload
-    let customMetadata: Record<string, any> = {};
+    // Build custom domain metadata payload & structured extras
+    const paxForExtras = activeDomain === 'hotel' ? totalAdults : Math.max(1, resortOccupants);
+    const extraCatalogMap: Record<string, { label: string; amount: number }> = {
+      grab_go: { label: 'Grab & Go (Petit-déj emporté)', amount: 12 * paxForExtras * calculatedDays },
+      picnic: { label: 'Panier Pique-Nique Excursion', amount: 20 * paxForExtras },
+      romantic: { label: 'Dîner Romantique Chandelles VIP', amount: 65 },
+      private_chef: { label: 'Barbecue & Chef Privé en Villa', amount: 95 },
+    };
+    const formExtras: Array<{ label: string; amount: number; category?: string }> = selectedExtras
+      .filter((id) => Boolean(extraCatalogMap[id]))
+      .map((id) => ({
+        label: extraCatalogMap[id].label,
+        amount: extraCatalogMap[id].amount,
+        category: 'booking_extra',
+      }));
+    const existingNonFormExtras = (selectedBooking?.extras || []).filter(
+      (item) => item.category !== 'booking_extra'
+    );
+    const combinedExtras = [...existingNonFormExtras, ...formExtras];
+
+    let customMetadata: Record<string, any> = {
+      selectedExtras: [...selectedExtras],
+      ...(guestAgeBracket ? { guestAgeBracket } : {}),
+      ...(clientSegment ? { clientSegment } : {}),
+    };
     if (activeDomain === 'hotel') {
       customMetadata = {
+        ...customMetadata,
         hotelAdults: totalAdults,
         hotelChildren: totalChildren,
         hotelMealPlan,
@@ -927,6 +969,7 @@ export const BookingModal: React.FC = () => {
       };
     } else if (activeDomain === 'resort') {
       customMetadata = {
+        ...customMetadata,
         resortOccupants: totalAdults,
         resortFormula,
         resortCheckinTime,
@@ -940,7 +983,8 @@ export const BookingModal: React.FC = () => {
     const computedOriginalAmount = Math.round(totalPrice * (ratesFromEur[paymentCurrency] || 1));
     const computedRateToDzd = ratesFromEur['DA'] / (ratesFromEur[paymentCurrency] || 1);
 
-    const currentUserName = `${currentRole.toUpperCase()} (${clientProfile?.name || 'Réception'})`;
+    const roleLabel = activeRoleDefinition.label[language] || activeRoleDefinition.label.fr || currentRole;
+    const currentUserName = `${roleLabel} (${clientProfile?.name || roleLabel})`;
     const nowIso = new Date().toISOString();
     const effectivePrimaryDocNum = idPieceNumber || (guestType === 'algerian' ? algerianIdNumber : passportNumber);
 
@@ -968,7 +1012,7 @@ export const BookingModal: React.FC = () => {
         notes,
         valuablesAtReception: (selectedBooking.valuablesAtReception || []).filter((item) => item.status !== 'returned').concat(valuablesText.split('\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'held' as const, recordedAt: nowIso }))),
         forgottenItems: (selectedBooking.forgottenItems || []).filter((item) => item.status !== 'returned').concat(forgottenText.split('\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'stored' as const, foundAt: nowIso, foundBy: currentUserName }))),
-        guestAlerts: (selectedBooking.guestAlerts || []).concat(guestAlertsText.split('\n').map((text) => text.trim()).filter(Boolean).map((text) => ({ id: crypto.randomUUID(), text, source: (currentRole === 'staff' ? 'housekeeping' : currentRole === 'manager' || currentRole === 'admin' ? 'management' : 'reception') as 'housekeeping' | 'reception' | 'management', createdAt: nowIso, createdBy: currentUserName }))),
+        guestAlerts: (selectedBooking.guestAlerts || []).concat(guestAlertsText.split('\n').map((text) => text.trim()).filter(Boolean).map((text) => ({ id: crypto.randomUUID(), text, source: resolveGuestAlertSourceForRole(activeRoleDefinition), createdAt: nowIso, createdBy: currentUserName }))),
         adults: totalAdults,
         adultGuests: normalizedOccupantsPreview.adults,
         occupantsList: normalizedOccupantsPreview.allOccupants,
@@ -989,6 +1033,7 @@ export const BookingModal: React.FC = () => {
         wilaya: wilayaOfOrigin,
         mealPlan: selectedMealPlanId as any,
         mealPlanDietPreferences: selectedDietary,
+        extras: combinedExtras,
         lastModifiedAt: nowIso,
         lastModifiedBy: currentUserName,
         modificationHistory: updatedHistory,
@@ -1030,7 +1075,7 @@ export const BookingModal: React.FC = () => {
         notes,
         valuablesAtReception: valuablesText.split('\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'held' as const, recordedAt: nowIso })),
         forgottenItems: forgottenText.split('\n').map((description) => description.trim()).filter(Boolean).map((description) => ({ id: crypto.randomUUID(), description, status: 'stored' as const, foundAt: nowIso, foundBy: currentUserName })),
-        guestAlerts: guestAlertsText.split('\n').map((text) => text.trim()).filter(Boolean).map((text) => ({ id: crypto.randomUUID(), text, source: (currentRole === 'staff' ? 'housekeeping' : currentRole === 'manager' || currentRole === 'admin' ? 'management' : 'reception') as 'housekeeping' | 'reception' | 'management', createdAt: nowIso, createdBy: currentUserName })),
+        guestAlerts: guestAlertsText.split('\n').map((text) => text.trim()).filter(Boolean).map((text) => ({ id: crypto.randomUUID(), text, source: resolveGuestAlertSourceForRole(activeRoleDefinition), createdAt: nowIso, createdBy: currentUserName })),
         adults: totalAdults,
         adultGuests: normalizedOccupantsPreview.adults,
         occupantsList: normalizedOccupantsPreview.allOccupants,
@@ -1051,6 +1096,7 @@ export const BookingModal: React.FC = () => {
         wilaya: wilayaOfOrigin,
         mealPlan: selectedMealPlanId as any,
         mealPlanDietPreferences: selectedDietary,
+        extras: combinedExtras,
         lastModifiedAt: nowIso,
         lastModifiedBy: currentUserName,
         modificationHistory: initialHistory,
@@ -1159,7 +1205,7 @@ export const BookingModal: React.FC = () => {
         className="pms-dialog-panel pms-modal pms-sheet w-full sm:max-w-4xl flex flex-col min-h-0 max-h-[94dvh] sm:max-h-[92dvh] my-0 sm:my-auto rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl"
       >
         {/* Modal Dedicated Domain Header */}
-        <div className="border-b border-slate-200 dark:border-slate-800 px-3.5 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0 gap-3">
+        <div className="border-b border-slate-200 dark:border-slate-800 px-3.5 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0 gap-3">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="p-2 rounded-xl bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0">
               <DomainHeaderIcon size={20} />
@@ -1168,16 +1214,25 @@ export const BookingModal: React.FC = () => {
               <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <h3
                   id="booking-dialog-title"
-                  className={isRoomCellBooking
-                    ? 'font-extrabold text-slate-900 dark:text-white text-base sm:text-lg leading-tight truncate'
-                    : 'font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-tight truncate'}
+                  className="font-extrabold text-slate-900 dark:text-white text-base sm:text-lg leading-tight truncate"
                 >
-                  {isRoomCellBooking
-                    ? (currentResource?.name || resourceNameFallback || domainResources.find((r) => r.id === resourceId)?.name || '')
-                    : isEditing && selectedBooking
-                    ? `${selectedBooking.resourceName || currentResource?.name || ''} · ${selectedBooking.guestName || sheetTitle[language] || sheetTitle.en}`
-                    : (sheetTitle[language] || sheetTitle.en)}
+                  {isEditing
+                    ? (language === 'fr'
+                        ? 'Modifier la réservation'
+                        : language === 'ar'
+                        ? 'تعديل الحجز'
+                        : 'Edit Reservation')
+                    : (language === 'fr'
+                        ? 'Nouvelle réservation'
+                        : language === 'ar'
+                        ? 'حجز جديد'
+                        : 'New Reservation')}
                 </h3>
+                {(isRoomCellBooking || (isEditing && selectedBooking?.resourceName)) && (
+                  <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shrink-0">
+                    {currentResource?.name || selectedBooking?.resourceName || resourceNameFallback}
+                  </span>
+                )}
                 {isEditing && selectedBooking && (
                   <span
                     className={`px-2 py-0.5 rounded text-[11px] font-semibold shrink-0 ${
@@ -1188,9 +1243,9 @@ export const BookingModal: React.FC = () => {
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
-                {domainCfg.label[language] || domainCfg.label.en} · {domainCfg.bookingTerm[language]}
-                {isEditing && selectedBooking?.resourceName ? ` · ${selectedBooking.resourceName}` : ''}
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate mt-0.5">
+                {domainCfg.label[language] || domainCfg.label.en} · {sheetTitle[language] || sheetTitle.en}
+                {isEditing && selectedBooking?.guestName ? ` · ${selectedBooking.guestName}` : ''}
               </p>
             </div>
           </div>
@@ -1360,23 +1415,18 @@ export const BookingModal: React.FC = () => {
           </div>
         ) : (
         <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="flex-1 min-h-0 p-3 sm:p-6 overflow-y-auto overscroll-contain space-y-5 text-sm bg-slate-50 dark:bg-slate-950">
-          <div className="rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-900 p-3.5 sm:p-5 shadow-xs space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
-                  {language === 'fr' ? 'Parcours de réservation' : language === 'ar' ? 'مراحل الحجز' : 'Booking progress'}
-                </p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  {language === 'fr' ? 'Progression du dossier' : language === 'ar' ? 'تقدم الملف' : 'Reservation steps'}
-                </p>
+          {/* Pinned compact booking journey header */}
+          <div className="shrink-0 border-b border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-3.5 sm:px-6 py-2 space-y-1.5 z-10">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 shrink-0">
+                {language === 'fr' ? 'Parcours de réservation' : language === 'ar' ? 'مراحل الحجز' : 'Booking progress'}
+              </span>
+              <div className="flex-1 h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${((bookingStep + 1) / 3) * 100}%` }} />
               </div>
-              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 tabular-nums shrink-0">{bookingStep + 1}/3</span>
+              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 tabular-nums shrink-0">{bookingStep + 1}/3</span>
             </div>
-            <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-              <div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${((bookingStep + 1) / 3) * 100}%` }} />
-            </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               {[
                 { label: language === 'fr' ? 'Client' : language === 'ar' ? 'النزيل' : 'Guest', target: 'booking-step-guest' },
                 { label: language === 'fr' ? 'Séjour' : language === 'ar' ? 'الإقامة' : 'Stay', target: 'booking-step-stay' },
@@ -1389,18 +1439,20 @@ export const BookingModal: React.FC = () => {
                     setBookingStep(index);
                     document.getElementById(step.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                   }}
-                  className={`rounded-xl min-h-11 px-2 py-2 text-xs font-bold transition cursor-pointer ${
+                  className={`rounded-lg h-8 sm:h-9 px-2 text-[11px] font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
                     bookingStep === index
                       ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-slate-100/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700'
+                      : 'bg-slate-100/90 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200/80 dark:hover:bg-slate-700'
                   }`}
                 >
-                  <span className="block text-[10px] opacity-75 tabular-nums">0{index + 1}</span>
-                  <span className="block truncate">{step.label}</span>
+                  <span className="text-[10px] opacity-75 tabular-nums">0{index + 1}</span>
+                  <span className="truncate">{step.label}</span>
                 </button>
               ))}
             </div>
           </div>
+
+          <div className="flex-1 min-h-0 p-3 sm:p-6 overflow-y-auto overscroll-contain space-y-5 text-sm bg-slate-50 dark:bg-slate-950">
           {conflictError && (
             <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
               <AlertCircle size={16} className="shrink-0" />
@@ -1994,15 +2046,17 @@ export const BookingModal: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="min-w-0">
                 <label htmlFor="booking-primary-email" className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {language === 'fr' ? 'Email de contact' : language === 'ar' ? 'البريد الإلكتروني' : 'Email Address'}
-                  {occupantCount > 1 ? ' *' : ' :'}
+                  {language === 'fr'
+                    ? 'Email de contact (optionnel) :'
+                    : language === 'ar'
+                    ? 'البريد الإلكتروني (اختياري):'
+                    : 'Email Address (optional):'}
                 </label>
                 <div className="relative">
                   <Mail size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     id="booking-primary-email"
                     type="email"
-                    required={occupantCount > 1}
                     value={guestEmail}
                     onChange={(e) => setGuestEmail(e.target.value)}
                     aria-invalid={Boolean(getFieldError(0, 'email'))}
@@ -2048,6 +2102,59 @@ export const BookingModal: React.FC = () => {
                     {getFieldError(0, 'phone')}
                   </p>
                 )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="min-w-0">
+                <label htmlFor="booking-guest-age-bracket" className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                  {language === 'fr'
+                    ? 'Tranche d’âge du client (optionnel)'
+                    : language === 'ar'
+                    ? 'الفئة العمرية للنزيل (اختياري)'
+                    : 'Guest Age Bracket (optional)'}
+                </label>
+                <select
+                  id="booking-guest-age-bracket"
+                  value={guestAgeBracket}
+                  onChange={(e) => setGuestAgeBracket(e.target.value)}
+                  className="w-full h-11 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">
+                    {language === 'fr' ? 'Non renseignée' : language === 'ar' ? 'غير محددة' : 'Not specified'}
+                  </option>
+                  <option value="18-25">18 – 25 {language === 'fr' ? 'ans' : language === 'ar' ? 'سنة' : 'yrs'}</option>
+                  <option value="26-35">26 – 35 {language === 'fr' ? 'ans' : language === 'ar' ? 'سنة' : 'yrs'}</option>
+                  <option value="36-50">36 – 50 {language === 'fr' ? 'ans' : language === 'ar' ? 'سنة' : 'yrs'}</option>
+                  <option value="51-65">51 – 65 {language === 'fr' ? 'ans' : language === 'ar' ? 'سنة' : 'yrs'}</option>
+                  <option value="65+">65+ {language === 'fr' ? 'ans' : language === 'ar' ? 'سنة' : 'yrs'}</option>
+                </select>
+              </div>
+
+              <div className="min-w-0">
+                <label htmlFor="booking-client-segment" className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                  {language === 'fr'
+                    ? 'Typologie de séjour (optionnel)'
+                    : language === 'ar'
+                    ? 'نوع الإقامة / العميل (اختياري)'
+                    : 'Guest Profile / Segment (optional)'}
+                </label>
+                <select
+                  id="booking-client-segment"
+                  value={clientSegment}
+                  onChange={(e) => setClientSegment(e.target.value)}
+                  className="w-full h-11 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">
+                    {language === 'fr' ? 'Détection automatique' : language === 'ar' ? 'تحديد تلقائي' : 'Auto-detect'}
+                  </option>
+                  <option value="solo">{language === 'fr' ? 'Voyageur Solo' : language === 'ar' ? 'مسافر منفرد' : 'Solo Traveler'}</option>
+                  <option value="couple">{language === 'fr' ? 'Couple / Loisirs' : language === 'ar' ? 'زوجان / سياحة' : 'Couple / Leisure'}</option>
+                  <option value="family">{language === 'fr' ? 'Famille (avec ou sans enfants)' : language === 'ar' ? 'عائلة' : 'Family'}</option>
+                  <option value="business">{language === 'fr' ? 'Affaires / Corporate' : language === 'ar' ? 'أعمال / شركات' : 'Business / Corporate'}</option>
+                  <option value="vip">{language === 'fr' ? 'Client VIP / Prestige' : language === 'ar' ? 'عميل VIP' : 'VIP / Prestige'}</option>
+                  <option value="group">{language === 'fr' ? 'Groupe / Délégation' : language === 'ar' ? 'مجموعة / وفد' : 'Group / Delegation'}</option>
+                </select>
               </div>
             </div>
           </div>
@@ -2384,10 +2491,11 @@ export const BookingModal: React.FC = () => {
                           normalizedOccupantsPreview.allOccupants.filter(
                             (p) =>
                               p.fullName.trim().length >= 2 &&
+                              (!p.phone.trim() || isValidPhoneNumber(p.phone)) &&
+                              (!p.email.trim() || isValidEmailAddress(p.email)) &&
                               (occupantCount <= 1 ||
-                                (p.phone.trim().length >= 6 &&
-                                  p.email.trim().includes('@') &&
-                                  p.documentNumber.trim().length >= 2))
+                                (p.documentNumber.trim().length >= 2 &&
+                                  (!p.isPrimary || isValidPhoneNumber(p.phone))))
                           ).length
                         )
                       )
@@ -2439,7 +2547,9 @@ export const BookingModal: React.FC = () => {
 
                           <div className="min-w-0">
                             <label htmlFor={`occ-adult-${index}-phone`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                              {getTranslation('bookingOccupantPhone', language)}
+                              {index === 0 && occupantCount > 1
+                                ? getTranslation('bookingOccupantPhone', language)
+                                : getTranslation('bookingOccupantPhoneOptional', language)}
                             </label>
                             <input
                               id={`occ-adult-${index}-phone`}
@@ -2580,7 +2690,7 @@ export const BookingModal: React.FC = () => {
 
                           <div className="min-w-0">
                             <label htmlFor={`occ-child-${childIdx}-phone`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                              {getTranslation('bookingOccupantPhone', language)}
+                              {getTranslation('bookingOccupantPhoneOptional', language)}
                             </label>
                             <input
                               id={`occ-child-${childIdx}-phone`}
@@ -2937,10 +3047,11 @@ export const BookingModal: React.FC = () => {
                           normalizedOccupantsPreview.allOccupants.filter(
                             (p) =>
                               p.fullName.trim().length >= 2 &&
+                              (!p.phone.trim() || isValidPhoneNumber(p.phone)) &&
+                              (!p.email.trim() || isValidEmailAddress(p.email)) &&
                               (occupantCount <= 1 ||
-                                (p.phone.trim().length >= 6 &&
-                                  p.email.trim().includes('@') &&
-                                  p.documentNumber.trim().length >= 2))
+                                (p.documentNumber.trim().length >= 2 &&
+                                  (!p.isPrimary || isValidPhoneNumber(p.phone))))
                           ).length
                         )
                       )
@@ -2987,7 +3098,9 @@ export const BookingModal: React.FC = () => {
                         </div>
                         <div className="min-w-0">
                           <label htmlFor={`resort-occ-${index}-phone`} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                            {getTranslation('bookingOccupantPhone', language)}
+                            {index === 0 && occupantCount > 1
+                              ? getTranslation('bookingOccupantPhone', language)
+                              : getTranslation('bookingOccupantPhoneOptional', language)}
                           </label>
                           <input
                             id={`resort-occ-${index}-phone`}

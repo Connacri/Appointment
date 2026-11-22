@@ -6,10 +6,10 @@ import { PackageSearch, CheckCircle2, AlertTriangle, Clock3 } from 'lucide-react
 type Tab = 'forgotten' | 'valuables' | 'alerts';
 
 export const LostPropertyView: React.FC = () => {
-  const { bookings, updateBooking, language, currentRole, clientProfile } = useApp();
+  const { bookings, updateBooking, activeRoleDefinition } = useApp();
   const [tab, setTab] = useState<Tab>('forgotten');
   const [search, setSearch] = useState('');
-  const canManage = ['admin', 'manager', 'receptionist', 'staff'].includes(currentRole);
+  const canManage = activeRoleDefinition.permissions.canManageLostProperty;
   const rows = useMemo(() => bookings.flatMap((booking: TimelineBooking): { booking: TimelineBooking; item: any }[] => {
     const matches = !search.trim() || (booking.guestName ?? '').toLowerCase().includes(search.toLowerCase()) || (booking.resourceName ?? '').toLowerCase().includes(search.toLowerCase());
     if (!matches) return [];

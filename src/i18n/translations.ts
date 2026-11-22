@@ -2130,9 +2130,9 @@ export const translations = {
     ar: 'هويات وبيانات الاتصال لجميع النزلاء ({count})',
   },
   bookingOccupantsRuleBanner: {
-    fr: 'Réservation multi-personnes : renseignez les détails et coordonnées de chaque personne (adultes et enfants).',
-    en: 'Multi-person booking: complete full identity and contact details for every adult and child.',
-    ar: 'حجز متعدد الأشخاص: يجب إدخال الهوية الكاملة وبيانات الاتصال لكل شخص (بالغين وأطفال).',
+    fr: 'Réservation multi-personnes : renseignez l’identité et la pièce de chaque occupant, ainsi que le téléphone du titulaire principal (les coordonnées des accompagnants et les e-mails sont facultatifs).',
+    en: 'Multi-person booking: complete identity and ID document for each occupant, plus the primary guest phone (companion contact details and emails are optional).',
+    ar: 'حجز متعدد الأشخاص: أدخل هوية ووثيقة كل نزيل وهاتف النزيل الرئيسي (بيانات الاتصال للمرافقين والبريد الإلكتروني للجميع اختيارية).',
   },
   bookingOccupantsCompletionStatus: {
     fr: '{completed}/{total} renseigné(s)',
@@ -2164,10 +2164,15 @@ export const translations = {
     en: 'Phone number *',
     ar: 'رقم الهاتف *',
   },
+  bookingOccupantPhoneOptional: {
+    fr: 'Téléphone (optionnel)',
+    en: 'Phone number (optional)',
+    ar: 'رقم الهاتف (اختياري)',
+  },
   bookingOccupantEmail: {
-    fr: 'Adresse e-mail *',
-    en: 'Email address *',
-    ar: 'البريد الإلكتروني *',
+    fr: 'Adresse e-mail (optionnel)',
+    en: 'Email address (optional)',
+    ar: 'البريد الإلكتروني (اختياري)',
   },
   bookingOccupantDocType: {
     fr: 'Type de pièce *',
@@ -2193,6 +2198,76 @@ export const translations = {
     fr: 'Renseigné ci-dessus et synchronisé automatiquement avec le titulaire.',
     en: 'Edited above and automatically synced with the primary guest.',
     ar: 'يتم تحريره أعلاه وتتم مزامنته تلقائياً مع النزيل الرئيسي.',
+  },
+  navRolesPermissions: {
+    fr: 'Rôles & Permissions',
+    en: 'Roles & Permissions',
+    ar: 'الأدوار والصلاحيات',
+  },
+  rolesTitle: {
+    fr: 'Gestion des Rôles & Accès Métiers',
+    en: 'Role & Access Management',
+    ar: 'إدارة الأدوار والصلاحيات الوظيفية',
+  },
+  rolesSubtitle: {
+    fr: 'Créez des rôles sur mesure et choisissez précisément les onglets et options visibles pour chaque équipe.',
+    en: 'Create custom roles and control the exact navigation tabs and options available to each team.',
+    ar: 'أنشئ أدواراً مخصصة وحدد بدقة التبويبات والخيارات المتاحة لكل فريق عمل.',
+  },
+  rolesNewRoleBtn: {
+    fr: 'Créer un rôle',
+    en: 'Create role',
+    ar: 'إنشاء دور جديد',
+  },
+  rolesEditRoleTitle: {
+    fr: 'Modifier le rôle',
+    en: 'Edit role',
+    ar: 'تعديل الدور',
+  },
+  rolesCreateRoleTitle: {
+    fr: 'Nouveau rôle hôtelier',
+    en: 'New hotel role',
+    ar: 'دور فندقي جديد',
+  },
+  rolesAllCategories: {
+    fr: 'Tous les pôles',
+    en: 'All departments',
+    ar: 'كل الأقسام',
+  },
+  rolesSearchPlaceholder: {
+    fr: 'Rechercher un rôle (ex: plombier, gouvernante, menuisier...)',
+    en: 'Search role (e.g. plumber, housekeeper, carpenter...)',
+    ar: 'ابحث عن دور (مثل: سباك، مشرف طوابق، نجار...)',
+  },
+  rolesActivateTest: {
+    fr: 'Activer ce rôle',
+    en: 'Switch to role',
+    ar: 'تفعيل هذا الدور',
+  },
+  rolesActiveBadge: {
+    fr: 'Rôle actif',
+    en: 'Active role',
+    ar: 'الدور النشط',
+  },
+  rolesCustomBadge: {
+    fr: 'Personnalisé',
+    en: 'Custom',
+    ar: 'مخصص',
+  },
+  rolesBuiltInBadge: {
+    fr: 'Intégré',
+    en: 'Built-in',
+    ar: 'افتراضي',
+  },
+  rolesTabsCountLabel: {
+    fr: 'onglet(s) visible(s)',
+    en: 'visible tab(s)',
+    ar: 'تبويب مرئي',
+  },
+  rolesResetDefaults: {
+    fr: 'Réinitialiser rôles intégrés',
+    en: 'Reset built-in defaults',
+    ar: 'استعادة الافتراضي',
   },
 };
 

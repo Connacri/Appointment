@@ -471,8 +471,6 @@ export function getPoliceSheetCompanionMissingFields(
     if (
       !companion ||
       !companion.fullName?.trim() ||
-      !companion.phone?.trim() ||
-      !companion.email?.trim() ||
       !companion.documentNumber?.trim()
     ) {
       incompleteCompanions += 1;

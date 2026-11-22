@@ -34,11 +34,15 @@ import {
   GraduationCap,
   Film,
   History,
+  UserCog,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
 import { DomainType } from '../types/booking';
 import { APP_THEMES } from '../data/themes';
+import { ROLE_CATEGORY_META } from '../data/roles';
+import type { RoleCategory, AppTabId } from '../types/roles';
+import { RoleIcon } from './RoleIcon';
 import { supabase } from '../services/supabase/supabaseClient';
 import { resolveAppIconHref } from '../utils/faviconSync';
 
@@ -56,6 +60,8 @@ export const Sidebar: React.FC = () => {
     currentDomain,
     currentRole,
     setCurrentRole,
+    roles,
+    activeRoleDefinition,
     setIsLegalModalOpen,
     setIsIndexedDBOpen,
     setIsAboutModalOpen,
@@ -225,22 +231,27 @@ export const Sidebar: React.FC = () => {
       id: 'events',
       label: getTranslation('navEventLog', language),
       icon: History,
-      view: 'events' as const,
-      roles: ['manager', 'receptionist', 'staff'],
+      view: 'events' as AppTabId,
+      domains: ['hotel', 'resort'] as DomainType[],
+    },
+    {
+      id: 'roles',
+      label: getTranslation('navRolesPermissions', language),
+      icon: UserCog,
+      view: 'roles' as AppTabId,
       domains: ['hotel', 'resort'] as DomainType[],
     },
     {
       id: 'videos',
       label: language === 'fr' ? 'Vidéos (HackTube)' : language === 'ar' ? 'فيديوهات (HackTube)' : 'Videos (HackTube)',
       icon: Film,
-      view: 'videos' as const,
-      roles: ['manager', 'receptionist', 'staff', 'client'],
+      view: 'videos' as AppTabId,
       domains: ['hotel', 'resort'] as DomainType[],
     },
   ];
 
   const navItems = allNavItems.filter(
-    (item) => (currentRole === 'admin' || item.roles.includes(currentRole)) && item.domains.includes(currentDomain)
+    (item) => activeRoleDefinition.allowedTabs.includes(item.view) && item.domains.includes(currentDomain)
   );
 
   const handleNavClick = (view: any) => {
@@ -369,40 +380,51 @@ export const Sidebar: React.FC = () => {
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">
                 {language === 'fr' ? 'Profil de travail' : language === 'ar' ? 'ملف العمل' : 'Work profile'}
               </span>
-              <span className="flex items-center gap-2">
-                <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-300">
-                  {currentRole === 'admin' ? 'Admin' : currentRole === 'manager' ? (language === 'fr' ? 'Gérant' : language === 'ar' ? 'مدير' : 'Manager') : currentRole === 'receptionist' ? (language === 'fr' ? 'Réception' : language === 'ar' ? 'استقبال' : 'Front desk') : currentRole === 'staff' ? (language === 'fr' ? 'Étage' : language === 'ar' ? 'طاقم العمل' : 'Staff') : (language === 'fr' ? 'Client' : language === 'ar' ? 'نزيل' : 'Guest')}
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-300 truncate max-w-[140px]">
+                  {activeRoleDefinition.label[language] || activeRoleDefinition.label.fr}
                 </span>
-                <ChevronDown size={15} className={`text-slate-400 transition-transform ${isMobileProfileExpanded ? 'rotate-180' : ''}`} />
+                <ChevronDown size={15} className={`text-slate-400 transition-transform shrink-0 ${isMobileProfileExpanded ? 'rotate-180' : ''}`} />
               </span>
             </button>
             {isMobileProfileExpanded && (
-              <div className="mt-2 grid grid-cols-2 gap-1.5">
-                {[
-                  { id: 'admin', label: 'Admin', icon: ShieldCheck },
-                  { id: 'manager', label: language === 'fr' ? 'Gérant' : language === 'ar' ? 'مدير' : 'Manager', icon: LayoutDashboard },
-                  { id: 'receptionist', label: language === 'fr' ? 'Réception' : language === 'ar' ? 'استقبال' : 'Front desk', icon: CalendarDays },
-                  { id: 'staff', label: language === 'fr' ? 'Étage' : language === 'ar' ? 'طاقم العمل' : 'Housekeeping', icon: Sparkles },
-                  { id: 'client', label: language === 'fr' ? 'Client' : language === 'ar' ? 'نزيل' : 'Guest', icon: User },
-                ].map((role) => {
-                  const RoleIcon = role.icon;
-                  const isSelected = currentRole === role.id;
+              <div className="mt-2 max-h-72 overflow-y-auto space-y-2.5 pr-0.5">
+                {(Object.keys(ROLE_CATEGORY_META) as RoleCategory[]).map((catKey) => {
+                  const catRoles = roles.filter((r) => r.category === catKey);
+                  if (catRoles.length === 0) return null;
+                  const catMeta = ROLE_CATEGORY_META[catKey];
                   return (
-                    <button
-                      key={role.id}
-                      type="button"
-                      aria-pressed={isSelected}
-                      onClick={() => setCurrentRole(role.id as any)}
-                      className={`flex min-h-10 min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left rtl:text-right text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 cursor-pointer ${
-                        isSelected
-                          ? 'border-blue-400/70 bg-blue-600 text-white shadow-sm'
-                          : 'border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950/70 text-slate-700 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <RoleIcon size={15} className={`shrink-0 ${isSelected ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`} />
-                      <span className="truncate">{role.label}</span>
-                      {isSelected && <CheckCircle2 size={13} className="ml-auto rtl:ml-0 rtl:mr-auto shrink-0" />}
-                    </button>
+                    <div key={catKey} className="space-y-1">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
+                        {catMeta.label[language] || catMeta.label.fr}
+                      </div>
+                      <div className="grid grid-cols-1 gap-1">
+                        {catRoles.map((role) => {
+                          const isSelected = currentRole === role.id;
+                          return (
+                            <button
+                              key={role.id}
+                              type="button"
+                              aria-pressed={isSelected}
+                              onClick={() => setCurrentRole(role.id)}
+                              className={`flex min-h-10 min-w-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left rtl:text-right text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 cursor-pointer ${
+                                isSelected
+                                  ? 'border-blue-400/70 bg-blue-600 text-white shadow-sm'
+                                  : 'border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950/70 text-slate-700 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              <RoleIcon
+                                iconName={role.iconName}
+                                size={14}
+                                className={`shrink-0 ${isSelected ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                              />
+                              <span className="truncate flex-1">{role.label[language] || role.label.fr}</span>
+                              {isSelected && <CheckCircle2 size={13} className="shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -693,8 +715,8 @@ export const Sidebar: React.FC = () => {
                 <span className="truncate font-bold text-rose-700 dark:text-rose-300">
                   {language === 'fr' ? 'Déconnexion' : language === 'ar' ? 'تسجيل الخروج' : 'Log out'}
                 </span>
-                <span className="text-[10px] text-rose-600 dark:text-rose-400 font-mono uppercase font-bold">
-                  {currentRole}
+                <span className="text-[10px] text-rose-600 dark:text-rose-400 font-mono font-bold truncate max-w-[90px]">
+                  {activeRoleDefinition.label[language] || activeRoleDefinition.label.fr}
                 </span>
               </div>
             )}

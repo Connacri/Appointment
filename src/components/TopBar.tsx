@@ -9,11 +9,6 @@ import {
   Hotel,
   Building2,
   Palmtree,
-  Crown,
-  Shield,
-  Briefcase,
-  UserCheck,
-  Users,
   Volume2,
   VolumeX,
   CheckCircle2,
@@ -29,13 +24,16 @@ import {
   AlertTriangle,
   CalendarSearch,
   History,
+  UserCog,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
 import { capitalizeFirstLetter } from '../utils/text';
 import { lockManager, UsbConnectionStatus, UsbDeviceInfo } from '../locks/lockManager';
 import { indexedDb, IndexedDbSyncState } from '../db/indexedDb';
-import { UserRole } from '../types/booking';
+import { ROLE_CATEGORY_META } from '../data/roles';
+import type { RoleCategory } from '../types/roles';
+import { RoleIcon } from './RoleIcon';
 import { BookingFinderModal } from './BookingFinderModal';
 
 export const TopBar: React.FC = () => {
@@ -47,6 +45,8 @@ export const TopBar: React.FC = () => {
     setCurrentDomain,
     currentRole,
     setCurrentRole,
+    roles,
+    activeRoleDefinition,
     setIsNewBookingModalOpen,
     setNewBookingInitialSlot,
     setIsSidebarMobileOpen,
@@ -75,6 +75,7 @@ export const TopBar: React.FC = () => {
 
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
+  const [roleSearch, setRoleSearch] = useState('');
   const [isSectorMenuOpen, setIsSectorMenuOpen] = useState(false);
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -187,16 +188,7 @@ export const TopBar: React.FC = () => {
     }
   };
 
-  const roleDefinitions: { id: UserRole; label: { fr: string; en: string; ar: string }; icon: any }[] = [
-    { id: 'admin', label: { fr: 'Administrateur', en: 'Administrator', ar: 'مدير النظام' }, icon: Crown },
-    { id: 'manager', label: { fr: 'Gérant', en: 'General Manager', ar: 'المدير العام' }, icon: Shield },
-    { id: 'receptionist', label: { fr: 'Réception', en: 'Reception', ar: 'الاستقبال' }, icon: Briefcase },
-    { id: 'staff', label: { fr: 'Étage', en: 'Staff', ar: 'طاقم العمل' }, icon: UserCheck },
-    { id: 'client', label: { fr: 'Client', en: 'Guest', ar: 'النزيل' }, icon: Users },
-  ];
-
-  const currentRoleObj = roleDefinitions.find((r) => r.id === currentRole) || roleDefinitions[0];
-  const CurrentRoleIcon = currentRoleObj.icon;
+  const currentRoleObj = activeRoleDefinition;
 
   const isRtl = language === 'ar';
 
@@ -375,7 +367,7 @@ export const TopBar: React.FC = () => {
               className="h-9 max-w-full min-w-0 px-2 sm:px-2.5 md:px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1 sm:gap-1.5 cursor-pointer shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               title={language === 'fr' ? 'Changer de rôle actif' : language === 'ar' ? 'تغيير الدور النشط' : 'Change active role'}
             >
-              <CurrentRoleIcon size={14} className="text-amber-500 shrink-0" />
+              <RoleIcon iconName={currentRoleObj.iconName} size={14} className="text-amber-500 shrink-0" />
               <span className="truncate min-w-0 max-w-[115px] sm:max-w-[140px] lg:max-w-none">
                 {currentRoleObj.label[language] || currentRoleObj.label.fr}
               </span>
@@ -386,36 +378,98 @@ export const TopBar: React.FC = () => {
               <div
                 role="menu"
                 dir={isRtl ? 'rtl' : 'ltr'}
-                className="absolute top-full mt-1.5 right-0 sm:right-auto sm:left-0 rtl:right-auto rtl:left-0 sm:rtl:left-auto sm:rtl:right-0 w-52 max-w-[calc(100vw-1rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-1.5 z-[100] text-xs pms-dropdown"
+                className="absolute top-full mt-1.5 right-0 sm:right-auto sm:left-0 rtl:right-auto rtl:left-0 sm:rtl:left-auto sm:rtl:right-0 w-72 max-w-[calc(100vw-1rem)] max-h-[75vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-2 z-[100] text-xs pms-dropdown space-y-2"
               >
-                <div className="px-2 py-1 text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 mb-1">
-                  {language === 'fr' ? 'Sélectionnez un rôle' : language === 'ar' ? 'اختر الدور' : 'Select a role'}
+                <div className="px-1.5 pb-1.5 border-b border-slate-100 dark:border-slate-800 space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                    <span>{language === 'fr' ? 'Sélectionnez un rôle' : language === 'ar' ? 'اختر الدور' : 'Select a role'}</span>
+                    <span className="text-slate-400">{roles.length}</span>
+                  </div>
+                  <div className="relative">
+                    <Search size={12} className="absolute left-2.5 rtl:left-auto rtl:right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={roleSearch}
+                      onChange={(e) => setRoleSearch(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder={language === 'fr' ? 'Filtrer les rôles...' : language === 'ar' ? 'تصفية الأدوار...' : 'Filter roles...'}
+                      className="w-full h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 pl-7 pr-2 rtl:pl-2 rtl:pr-7 text-[11px] text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
-                {roleDefinitions.map((role) => {
-                  const IconComponent = role.icon;
-                  const isSelected = currentRole === role.id;
+
+                {(Object.keys(ROLE_CATEGORY_META) as RoleCategory[]).map((catKey) => {
+                  const q = roleSearch.trim().toLowerCase();
+                  const catRoles = roles.filter((r) => {
+                    if (r.category !== catKey) return false;
+                    if (!q) return true;
+                    return `${r.label.fr} ${r.label.en} ${r.label.ar} ${r.id}`.toLowerCase().includes(q);
+                  });
+                  if (catRoles.length === 0) return null;
+                  const catMeta = ROLE_CATEGORY_META[catKey];
                   return (
-                    <button
-                      key={role.id}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={isSelected}
-                      onClick={() => {
-                        setCurrentRole(role.id);
-                        setIsRoleMenuOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left rtl:text-right transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                        isSelected
-                          ? 'bg-blue-600 text-white font-bold'
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <IconComponent size={14} className={isSelected ? 'text-white' : 'text-slate-500 dark:text-slate-400'} />
-                      <span className="flex-1 truncate">{role.label[language] || role.label.fr}</span>
-                      {isSelected && <CheckCircle2 size={13} className="text-white ml-auto rtl:ml-0 rtl:mr-auto" />}
-                    </button>
+                    <div key={catKey} className="space-y-0.5">
+                      <div className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        {catMeta.label[language] || catMeta.label.fr}
+                      </div>
+                      {catRoles.map((role) => {
+                        const isSelected = currentRole === role.id;
+                        return (
+                          <button
+                            key={role.id}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={isSelected}
+                            onClick={() => {
+                              setCurrentRole(role.id);
+                              setIsRoleMenuOpen(false);
+                              setRoleSearch('');
+                            }}
+                            className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left rtl:text-right transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                              isSelected
+                                ? 'bg-blue-600 text-white font-bold'
+                                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                            }`}
+                          >
+                            <RoleIcon
+                              iconName={role.iconName}
+                              size={14}
+                              className={isSelected ? 'text-white shrink-0' : 'text-slate-500 dark:text-slate-400 shrink-0'}
+                            />
+                            <span className="flex-1 truncate">{role.label[language] || role.label.fr}</span>
+                            {!role.isBuiltIn && (
+                              <span
+                                className={`text-[9px] px-1 rounded font-bold ${
+                                  isSelected ? 'bg-white/20 text-white' : 'bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-300'
+                                }`}
+                              >
+                                {language === 'fr' ? 'Perso' : language === 'ar' ? 'مخصص' : 'Custom'}
+                              </span>
+                            )}
+                            {isSelected && <CheckCircle2 size={13} className="text-white shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
                   );
                 })}
+
+                {activeRoleDefinition.allowedTabs.includes('roles') && (
+                  <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveView('roles');
+                        setIsRoleMenuOpen(false);
+                        setRoleSearch('');
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 font-bold text-[11px] cursor-pointer transition-colors"
+                    >
+                      <UserCog size={14} />
+                      <span>{getTranslation('navRolesPermissions', language)}</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -615,19 +669,21 @@ export const TopBar: React.FC = () => {
           </div>
 
           {/* Primary Action Button: + Nouveau */}
-          <button
-            type="button"
-            onClick={() => {
-              setNewBookingInitialSlot(null);
-              setIsNewBookingModalOpen(true);
-            }}
-            className="h-9 w-9 lg:w-auto lg:px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            title={language === 'fr' ? 'Créer une nouvelle réservation' : language === 'ar' ? 'إنشاء حجز جديد' : 'Create new booking'}
-            aria-label={language === 'fr' ? 'Nouvelle réservation' : language === 'ar' ? 'حجز جديد' : 'New booking'}
-          >
-            <Plus size={15} strokeWidth={2.5} />
-            <span className="hidden lg:inline">{language === 'fr' ? 'Nouveau' : language === 'ar' ? 'حجز جديد' : 'New'}</span>
-          </button>
+          {(activeRoleDefinition.permissions.canManageBookings || activeRoleDefinition.permissions.isClientPortal) && (
+            <button
+              type="button"
+              onClick={() => {
+                setNewBookingInitialSlot(null);
+                setIsNewBookingModalOpen(true);
+              }}
+              className="h-9 w-9 lg:w-auto lg:px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              title={language === 'fr' ? 'Créer une nouvelle réservation' : language === 'ar' ? 'إنشاء حجز جديد' : 'Create new booking'}
+              aria-label={language === 'fr' ? 'Nouvelle réservation' : language === 'ar' ? 'حجز جديد' : 'New booking'}
+            >
+              <Plus size={15} strokeWidth={2.5} />
+              <span className="hidden lg:inline">{language === 'fr' ? 'Nouveau' : language === 'ar' ? 'حجز جديد' : 'New'}</span>
+            </button>
+          )}
 
           {/* More Menu [⋮] */}
           <div className="relative shrink-0 overflow-visible" ref={moreMenuRef}>
@@ -777,7 +833,7 @@ export const TopBar: React.FC = () => {
                 </button>
 
                 {/* Event Log shortcut */}
-                {currentRole !== 'client' && (
+                {activeRoleDefinition.allowedTabs.includes('events') && (
                   <button
                     type="button"
                     onClick={() => {

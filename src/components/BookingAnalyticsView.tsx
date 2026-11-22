@@ -12,6 +12,16 @@ import {
   Presentation,
   ChevronDown,
   Download,
+  TrendingUp,
+  AlertTriangle,
+  Wrench,
+  Users,
+  Sparkles,
+  ShieldAlert,
+  Lightbulb,
+  Layers,
+  MessageSquareWarning,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { InvoiceRecord } from '../types/booking';
@@ -21,32 +31,25 @@ import {
   computeSegmentedRingArcs,
   type RingSliceInput,
 } from '../utils/analyticsCharts';
+import {
+  computeBookingAnalyticsSnapshot,
+  type AnalyticsRangeKey,
+  type MetricDelta,
+} from '../utils/bookingAnalyticsEngine';
 
-type RangeKey = '30d' | '90d' | '365d';
-type RingDimension = 'status' | 'building' | 'roomType' | 'housekeeping';
+type RingDimension = 'status' | 'building' | 'roomType' | 'housekeeping' | 'segment' | 'mealPlan';
 type SplineMetric = 'occupancy' | 'arrivals' | 'revenue' | 'stockOut';
-type SectionFilter = 'all' | 'inventory' | 'billing' | 'stock' | 'modules';
+type SectionFilter =
+  | 'all'
+  | 'forecast'
+  | 'inventory'
+  | 'guests'
+  | 'extras'
+  | 'prevention'
+  | 'billing_stock';
+type RoomSortMode = 'most_used' | 'least_used' | 'maintenance';
 
-const RING_PALETTE = ['#87CEFA', '#7178FF', '#67C380', '#6E717A', '#FFA84B', '#FF7369'];
-
-const dateKey = (date: Date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
-
-const dayDiff = (start: string, end: string) => {
-  const a = new Date(`${start}T00:00:00`).getTime();
-  const b = new Date(`${end}T00:00:00`).getTime();
-  return Number.isFinite(a) && Number.isFinite(b) ? Math.max(0, Math.round((b - a) / 86400000)) : 0;
-};
-
-const overlapNights = (start: string, end: string, from: string, toExclusive: string) => {
-  const a = start > from ? start : from;
-  const b = end < toExclusive ? end : toExclusive;
-  return dayDiff(a, b);
-};
+const RING_PALETTE = ['#87CEFA', '#7178FF', '#67C380', '#FFA84B', '#FF7369', '#6E717A'];
 
 export const BookingAnalyticsView: React.FC = () => {
   const {
@@ -55,6 +58,7 @@ export const BookingAnalyticsView: React.FC = () => {
     stockItems,
     stockMovements,
     tasks,
+    eventLogs,
     language,
     currency,
     currentDomain,
@@ -62,13 +66,15 @@ export const BookingAnalyticsView: React.FC = () => {
     setActiveView,
   } = useApp();
 
-  const [range, setRange] = useState<RangeKey>('30d');
+  const [range, setRange] = useState<AnalyticsRangeKey>('30d');
   const [ringDimension, setRingDimension] = useState<RingDimension>('status');
   const [selectedRingKey, setSelectedRingKey] = useState<string | null>(null);
   const [selectedWedgeKey, setSelectedWedgeKey] = useState<string | null>(null);
   const [splineMetric, setSplineMetric] = useState<SplineMetric>('occupancy');
+  const [showPreviousCurve, setShowPreviousCurve] = useState<boolean>(true);
   const [hoveredSplineIndex, setHoveredSplineIndex] = useState<number | null>(null);
   const [sectionFilter, setSectionFilter] = useState<SectionFilter>('all');
+  const [roomSortMode, setRoomSortMode] = useState<RoomSortMode>('most_used');
 
   const [invoiceDocs] = useState<InvoiceRecord[]>(() => {
     try {
@@ -84,24 +90,7 @@ export const BookingAnalyticsView: React.FC = () => {
   const t = (fr: string, en: string, ar: string) => (isFr ? fr : isAr ? ar : en);
   const localeCode = isFr ? 'fr-DZ' : isAr ? 'ar-DZ' : 'en-US';
 
-  const now = new Date();
-  const today = dateKey(now);
-  const periodDays = range === '30d' ? 30 : range === '90d' ? 90 : 365;
-  const fromDate = new Date(now);
-  fromDate.setDate(fromDate.getDate() - (periodDays - 1));
-  const from = dateKey(fromDate);
-  const toExclusiveDate = new Date(now);
-  toExclusiveDate.setDate(toExclusiveDate.getDate() + 1);
-  const toExclusive = dateKey(toExclusiveDate);
-
-  const currentMonthHeadline = useMemo(() => {
-    if (range === '30d') {
-      const raw = new Intl.DateTimeFormat(localeCode, { month: 'long' }).format(now);
-      return raw.charAt(0).toUpperCase() + raw.slice(1);
-    }
-    if (range === '90d') return t('90 derniers jours', 'Last 90 days', 'آخر 90 يوماً');
-    return t('12 derniers mois', 'Last 12 months', 'آخر 12 شهراً');
-  }, [range, localeCode, isFr, isAr]);
+  const now = useMemo(() => new Date(), []);
 
   const { activeGroups, rooms } = useMemo(() => {
     const groups = resourceGroups.filter((group) => group.sector === currentDomain);
@@ -115,66 +104,54 @@ export const BookingAnalyticsView: React.FC = () => {
     return { activeGroups: groups, rooms: groupRooms };
   }, [resourceGroups, currentDomain, language]);
 
-  const activeBookings = useMemo(
+  const snapshot = useMemo(
     () =>
-      bookings.filter(
-        (booking) =>
-          booking.sector === currentDomain &&
-          booking.status !== 'cancelled' &&
-          booking.status !== 'out_of_order' &&
-          booking.startDate < toExclusive &&
-          booking.endDate > from
-      ),
-    [bookings, currentDomain, from, toExclusive]
+      computeBookingAnalyticsSnapshot({
+        bookings,
+        rooms,
+        groups: activeGroups,
+        tasks,
+        stockItems,
+        stockMovements,
+        eventLogs,
+        invoiceDocs,
+        range,
+        currency,
+        domain: currentDomain,
+        language,
+        now,
+      }),
+    [
+      bookings,
+      rooms,
+      activeGroups,
+      tasks,
+      stockItems,
+      stockMovements,
+      eventLogs,
+      invoiceDocs,
+      range,
+      currency,
+      currentDomain,
+      language,
+      now,
+    ]
   );
 
-  const { validRooms, validRoomIds } = useMemo(() => {
-    const available = rooms.filter((room) => room.housekeepingStatus !== 'out_of_order');
-    return { validRooms: available, validRoomIds: new Set(available.map((room) => room.id)) };
-  }, [rooms]);
+  const { current, previous, deltas, trendPoints } = snapshot;
+  const from = current.from;
+  const toExclusive = current.toExclusive;
+  const today = snapshot.today;
 
-  const occupiedTodayIds = useMemo(
-    () =>
-      new Set(
-        bookings
-          .filter(
-            (booking) =>
-              booking.sector === currentDomain &&
-              booking.status !== 'cancelled' &&
-              booking.status !== 'out_of_order' &&
-              booking.startDate <= today &&
-              booking.endDate > today
-          )
-          .map((booking) => booking.resourceId)
-      ),
-    [bookings, currentDomain, today]
-  );
-
-  const occupiedToday = validRooms.filter((room) => occupiedTodayIds.has(room.id)).length;
-  const occupancyToday = validRooms.length ? Math.round((occupiedToday / validRooms.length) * 100) : 0;
-  const roomNightsAvailable = validRooms.length * periodDays;
-
-  const { occupiedRoomNights, periodRevenueByCurrency, primaryRevenueNumber } = useMemo(() => {
-    let nights = 0;
-    const revenue = activeBookings.reduce((totals, booking) => {
-      const nightsInPeriod = overlapNights(booking.startDate, booking.endDate, from, toExclusive);
-      nights += nightsInPeriod;
-      const totalNights = Math.max(1, dayDiff(booking.startDate, booking.endDate));
-      const code = booking.paymentCurrency || currency;
-      totals[code] = (totals[code] || 0) + (booking.totalPrice * nightsInPeriod) / totalNights;
-      return totals;
-    }, {} as Record<string, number>);
-    const primaryTotal = revenue[currency] ?? Object.values(revenue)[0] ?? 0;
-    return {
-      occupiedRoomNights: nights,
-      periodRevenueByCurrency: revenue,
-      primaryRevenueNumber: Math.round(primaryTotal),
-    };
-  }, [activeBookings, from, toExclusive, currency]);
-
-  const periodOccupancy = roomNightsAvailable
-    ? Math.min(100, Math.round((occupiedRoomNights / roomNightsAvailable) * 100))
-    : 0;
+  const currentMonthHeadline = useMemo(() => {
+    if (range === '7d') return t('7 derniers jours', 'Last 7 days', 'آخر 7 أيام');
+    if (range === '30d') {
+      const raw = new Intl.DateTimeFormat(localeCode, { month: 'long' }).format(now);
+      return raw.charAt(0).toUpperCase() + raw.slice(1);
+    }
+    if (range === '90d') return t('90 derniers jours', 'Last 90 days', 'آخر 90 يوماً');
+    return t('12 derniers mois', 'Last 12 months', 'آخر 12 شهراً');
+  }, [range, localeCode, isFr, isAr, now]);
 
   const fmtMoney = (amount: number, code = currency) => {
     const normalized = code === 'DA' ? 'DZD' : code;
@@ -194,30 +171,65 @@ export const BookingAnalyticsView: React.FC = () => {
     return entries.length ? entries.map(([code, amount]) => fmtMoney(amount, code)).join(' · ') : fmtMoney(0);
   };
 
-  const periodRevenue = formatBreakdown(periodRevenueByCurrency);
+  const periodRevenue = formatBreakdown(current.revenueByCurrency);
+
+  const { validRooms, occupiedTodayIds } = useMemo(() => {
+    const available = rooms.filter((room) => room.housekeepingStatus !== 'out_of_order');
+    const occIds = new Set(
+      bookings
+        .filter(
+          (booking) =>
+            booking.sector === currentDomain &&
+            booking.status !== 'cancelled' &&
+            booking.status !== 'out_of_order' &&
+            booking.startDate <= today &&
+            booking.endDate > today
+        )
+        .map((booking) => booking.resourceId)
+    );
+    return { validRooms: available, occupiedTodayIds: occIds };
+  }, [rooms, bookings, currentDomain, today]);
+
+  const occupiedToday = validRooms.filter((room) => occupiedTodayIds.has(room.id)).length;
+  const occupancyToday = validRooms.length ? Math.round((occupiedToday / validRooms.length) * 100) : 0;
+
+  const periodBookings = useMemo(
+    () =>
+      bookings.filter(
+        (booking) =>
+          booking.sector === currentDomain && booking.startDate < toExclusive && booking.endDate > from
+      ),
+    [bookings, currentDomain, from, toExclusive]
+  );
 
   const buildingStats = useMemo(() => {
-    const bookingsByResource = new Map<string, typeof activeBookings>();
-    for (const booking of activeBookings) {
-      const bucket = bookingsByResource.get(booking.resourceId);
-      if (bucket) bucket.push(booking);
-      else bookingsByResource.set(booking.resourceId, [booking]);
+    const activeBookings = periodBookings.filter(
+      (b) => b.status !== 'cancelled' && b.status !== 'out_of_order'
+    );
+    const revByRoom = new Map<string, { nights: number; revenue: number; stays: number }>();
+    for (const rStat of snapshot.roomFrequencies) {
+      revByRoom.set(rStat.roomId, {
+        nights: rStat.nightsSold,
+        revenue: rStat.revenue,
+        stays: rStat.staysCount,
+      });
     }
 
     return activeGroups.map((group) => {
       const groupRooms = group.resources.filter((room) => room.housekeepingStatus !== 'out_of_order');
       const occupiedNow = groupRooms.filter((room) => occupiedTodayIds.has(room.id)).length;
       let nights = 0;
+      let revenue = 0;
       let bookingCount = 0;
       for (const room of group.resources) {
-        const roomBookings = bookingsByResource.get(room.id);
-        if (!roomBookings) continue;
-        bookingCount += roomBookings.length;
-        for (const booking of roomBookings) {
-          nights += overlapNights(booking.startDate, booking.endDate, from, toExclusive);
+        const rs = revByRoom.get(room.id);
+        if (rs) {
+          nights += rs.nights;
+          revenue += rs.revenue;
+          bookingCount += rs.stays;
         }
       }
-      const capacity = groupRooms.length * periodDays;
+      const capacity = groupRooms.length * current.days;
       return {
         id: group.id,
         name: typeof group.name === 'string' ? group.name : group.name[language] || group.name.fr,
@@ -227,15 +239,36 @@ export const BookingAnalyticsView: React.FC = () => {
         occupiedNow,
         occupancy: capacity ? Math.min(100, Math.round((nights / capacity) * 100)) : 0,
         roomNights: nights,
-        bookingCount,
+        revenue,
+        bookingCount: bookingCount || activeBookings.filter((b) => group.resources.some((r) => r.id === b.resourceId)).length,
       };
     });
-  }, [activeGroups, activeBookings, occupiedTodayIds, from, toExclusive, periodDays, language]);
+  }, [activeGroups, periodBookings, snapshot.roomFrequencies, occupiedTodayIds, current.days, language]);
+
+  const { housekeepingCounts, roomTypes } = useMemo(() => {
+    const counts = rooms.reduce((result, room) => {
+      const status = room.housekeepingStatus || 'clean';
+      result[status] = (result[status] || 0) + 1;
+      return result;
+    }, {} as Record<string, number>);
+    const byType = new Map<string, { count: number; occupied: number; nights: number }>();
+    const freqMap = new Map(snapshot.roomFrequencies.map((r) => [r.roomId, r]));
+    for (const room of rooms) {
+      const entry = byType.get(room.type) ?? { count: 0, occupied: 0, nights: 0 };
+      entry.count += 1;
+      if (occupiedTodayIds.has(room.id)) entry.occupied += 1;
+      entry.nights += freqMap.get(room.id)?.nightsSold || 0;
+      byType.set(room.type, entry);
+    }
+    return {
+      housekeepingCounts: counts,
+      roomTypes: [...byType.entries()].map(([type, entry]) => ({ type, ...entry })),
+    };
+  }, [rooms, occupiedTodayIds, snapshot.roomFrequencies]);
 
   const {
     lowStock,
     stockValue,
-    periodMovements,
     consumption,
     received,
     consumedUnits,
@@ -264,7 +297,6 @@ export const BookingAnalyticsView: React.FC = () => {
     return {
       lowStock: low,
       stockValue: value,
-      periodMovements: movements,
       consumption: issues,
       received: receipts,
       consumedUnits: units,
@@ -308,35 +340,7 @@ export const BookingAnalyticsView: React.FC = () => {
     };
   }, [invoiceDocs, currentDomain, from, toExclusive, currency, language]);
 
-  const { housekeepingCounts, roomTypes } = useMemo(() => {
-    const counts = rooms.reduce((result, room) => {
-      const status = room.housekeepingStatus || 'clean';
-      result[status] = (result[status] || 0) + 1;
-      return result;
-    }, {} as Record<string, number>);
-    const byType = new Map<string, { count: number; occupied: number }>();
-    for (const room of rooms) {
-      const entry = byType.get(room.type) ?? { count: 0, occupied: 0 };
-      entry.count += 1;
-      if (occupiedTodayIds.has(room.id)) entry.occupied += 1;
-      byType.set(room.type, entry);
-    }
-    return {
-      housekeepingCounts: counts,
-      roomTypes: [...byType.entries()].map(([type, entry]) => ({ type, ...entry })),
-    };
-  }, [rooms, occupiedTodayIds]);
-
-  const periodBookings = useMemo(
-    () =>
-      bookings.filter(
-        (booking) =>
-          booking.sector === currentDomain && booking.startDate < toExclusive && booking.endDate > from
-      ),
-    [bookings, currentDomain, from, toExclusive]
-  );
-
-  // Left Segmented Ring Data based on selected dimension
+  // Segmented Ring Source Items (including Client Segment & Meal Plans!)
   const ringSourceItems = useMemo<RingSliceInput[]>(() => {
     if (ringDimension === 'building') {
       return buildingStats
@@ -355,13 +359,13 @@ export const BookingAnalyticsView: React.FC = () => {
     if (ringDimension === 'roomType') {
       return roomTypes
         .slice()
-        .sort((a, b) => b.count - a.count)
+        .sort((a, b) => b.nights - a.nights || b.count - a.count)
         .slice(0, 5)
         .map((rt, index) => ({
           key: rt.type,
           label: rt.type,
-          value: rt.count,
-          detail: `${rt.occupied}/${rt.count}`,
+          value: rt.nights > 0 ? rt.nights : rt.count,
+          detail: `${rt.nights}n · ${rt.occupied}/${rt.count}`,
           color: RING_PALETTE[index % RING_PALETTE.length],
         }));
     }
@@ -382,7 +386,26 @@ export const BookingAnalyticsView: React.FC = () => {
       }));
     }
 
-    // Default: 'status' (Booking statuses)
+    if (ringDimension === 'segment') {
+      return snapshot.clientSegments.slice(0, 6).map((seg, index) => ({
+        key: seg.id,
+        label: seg.label[language] || seg.label.fr,
+        value: seg.count,
+        detail: `${seg.count} · ${seg.nightsSold}n`,
+        color: RING_PALETTE[index % RING_PALETTE.length],
+      }));
+    }
+
+    if (ringDimension === 'mealPlan') {
+      return snapshot.mealPlanStats.slice(0, 6).map((mp, index) => ({
+        key: mp.id,
+        label: `${mp.code} · ${mp.label}`,
+        value: mp.count,
+        detail: `${mp.count}`,
+        color: RING_PALETTE[index % RING_PALETTE.length],
+      }));
+    }
+
     const statusBuckets = [
       {
         key: 'confirmed',
@@ -392,7 +415,7 @@ export const BookingAnalyticsView: React.FC = () => {
       },
       {
         key: 'active',
-        label: t('En séjour', 'Checked in', 'مقيمون حالياً'),
+        label: t('En séjour / Clôturées', 'Checked in / out', 'مقيمون / مكتمل'),
         color: '#7178FF',
         value: periodBookings.filter((b) => b.status === 'checked_in' || b.status === 'checked_out').length,
       },
@@ -404,7 +427,7 @@ export const BookingAnalyticsView: React.FC = () => {
       },
       {
         key: 'cancelled',
-        label: t('Annulées', 'Cancelled', 'ملغاة'),
+        label: t('Annulées / HS', 'Cancelled / OOO', 'ملغاة / معطلة'),
         color: '#6E717A',
         value: periodBookings.filter((b) => b.status === 'cancelled' || b.status === 'out_of_order').length,
       },
@@ -413,7 +436,18 @@ export const BookingAnalyticsView: React.FC = () => {
       ...item,
       detail: `${item.value}`,
     }));
-  }, [ringDimension, buildingStats, roomTypes, housekeepingCounts, periodBookings, isFr, isAr]);
+  }, [
+    ringDimension,
+    buildingStats,
+    roomTypes,
+    housekeepingCounts,
+    snapshot.clientSegments,
+    snapshot.mealPlanStats,
+    periodBookings,
+    language,
+    isFr,
+    isAr,
+  ]);
 
   const computedRing = useMemo(
     () => computeSegmentedRingArcs(ringSourceItems, { cx: 90, cy: 90, r: 68, gapDeg: 18 }),
@@ -423,7 +457,6 @@ export const BookingAnalyticsView: React.FC = () => {
   const activeRingSlice =
     computedRing.slices.find((s) => s.key === selectedRingKey) ?? computedRing.slices[0] ?? null;
 
-  // Right Rounded Pie Chart: Payment & Stay Financial Split
   const pieSourceItems = useMemo<RingSliceInput[]>(() => {
     const paidCount = periodBookings.filter(
       (b) => b.status !== 'cancelled' && b.paymentStatus === 'paid'
@@ -468,139 +501,132 @@ export const BookingAnalyticsView: React.FC = () => {
   const activeWedge =
     computedPie.wedges.find((w) => w.key === selectedWedgeKey) ?? computedPie.wedges[0] ?? null;
 
-  const floorStats = useMemo(() => {
-    return rooms.reduce((stats, room) => {
-      const building = room.building?.trim() || room.groupName;
-      const floor = room.floor?.trim() || t('Étage non renseigné', 'Floor not specified', 'الطابق غير محدد');
-      const key = `${building}::${floor}`;
-      if (!stats[key]) stats[key] = { key, building, floor, total: 0, occupied: 0, outOfOrder: 0 };
-      stats[key].total += 1;
-      if (occupiedTodayIds.has(room.id)) stats[key].occupied += 1;
-      if (room.housekeepingStatus === 'out_of_order') stats[key].outOfOrder += 1;
-      return stats;
-    }, {} as Record<string, { key: string; building: string; floor: string; total: number; occupied: number; outOfOrder: number }>);
-  }, [rooms, occupiedTodayIds, language]);
+  // Spline Chart with Optional Previous Period Comparison Curve
+  const splineWidth = 760;
+  const splineHeight = 148;
+  const splineLeft = 18;
+  const splineRight = 742;
+  const splineTop = 20;
+  const splineBottom = 126;
 
-  const trendPoints = useMemo(() => {
-    const bucketCount = range === '30d' ? 8 : range === '90d' ? 9 : 12;
+  const activeSplineIndex =
+    hoveredSplineIndex !== null && trendPoints[hoveredSplineIndex]
+      ? hoveredSplineIndex
+      : Math.max(0, trendPoints.length - 1);
 
-    const dayKeys: string[] = [];
-    const cursor = new Date(`${from}T00:00:00`);
-    while (dateKey(cursor) < toExclusive) {
-      dayKeys.push(dateKey(cursor));
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    const dayIndex = new Map(dayKeys.map((key, index) => [key, index]));
-    const diff = new Int32Array(dayKeys.length + 1);
-    const firstDay = dayKeys[0];
-    const lastDay = dayKeys[dayKeys.length - 1];
+  const prevMetricKey =
+    splineMetric === 'occupancy'
+      ? 'prevOccupancy'
+      : splineMetric === 'revenue'
+      ? 'prevRevenue'
+      : splineMetric === 'arrivals'
+      ? 'prevArrivals'
+      : 'prevStockOut';
 
-    if (firstDay && lastDay) {
-      const intervalsByResource = new Map<string, Array<{ start: number; end: number }>>();
-      for (const booking of activeBookings) {
-        if (!validRoomIds.has(booking.resourceId)) continue;
-        if (['cancelled', 'out_of_order', 'booking_offer'].includes(booking.status)) continue;
-        if (booking.endDate <= firstDay || booking.startDate > lastDay) continue;
+  const splineValues = trendPoints.map((p) => p[splineMetric]);
+  const prevSplineValues = trendPoints.map((p) => p[prevMetricKey]);
+  const splineMax =
+    splineMetric === 'occupancy'
+      ? 100
+      : Math.max(1, ...splineValues, ...(showPreviousCurve ? prevSplineValues : [0]));
 
-        let start = dayIndex.get(booking.startDate);
-        if (start === undefined) start = booking.startDate < firstDay ? 0 : -1;
-        let end = dayIndex.get(booking.endDate);
-        if (end === undefined) end = booking.endDate > lastDay ? dayKeys.length : -1;
-        if (start < 0 || end < 0 || end <= start) continue;
-
-        const list = intervalsByResource.get(booking.resourceId);
-        if (list) list.push({ start, end });
-        else intervalsByResource.set(booking.resourceId, [{ start, end }]);
-      }
-
-      for (const intervals of intervalsByResource.values()) {
-        intervals.sort((a, b) => a.start - b.start);
-        let currentStart = -1;
-        let currentEnd = -1;
-        for (const interval of intervals) {
-          if (currentStart < 0) {
-            currentStart = interval.start;
-            currentEnd = interval.end;
-            continue;
-          }
-          if (interval.start <= currentEnd) {
-            if (interval.end > currentEnd) currentEnd = interval.end;
-            continue;
-          }
-          diff[currentStart] += 1;
-          diff[Math.min(currentEnd, dayKeys.length)] -= 1;
-          currentStart = interval.start;
-          currentEnd = interval.end;
-        }
-        if (currentStart >= 0) {
-          diff[currentStart] += 1;
-          diff[Math.min(currentEnd, dayKeys.length)] -= 1;
-        }
-      }
-    }
-
-    const occupiedByDay = new Int32Array(dayKeys.length);
-    let occupied = 0;
-    for (let index = 0; index < dayKeys.length; index += 1) {
-      occupied += diff[index];
-      occupiedByDay[index] = occupied;
-    }
-
-    const arrivalsByDay = new Map<string, number>();
-    const revenueByDay = new Map<string, number>();
-    for (const booking of activeBookings) {
-      if (booking.startDate >= from && booking.startDate < toExclusive) {
-        arrivalsByDay.set(booking.startDate, (arrivalsByDay.get(booking.startDate) || 0) + 1);
-      }
-      const nights = Math.max(1, dayDiff(booking.startDate, booking.endDate));
-      const nightly = booking.totalPrice / nights;
-      for (const dKey of dayKeys) {
-        if (dKey >= booking.startDate && dKey < booking.endDate) {
-          revenueByDay.set(dKey, (revenueByDay.get(dKey) || 0) + nightly);
-        }
-      }
-    }
-
-    const stockOutByDay = new Map<string, number>();
-    for (const movement of periodMovements) {
-      if (movement.delta >= 0) continue;
-      const d = movement.timestamp.slice(0, 10);
-      stockOutByDay.set(d, (stockOutByDay.get(d) || 0) + Math.abs(movement.delta));
-    }
-
-    return Array.from({ length: bucketCount }, (_, index) => {
-      const startOffset = Math.floor((index * dayKeys.length) / bucketCount);
-      const endOffset =
-        index === bucketCount - 1
-          ? dayKeys.length
-          : Math.floor(((index + 1) * dayKeys.length) / bucketCount);
-      let occupancyPercentTotal = 0;
-      let arrivals = 0;
-      let revenue = 0;
-      let stockOut = 0;
-      for (let day = startOffset; day < endOffset; day += 1) {
-        const dKey = dayKeys[day];
-        occupancyPercentTotal += validRooms.length
-          ? Math.min(100, (occupiedByDay[day] / validRooms.length) * 100)
-          : 0;
-        arrivals += arrivalsByDay.get(dKey) || 0;
-        revenue += revenueByDay.get(dKey) || 0;
-        stockOut += stockOutByDay.get(dKey) || 0;
-      }
-      const measuredDays = Math.max(0, endOffset - startOffset);
-      const labelDate = new Date(`${dayKeys[startOffset] ?? from}T00:00:00`);
-      return {
-        label: new Intl.DateTimeFormat(localeCode, {
-          day: range === '365d' ? undefined : '2-digit',
-          month: 'short',
-        }).format(labelDate),
-        occupancy: measuredDays ? Math.round(occupancyPercentTotal / measuredDays) : 0,
-        arrivals,
-        revenue: Math.round(revenue),
-        stockOut,
-      };
+  const { splineCoords, prevSplineCoords } = useMemo(() => {
+    const count = trendPoints.length;
+    const curC = trendPoints.map((point, idx) => {
+      const xPos =
+        count <= 1 ? (splineLeft + splineRight) / 2 : splineLeft + (idx / (count - 1)) * (splineRight - splineLeft);
+      const yPos = splineBottom - (Math.max(0, point[splineMetric]) / splineMax) * (splineBottom - splineTop);
+      return { x: xPos, y: yPos };
     });
-  }, [range, from, toExclusive, activeBookings, periodMovements, validRoomIds, validRooms.length, localeCode]);
+    const prevC = trendPoints.map((point, idx) => {
+      const xPos =
+        count <= 1 ? (splineLeft + splineRight) / 2 : splineLeft + (idx / (count - 1)) * (splineRight - splineLeft);
+      const yPos = splineBottom - (Math.max(0, point[prevMetricKey]) / splineMax) * (splineBottom - splineTop);
+      return { x: xPos, y: yPos };
+    });
+    return { splineCoords: curC, prevSplineCoords: prevC };
+  }, [trendPoints, splineMetric, prevMetricKey, splineMax]);
+
+  const splinePathD = useMemo(
+    () => buildSmoothSplinePath(splineCoords, splineTop, splineBottom),
+    [splineCoords]
+  );
+  const prevSplinePathD = useMemo(
+    () => buildSmoothSplinePath(prevSplineCoords, splineTop, splineBottom),
+    [prevSplineCoords]
+  );
+
+  const activeSplinePoint = trendPoints[activeSplineIndex] ?? null;
+  const activeSplineCoord = splineCoords[activeSplineIndex] ?? null;
+  const activePrevSplineCoord = prevSplineCoords[activeSplineIndex] ?? null;
+
+  const formatSplineValue = (value: number) => {
+    if (splineMetric === 'occupancy') return `${value}%`;
+    if (splineMetric === 'revenue') return fmtMoney(value, currency);
+    if (splineMetric === 'stockOut') return `${value.toLocaleString()} ${t('u.', 'u.', 'و')}`;
+    return value.toLocaleString();
+  };
+
+  const renderDeltaBadge = (
+    delta: MetricDelta,
+    options?: { unit?: string; invertGood?: boolean; isPts?: boolean }
+  ) => {
+    const { unit = '', invertGood = false, isPts = false } = options || {};
+    const isNeutral = delta.diff === 0;
+    const isPositive = delta.diff > 0;
+    const isGood = invertGood ? !isPositive : isPositive;
+    const arrow = isNeutral ? '•' : isPositive ? '▲' : '▼';
+    const text = isPts
+      ? `${delta.diff > 0 ? '+' : ''}${delta.diff} pts`
+      : delta.pctChange !== null
+      ? `${delta.pctChange > 0 ? '+' : ''}${delta.pctChange}%`
+      : `${delta.diff > 0 ? '+' : ''}${delta.diff}${unit}`;
+
+    const badgeCls = isNeutral
+      ? 'bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-[#9E9EA8]'
+      : isGood
+      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-[#67C380]'
+      : 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-[#FF7369]';
+
+    return (
+      <span
+        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${badgeCls}`}
+        title={`${t('Période précédente', 'Previous period', 'الفترة السابقة')}: ${delta.previous}${unit}`}
+      >
+        <span aria-hidden="true">{arrow}</span>
+        <span>{text}</span>
+      </span>
+    );
+  };
+
+  const progress = (value: number, barClass = 'bg-sky-400') => (
+    <div className="h-2 overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/[0.08]">
+      <div
+        className={`h-full rounded-full transition-[width] duration-200 ${barClass}`}
+        style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+      />
+    </div>
+  );
+
+  const sortedRooms = useMemo(() => {
+    if (roomSortMode === 'least_used') {
+      return snapshot.roomFrequencies
+        .slice()
+        .sort((a, b) => a.utilizationPct - b.utilizationPct || a.staysCount - b.staysCount);
+    }
+    if (roomSortMode === 'maintenance') {
+      return snapshot.roomFrequencies
+        .slice()
+        .sort(
+          (a, b) =>
+            b.maintenanceCount - a.maintenanceCount ||
+            b.alertsCount - a.alertsCount ||
+            (b.housekeepingStatus === 'out_of_order' ? 1 : 0) -
+              (a.housekeepingStatus === 'out_of_order' ? 1 : 0)
+        );
+    }
+    return snapshot.roomFrequencies;
+  }, [snapshot.roomFrequencies, roomSortMode]);
 
   const stockCategoryStats = useMemo(() => {
     const byCategory = new Map<string, { quantity: number; low: number }>();
@@ -617,80 +643,72 @@ export const BookingAnalyticsView: React.FC = () => {
 
   const handleExportCsv = () => {
     const rows = [
-      ['Période', 'Occupation (%)', 'Arrivées', `Revenus (${currency})`, 'Sorties stock'],
+      ['=== TENDANCES & COMPARAISON N vs N-1 ===', '', '', '', '', '', '', ''],
+      [
+        'Période',
+        'Occupation (%)',
+        'Occupation N-1 (%)',
+        'Arrivées',
+        'Arrivées N-1',
+        `Revenus (${currency})`,
+        `Revenus N-1 (${currency})`,
+        'Sorties stock',
+      ],
       ...trendPoints.map((point) => [
         point.label,
         String(point.occupancy),
+        String(point.prevOccupancy),
         String(point.arrivals),
+        String(point.prevArrivals),
         String(point.revenue),
+        String(point.prevRevenue),
         String(point.stockOut),
       ]),
+      ['', '', '', '', '', '', '', ''],
+      ['=== FRÉQUENCE DES CHAMBRES ===', '', '', '', '', '', '', ''],
+      ['Chambre', 'Type', 'Bâtiment', 'Étage', 'Séjours', 'Nuitées', 'Utilisation (%)', `Revenus (${currency})`],
+      ...snapshot.roomFrequencies.map((r) => [
+        r.roomName,
+        r.roomType,
+        r.building,
+        r.floor,
+        String(r.staysCount),
+        String(r.nightsSold),
+        String(r.utilizationPct),
+        String(r.revenue),
+      ]),
+      ['', '', '', '', '', '', '', ''],
+      ['=== PRÉVISIONS ===', '', '', '', '', '', '', ''],
+      ['Horizon', 'Occ. Confirmée (%)', 'Occ. Projetée (%)', `Rev. Confirmé (${currency})`, `Rev. Projeté (${currency})`, 'Arrivées prévues', 'Départs prévus', 'Confiance (%)'],
+      ...snapshot.forecasts.map((f) => [
+        f.label[language] || f.label.fr,
+        String(f.confirmedOccupancyPct),
+        String(f.projectedOccupancyPct),
+        String(f.confirmedRevenue),
+        String(f.projectedRevenue),
+        String(f.expectedArrivals),
+        String(f.expectedCheckouts),
+        String(f.confidencePct),
+      ]),
     ];
-    const csv = rows.map((row) => row.map((value) => `"${value.replace(/"/g, '""')}"`).join(';')).join('\n');
+    const csv = rows
+      .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
     const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `appointment-booking-analytics-${range}.csv`;
+    anchor.download = `appointment-manager-analytics-${range}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
 
-  // Spline coordinates calculation
-  const splineWidth = 760;
-  const splineHeight = 148;
-  const splineLeft = 18;
-  const splineRight = 742;
-  const splineTop = 20;
-  const splineBottom = 126;
-
-  const activeSplineIndex =
-    hoveredSplineIndex !== null && trendPoints[hoveredSplineIndex]
-      ? hoveredSplineIndex
-      : Math.max(0, trendPoints.length - 1);
-
-  const splineValues = trendPoints.map((p) => p[splineMetric]);
-  const splineMax = splineMetric === 'occupancy' ? 100 : Math.max(1, ...splineValues);
-
-  const splineCoords = useMemo(() => {
-    const count = trendPoints.length;
-    return trendPoints.map((point, idx) => {
-      const xPos =
-        count <= 1 ? (splineLeft + splineRight) / 2 : splineLeft + (idx / (count - 1)) * (splineRight - splineLeft);
-      const yPos =
-        splineBottom - (Math.max(0, point[splineMetric]) / splineMax) * (splineBottom - splineTop);
-      return { x: xPos, y: yPos };
-    });
-  }, [trendPoints, splineMetric, splineMax]);
-
-  const splinePathD = useMemo(
-    () => buildSmoothSplinePath(splineCoords, splineTop, splineBottom),
-    [splineCoords]
-  );
-
-  const activeSplinePoint = trendPoints[activeSplineIndex] ?? null;
-  const activeSplineCoord = splineCoords[activeSplineIndex] ?? null;
-
-  const formatSplineValue = (value: number) => {
-    if (splineMetric === 'occupancy') return `${value}%`;
-    if (splineMetric === 'revenue') return fmtMoney(value, currency);
-    if (splineMetric === 'stockOut') return `${value.toLocaleString()} ${t('u.', 'u.', 'و')}`;
-    return value.toLocaleString();
-  };
-
-  const progress = (value: number, barClass = 'bg-sky-400') => (
-    <div className="h-2 overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/[0.08]">
-      <div
-        className={`h-full rounded-full transition-[width] duration-200 ${barClass}`}
-        style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
-      />
-    </div>
-  );
-
+  const showForecast = sectionFilter === 'all' || sectionFilter === 'forecast';
   const showInventory = sectionFilter === 'all' || sectionFilter === 'inventory';
-  const showBilling = sectionFilter === 'all' || sectionFilter === 'billing';
-  const showStock = sectionFilter === 'all' || sectionFilter === 'stock';
-  const showModules = sectionFilter === 'all' || sectionFilter === 'modules';
+  const showGuests = sectionFilter === 'all' || sectionFilter === 'guests';
+  const showExtras = sectionFilter === 'all' || sectionFilter === 'extras';
+  const showPrevention = sectionFilter === 'all' || sectionFilter === 'prevention';
+  const showBillingStock = sectionFilter === 'all' || sectionFilter === 'billing_stock';
 
   return (
     <div
@@ -698,8 +716,8 @@ export const BookingAnalyticsView: React.FC = () => {
       className="min-w-0 w-full flex-1 overflow-y-auto overscroll-contain bg-[#F4F5F7] text-slate-900 dark:bg-[#141416] dark:text-[#F4F4F6]"
     >
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-3 py-4 sm:px-6 sm:py-6">
-        {/* Compact Top Bar matching the reference: [ Back ]  Statistics  [ CSV ] */}
-        <header className="flex items-center justify-between gap-3">
+        {/* Top Bar */}
+        <header className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
@@ -711,12 +729,18 @@ export const BookingAnalyticsView: React.FC = () => {
             </button>
             <div className="min-w-0">
               <h1 className="truncate text-lg font-semibold tracking-tight text-slate-900 dark:text-[#F4F4F6] sm:text-xl">
-                {t('Statistiques', 'Statistics', 'الإحصائيات')}
+                {t('Centre Analytique & Prédictions Gérant', 'Manager Analytics & Forecasting', 'مركز التحليلات والتوقعات للمدير')}
               </h1>
               <p className="truncate text-xs text-slate-500 dark:text-[#8E8E98]">
                 {establishmentProfile?.name || t('Établissement', 'Property', 'المنشأة')} ·{' '}
                 {currentDomain === 'resort' ? t('Resort', 'Resort', 'منتجع') : t('Hôtel', 'Hotel', 'فندق')} ·{' '}
-                <span className="tabular-nums">{from} → {today}</span>
+                <span className="tabular-nums">
+                  {from} → {today}
+                </span>{' '}
+                ·{' '}
+                <span className="text-slate-400 dark:text-[#6E6E78] tabular-nums">
+                  {t('vs', 'vs', 'مقابل')} {previous.from} → {previous.toInclusive}
+                </span>
               </p>
             </div>
           </div>
@@ -727,38 +751,45 @@ export const BookingAnalyticsView: React.FC = () => {
             className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full border border-slate-300/90 bg-white px-4 text-xs font-semibold text-slate-800 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-white/[0.1] dark:bg-[#1E1E22] dark:text-[#F4F4F6] dark:hover:bg-[#27272C]"
           >
             <Download size={15} />
-            <span className="whitespace-nowrap">CSV</span>
+            <span className="whitespace-nowrap">{t('Exporter CSV', 'Export CSV', 'تصدير CSV')}</span>
           </button>
         </header>
 
-        {/* Primary Focal Zone: Hero Summary Card + Controls + Dual Charts + Spline Trend */}
+        {/* Primary Focal Zone: Hero Card + Comparison Deltas + Dual Charts + Comparative Spline */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:items-start">
-          {/* Left Column (Hero Card + Breakdown Controls + Segmented Ring & Organic Pie) */}
+          {/* Left Column */}
           <div className="flex flex-col gap-5 lg:col-span-7">
-            {/* Hero Revenue & Property Summary Card (Inspired by top card of reference) */}
             <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0 space-y-1">
                   <div className="text-base font-bold tracking-tight text-slate-900 dark:text-white sm:text-lg">
                     {establishmentProfile?.name || t('Analyse globale', 'Global analytics', 'التحليل العام')}
                   </div>
-                  <div className="text-xs font-medium text-slate-500 dark:text-[#8E8E98]">
-                    {t('Revenus séjours proratisés', 'Prorated stay revenue', 'إيرادات الإقامات المحسوبة')} ·{' '}
-                    {range === '30d' ? t('30 jours', '30 days', '30 يوماً') : range === '90d' ? t('90 jours', '90 days', '90 يوماً') : t('12 mois', '12 months', '12 شهراً')}
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500 dark:text-[#8E8E98]">
+                    <span>
+                      {t('Revenus séjours proratisés', 'Prorated stay revenue', 'إيرادات الإقامات المحسوبة')} ·{' '}
+                      {range === '7d'
+                        ? t('7 jours', '7 days', '7 أيام')
+                        : range === '30d'
+                        ? t('30 jours', '30 days', '30 يوماً')
+                        : range === '90d'
+                        ? t('90 jours', '90 days', '90 يوماً')
+                        : t('12 mois', '12 months', '12 شهراً')}
+                    </span>
+                    {renderDeltaBadge(deltas.revenue)}
                   </div>
                 </div>
                 <div className="text-end">
                   <div className="text-[clamp(1.65rem,4vw,2.35rem)] font-bold leading-none tracking-tight text-slate-950 tabular-nums dark:text-white">
                     {periodRevenue}
                   </div>
-                  {primaryRevenueNumber === 0 && (
-                    <div className="mt-1 text-[11px] text-slate-400 dark:text-[#787882]">
-                      {t('Aucun revenu enregistré sur la période', 'No revenue recorded in period', 'لا توجد إيرادات في الفترة')}
-                    </div>
-                  )}
+                  <div className="mt-1.5 text-[11px] text-slate-400 tabular-nums dark:text-[#787882]">
+                    {t('Période préc.', 'Prev. period', 'الفترة السابقة')}: {fmtMoney(previous.revenuePrimary, currency)}
+                  </div>
                 </div>
               </div>
 
+              {/* 8 Comparative Manager KPIs */}
               <div className="mt-6 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 dark:border-white/[0.06] sm:grid-cols-4">
                 <div>
                   <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">
@@ -770,40 +801,90 @@ export const BookingAnalyticsView: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">
-                    {t('Nuitées vendues', 'Room nights', 'الليالي المحجوزة')}
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                    <span>{t('Occupation période', 'Period occ.', 'إشغال الفترة')}</span>
+                    {renderDeltaBadge(deltas.occupancyPct, { isPts: true })}
                   </div>
                   <div className="mt-0.5 text-sm font-semibold text-slate-900 tabular-nums dark:text-[#E8E8EC]">
-                    {occupiedRoomNights.toLocaleString()}{' '}
-                    <span className="text-xs font-normal text-slate-500 dark:text-[#8E8E98]">({periodOccupancy}%)</span>
+                    {current.occupancyPct}%{' '}
+                    <span className="text-xs font-normal text-slate-500 dark:text-[#8E8E98]">
+                      ({current.occupiedRoomNights}n)
+                    </span>
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">
-                    {t('Réservations', 'Bookings', 'الحجوزات')}
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                    <span>ADR / RevPAR</span>
+                    {renderDeltaBadge(deltas.adr)}
                   </div>
                   <div className="mt-0.5 text-sm font-semibold text-slate-900 tabular-nums dark:text-[#E8E8EC]">
-                    {periodBookings.length.toLocaleString()}
+                    {fmtMoney(current.adr, currency)}{' '}
+                    <span className="text-xs font-normal text-slate-500 dark:text-[#8E8E98]">
+                      / {fmtMoney(current.revPar, currency)}
+                    </span>
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">
-                    {t('Bâtiments', 'Buildings', 'المباني')}
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                    <span>{t('Séjours / ALOS', 'Stays / ALOS', 'الإقامات / المعدل')}</span>
+                    {renderDeltaBadge(deltas.bookingsCount)}
                   </div>
                   <div className="mt-0.5 text-sm font-semibold text-slate-900 tabular-nums dark:text-[#E8E8EC]">
-                    {activeGroups.length}
+                    {current.bookingsCount}{' '}
+                    <span className="text-xs font-normal text-slate-500 dark:text-[#8E8E98]">
+                      · {current.alos} {t('j/séjour', 'd/stay', 'ي')}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                    <span>{t('Étage phare', 'Top floor', 'الأكثر طلباً')}</span>
+                  </div>
+                  <div className="mt-0.5 truncate text-sm font-semibold text-slate-900 dark:text-[#E8E8EC]">
+                    {snapshot.mostFrequentFloor
+                      ? `${snapshot.mostFrequentFloor.floor} (${snapshot.mostFrequentFloor.nightsSold}n)`
+                      : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                    <span>{t('Prise extras', 'Extras attach', 'الإضافات')}</span>
+                  </div>
+                  <div className="mt-0.5 text-sm font-semibold text-slate-900 tabular-nums dark:text-[#E8E8EC]">
+                    {snapshot.extrasAttachRatePct}%{' '}
+                    <span className="text-xs font-normal text-slate-500 dark:text-[#8E8E98]">
+                      ({fmtMoney(snapshot.totalEstimatedExtrasRevenue, currency)})
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                    <span>{t('Taux annulation', 'Cancel rate', 'الإلغاء')}</span>
+                    {renderDeltaBadge(deltas.cancelRatePct, { invertGood: true, isPts: true })}
+                  </div>
+                  <div className="mt-0.5 text-sm font-semibold text-slate-900 tabular-nums dark:text-[#E8E8EC]">
+                    {current.cancelRatePct}%{' '}
+                    <span className="text-xs font-normal text-slate-500 dark:text-[#8E8E98]">
+                      ({current.cancellationsCount})
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                    <span>{t('Pannes & Doléances', 'Issues & Alerts', 'الأعطال والشكاوى')}</span>
+                    {renderDeltaBadge(deltas.alertsCount, { invertGood: true })}
+                  </div>
+                  <div className="mt-0.5 text-sm font-semibold text-slate-900 tabular-nums dark:text-[#E8E8EC]">
+                    {current.maintenanceTasksCount} / {snapshot.complaintsAndAlerts.length}
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Controls Row: [ ● Breakdown Selector ▾ ]   [ 30 j | 90 j | 12 mois ] */}
+            {/* Controls Row: [ ● Breakdown Selector ▾ ]   [ 7 j | 30 j | 90 j | 12 mois ] */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="relative inline-flex min-h-[44px] items-center rounded-full border border-slate-200/90 bg-white px-3.5 dark:border-white/[0.08] dark:bg-[#1E1E22]">
-                <span
-                  aria-hidden="true"
-                  className="me-2.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#FF7369]"
-                />
+                <span aria-hidden="true" className="me-2.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#FF7369]" />
                 <select
                   aria-label={t('Dimension d’analyse', 'Analytics breakdown', 'تصنيف التحليل')}
                   value={ringDimension}
@@ -825,6 +906,12 @@ export const BookingAnalyticsView: React.FC = () => {
                   <option value="housekeeping" className="bg-white text-slate-900 dark:bg-[#1E1E22] dark:text-white">
                     {t('État ménage', 'Housekeeping', 'حالة النظافة')}
                   </option>
+                  <option value="segment" className="bg-white text-slate-900 dark:bg-[#1E1E22] dark:text-white">
+                    {t('Typologie clients', 'Client typology', 'أنواع العملاء')}
+                  </option>
+                  <option value="mealPlan" className="bg-white text-slate-900 dark:bg-[#1E1E22] dark:text-white">
+                    {t('Formules de pension', 'Meal plans', 'أنظمة الوجبات')}
+                  </option>
                 </select>
                 <ChevronDown
                   size={15}
@@ -838,7 +925,7 @@ export const BookingAnalyticsView: React.FC = () => {
                 aria-label={t('Période d’analyse', 'Date range', 'الفترة الزمنية')}
                 className="inline-flex min-h-[44px] items-center rounded-full border border-slate-200/90 bg-white p-1 dark:border-white/[0.08] dark:bg-[#1E1E22]"
               >
-                {(['30d', '90d', '365d'] as RangeKey[]).map((key) => {
+                {(['7d', '30d', '90d', '365d'] as AnalyticsRangeKey[]).map((key) => {
                   const isActive = range === key;
                   return (
                     <button
@@ -849,13 +936,15 @@ export const BookingAnalyticsView: React.FC = () => {
                         setHoveredSplineIndex(null);
                       }}
                       aria-pressed={isActive}
-                      className={`min-h-[36px] whitespace-nowrap rounded-full px-3.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                      className={`min-h-[36px] whitespace-nowrap rounded-full px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
                         isActive
                           ? 'bg-slate-900 text-white dark:bg-[#E8E8EC] dark:text-[#141416]'
                           : 'text-slate-500 hover:text-slate-900 dark:text-[#8E8E98] dark:hover:text-white'
                       }`}
                     >
-                      {key === '30d'
+                      {key === '7d'
+                        ? t('7 j', '7d', '7 ي')
+                        : key === '30d'
                         ? t('30 j', '30d', '30 ي')
                         : key === '90d'
                         ? t('90 j', '90d', '90 ي')
@@ -866,9 +955,8 @@ export const BookingAnalyticsView: React.FC = () => {
               </div>
             </div>
 
-            {/* Dual Visual Charts Side-by-Side (Segmented Ring + Period Rounded Pie) */}
+            {/* Dual Visual Charts Side-by-Side */}
             <section className="grid grid-cols-1 gap-5 rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:grid-cols-2 sm:p-6">
-              {/* Left Chart: Segmented Rounded-Cap Ring */}
               <div className="flex flex-col items-center">
                 {computedRing.slices.length > 0 ? (
                   <>
@@ -942,9 +1030,7 @@ export const BookingAnalyticsView: React.FC = () => {
                                   className="h-2.5 w-2.5 shrink-0 rounded-full"
                                   style={{ backgroundColor: slice.color }}
                                 />
-                                <span className="truncate text-slate-700 dark:text-[#D4D4DC]">
-                                  {slice.label}
-                                </span>
+                                <span className="truncate text-slate-700 dark:text-[#D4D4DC]">{slice.label}</span>
                               </span>
                               <span className="shrink-0 font-semibold text-slate-900 tabular-nums dark:text-white">
                                 {slice.percentage}%
@@ -969,7 +1055,6 @@ export const BookingAnalyticsView: React.FC = () => {
                 )}
               </div>
 
-              {/* Right Chart: Active Month / Period + Rounded Organic 3-Wedge Pie */}
               <div className="flex flex-col items-center border-t border-slate-100 pt-5 dark:border-white/[0.06] sm:border-s sm:border-t-0 sm:ps-5 sm:pt-0">
                 <div className="mb-3 w-full text-center text-base font-semibold tracking-tight text-slate-900 dark:text-[#F4F4F6]">
                   {currentMonthHeadline}
@@ -1032,9 +1117,7 @@ export const BookingAnalyticsView: React.FC = () => {
                                   className="h-2.5 w-2.5 shrink-0 rounded-full border border-black/10"
                                   style={{ backgroundColor: item.color }}
                                 />
-                                <span className="truncate text-slate-700 dark:text-[#D4D4DC]">
-                                  {item.label}
-                                </span>
+                                <span className="truncate text-slate-700 dark:text-[#D4D4DC]">{item.label}</span>
                               </span>
                               <span className="shrink-0 font-semibold text-slate-900 tabular-nums dark:text-white">
                                 {pct}%{' '}
@@ -1059,11 +1142,10 @@ export const BookingAnalyticsView: React.FC = () => {
             </section>
           </div>
 
-          {/* Right Column on Desktop (or Below on Mobile): Smooth Spline Trend with Lime Value Highlight Chip */}
+          {/* Right Column: Comparative Spline Trend (N vs N-1) + Quick Forecast Card */}
           <div className="flex flex-col gap-5 lg:col-span-5">
             <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
-              {/* Header row: [ ● Income/Occupancy ▾ ]    [ Label ] [ #D9FF54 Value Chip ] */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="relative inline-flex min-h-[44px] items-center rounded-full border border-slate-200/90 bg-slate-50 px-3.5 dark:border-white/[0.08] dark:bg-[#26262B]">
                   <span
                     aria-hidden="true"
@@ -1098,21 +1180,38 @@ export const BookingAnalyticsView: React.FC = () => {
                   />
                 </div>
 
-                {activeSplinePoint && (
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xs font-medium text-slate-500 dark:text-[#8E8E98]">
-                      {activeSplinePoint.label}
-                    </span>
-                    <span className="inline-flex min-h-[32px] items-center rounded-full border border-black/10 bg-[#D9FF54] px-3.5 text-xs font-bold text-[#141416] tabular-nums">
-                      {formatSplineValue(activeSplinePoint[splineMetric])}
-                    </span>
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setShowPreviousCurve((v) => !v)}
+                  aria-pressed={showPreviousCurve}
+                  className={`min-h-[36px] rounded-full border px-3 text-[11px] font-semibold transition-colors ${
+                    showPreviousCurve
+                      ? 'border-sky-400/50 bg-sky-50 text-sky-700 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-[#87CEFA]'
+                      : 'border-slate-200 text-slate-500 dark:border-white/[0.08] dark:text-[#8E8E98]'
+                  }`}
+                >
+                  {t('Comparer N-1', 'Compare Prev.', 'مقارنة N-1')}
+                </button>
               </div>
 
-              {/* Smooth Spline Curve */}
+              {activeSplinePoint && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-slate-50 px-3.5 py-2 dark:bg-white/[0.03]">
+                  <div className="text-xs">
+                    <span className="font-semibold text-slate-700 dark:text-[#D4D4DC]">{activeSplinePoint.label}</span>
+                    {showPreviousCurve && activeSplinePoint.prevLabel && (
+                      <span className="ms-2 text-[11px] text-slate-400 dark:text-[#787882]">
+                        vs {activeSplinePoint.prevLabel}: {formatSplineValue(activeSplinePoint[prevMetricKey])}
+                      </span>
+                    )}
+                  </div>
+                  <span className="inline-flex min-h-[28px] items-center rounded-full border border-black/10 bg-[#D9FF54] px-3 text-xs font-bold text-[#141416] tabular-nums">
+                    {formatSplineValue(activeSplinePoint[splineMetric])}
+                  </span>
+                </div>
+              )}
+
               {trendPoints.length > 0 ? (
-                <div className="mt-5">
+                <div className="mt-4">
                   <div
                     className="relative w-full"
                     style={{ touchAction: 'pan-y' }}
@@ -1130,16 +1229,9 @@ export const BookingAnalyticsView: React.FC = () => {
                     <svg
                       viewBox={`0 0 ${splineWidth} ${splineHeight}`}
                       role="img"
-                      aria-label={t('Courbe d’évolution lissée', 'Smooth trend curve', 'منحنى التطور الزمني')}
+                      aria-label={t('Courbe comparative N vs N-1', 'Comparative trend curve', 'منحنى المقارنة الزمني')}
                       className="h-44 w-full overflow-visible sm:h-48"
                     >
-                      <defs>
-                        <linearGradient id="analytics-spline-glow" x1="0" x2="0" y1="0" y2="1">
-                          <stop offset="0%" stopColor="#D9FF54" stopOpacity="0.22" />
-                          <stop offset="100%" stopColor="#D9FF54" stopOpacity="0" />
-                        </linearGradient>
-                      </defs>
-
                       {/* Subtle vertical focus indicator */}
                       {activeSplineCoord && (
                         <line
@@ -1153,18 +1245,41 @@ export const BookingAnalyticsView: React.FC = () => {
                         />
                       )}
 
-                      {/* Smooth Spline Line */}
+                      {/* Previous Period Dashed Spline */}
+                      {showPreviousCurve && prevSplinePathD && (
+                        <path
+                          d={prevSplinePathD}
+                          fill="none"
+                          stroke="#87CEFA"
+                          strokeWidth="2.5"
+                          strokeDasharray="6 6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.75"
+                        />
+                      )}
+
+                      {/* Current Period Smooth Spline */}
                       <path
                         d={splinePathD}
                         fill="none"
                         stroke="currentColor"
-                        strokeWidth="4.2"
+                        strokeWidth="4"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         className="text-[#4D7C0F] dark:text-[#D9FF54]"
                       />
 
-                      {/* Active Point Anchor */}
+                      {showPreviousCurve && activePrevSplineCoord && (
+                        <circle
+                          cx={activePrevSplineCoord.x}
+                          cy={activePrevSplineCoord.y}
+                          r="4.5"
+                          className="fill-[#87CEFA] stroke-[#141416] dark:stroke-[#1E1E22]"
+                          strokeWidth="2"
+                        />
+                      )}
+
                       {activeSplineCoord && (
                         <circle
                           cx={activeSplineCoord.x}
@@ -1177,7 +1292,6 @@ export const BookingAnalyticsView: React.FC = () => {
                     </svg>
                   </div>
 
-                  {/* Interactive X-axis ticks (tap or click on mobile/desktop) */}
                   <div className="mt-2 flex items-center justify-between gap-1 overflow-x-auto pb-1">
                     {trendPoints.map((pt, idx) => {
                       const isCurrent = idx === activeSplineIndex;
@@ -1205,49 +1319,39 @@ export const BookingAnalyticsView: React.FC = () => {
               )}
             </section>
 
-            {/* Quick Operational Snapshot Card (Real Housekeeping & Invoicing Summary) */}
+            {/* Quick Forward Forecast Summary Card */}
             <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
-                  {t('Synthèse facturation & stock', 'Billing & stock summary', 'ملخص الفوترة والمخزون')}
-                </h2>
-                <span className="text-xs text-slate-500 dark:text-[#8E8E98]">
-                  {issuedInvoices.length} {t('factures', 'invoices', 'فواتير')}
+                <div className="flex items-center gap-2">
+                  <TrendingUp size={17} className="text-emerald-600 dark:text-[#67C380]" />
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                    {t('Radar Prévisions (J+7 · J+14 · J+30)', 'Forward Radar (+7d · +14d · +30d)', 'رادار التوقعات القادمة')}
+                  </h2>
+                </div>
+                <span className="text-[11px] font-medium text-slate-500 dark:text-[#8E8E98]">
+                  {snapshot.recommendations.length} {t('actions', 'actions', 'توصيات')}
                 </span>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="border-b border-slate-100 pb-3 dark:border-white/[0.06]">
-                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">
-                    {t('Encaissé', 'Collected', 'المحصل')}
+              <div className="mt-4 grid grid-cols-3 gap-2.5">
+                {snapshot.forecasts.map((f) => (
+                  <div
+                    key={f.horizonDays}
+                    className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3 dark:border-white/[0.06] dark:bg-white/[0.03]"
+                  >
+                    <div className="text-[11px] font-semibold text-slate-500 dark:text-[#8E8E98]">
+                      J+{f.horizonDays}
+                    </div>
+                    <div className="mt-1 text-lg font-bold text-slate-900 tabular-nums dark:text-white">
+                      {f.projectedOccupancyPct}%
+                    </div>
+                    <div className="text-[10px] text-slate-500 tabular-nums dark:text-[#8E8E98]">
+                      {t('Confirmé', 'Booked', 'مؤكد')}: {f.confirmedOccupancyPct}%
+                    </div>
+                    <div className="mt-1 truncate text-[11px] font-semibold text-emerald-700 tabular-nums dark:text-[#67C380]">
+                      {fmtMoney(f.projectedRevenue, currency)}
+                    </div>
                   </div>
-                  <div className="mt-1 text-base font-bold text-emerald-700 tabular-nums dark:text-[#67C380]">
-                    {collectedTotal}
-                  </div>
-                </div>
-                <div className="border-b border-slate-100 pb-3 dark:border-white/[0.06]">
-                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">
-                    {t('Reste dû', 'Balance due', 'المتبقي')}
-                  </div>
-                  <div className="mt-1 text-base font-bold text-rose-600 tabular-nums dark:text-[#FF7369]">
-                    {dueTotal}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">
-                    {t('Valeur du stock', 'Stock value', 'قيمة المخزون')}
-                  </div>
-                  <div className="mt-1 text-base font-bold text-slate-900 tabular-nums dark:text-[#F4F4F6]">
-                    {fmtMoney(stockValue, 'DZD')}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">
-                    {t('Articles sous seuil', 'Low stock items', 'أصناف تحت الحد')}
-                  </div>
-                  <div className="mt-1 text-base font-bold text-amber-600 tabular-nums dark:text-[#FFA84B]">
-                    {lowStock.length}
-                  </div>
-                </div>
+                ))}
               </div>
             </section>
           </div>
@@ -1255,16 +1359,18 @@ export const BookingAnalyticsView: React.FC = () => {
 
         {/* Interactive Operational Section Filter Bar */}
         <nav
-          aria-label={t('Filtrer les sections détaillées', 'Filter detailed sections', 'تصفية الأقسام التفصيلية')}
+          aria-label={t('Filtrer les sections analytiques', 'Filter analytics sections', 'تصفية أقسام التحليل')}
           className="flex items-center gap-1.5 overflow-x-auto pb-1"
         >
           {(
             [
               ['all', t('Tout afficher', 'All sections', 'عرض الكل')],
-              ['inventory', t('Bâtiments & Chambres', 'Buildings & Rooms', 'المباني والغرف')],
-              ['billing', t('Facturation', 'Billing', 'الفوترة')],
-              ['stock', t('Stock & Consommables', 'Stock & Consumables', 'المخزون والمستهلكات')],
-              ['modules', t('Spa & Événements', 'Spa & Events', 'السبا والفعاليات')],
+              ['forecast', t('Prédictions & Recommandations', 'Forecast & Actions', 'التوقعات والتوصيات')],
+              ['inventory', t('Chambres & Étages', 'Rooms & Floors', 'الغرف والطوابق')],
+              ['guests', t('Clients, Âges & Besoins', 'Guests, Ages & Needs', 'العملاء والأعمار والاحتياجات')],
+              ['extras', t('Extras, Formules & Additifs', 'Extras & Additives', 'الإضافات والوجبات')],
+              ['prevention', t('Pannes, Prévention & Doléances', 'Failures & Complaints', 'الأعطال والوقاية والشكاوى')],
+              ['billing_stock', t('Facturation & Stock', 'Billing & Stock', 'الفوترة والمخزون')],
             ] as Array<[SectionFilter, string]>
           ).map(([key, label]) => {
             const active = sectionFilter === key;
@@ -1286,41 +1392,699 @@ export const BookingAnalyticsView: React.FC = () => {
           })}
         </nav>
 
-        {/* Detailed PMS Sections (Preserving All Real Operational Analytics Cleanly) */}
+        {/* SECTION 1: PRÉDICTIONS, COMPARAISON & RECOMMANDATIONS GÉRANT */}
+        {showForecast && (
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6 xl:col-span-6">
+              <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <div className="flex items-center gap-3 min-w-0">
+                  <TrendingUp size={18} className="shrink-0 text-emerald-600 dark:text-[#67C380]" />
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                      {t('Prévisions d’occupation, CA & flux opérationnels', 'Occupancy, Revenue & Flow Forecasts', 'توقعات الإشغال والإيرادات والحركة')}
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                      {t(
+                        'Combinaison du carnet confirmé (On-Books) et de la vélocité historique récente.',
+                        'Combines confirmed on-books reservations with recent occupancy momentum.',
+                        'دمج الحجوزات المؤكدة مع وتيرة الإشغال التاريخية الحديثة.'
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {snapshot.forecasts.map((f) => (
+                  <div
+                    key={f.horizonDays}
+                    className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 dark:border-white/[0.06] dark:bg-white/[0.02]"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                          {f.label[language] || f.label.fr}
+                        </span>
+                        <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-[10px] font-semibold text-slate-700 tabular-nums dark:bg-white/[0.08] dark:text-[#D4D4DC]">
+                          {t('Confiance', 'Confidence', 'الثقة')} {f.confidencePct}%
+                        </span>
+                      </div>
+                      <div className="text-xs font-bold text-emerald-700 tabular-nums dark:text-[#67C380]">
+                        {fmtMoney(f.projectedRevenue, currency)}{' '}
+                        <span className="font-normal text-slate-500 dark:text-[#8E8E98]">
+                          ({t('confirmé', 'booked', 'مؤكد')}: {fmtMoney(f.confirmedRevenue, currency)})
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Stacked Confirmé + Projeté bar */}
+                    <div className="mt-2.5 h-2.5 overflow-hidden rounded-full bg-slate-200/90 dark:bg-white/[0.08]">
+                      <div className="relative flex h-full w-full">
+                        <div
+                          className="h-full bg-sky-500 dark:bg-[#87CEFA]"
+                          style={{ width: `${f.confirmedOccupancyPct}%` }}
+                        />
+                        <div
+                          className="h-full bg-[#D9FF54]/90"
+                          style={{ width: `${Math.max(0, f.projectedOccupancyPct - f.confirmedOccupancyPct)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 dark:text-[#9E9EA8] tabular-nums">
+                      <span>
+                        {t('Confirmé', 'Confirmed', 'مؤكد')}: <strong>{f.confirmedOccupancyPct}%</strong> ({f.confirmedNights}n) ·{' '}
+                        {t('Projeté', 'Projected', 'متوقع')}: <strong>{f.projectedOccupancyPct}%</strong> ({f.projectedNights}n)
+                      </span>
+                      <span>
+                        {f.expectedArrivals} {t('arrivées', 'arrivals', 'وصول')} · {f.expectedCheckouts}{' '}
+                        {t('départs', 'checkouts', 'مغادرة')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6 xl:col-span-6">
+              <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Lightbulb size={18} className="shrink-0 text-amber-500 dark:text-[#FFA84B]" />
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                      {t('Recommandations Gérant & Plan d’action', 'Manager Recommendations & Actions', 'توصيات المدير وخطة العمل')}
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                      {t(
+                        'Priorisées selon le rendement, les pannes récurrentes, les doléances et le stock.',
+                        'Prioritized across yield, recurring failures, guest complaints and stock runway.',
+                        'مرتبة حسب الأولوية: التسعير، الصيانة الوقائية، الشكاوى والمخزون.'
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {snapshot.recommendations.length > 0 ? (
+                <div className="space-y-3">
+                  {snapshot.recommendations.map((rec) => {
+                    const prioStyle =
+                      rec.priority === 'high'
+                        ? 'border-rose-200/80 bg-rose-50/70 dark:border-[#FF7369]/25 dark:bg-[#FF7369]/10'
+                        : rec.priority === 'medium'
+                        ? 'border-amber-200/80 bg-amber-50/70 dark:border-[#FFA84B]/25 dark:bg-[#FFA84B]/10'
+                        : 'border-emerald-200/80 bg-emerald-50/60 dark:border-[#67C380]/25 dark:bg-[#67C380]/10';
+                    const badgeStyle =
+                      rec.priority === 'high'
+                        ? 'bg-rose-600 text-white dark:bg-[#FF7369] dark:text-[#141416]'
+                        : rec.priority === 'medium'
+                        ? 'bg-amber-500 text-white dark:bg-[#FFA84B] dark:text-[#141416]'
+                        : 'bg-emerald-600 text-white dark:bg-[#67C380] dark:text-[#141416]';
+                    return (
+                      <article key={rec.id} className={`rounded-2xl border p-3.5 ${prioStyle}`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                            {rec.title[language] || rec.title.fr}
+                          </h3>
+                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold tabular-nums ${badgeStyle}`}>
+                            {rec.metricBadge}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-slate-700 dark:text-[#D4D4DC]">
+                          {rec.rationale[language] || rec.rationale.fr}
+                        </p>
+                        <p className="mt-1.5 text-[11px] font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                          → {rec.action[language] || rec.action.fr}
+                        </p>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 py-8 text-xs font-medium text-emerald-700 dark:text-[#67C380]">
+                  <CheckCircle2 size={16} />
+                  {t(
+                    'Aucun risque critique détecté. Exploitation équilibrée sur la période.',
+                    'No critical issues detected. Operations balanced across the period.',
+                    'لا توجد مخاطر حرجة. التشغيل متوازن في هذه الفترة.'
+                  )}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+        {/* SECTION 2: CHAMBRES UTILISÉES, FRÉQUENCES & ÉTAGE LE PLUS FRÉQUENTÉ */}
         {showInventory && (
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
-              <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
-                <Building2 size={18} className="shrink-0 text-sky-600 dark:text-[#87CEFA]" />
-                <div className="min-w-0">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+            {/* Room-by-Room Usage & Frequency */}
+            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6 xl:col-span-7">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <div className="flex items-center gap-3 min-w-0">
+                  <BedDouble size={18} className="shrink-0 text-sky-600 dark:text-[#87CEFA]" />
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                      {t('Chambres utilisées & fréquences d’occupation', 'Room Usage & Frequency Ranking', 'الغرف المستخدمة ومعدلات تكرارها')}
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                      {t('Séjours, nuitées, taux d’utilisation vs N-1, revenus et alertes par chambre.', 'Stays, nights, utilization vs prev. period, revenue & alerts per room.', 'الإقامات والليالي ومعدل الاستخدام مقابل الفترة السابقة.')}
+                    </p>
+                  </div>
+                </div>
+                <div className="inline-flex rounded-full border border-slate-200/90 p-0.5 dark:border-white/[0.08]">
+                  {(
+                    [
+                      ['most_used', t('Top utilisées', 'Most used', 'الأكثر استخداماً')],
+                      ['least_used', t('Sous-utilisées', 'Underused', 'الأقل استخداماً')],
+                      ['maintenance', t('Pannes/Alertes', 'Issues', 'الأعطال')],
+                    ] as Array<[RoomSortMode, string]>
+                  ).map(([mode, lbl]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setRoomSortMode(mode)}
+                      className={`min-h-[32px] rounded-full px-3 text-[11px] font-semibold transition-colors ${
+                        roomSortMode === mode
+                          ? 'bg-slate-900 text-white dark:bg-[#E8E8EC] dark:text-[#141416]'
+                          : 'text-slate-500 hover:text-slate-900 dark:text-[#8E8E98] dark:hover:text-white'
+                      }`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="max-h-96 space-y-2.5 overflow-y-auto pe-1">
+                {sortedRooms.map((rm) => {
+                  const deltaPts = rm.utilizationPct - rm.prevUtilizationPct;
+                  return (
+                    <div
+                      key={rm.roomId}
+                      className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3 dark:border-white/[0.05] dark:bg-white/[0.02]"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div className="min-w-0">
+                          <span className="font-bold text-slate-900 dark:text-white">{rm.roomName}</span>
+                          <span className="ms-2 text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                            {rm.roomType} · {t('Étage', 'Floor', 'طابق')} {rm.floor}
+                          </span>
+                          {rm.housekeepingStatus === 'out_of_order' && (
+                            <span className="ms-2 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:bg-rose-500/20 dark:text-[#FF7369]">
+                              HS / OOO
+                            </span>
+                          )}
+                          {rm.maintenanceCount > 0 && (
+                            <span className="ms-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-500/20 dark:text-[#FFA84B]">
+                              {rm.maintenanceCount} {t('maint.', 'maint.', 'صيانة')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 tabular-nums">
+                          <span className="text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                            {rm.staysCount} {t('séj.', 'stays', 'إقامة')} · {rm.nightsSold}n
+                          </span>
+                          <span className="font-bold text-slate-900 dark:text-white">{rm.utilizationPct}%</span>
+                          <span
+                            className={`text-[10px] font-bold ${
+                              deltaPts > 0
+                                ? 'text-emerald-600 dark:text-[#67C380]'
+                                : deltaPts < 0
+                                ? 'text-rose-600 dark:text-[#FF7369]'
+                                : 'text-slate-400'
+                            }`}
+                          >
+                            {deltaPts > 0 ? `+${deltaPts}` : deltaPts}pts
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-2">
+                        {progress(
+                          rm.utilizationPct,
+                          rm.utilizationPct >= 65
+                            ? 'bg-emerald-500 dark:bg-[#67C380]'
+                            : rm.utilizationPct >= 25
+                            ? 'bg-sky-500 dark:bg-[#87CEFA]'
+                            : 'bg-amber-500 dark:bg-[#FFA84B]'
+                        )}
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500 tabular-nums dark:text-[#8E8E98]">
+                        <span>{rm.building}</span>
+                        <span>
+                          {t('CA généré', 'Revenue', 'الإيراد')}: <strong className="text-slate-800 dark:text-[#E8E8EC]">{fmtMoney(rm.revenue, currency)}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {!sortedRooms.length && (
+                  <p className="py-8 text-center text-xs text-slate-500 dark:text-[#8E8E98]">
+                    {t('Aucune chambre enregistrée.', 'No rooms registered.', 'لا توجد غرف مسجلة.')}
+                  </p>
+                )}
+              </div>
+            </section>
+
+            {/* Floor Frequency & Building Performance */}
+            <div className="flex flex-col gap-5 xl:col-span-5">
+              <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
+                <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Layers size={18} className="shrink-0 text-indigo-600 dark:text-[#7178FF]" />
+                    <div className="min-w-0">
+                      <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                        {t('Étage le plus fréquenté & comparatif étages', 'Most Frequented Floor & Floor Mix', 'الطابق الأكثر إقبالاً وتوزيع الطوابق')}
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                        {t('Classement par nuitées vendues et évolution vs N-1.', 'Ranked by nights sold with period-over-period delta.', 'مرتب حسب الليالي المباعة والتطور.')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {snapshot.mostFrequentFloor && (
+                  <div className="mb-4 rounded-2xl border border-indigo-200/80 bg-indigo-50/70 p-3.5 dark:border-[#7178FF]/30 dark:bg-[#7178FF]/10">
+                    <div className="text-[11px] font-bold uppercase tracking-wide text-indigo-700 dark:text-[#87CEFA]">
+                      {t('Étage n°1 de la période', '#1 Most Frequented Floor', 'الطابق الأكثر تردداً')}
+                    </div>
+                    <div className="mt-1 flex items-baseline justify-between gap-2">
+                      <span className="text-sm font-bold text-slate-900 dark:text-white">
+                        {snapshot.mostFrequentFloor.building} · {t('Étage', 'Floor', 'طابق')} {snapshot.mostFrequentFloor.floor}
+                      </span>
+                      <span className="text-sm font-bold text-indigo-700 tabular-nums dark:text-[#D9FF54]">
+                        {snapshot.mostFrequentFloor.nightsSold} {t('nuitées', 'nights', 'ليالٍ')} ({snapshot.mostFrequentFloor.occupancyPct}%)
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  {snapshot.floorFrequencies.map((fl) => (
+                    <div key={fl.key} className="space-y-1">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="min-w-0 truncate font-medium text-slate-800 dark:text-[#E8E8EC]">
+                          {fl.building} · {t('Étage', 'Fl.', 'طابق')} {fl.floor}
+                        </span>
+                        <span className="shrink-0 font-semibold text-slate-900 tabular-nums dark:text-white">
+                          {fl.occupancyPct}% · {fl.nightsSold}n{' '}
+                          <span className="text-[10px] font-normal text-slate-400">
+                            ({fl.deltaPts > 0 ? `+${fl.deltaPts}` : fl.deltaPts}pts)
+                          </span>
+                        </span>
+                      </div>
+                      {progress(
+                        fl.occupancyPct,
+                        fl.isMostFrequent ? 'bg-indigo-600 dark:bg-[#7178FF]' : 'bg-sky-500 dark:bg-[#87CEFA]'
+                      )}
+                    </div>
+                  ))}
+                  {!snapshot.floorFrequencies.length && (
+                    <p className="py-4 text-center text-xs text-slate-500 dark:text-[#8E8E98]">
+                      {t('Aucun étage renseigné.', 'No floors recorded.', 'لا توجد طوابق مسجلة.')}
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
+                <div className="mb-3 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                  <Building2 size={18} className="shrink-0 text-emerald-600 dark:text-[#67C380]" />
                   <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
                     {t('Performance par bâtiment', 'Performance by building', 'الأداء حسب المبنى')}
                   </h2>
+                </div>
+                <div className="space-y-3">
+                  {buildingStats.map((b) => (
+                    <div key={b.id} className="space-y-1">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="truncate font-semibold text-slate-800 dark:text-[#E8E8EC]">{b.name}</span>
+                        <span className="shrink-0 font-bold text-slate-900 tabular-nums dark:text-white">
+                          {b.occupancy}% · {fmtMoney(b.revenue, currency)}
+                        </span>
+                      </div>
+                      {progress(b.occupancy, 'bg-emerald-500 dark:bg-[#67C380]')}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </div>
+        )}
+
+        {/* SECTION 3: TYPES DE CLIENTS, TRANCHES D'ÂGE & BESOINS / DEMANDES */}
+        {showGuests && (
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+            {/* Client Typology & Correlated Needs */}
+            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6 xl:col-span-5">
+              <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <Users size={18} className="shrink-0 text-indigo-600 dark:text-[#7178FF]" />
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                    {t('Typologie des clients & besoins par profil', 'Client Typology & Profile Needs', 'تصنيف العملاء واحتياجات كل فئة')}
+                  </h2>
                   <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
-                    {t('Capacité, occupation sur la période et chambres hors service.', 'Capacity, period occupancy and out-of-order rooms.', 'السعة والإشغال والغرف خارج الخدمة.')}
+                    {t('Part des séjours, dépense moyenne et demandes fréquentes.', 'Stay share, average spend and recurring requests.', 'نسبة الحجوزات ومتوسط الإنفاق والطلبات.')}
                   </p>
                 </div>
               </div>
-              {buildingStats.length ? (
-                <div className="space-y-4">
-                  {buildingStats.map((building) => (
-                    <div key={building.id} className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-3 text-xs">
-                        <span className="min-w-0 truncate font-semibold text-slate-800 dark:text-[#E8E8EC]">
-                          {building.name}
+
+              {snapshot.clientSegments.length > 0 ? (
+                <div className="space-y-3.5">
+                  {snapshot.clientSegments.map((seg) => (
+                    <div
+                      key={seg.id}
+                      className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3 dark:border-white/[0.05] dark:bg-white/[0.02]"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          {seg.label[language] || seg.label.fr}
                         </span>
-                        <span className="shrink-0 font-bold text-slate-900 tabular-nums dark:text-white">
-                          {building.occupancy}%
+                        <span className="font-semibold text-slate-800 tabular-nums dark:text-[#E8E8EC]">
+                          {seg.sharePct}% ({seg.count} · {t('N-1', 'Prev', 'السابق')}: {seg.prevCount})
                         </span>
                       </div>
-                      {progress(building.occupancy, 'bg-sky-500 dark:bg-[#87CEFA]')}
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-[#8E8E98]">
-                        <span className="tabular-nums">{building.total} {t('chambres', 'rooms', 'غرف')}</span>
-                        <span className="tabular-nums">{building.occupiedNow} {t('occupées aujourd’hui', 'occupied today', 'مشغولة اليوم')}</span>
-                        <span className="tabular-nums">{building.roomNights} {t('nuitées vendues', 'room nights', 'ليالٍ محجوزة')}</span>
-                        {building.outOfOrder > 0 && (
-                          <span className="font-semibold text-rose-600 dark:text-[#FF7369]">
-                            {building.outOfOrder} {t('hors service', 'out of order', 'خارج الخدمة')}
+                      <div className="mt-1.5">{progress(seg.sharePct, 'bg-indigo-500 dark:bg-[#7178FF]')}</div>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 tabular-nums dark:text-[#8E8E98]">
+                        <span>
+                          {seg.nightsSold}n · {t('Moy.', 'Avg', 'المتوسط')}: {seg.avgStayNights}j
+                        </span>
+                        <span>
+                          {t('Panier moy.', 'Avg spend', 'معدل الإنفاق')}: {fmtMoney(seg.avgSpend, currency)}
+                        </span>
+                      </div>
+                      {seg.topNeeds.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {seg.topNeeds.map((n) => (
+                            <span
+                              key={n.id}
+                              className="rounded-md bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 border border-slate-200/80 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-[#D4D4DC]"
+                            >
+                              {n.label} ({n.count})
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-8 text-center text-xs text-slate-500 dark:text-[#8E8E98]">
+                  {t('Aucune donnée client sur la période.', 'No guest data in this period.', 'لا توجد بيانات عملاء.')}
+                </p>
+              )}
+            </section>
+
+            {/* Age Brackets */}
+            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6 xl:col-span-3">
+              <div className="mb-4 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                  {t('Tranches d’âge des voyageurs', 'Guest Age Brackets', 'الفئات العمرية للنزلاء')}
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-[#8E8E98]">
+                  {t('Total', 'Total', 'الإجمالي')}: {snapshot.totalGuestsCount} {t('pers.', 'guests', 'شخص')} ·{' '}
+                  {snapshot.declaredAgeSharePct}% {t('renseigné', 'declared', 'محدد')}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {snapshot.ageBrackets.map((ab) => (
+                  <div key={ab.id} className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate font-medium text-slate-800 dark:text-[#E8E8EC]">
+                        {ab.label[language] || ab.label.fr}
+                      </span>
+                      <span className="shrink-0 font-bold text-slate-900 tabular-nums dark:text-white">
+                        {ab.peopleCount} ({ab.sharePct}%)
+                      </span>
+                    </div>
+                    {progress(
+                      ab.sharePct,
+                      ab.isEstimatedOrMissing
+                        ? 'bg-slate-400 dark:bg-[#6E717A]'
+                        : ab.id === '0-17'
+                        ? 'bg-emerald-500 dark:bg-[#67C380]'
+                        : 'bg-sky-500 dark:bg-[#87CEFA]'
+                    )}
+                    {ab.topNeeds.length > 0 && (
+                      <div className="text-[10px] text-slate-500 dark:text-[#8E8E98]">
+                        {t('Besoins', 'Needs', 'الاحتياجات')}: {ab.topNeeds.join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {!snapshot.ageBrackets.length && (
+                  <p className="py-6 text-center text-xs text-slate-500 dark:text-[#8E8E98]">
+                    {t('Aucun voyageur comptabilisé.', 'No travelers recorded.', 'لا يوجد مسافرون.')}
+                  </p>
+                )}
+              </div>
+              <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-400 dark:border-white/[0.06] dark:text-[#787882]">
+                {t(
+                  'Les enfants sont comptés automatiquement ; les tranches adultes proviennent du sélecteur optionnel du dossier.',
+                  'Children are counted automatically; adult brackets come from the optional booking age selector.',
+                  'يُحتسب الأطفال تلقائياً وتُستمد فئات البالغين من الحقل الاختياري في الحجز.'
+                )}
+              </p>
+            </section>
+
+            {/* Needs, Channels & Nationalities */}
+            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6 xl:col-span-4">
+              <div className="mb-4 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                  {t('Demandes, besoins, canaux & origines', 'Requests, Needs, Channels & Origins', 'الطلبات والقنوات والجنسيات')}
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-[#8E8E98]">
+                  {t('Options demandées, notes séjours et provenance.', 'Requested options, stay notes and booking sources.', 'الخيارات المطلوبة ومصادر الحجز.')}
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-[#8E8E98]">
+                    {t('Besoins & préférences exprimés', 'Expressed needs & preferences', 'الاحتياجات والتفضيلات')}
+                  </div>
+                  {snapshot.guestNeeds.length > 0 ? (
+                    <div className="space-y-2">
+                      {snapshot.guestNeeds.slice(0, 6).map((need) => (
+                        <div key={need.id} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="truncate text-slate-700 dark:text-[#D4D4DC]">
+                            {need.label[language] || need.label.fr}
+                          </span>
+                          <span className="shrink-0 font-semibold text-slate-900 tabular-nums dark:text-white">
+                            {need.count} ({need.sharePct}%)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 dark:text-[#787882]">
+                      {t('Aucune demande particulière détectée.', 'No special requests recorded.', 'لا توجد طلبات خاصة.')}
+                    </p>
+                  )}
+                </div>
+
+                <div className="border-t border-slate-100 pt-3 dark:border-white/[0.06]">
+                  <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-[#8E8E98]">
+                    {t('Canaux d’acquisition', 'Acquisition channels', 'قنوات الحجز')}
+                  </div>
+                  <div className="space-y-1.5">
+                    {snapshot.channelBreakdown.slice(0, 4).map((ch) => (
+                      <div key={ch.label} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="truncate font-medium text-slate-700 dark:text-[#D4D4DC]">{ch.label}</span>
+                        <span className="shrink-0 font-semibold text-slate-900 tabular-nums dark:text-white">
+                          {ch.sharePct}% · {fmtMoney(ch.revenue, currency)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-3 dark:border-white/[0.06]">
+                  <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-[#8E8E98]">
+                    {t('Nationalités principales', 'Top nationalities', 'الجنسيات الرئيسية')}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {snapshot.nationalityBreakdown.slice(0, 6).map((nat) => (
+                      <span
+                        key={nat.label}
+                        className="rounded-lg border border-slate-200/80 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 tabular-nums dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-[#D4D4DC]"
+                      >
+                        {nat.label} · {nat.count} ({nat.sharePct}%)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* SECTION 4: EXTRAS, FORMULES DE PENSION & ADDITIFS ALIMENTAIRES */}
+        {showExtras && (
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+            {/* Meal Plans */}
+            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
+              <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <UtensilsCrossed size={18} className="shrink-0 text-amber-500 dark:text-[#FFA84B]" />
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                    {t('Formules de pension', 'Meal plans mix', 'أنظمة الإقامة والوجبات')}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                    {t('Comparaison N vs N-1', 'Current vs previous period', 'مقارنة بالفترة السابقة')}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {snapshot.mealPlanStats.map((mp) => (
+                  <div key={mp.id} className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate font-semibold text-slate-800 dark:text-[#E8E8EC]">
+                        {mp.code} · {mp.label}
+                      </span>
+                      <span className="shrink-0 font-bold text-slate-900 tabular-nums dark:text-white">
+                        {mp.count} ({mp.sharePct}%) · {t('N-1', 'Prev', 'السابق')}: {mp.prevCount}
+                      </span>
+                    </div>
+                    {progress(mp.sharePct, 'bg-amber-500 dark:bg-[#FFA84B]')}
+                  </div>
+                ))}
+                {!snapshot.mealPlanStats.length && (
+                  <p className="py-4 text-xs text-slate-500 dark:text-[#8E8E98]">
+                    {t('Aucune formule enregistrée.', 'No meal plans recorded.', 'لا توجد بيانات وجبات.')}
+                  </p>
+                )}
+              </div>
+            </section>
+
+            {/* Paid Extras & Stay Add-ons */}
+            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
+              <div className="mb-4 flex items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <div className="flex items-center gap-3">
+                  <Sparkles size={18} className="shrink-0 text-emerald-600 dark:text-[#67C380]" />
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                      {t('Extras & options payantes', 'Paid Extras & Add-ons', 'الإضافات والخدمات المدفوعة')}
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                      {t('Taux de prise', 'Attach rate', 'نسبة الإقبال')}: {snapshot.extrasAttachRatePct}%
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 tabular-nums dark:bg-emerald-500/15 dark:text-[#67C380]">
+                  {fmtMoney(snapshot.totalEstimatedExtrasRevenue, currency)}
+                </span>
+              </div>
+
+              <div className="max-h-64 space-y-2.5 overflow-y-auto pe-1">
+                {snapshot.paidExtrasStats.map((ex) => (
+                  <div
+                    key={ex.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2 text-xs dark:border-white/[0.05] dark:bg-white/[0.02]"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-slate-800 dark:text-[#E8E8EC]">{ex.label}</div>
+                      <div className="text-[11px] text-slate-500 tabular-nums dark:text-[#8E8E98]">
+                        {ex.count} {t('séj.', 'stays', 'إقامة')} ({ex.attachRatePct}%) · {t('N-1', 'Prev', 'السابق')}: {ex.prevCount}
+                      </div>
+                    </div>
+                    <span className="shrink-0 font-bold text-slate-900 tabular-nums dark:text-white">
+                      {fmtMoney(ex.estimatedRevenue, currency)}
+                    </span>
+                  </div>
+                ))}
+                {!snapshot.paidExtrasStats.length && (
+                  <p className="py-6 text-center text-xs text-slate-500 dark:text-[#8E8E98]">
+                    {t('Aucun extra payant enregistré sur la période.', 'No paid extras recorded in this period.', 'لا توجد إضافات مدفوعة في هذه الفترة.')}
+                  </p>
+                )}
+              </div>
+            </section>
+
+            {/* Dietary Additives & Special Menus */}
+            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
+              <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <Sparkles size={18} className="shrink-0 text-sky-600 dark:text-[#87CEFA]" />
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                    {t('Additifs & régimes alimentaires', 'Dietary Additives & Special Menus', 'الإضافات الغذائية والأنظمة الخاصة')}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                    {t('Préférences cuisine & menus spéciaux.', 'Kitchen preferences and special dietary needs.', 'تفضيلات المطبخ والوجبات الخاصة.')}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {snapshot.dietaryAdditivesStats.map((diet) => (
+                  <div key={diet.id} className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate font-medium text-slate-800 dark:text-[#E8E8EC]">{diet.label}</span>
+                      <span className="shrink-0 font-bold text-slate-900 tabular-nums dark:text-white">
+                        {diet.count} ({diet.attachRatePct}%) · {t('N-1', 'Prev', 'السابق')}: {diet.prevCount}
+                      </span>
+                    </div>
+                    {progress(diet.attachRatePct, 'bg-sky-500 dark:bg-[#87CEFA]')}
+                  </div>
+                ))}
+                {!snapshot.dietaryAdditivesStats.length && (
+                  <p className="py-6 text-center text-xs text-slate-500 dark:text-[#8E8E98]">
+                    {t('Aucun régime ou additif spécifique saisi.', 'No specific dietary additives recorded.', 'لا توجد تفضيلات غذائية مسجلة.')}
+                  </p>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* SECTION 5: PRÉVENTION, PANNES TECHNIQUES, DOLÉANCES & RUPTURES STOCK */}
+        {showPrevention && (
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+            {/* Failures by Technical Trade & Recurring Risk Rooms */}
+            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6 xl:col-span-5">
+              <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <Wrench size={18} className="shrink-0 text-amber-500 dark:text-[#FFA84B]" />
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                    {t('Pannes par corps de métier & prévention', 'Failures by Trade & Prevention', 'الأعطال حسب التخصص والوقاية')}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                    {t('CVC, Plomberie, Électricité/Serrures, Menuiserie vs N-1.', 'HVAC, Plumbing, Electrical/Locks, Carpentry vs prev. period.', 'التكييف والسباكة والكهرباء والنجارة.')}
+                  </p>
+                </div>
+              </div>
+
+              {snapshot.failuresByTrade.length > 0 ? (
+                <div className="space-y-3">
+                  {snapshot.failuresByTrade.map((tr) => (
+                    <div
+                      key={tr.id}
+                      className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3 dark:border-white/[0.05] dark:bg-white/[0.02]"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          {tr.label[language] || tr.label.fr}
+                        </span>
+                        <span className="font-bold text-slate-900 tabular-nums dark:text-white">
+                          {tr.count}{' '}
+                          <span className="font-normal text-slate-500 dark:text-[#8E8E98]">
+                            ({t('N-1', 'Prev', 'السابق')}: {tr.prevCount})
+                          </span>
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] tabular-nums">
+                        {tr.openCount > 0 && (
+                          <span className="rounded bg-amber-100 px-2 py-0.5 font-semibold text-amber-800 dark:bg-amber-500/20 dark:text-[#FFA84B]">
+                            {tr.openCount} {t('en cours', 'open', 'قيد المعالجة')}
+                          </span>
+                        )}
+                        {tr.urgentCount > 0 && (
+                          <span className="rounded bg-rose-100 px-2 py-0.5 font-semibold text-rose-700 dark:bg-rose-500/20 dark:text-[#FF7369]">
+                            {tr.urgentCount} {t('urgentes', 'urgent', 'عاجلة')}
+                          </span>
+                        )}
+                        {tr.sampleRooms.length > 0 && (
+                          <span className="text-slate-500 dark:text-[#8E8E98]">
+                            {tr.sampleRooms.join(', ')}
                           </span>
                         )}
                       </div>
@@ -1328,337 +2092,397 @@ export const BookingAnalyticsView: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <p className="py-6 text-center text-xs text-slate-500 dark:text-[#8E8E98]">
-                  {t('Aucun bâtiment ou groupe de chambres configuré.', 'No building or room group configured.', 'لا توجد مبانٍ أو مجموعات غرف مهيأة.')}
-                </p>
-              )}
-            </section>
-
-            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
-              <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
-                <BedDouble size={18} className="shrink-0 text-emerald-600 dark:text-[#67C380]" />
-                <div className="min-w-0">
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
-                    {t('Utilisation des chambres & étages', 'Room & floor utilization', 'استخدام الغرف والطوابق')}
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
-                    {t('Occupation réelle aujourd’hui et répartition par type.', 'Actual occupancy today and breakdown by room type.', 'الإشغال الفعلي اليوم والتوزيع حسب نوع الغرفة.')}
-                  </p>
+                <div className="flex items-center gap-2 py-4 text-xs font-medium text-emerald-700 dark:text-[#67C380]">
+                  <CheckCircle2 size={16} />
+                  {t('Aucune panne technique enregistrée sur la période.', 'No technical failures recorded in this period.', 'لا توجد أعطال تقنية مسجلة.')}
                 </div>
-              </div>
-              <div className="space-y-3">
-                {roomTypes.map((item) => (
-                  <div key={item.type}>
-                    <div className="mb-1 flex justify-between gap-2 text-xs">
-                      <span className="truncate font-medium text-slate-700 dark:text-[#D4D4DC]">{item.type}</span>
-                      <span className="shrink-0 text-slate-500 tabular-nums dark:text-[#8E8E98]">
-                        {item.occupied}/{item.count}
-                      </span>
-                    </div>
-                    {progress(
-                      item.count ? (item.occupied / item.count) * 100 : 0,
-                      'bg-emerald-500 dark:bg-[#67C380]'
-                    )}
-                  </div>
-                ))}
-                {!roomTypes.length && (
-                  <p className="py-4 text-center text-xs text-slate-500 dark:text-[#8E8E98]">
-                    {t('Aucune chambre enregistrée.', 'No rooms registered.', 'لا توجد غرف مسجلة.')}
-                  </p>
-                )}
-              </div>
+              )}
 
-              {Object.values(floorStats).length > 0 && (
-                <div className="mt-5 border-t border-slate-100 pt-4 dark:border-white/[0.06]">
-                  <div className="mb-2 text-xs font-semibold text-slate-700 dark:text-[#D4D4DC]">
-                    {t('Détail par étage', 'Floor breakdown', 'التفصيل حسب الطابق')}
-                  </div>
-                  <div className="max-h-40 space-y-2 overflow-y-auto pe-1">
-                    {Object.values(floorStats).map((fl) => (
-                      <div key={fl.key} className="flex items-center justify-between gap-3 text-xs">
-                        <span className="min-w-0 truncate text-slate-600 dark:text-[#9E9EA8]">
-                          {fl.building} · {fl.floor}
-                        </span>
-                        <span className="shrink-0 font-semibold text-slate-900 tabular-nums dark:text-[#E8E8EC]">
-                          {fl.occupied}/{fl.total}
-                          {fl.outOfOrder > 0 ? ` (${fl.outOfOrder} HS)` : ''}
-                        </span>
+              {/* Recurring Risk Rooms */}
+              <div className="mt-5 border-t border-slate-100 pt-4 dark:border-white/[0.06]">
+                <div className="mb-2.5 flex items-center gap-2 text-xs font-bold text-slate-900 dark:text-white">
+                  <ShieldAlert size={15} className="text-rose-500 dark:text-[#FF7369]" />
+                  <span>{t('Chambres à surveiller (risque récurrent)', 'Recurring Risk Rooms', 'غرف تتطلب مراقبة وقائية')}</span>
+                </div>
+                {snapshot.recurringRiskRooms.length > 0 ? (
+                  <div className="space-y-2">
+                    {snapshot.recurringRiskRooms.slice(0, 5).map((rr) => (
+                      <div
+                        key={rr.roomKey}
+                        className="rounded-xl border border-rose-200/70 bg-rose-50/50 px-3 py-2 text-xs dark:border-[#FF7369]/25 dark:bg-[#FF7369]/10"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-slate-900 dark:text-white">{rr.roomLabel}</span>
+                          <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-bold text-white tabular-nums dark:bg-[#FF7369] dark:text-[#141416]">
+                            {rr.riskLevel === 'high' ? t('Risque élevé', 'High risk', 'خطر مرتفع') : t('À inspecter', 'Watch', 'للمتابعة')}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-600 dark:text-[#D4D4DC]">
+                          {rr.reasons.join(' · ')}
+                        </div>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                    {t('Aucune chambre en récurrence de pannes.', 'No rooms with recurring issues.', 'لا توجد غرف بأعطال متكررة.')}
+                  </p>
+                )}
+              </div>
+            </section>
 
-              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 pt-3 text-[11px] text-slate-500 dark:border-white/[0.06] dark:text-[#8E8E98]">
-                {[
-                  ['clean', t('Propres', 'Clean', 'نظيفة'), '#67C380'],
-                  ['cleaning', t('En nettoyage', 'Cleaning', 'قيد التنظيف'), '#87CEFA'],
-                  ['dirty', t('À nettoyer', 'Dirty', 'تحتاج تنظيفاً'), '#FFA84B'],
-                  ['out_of_order', t('Hors service', 'Out of order', 'خارج الخدمة'), '#6E717A'],
-                ].map(([key, label, dotColor]) => (
-                  <span key={key} className="inline-flex items-center gap-1.5 tabular-nums">
-                    <span
-                      aria-hidden="true"
-                      className="h-2 w-2 rounded-full"
-                      style={{ backgroundColor: dotColor }}
-                    />
-                    {label}: {housekeepingCounts[key] || 0}
-                  </span>
+            {/* Complaints, Guest Alerts & Forgotten Items */}
+            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6 xl:col-span-4">
+              <div className="mb-4 flex items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <div className="flex items-center gap-3">
+                  <MessageSquareWarning size={18} className="shrink-0 text-rose-500 dark:text-[#FF7369]" />
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                      {t('Doléances, alertes & incidents', 'Complaints, Alerts & Incidents', 'الشكاوى والتنبيهات والحوادث')}
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                      {t('Retours clients, erreurs serrures & objets consignés.', 'Guest alerts, lock errors & stored lost items.', 'تنبيهات النزلاء وأخطاء الأقفال والمفقودات.')}
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-800 tabular-nums dark:bg-white/[0.08] dark:text-white">
+                  {snapshot.complaintsAndAlerts.length}
+                </span>
+              </div>
+
+              <div className="max-h-80 space-y-2.5 overflow-y-auto pe-1">
+                {snapshot.complaintsAndAlerts.slice(0, 12).map((c) => (
+                  <div
+                    key={c.id}
+                    className={`rounded-xl border px-3 py-2 text-xs ${
+                      c.severity === 'high'
+                        ? 'border-rose-200/80 bg-rose-50/70 dark:border-[#FF7369]/30 dark:bg-[#FF7369]/10'
+                        : c.severity === 'medium'
+                        ? 'border-amber-200/80 bg-amber-50/60 dark:border-[#FFA84B]/25 dark:bg-[#FFA84B]/10'
+                        : 'border-slate-200/80 bg-slate-50/70 dark:border-white/[0.06] dark:bg-white/[0.03]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-bold text-slate-900 dark:text-white">
+                        {c.roomName} · {c.guestName}
+                      </span>
+                      <span className="shrink-0 text-[10px] text-slate-500 tabular-nums dark:text-[#8E8E98]">
+                        {c.date}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-700 dark:text-[#D4D4DC]">{c.text}</p>
+                  </div>
                 ))}
+                {!snapshot.complaintsAndAlerts.length && (
+                  <div className="flex items-center gap-2 py-8 text-xs font-medium text-emerald-700 dark:text-[#67C380]">
+                    <CheckCircle2 size={16} />
+                    {t('Aucune doléance ni alerte client sur la période.', 'No complaints or guest alerts in this period.', 'لا توجد شكاوى أو تنبيهات للنزلاء.')}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Stock Runway Prevention */}
+            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6 xl:col-span-3">
+              <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <AlertTriangle size={18} className="shrink-0 text-amber-500 dark:text-[#FFA84B]" />
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                    {t('Prévention ruptures stock', 'Stockout Prevention', 'توقعات نفاذ المخزون')}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                    {t('Autonomie estimée (j)', 'Estimated days left', 'الأيام المتبقية')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="max-h-80 space-y-2.5 overflow-y-auto pe-1">
+                {snapshot.stockRunway.slice(0, 8).map((sr) => (
+                  <div
+                    key={sr.itemId}
+                    className={`rounded-xl border px-3 py-2 text-xs ${
+                      sr.riskLevel === 'critical'
+                        ? 'border-rose-200/80 bg-rose-50/70 dark:border-[#FF7369]/30 dark:bg-[#FF7369]/10'
+                        : sr.riskLevel === 'warning'
+                        ? 'border-amber-200/80 bg-amber-50/60 dark:border-[#FFA84B]/25 dark:bg-[#FFA84B]/10'
+                        : 'border-slate-100 bg-slate-50/60 dark:border-white/[0.05] dark:bg-white/[0.02]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-semibold text-slate-900 dark:text-white">{sr.name}</span>
+                      <span className="shrink-0 font-bold tabular-nums text-slate-900 dark:text-white">
+                        {sr.daysRemaining !== null ? `${sr.daysRemaining}j` : `${sr.quantity} ${sr.unit}`}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500 tabular-nums dark:text-[#8E8E98]">
+                      <span>
+                        {sr.quantity}/{sr.minThreshold} {sr.unit}
+                      </span>
+                      <span>
+                        {sr.avgDailyBurn > 0 ? `-${sr.avgDailyBurn}/${t('j', 'd', 'ي')}` : sr.category}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {!snapshot.stockRunway.length && (
+                  <div className="flex items-center gap-2 py-8 text-xs font-medium text-emerald-700 dark:text-[#67C380]">
+                    <CheckCircle2 size={16} />
+                    {t('Tous les stocks sont confortables.', 'All stock levels are healthy.', 'جميع مستويات المخزون آمنة.')}
+                  </div>
+                )}
               </div>
             </section>
           </div>
         )}
 
-        {showBilling && (
-          <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
-              <div className="flex items-center gap-3">
-                <FileText size={18} className="shrink-0 text-indigo-600 dark:text-[#7178FF]" />
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
-                    {t('Facturation & encaissements', 'Billing & collections', 'الفوترة والتحصيل')}
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
-                    {t('Factures émises, devis, montants encaissés et soldes clients.', 'Issued invoices, quotations, collected amounts and customer balances.', 'الفواتير الصادرة وعروض الأسعار والمبالغ المحصلة وأرصدة العملاء.')}
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-3 text-xs text-slate-500 dark:text-[#8E8E98]">
-                <span className="tabular-nums">{paidInvoices.length} {t('soldées', 'paid', 'مسددة')}</span>
-                <span aria-hidden="true">·</span>
-                <span className="tabular-nums">{unpaidCount} {t('en attente', 'pending', 'معلقة')}</span>
-                <span aria-hidden="true">·</span>
-                <span className="tabular-nums">{quotes.length} {t('devis', 'quotes', 'عروض')}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <div>
-                <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Factures émises', 'Invoices', 'الفواتير')}</div>
-                <div className="mt-1 text-xl font-bold text-slate-900 tabular-nums dark:text-white">{issuedInvoices.length}</div>
-              </div>
-              <div>
-                <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Total facturé TTC', 'Total invoiced', 'إجمالي الفواتير')}</div>
-                <div className="mt-1 text-base font-bold text-slate-900 tabular-nums dark:text-white">{invoicedTotal}</div>
-              </div>
-              <div>
-                <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Acomptes encaissés', 'Collected', 'المحصل')}</div>
-                <div className="mt-1 text-base font-bold text-emerald-700 tabular-nums dark:text-[#67C380]">{collectedTotal}</div>
-              </div>
-              <div>
-                <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Reste à encaisser', 'Balance due', 'المتبقي')}</div>
-                <div className="mt-1 text-base font-bold text-rose-600 tabular-nums dark:text-[#FF7369]">{dueTotal}</div>
-              </div>
-            </div>
-
-            <div className="mt-4 max-h-56 divide-y divide-slate-100 overflow-y-auto dark:divide-white/[0.06]">
-              {periodInvoices
-                .slice()
-                .sort((a, b) => b.issueDate.localeCompare(a.issueDate))
-                .slice(0, 8)
-                .map((invoice) => (
-                  <div key={invoice.id} className="flex items-center justify-between gap-3 py-2.5 text-xs">
-                    <div className="min-w-0">
-                      <div className="truncate font-semibold text-slate-800 dark:text-[#E8E8EC]">
-                        {invoice.docNumber} · {invoice.customerName}
-                      </div>
-                      <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">
-                        {invoice.issueDate} · {invoice.status}
-                      </div>
-                    </div>
-                    <span className="shrink-0 font-semibold text-slate-900 tabular-nums dark:text-white">
-                      {fmtMoney(invoice.totalTTC, invoice.currency || currency)}
-                    </span>
-                  </div>
-                ))}
-              {!periodInvoices.length && (
-                <p className="pt-3 text-xs text-slate-500 dark:text-[#8E8E98]">
-                  {t('Aucun document de facturation sur cette période.', 'No billing documents in this period.', 'لا توجد مستندات فوترة خلال هذه الفترة.')}
-                </p>
-              )}
-            </div>
-          </section>
-        )}
-
-        {showStock && (
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        {/* SECTION 6: FACTURATION & MOUVEMENTS DE STOCK + MODULES */}
+        {showBillingStock && (
+          <>
             <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
-              <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
-                <Package size={18} className="shrink-0 text-amber-500 dark:text-[#FFA84B]" />
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
-                    {t('Consommables & mouvements', 'Consumables & movements', 'المستهلكات والحركات')}
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
-                    {t('Sorties, entrées et consommation déclarée sur la période.', 'Stock issues, receipts and recorded consumption.', 'الصادرات والواردات والاستهلاك المسجل.')}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mb-4 grid grid-cols-3 gap-3">
-                <div>
-                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Unités sorties', 'Issued', 'المصروف')}</div>
-                  <div className="mt-1 text-lg font-bold text-rose-600 tabular-nums dark:text-[#FF7369]">{consumedUnits}</div>
-                </div>
-                <div>
-                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Entrées', 'Received', 'الوارد')}</div>
-                  <div className="mt-1 text-lg font-bold text-emerald-700 tabular-nums dark:text-[#67C380]">
-                    {received.reduce((sum, movement) => sum + movement.delta, 0)}
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <div className="flex items-center gap-3">
+                  <FileText size={18} className="shrink-0 text-indigo-600 dark:text-[#7178FF]" />
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                      {t('Facturation & encaissements', 'Billing & collections', 'الفوترة والتحصيل')}
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                      {t('Factures émises, devis, montants encaissés et soldes clients.', 'Issued invoices, quotations, collected amounts and customer balances.', 'الفواتير الصادرة وعروض الأسعار والمبالغ المحصلة وأرصدة العملاء.')}
+                    </p>
                   </div>
                 </div>
-                <div>
-                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Coût sorties', 'Issue cost', 'تكلفة الصرف')}</div>
-                  <div className="mt-1 text-sm font-bold text-slate-900 tabular-nums dark:text-white">
-                    {fmtMoney(consumedValue, 'DZD')}
-                  </div>
+                <div className="flex flex-wrap gap-3 text-xs text-slate-500 dark:text-[#8E8E98]">
+                  <span className="tabular-nums">{paidInvoices.length} {t('soldées', 'paid', 'مسددة')}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="tabular-nums">{unpaidCount} {t('en attente', 'pending', 'معلقة')}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="tabular-nums">{quotes.length} {t('devis', 'quotes', 'عروض')}</span>
                 </div>
               </div>
 
-              <div className="mb-3 flex items-center justify-between text-xs text-slate-500 dark:text-[#8E8E98]">
-                <span>{t('Consommation saisie dans les tâches', 'Consumption in tasks', 'الاستهلاك في المهام')}</span>
-                <strong className="text-slate-900 tabular-nums dark:text-white">
-                  {taskConsumedUnits} {t('unités', 'units', 'وحدات')}
-                </strong>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div>
+                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Factures émises', 'Invoices', 'الفواتير')}</div>
+                  <div className="mt-1 text-xl font-bold text-slate-900 tabular-nums dark:text-white">{issuedInvoices.length}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Total facturé TTC', 'Total invoiced', 'إجمالي الفواتير')}</div>
+                  <div className="mt-1 text-base font-bold text-slate-900 tabular-nums dark:text-white">{invoicedTotal}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Acomptes encaissés', 'Collected', 'المحصل')}</div>
+                  <div className="mt-1 text-base font-bold text-emerald-700 tabular-nums dark:text-[#67C380]">{collectedTotal}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Reste à encaisser', 'Balance due', 'المتبقي')}</div>
+                  <div className="mt-1 text-base font-bold text-rose-600 tabular-nums dark:text-[#FF7369]">{dueTotal}</div>
+                </div>
               </div>
 
-              <div className="max-h-52 divide-y divide-slate-100 overflow-y-auto dark:divide-white/[0.06]">
-                {consumption
+              <div className="mt-4 max-h-56 divide-y divide-slate-100 overflow-y-auto dark:divide-white/[0.06]">
+                {periodInvoices
                   .slice()
-                  .reverse()
+                  .sort((a, b) => b.issueDate.localeCompare(a.issueDate))
                   .slice(0, 8)
-                  .map((movement) => (
-                    <div key={movement.id} className="flex items-center justify-between gap-3 py-2 text-xs">
+                  .map((invoice) => (
+                    <div key={invoice.id} className="flex items-center justify-between gap-3 py-2.5 text-xs">
                       <div className="min-w-0">
-                        <div className="truncate font-semibold text-slate-800 dark:text-[#E8E8EC]">{movement.itemName}</div>
-                        <div className="truncate text-[11px] text-slate-500 dark:text-[#8E8E98]">
-                          {movement.room || movement.reason} · {movement.timestamp.slice(0, 10)}
+                        <div className="truncate font-semibold text-slate-800 dark:text-[#E8E8EC]">
+                          {invoice.docNumber} · {invoice.customerName}
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                          {invoice.issueDate} · {invoice.status}
                         </div>
                       </div>
-                      <span className="shrink-0 font-bold text-rose-600 tabular-nums dark:text-[#FF7369]">
-                        −{Math.abs(movement.delta)}
+                      <span className="shrink-0 font-semibold text-slate-900 tabular-nums dark:text-white">
+                        {fmtMoney(invoice.totalTTC, invoice.currency || currency)}
                       </span>
                     </div>
                   ))}
-                {!consumption.length && (
-                  <p className="py-4 text-xs text-slate-500 dark:text-[#8E8E98]">
-                    {t('Aucune sortie de stock sur cette période.', 'No stock issues in this period.', 'لا توجد حركات صرف خلال هذه الفترة.')}
+                {!periodInvoices.length && (
+                  <p className="pt-3 text-xs text-slate-500 dark:text-[#8E8E98]">
+                    {t('Aucun document de facturation sur cette période.', 'No billing documents in this period.', 'لا توجد مستندات فوترة خلال هذه الفترة.')}
                   </p>
                 )}
               </div>
             </section>
 
-            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
-              <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
-                <Boxes size={18} className="shrink-0 text-amber-500 dark:text-[#FFA84B]" />
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
-                    {t('État du stock & catégories', 'Inventory status & categories', 'حالة المخزون والفئات')}
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
-                    {t('Valeur immobilisée, seuils d’alerte et répartition par catégorie.', 'Inventory value, low-stock alerts and breakdown.', 'قيمة المخزون وحدود التنبيه والتوزيع.')}
-                  </p>
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+              <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
+                <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                  <Package size={18} className="shrink-0 text-amber-500 dark:text-[#FFA84B]" />
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                      {t('Consommables & mouvements', 'Consumables & movements', 'المستهلكات والحركات')}
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                      {t('Sorties, entrées et consommation déclarée sur la période.', 'Stock issues, receipts and recorded consumption.', 'الصادرات والواردات والاستهلاك المسجل.')}
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              {stockCategoryStats.length > 0 && (
-                <div className="mb-4 space-y-2.5">
-                  {stockCategoryStats.slice(0, 4).map((item) => (
-                    <div key={item.category}>
-                      <div className="mb-1 flex justify-between gap-3 text-xs">
-                        <span className="min-w-0 truncate text-slate-700 dark:text-[#D4D4DC]">{item.category}</span>
-                        <span className="shrink-0 font-semibold text-slate-900 tabular-nums dark:text-white">
-                          {item.quantity} {item.low > 0 ? `(${item.low} !)` : ''}
+                <div className="mb-4 grid grid-cols-3 gap-3">
+                  <div>
+                    <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Unités sorties', 'Issued', 'المصروف')}</div>
+                    <div className="mt-1 text-lg font-bold text-rose-600 tabular-nums dark:text-[#FF7369]">{consumedUnits}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Entrées', 'Received', 'الوارد')}</div>
+                    <div className="mt-1 text-lg font-bold text-emerald-700 tabular-nums dark:text-[#67C380]">
+                      {received.reduce((sum, movement) => sum + movement.delta, 0)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">{t('Coût sorties', 'Issue cost', 'تكلفة الصرف')}</div>
+                    <div className="mt-1 text-sm font-bold text-slate-900 tabular-nums dark:text-white">
+                      {fmtMoney(consumedValue, 'DZD')}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-3 flex items-center justify-between text-xs text-slate-500 dark:text-[#8E8E98]">
+                  <span>{t('Consommation saisie dans les tâches', 'Consumption in tasks', 'الاستهلاك في المهام')}</span>
+                  <strong className="text-slate-900 tabular-nums dark:text-white">
+                    {taskConsumedUnits} {t('unités', 'units', 'وحدات')}
+                  </strong>
+                </div>
+
+                <div className="max-h-52 divide-y divide-slate-100 overflow-y-auto dark:divide-white/[0.06]">
+                  {consumption
+                    .slice()
+                    .reverse()
+                    .slice(0, 8)
+                    .map((movement) => (
+                      <div key={movement.id} className="flex items-center justify-between gap-3 py-2 text-xs">
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold text-slate-800 dark:text-[#E8E8EC]">{movement.itemName}</div>
+                          <div className="truncate text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                            {movement.room || movement.reason} · {movement.timestamp.slice(0, 10)}
+                          </div>
+                        </div>
+                        <span className="shrink-0 font-bold text-rose-600 tabular-nums dark:text-[#FF7369]">
+                          −{Math.abs(movement.delta)}
                         </span>
                       </div>
-                      {progress(
-                        stockCategoryStats[0].quantity ? (item.quantity / stockCategoryStats[0].quantity) * 100 : 0,
-                        'bg-amber-500 dark:bg-[#FFA84B]'
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  {!consumption.length && (
+                    <p className="py-4 text-xs text-slate-500 dark:text-[#8E8E98]">
+                      {t('Aucune sortie de stock sur cette période.', 'No stock issues in this period.', 'لا توجد حركات صرف خلال هذه الفترة.')}
+                    </p>
+                  )}
                 </div>
-              )}
+              </section>
 
-              {lowStock.length ? (
-                <div className="space-y-2 border-t border-slate-100 pt-3 dark:border-white/[0.06]">
-                  {lowStock.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2 dark:border-[#FFA84B]/25 dark:bg-[#FFA84B]/10"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-xs font-semibold text-slate-800 dark:text-[#F4F4F6]">{item.name}</div>
-                        <div className="text-[11px] text-amber-700 dark:text-[#FFA84B]">
-                          {item.category} · {t('Seuil', 'Threshold', 'الحد')}: {item.minThreshold}
+              <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
+                <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                  <Boxes size={18} className="shrink-0 text-amber-500 dark:text-[#FFA84B]" />
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                      {t('État du stock & catégories', 'Inventory status & categories', 'حالة المخزون والفئات')}
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                      {t('Valeur', 'Value', 'القيمة')}: {fmtMoney(stockValue, 'DZD')} · {lowStock.length}{' '}
+                      {t('sous seuil', 'low stock', 'تحت الحد')}
+                    </p>
+                  </div>
+                </div>
+
+                {stockCategoryStats.length > 0 && (
+                  <div className="mb-4 space-y-2.5">
+                    {stockCategoryStats.slice(0, 4).map((item) => (
+                      <div key={item.category}>
+                        <div className="mb-1 flex justify-between gap-3 text-xs">
+                          <span className="min-w-0 truncate text-slate-700 dark:text-[#D4D4DC]">{item.category}</span>
+                          <span className="shrink-0 font-semibold text-slate-900 tabular-nums dark:text-white">
+                            {item.quantity} {item.low > 0 ? `(${item.low} !)` : ''}
+                          </span>
                         </div>
+                        {progress(
+                          stockCategoryStats[0].quantity ? (item.quantity / stockCategoryStats[0].quantity) * 100 : 0,
+                          'bg-amber-500 dark:bg-[#FFA84B]'
+                        )}
                       </div>
-                      <div className="shrink-0 text-end">
-                        <div className="text-sm font-bold text-amber-700 tabular-nums dark:text-[#FFA84B]">
+                    ))}
+                  </div>
+                )}
+
+                {lowStock.length ? (
+                  <div className="space-y-2 border-t border-slate-100 pt-3 dark:border-white/[0.06]">
+                    {lowStock.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2 dark:border-[#FFA84B]/25 dark:bg-[#FFA84B]/10"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-semibold text-slate-800 dark:text-[#F4F4F6]">{item.name}</div>
+                          <div className="text-[11px] text-amber-700 dark:text-[#FFA84B]">
+                            {item.category} · {t('Seuil', 'Threshold', 'الحد')}: {item.minThreshold}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-end text-sm font-bold text-amber-700 tabular-nums dark:text-[#FFA84B]">
                           {item.quantity} {item.unit}
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 border-t border-slate-100 pt-3 text-xs font-medium text-emerald-700 dark:border-white/[0.06] dark:text-[#67C380]">
-                  <CheckCircle2 size={16} />
-                  {t('Aucun article sous le seuil minimum.', 'No items below minimum threshold.', 'لا توجد مواد دون الحد الأدنى.')}
-                </div>
-              )}
-            </section>
-          </div>
-        )}
-
-        {showModules && (
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
-              <div className="mb-3 flex items-center gap-3">
-                <Flower2 size={18} className="shrink-0 text-slate-500 dark:text-[#8E8E98]" />
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
-                  {t('Spa & bien-être', 'Spa & wellness', 'المنتجع الصحي والعافية')}
-                </h2>
-              </div>
-              <p className="text-xs font-semibold text-slate-700 dark:text-[#D4D4DC]">
-                {t('Source analytique non centralisée', 'Analytics source not centralized', 'مصدر التحليلات غير مركزي')}
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-[#8E8E98]">
-                {t(
-                  'Les rendez-vous Spa sont actuellement conservés dans l’état local de l’écran Spa. Aucun chiffre n’est affiché pour éviter de confondre les données de démonstration avec l’activité réelle.',
-                  'Spa appointments live in the Spa screen local state and are not exposed here. No figures are shown to avoid presenting demo data as real activity.',
-                  'مواعيد السبا محفوظة في الحالة المحلية لشاشة السبا ولا يتم عرض أرقام لتجنب الخلط مع بيانات العرض.'
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 border-t border-slate-100 pt-3 text-xs font-medium text-emerald-700 dark:border-white/[0.06] dark:text-[#67C380]">
+                    <CheckCircle2 size={16} />
+                    {t('Aucun article sous le seuil minimum.', 'No items below minimum threshold.', 'لا توجد مواد دون الحد الأدنى.')}
+                  </div>
                 )}
-              </p>
-            </section>
+              </section>
+            </div>
 
-            <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
-              <div className="mb-3 flex items-center gap-3">
-                <Presentation size={18} className="shrink-0 text-slate-500 dark:text-[#8E8E98]" />
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
-                  {t('Conférences & événements', 'Conferences & events', 'المؤتمرات والفعاليات')}
-                </h2>
-              </div>
-              <p className="text-xs font-semibold text-slate-700 dark:text-[#D4D4DC]">
-                {t('Module non disponible dans cette version', 'Module not available in this version', 'الوحدة غير متاحة في هذا الإصدار')}
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-[#8E8E98]">
-                {t(
-                  'Le dépôt ne contient pas encore de modèle de données ni de module de gestion des conférences. Ces indicateurs nécessiteront un vrai référentiel de salles, événements et réservations.',
-                  'The repository does not yet contain a conference data model or management module. These metrics require a real source for venues, events and bookings.',
-                  'لا يحتوي المشروع بعد على نموذج بيانات أو وحدة لإدارة المؤتمرات.'
-                )}
-              </p>
-            </section>
-          </div>
+            {/* External / Non-centralized Modules Transparency */}
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+              <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
+                <div className="mb-3 flex items-center gap-3">
+                  <Flower2 size={18} className="shrink-0 text-slate-500 dark:text-[#8E8E98]" />
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                    {t('Spa & bien-être', 'Spa & wellness', 'المنتجع الصحي والعافية')}
+                  </h2>
+                </div>
+                <p className="text-xs font-semibold text-slate-700 dark:text-[#D4D4DC]">
+                  {t('Source analytique non centralisée', 'Analytics source not centralized', 'مصدر التحليلات غير مركزي')}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-[#8E8E98]">
+                  {t(
+                    'Les rendez-vous Spa sont actuellement conservés dans l’état local de l’écran Spa. Aucun chiffre n’est affiché pour éviter de confondre les données de démonstration avec l’activité réelle.',
+                    'Spa appointments live in the Spa screen local state and are not exposed here. No figures are shown to avoid presenting demo data as real activity.',
+                    'مواعيد السبا محفوظة في الحالة المحلية لشاشة السبا ولا يتم عرض أرقام لتجنب الخلط مع بيانات العرض.'
+                  )}
+                </p>
+              </section>
+
+              <section className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
+                <div className="mb-3 flex items-center gap-3">
+                  <Presentation size={18} className="shrink-0 text-slate-500 dark:text-[#8E8E98]" />
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                    {t('Conférences & événements', 'Conferences & events', 'المؤتمرات والفعاليات')}
+                  </h2>
+                </div>
+                <p className="text-xs font-semibold text-slate-700 dark:text-[#D4D4DC]">
+                  {t('Module non disponible dans cette version', 'Module not available in this version', 'الوحدة غير متاحة في هذا الإصدار')}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-[#8E8E98]">
+                  {t(
+                    'Le dépôt ne contient pas encore de modèle de données ni de module de gestion des conférences. Ces indicateurs nécessiteront un vrai référentiel de salles, événements et réservations.',
+                    'The repository does not yet contain a conference data model or management module. These metrics require a real source for venues, events and bookings.',
+                    'لا يحتوي المشروع بعد على نموذج بيانات أو وحدة لإدارة المؤتمرات.'
+                  )}
+                </p>
+              </section>
+            </div>
+          </>
         )}
 
         <footer className="flex flex-wrap items-center justify-between gap-2 px-1 pb-2 text-[11px] text-slate-400 dark:text-[#6E6E78]">
           <span>
             {t(
-              'Source : réservations, inventaire, mouvements de stock, tâches PMS et documents de facturation locaux.',
-              'Sources: bookings, inventory, stock movements, PMS tasks and locally stored billing documents.',
-              'المصادر: الحجوزات والمخزون وحركاته ومهام النظام ومستندات الفوترة المحلية.'
+              'Source : réservations, chambres & étages, tâches PMS, mouvements de stock, journal d’audit et facturation locale.',
+              'Sources: bookings, rooms & floors, PMS tasks, stock movements, audit logs and local billing documents.',
+              'المصادر: الحجوزات والغرف والطوابق ومهام النظام وحركات المخزون وسجل الأحداث والفوترة المحلية.'
             )}
           </span>
           <span className="inline-flex items-center gap-1.5 tabular-nums">

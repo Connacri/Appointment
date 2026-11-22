@@ -2,7 +2,7 @@ export type DomainType =
   | 'hotel'
   | 'resort';
 
-export type UserRole = 'admin' | 'manager' | 'receptionist' | 'staff' | 'client';
+export type { UserRole, BuiltInRoleId, RoleDefinition, RolePermissions, RoleCategory, AppTabId, RoleIconName } from './roles';
 
 export interface ClientProfile {
   id: string;

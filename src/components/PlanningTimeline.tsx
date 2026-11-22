@@ -72,6 +72,7 @@ export const PlanningTimeline: React.FC = () => {
     setSearchQuery,
     currentDomain,
     currentRole,
+    activeRoleDefinition,
     resourceGroups,
     setSelectedBooking,
     setIsNewBookingModalOpen,
@@ -1051,7 +1052,7 @@ export const PlanningTimeline: React.FC = () => {
           )}
 
           {/* Batch Police Sheets Print Button (Today & Date Interval) */}
-          {currentRole !== 'client' && (
+          {!activeRoleDefinition.permissions.isClientPortal && (
             <button
               type="button"
               onClick={() => setIsPoliceBatchPrintOpen(true)}

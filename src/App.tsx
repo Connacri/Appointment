@@ -69,6 +69,9 @@ const HelpCenterView = React.lazy(() =>
 const VideoHubView = React.lazy(() =>
   import('./components/VideoHubView').then((m) => ({ default: m.VideoHubView })),
 );
+const RoleManagementView = React.lazy(() =>
+  import('./components/RoleManagementView').then((m) => ({ default: m.RoleManagementView })),
+);
 
 /**
  * Modals are code-split and only mounted while open, so their dependencies
@@ -330,6 +333,8 @@ const MainLayout: React.FC = () => {
                 {activeView === 'prousb' && <ProUsbLockSystemView />}
 
                 {activeView === 'spa' && <SpaManagementView />}
+
+                {activeView === 'roles' && <RoleManagementView />}
 
                 {activeView === 'help' && <HelpCenterView />}
 

@@ -48,7 +48,7 @@ export const MyBookingsView: React.FC = () => {
     setIsNewBookingModalOpen,
     activeSector,
     setActiveSector,
-    currentRole,
+    activeRoleDefinition,
     clientProfile,
     setClientProfile,
     setActiveQrPassBooking,
@@ -59,7 +59,7 @@ export const MyBookingsView: React.FC = () => {
     updateBookingStatus,
   } = useApp();
 
-  const isClientRole = currentRole === 'client';
+  const isClientRole = activeRoleDefinition.permissions.isClientPortal;
   const [filterTab, setFilterTab] = useState<'all' | 'confirmed' | 'checked_in' | 'cash_pending'>('all');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editName, setEditName] = useState(clientProfile.name);

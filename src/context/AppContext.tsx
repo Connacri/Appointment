@@ -81,6 +81,27 @@ import {
   type AudioFeedbackOptions,
 } from '../utils/audioFeedback';
 
+import type {
+  AppTabId,
+  RoleCategory,
+  RoleDefinition,
+  RoleIconName,
+  RolePermissions,
+  StoredRolesPayload,
+} from '../types/roles';
+import { BUILT_IN_ROLES } from '../data/roles';
+import {
+  isTabAllowedForRole,
+  loadStoredRolesPayload,
+  mergeRolesWithStoredConfig,
+  normalizeLegacyRoleId,
+  resolveFallbackTabForRole,
+  resolveRoleDefinition,
+  sanitizeAllowedTabs,
+  saveStoredRolesPayload,
+  slugifyCustomRoleId,
+} from '../utils/rolePermissions';
+
 export type ActiveAppView =
   | 'planning'
   | 'my_bookings'
@@ -96,6 +117,7 @@ export type ActiveAppView =
   | 'prousb'
   | 'spa'
   | 'events'
+  | 'roles'
   | 'help'
   | 'videos';
 
@@ -115,6 +137,31 @@ interface AppContextType {
   setCurrentDomain: (domain: DomainType) => void;
   currentRole: UserRole;
   setCurrentRole: (role: UserRole) => void;
+  roles: RoleDefinition[];
+  activeRoleDefinition: RoleDefinition;
+  createCustomRole: (input: {
+    name: string;
+    label?: { fr: string; en: string; ar: string };
+    description?: { fr: string; en: string; ar: string };
+    category: RoleCategory;
+    iconName: RoleIconName;
+    allowedTabs: AppTabId[];
+    permissions: RolePermissions;
+  }) => RoleDefinition;
+  updateRoleConfig: (
+    roleId: UserRole,
+    patch: {
+      label?: { fr: string; en: string; ar: string };
+      description?: { fr: string; en: string; ar: string };
+      category?: RoleCategory;
+      iconName?: RoleIconName;
+      allowedTabs?: AppTabId[];
+      permissions?: RolePermissions;
+    }
+  ) => void;
+  deleteCustomRole: (roleId: UserRole) => boolean;
+  resetBuiltInRoles: () => void;
+  hasCustomizedBuiltInRoles: boolean;
   clientProfile: ClientProfile;
   setClientProfile: (profile: ClientProfile) => void;
   activeSector: SectorType | 'all';
@@ -262,9 +309,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return 'hotel';
   });
 
+  const [storedRolesConfig, setStoredRolesConfig] = useState<StoredRolesPayload>(() => loadStoredRolesPayload());
+  const roles = useMemo(() => mergeRolesWithStoredConfig(storedRolesConfig), [storedRolesConfig]);
+  const hasCustomizedBuiltInRoles = Object.keys(storedRolesConfig.builtInOverrides || {}).length > 0;
+
   const [currentRole, setCurrentRoleState] = useState<UserRole>(() => {
-    return (localStorage.getItem('omnibook_role') as UserRole) || 'manager';
+    return normalizeLegacyRoleId(localStorage.getItem('omnibook_role'));
   });
+
+  const activeRoleDefinition = useMemo(
+    () => resolveRoleDefinition(roles, currentRole),
+    [roles, currentRole]
+  );
 
   const [persistedEventLogs, setPersistedEventLogs] = useState<EventLogEntry[]>([]);
   const [lockHistoryVersion, setLockHistoryVersion] = useState(0);
@@ -273,18 +329,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   activeWorkspaceIdRef.current = workspace.activeWorkspaceId;
   const currentRoleRef = useRef<UserRole>(currentRole);
   currentRoleRef.current = currentRole;
+  const rolesRef = useRef<RoleDefinition[]>(roles);
+  rolesRef.current = roles;
+  const languageRef = useRef<Language>(language);
+  languageRef.current = language;
   const clientProfileRef = useRef<ClientProfile | null>(null);
 
   const resolveActorLabel = useCallback((role: UserRole): string => {
     const profileName = clientProfileRef.current?.name?.trim();
     if (profileName) return profileName;
-    switch (role) {
-      case 'admin': return 'Admin';
-      case 'manager': return 'Gérant';
-      case 'receptionist': return 'Réception';
-      case 'staff': return 'Étage & Maintenance';
-      case 'client': return 'Client';
-    }
+    const roleDef = resolveRoleDefinition(rolesRef.current, role);
+    return roleDef.label[languageRef.current] || roleDef.label.fr || String(role);
   }, []);
 
   const logEvent = useCallback((input: NewEventLogInput): EventLogEntry => {
@@ -357,18 +412,155 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setCurrentRole = (r: UserRole) => {
-    if (r !== currentRole) {
+    const normalized = normalizeLegacyRoleId(r);
+    if (normalized !== currentRole) {
+      const targetDef = resolveRoleDefinition(rolesRef.current, normalized);
+      const prevDef = resolveRoleDefinition(rolesRef.current, currentRole);
       logEvent({
         category: 'system',
         action: 'system.role_changed',
         severity: 'info',
-        title: `Profil opérateur modifié · ${r}`,
-        description: `Changement de rôle session : ${currentRole} → ${r}.`,
-        changes: [{ field: 'Rôle', before: currentRole, after: r }],
+        title: `Profil opérateur modifié · ${targetDef.label.fr}`,
+        description: `Changement de rôle session : ${prevDef.label.fr} → ${targetDef.label.fr}.`,
+        changes: [{ field: 'Rôle', before: prevDef.label.fr, after: targetDef.label.fr }],
       });
     }
-    setCurrentRoleState(r);
-    localStorage.setItem('omnibook_role', r);
+    setCurrentRoleState(normalized);
+    localStorage.setItem('omnibook_role', normalized);
+  };
+
+  const persistRolesConfig = useCallback((updater: (prev: StoredRolesPayload) => StoredRolesPayload) => {
+    setStoredRolesConfig((prev) => {
+      const next = updater(prev);
+      saveStoredRolesPayload(next);
+      return next;
+    });
+  }, []);
+
+  const createCustomRole: AppContextType['createCustomRole'] = (input) => {
+    const trimmedName = input.name.trim() || 'Nouveau rôle';
+    const existingIds = rolesRef.current.map((r) => r.id);
+    const id = slugifyCustomRoleId(trimmedName, existingIds);
+    const allowedTabs = sanitizeAllowedTabs(input.allowedTabs);
+    if (input.permissions.canManageRoles && !allowedTabs.includes('roles')) {
+      allowedTabs.push('roles');
+    }
+    const newRole: RoleDefinition = {
+      id,
+      label: {
+        fr: input.label?.fr?.trim() || trimmedName,
+        en: input.label?.en?.trim() || trimmedName,
+        ar: input.label?.ar?.trim() || trimmedName,
+      },
+      description: {
+        fr: input.description?.fr?.trim() || '',
+        en: input.description?.en?.trim() || input.description?.fr?.trim() || '',
+        ar: input.description?.ar?.trim() || input.description?.fr?.trim() || '',
+      },
+      category: input.category,
+      iconName: input.iconName,
+      isBuiltIn: false,
+      allowedTabs,
+      permissions: { ...input.permissions },
+    };
+
+    persistRolesConfig((prev) => ({
+      ...prev,
+      customRoles: [...prev.customRoles, newRole],
+    }));
+
+    logEvent({
+      category: 'system',
+      action: 'system.role_created',
+      severity: 'success',
+      title: `Rôle personnalisé créé · ${newRole.label.fr}`,
+      description: `${newRole.allowedTabs.length} onglet(s) autorisé(s).`,
+    });
+
+    return newRole;
+  };
+
+  const updateRoleConfig: AppContextType['updateRoleConfig'] = (roleId, patch) => {
+    const isBuiltIn = BUILT_IN_ROLES.some((b) => b.id === roleId);
+    const sanitizedTabs = patch.allowedTabs ? sanitizeAllowedTabs(patch.allowedTabs) : undefined;
+    if (sanitizedTabs && patch.permissions?.canManageRoles && !sanitizedTabs.includes('roles')) {
+      sanitizedTabs.push('roles');
+    }
+
+    persistRolesConfig((prev) => {
+      if (isBuiltIn) {
+        return {
+          ...prev,
+          builtInOverrides: {
+            ...prev.builtInOverrides,
+            [roleId]: {
+              ...(prev.builtInOverrides[roleId] || {}),
+              ...(patch.label ? { label: patch.label } : {}),
+              ...(patch.description ? { description: patch.description } : {}),
+              ...(patch.category ? { category: patch.category } : {}),
+              ...(patch.iconName ? { iconName: patch.iconName } : {}),
+              ...(sanitizedTabs ? { allowedTabs: sanitizedTabs } : {}),
+              ...(patch.permissions ? { permissions: patch.permissions } : {}),
+            },
+          },
+        };
+      }
+      return {
+        ...prev,
+        customRoles: prev.customRoles.map((role) =>
+          role.id === roleId
+            ? {
+                ...role,
+                label: patch.label || role.label,
+                description: patch.description || role.description,
+                category: patch.category || role.category,
+                iconName: patch.iconName || role.iconName,
+                allowedTabs: sanitizedTabs || role.allowedTabs,
+                permissions: patch.permissions || role.permissions,
+              }
+            : role
+        ),
+      };
+    });
+
+    logEvent({
+      category: 'system',
+      action: 'system.role_updated',
+      severity: 'info',
+      title: `Permissions de rôle mises à jour · ${resolveRoleDefinition(rolesRef.current, roleId).label.fr}`,
+      description: sanitizedTabs ? `${sanitizedTabs.length} onglet(s) configuré(s).` : 'Configuration modifiée.',
+    });
+  };
+
+  const deleteCustomRole = (roleId: UserRole): boolean => {
+    if (BUILT_IN_ROLES.some((b) => b.id === roleId)) return false;
+    const target = rolesRef.current.find((r) => r.id === roleId);
+    if (!target) return false;
+
+    persistRolesConfig((prev) => ({
+      ...prev,
+      customRoles: prev.customRoles.filter((r) => r.id !== roleId),
+    }));
+
+    if (currentRole === roleId) {
+      setCurrentRole('manager');
+    }
+
+    logEvent({
+      category: 'system',
+      action: 'system.role_deleted',
+      severity: 'warn',
+      title: `Rôle personnalisé supprimé · ${target.label.fr}`,
+      description: `Le rôle ${target.label.fr} a été supprimé.`,
+    });
+    return true;
+  };
+
+  const resetBuiltInRoles = () => {
+    persistRolesConfig((prev) => ({
+      ...prev,
+      builtInOverrides: {},
+    }));
   };
 
   const [activeSector, setActiveSector] = useState<SectorType | 'all'>('all');
@@ -382,7 +574,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   });
-  const [activeView, setActiveView] = useState<ActiveAppView>('planning');
+  const [activeView, setActiveView] = useState<ActiveAppView>(() =>
+    resolveFallbackTabForRole(
+      resolveRoleDefinition(mergeRolesWithStoredConfig(loadStoredRolesPayload()), normalizeLegacyRoleId(localStorage.getItem('omnibook_role'))),
+      'planning'
+    )
+  );
+
+  // Ensure the active view is always permitted for the currently selected role.
+  useEffect(() => {
+    if (activeView !== 'help' && !isTabAllowedForRole(activeRoleDefinition, activeView)) {
+      setActiveView(resolveFallbackTabForRole(activeRoleDefinition, activeView));
+    }
+  }, [activeRoleDefinition, activeView]);
 
   // PMS Hotel Complex & Multi-Currency (DZD, EUR, USD, RMB, GBP, SAR)
   // Populated only from verified remote Supabase establishments (never fabricated locally).
@@ -1879,7 +2083,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               startDate: bookingData.startDate,
               endDate: bookingData.endDate,
             },
-            currentRole === 'manager' ? 'Admin' : 'Reception'
+            resolveRoleDefinition(rolesRef.current, currentRoleRef.current).category === 'management'
+              ? 'Admin'
+              : resolveActorLabel(currentRoleRef.current)
           )
           .then((card: any) => {
             console.log('[AppContext] Auto-issued proUSB guest card for booking', newBkg.id, card?.rawHex);
@@ -2254,7 +2460,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ...t,
             status,
             completedAt: status === 'done' ? nowStr : t.completedAt,
-            completedBy: status === 'done' ? (currentRole === 'staff' ? 'Amina (Staff)' : 'Gouvernante') : t.completedBy,
+            completedBy: status === 'done' ? resolveActorLabel(currentRoleRef.current) : t.completedBy,
           };
         }
         return t;
@@ -2414,7 +2620,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       delta,
       reason,
       room,
-      user: currentRole === 'staff' ? 'Amina (Étage)' : 'Gouvernante',
+      user: resolveActorLabel(currentRoleRef.current),
     };
 
     setStockMovements((prev) => {
@@ -2543,6 +2749,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsEstablishmentModalOpen(false);
     setActiveSector('all');
     setSearchQuery('');
+    setStoredRolesConfig({ customRoles: [], builtInOverrides: {} });
 
     // Remove every key owned by this application, including future proUSB keys.
     try {
@@ -2622,6 +2829,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentDomain,
         currentRole,
         setCurrentRole,
+        roles,
+        activeRoleDefinition,
+        createCustomRole,
+        updateRoleConfig,
+        deleteCustomRole,
+        resetBuiltInRoles,
+        hasCustomizedBuiltInRoles,
         clientProfile,
         setClientProfile,
         activeSector,

@@ -111,8 +111,8 @@ test('buildNormalizedOccupantList synchronizes Person #1, additional adults, chi
   assert.equal(legacySummary.children[0].documentType, 'family_book');
 });
 
-test('validateBookingOccupants enforces full details & coordinates for every adult and child when total occupants > 1', () => {
-  // Incomplete second adult & missing child
+test('validateBookingOccupants requires identity for every occupant and primary phone when total occupants > 1, while emails and companion phones remain optional', () => {
+  // Incomplete second adult & missing child: missing companion phone is allowed, malformed email & missing identity fail
   const missingResult = validateBookingOccupants(
     {
       ...baseBooking,
@@ -126,7 +126,7 @@ test('validateBookingOccupants enforces full details & coordinates for every adu
           isPrimary: true,
           fullName: 'Karim Benali',
           phone: '+213 550 11 22 33',
-          email: 'karim.benali@hotel-oran.dz',
+          email: '',
           documentType: 'cni',
           documentNumber: '1002003004',
         },
@@ -149,12 +149,13 @@ test('validateBookingOccupants enforces full details & coordinates for every adu
   assert.equal(missingResult.valid, false);
   assert.equal(missingResult.requiresAllOccupants, true);
   assert.equal(missingResult.totalPeople, 3);
-  assert.ok(missingResult.errors.some((e) => e.personIndex === 1 && e.field === 'phone'));
+  assert.equal(missingResult.errors.some((e) => e.personIndex === 0 && e.field === 'email'), false);
+  assert.equal(missingResult.errors.some((e) => e.personIndex === 1 && e.field === 'phone'), false);
   assert.ok(missingResult.errors.some((e) => e.personIndex === 1 && e.field === 'email'));
   assert.ok(missingResult.errors.some((e) => e.personIndex === 1 && e.field === 'documentNumber'));
   assert.ok(missingResult.errors.some((e) => e.personIndex === 2 && e.role === 'child' && e.field === 'fullName'));
-  assert.ok(missingResult.errors.some((e) => e.personIndex === 2 && e.role === 'child' && e.field === 'phone'));
-  assert.ok(missingResult.errors.some((e) => e.personIndex === 2 && e.role === 'child' && e.field === 'email'));
+  assert.equal(missingResult.errors.some((e) => e.personIndex === 2 && e.role === 'child' && e.field === 'phone'), false);
+  assert.equal(missingResult.errors.some((e) => e.personIndex === 2 && e.role === 'child' && e.field === 'email'), false);
   assert.ok(missingResult.errors.some((e) => e.personIndex === 2 && e.role === 'child' && e.field === 'documentNumber'));
 
   // Resort multi-person check (ar & en messages)
@@ -173,10 +174,48 @@ test('validateBookingOccupants enforces full details & coordinates for every adu
   assert.equal(resortInvalid.totalPeople, 3);
   assert.match(resortInvalid.summaryError ?? '', /3/);
 
-  // Complete 1-adult + 1-child booking succeeds
+  // Primary guest without phone in multi-person booking still fails
+  const missingPrimaryPhone = validateBookingOccupants(
+    {
+      ...baseBooking,
+      guestPhone: '',
+      adults: 2,
+      children: 0,
+      occupantsList: [
+        {
+          id: 'adult-1',
+          role: 'adult',
+          isAdult: true,
+          isPrimary: true,
+          fullName: 'Karim Benali',
+          phone: '',
+          email: '',
+          documentType: 'cni',
+          documentNumber: '1002003004',
+        },
+        {
+          id: 'adult-2',
+          role: 'adult',
+          isAdult: true,
+          isPrimary: false,
+          fullName: 'Salima Benali',
+          phone: '',
+          email: '',
+          documentType: 'cni',
+          documentNumber: '2003004005',
+        },
+      ],
+    },
+    'fr'
+  );
+  assert.equal(missingPrimaryPhone.valid, false);
+  assert.ok(missingPrimaryPhone.errors.some((e) => e.personIndex === 0 && e.field === 'phone'));
+
+  // Complete 1-adult + 1-child booking succeeds WITHOUT any email or child phone
   const validHotelFamily = validateBookingOccupants(
     {
       ...baseBooking,
+      guestEmail: '',
       adults: 1,
       children: 1,
       occupantsList: [
@@ -187,7 +226,7 @@ test('validateBookingOccupants enforces full details & coordinates for every adu
           isPrimary: true,
           fullName: 'Karim Benali',
           phone: '+213 550 11 22 33',
-          email: 'karim.benali@hotel-oran.dz',
+          email: '',
           documentType: 'cni',
           documentNumber: '1002003004',
         },
@@ -197,8 +236,8 @@ test('validateBookingOccupants enforces full details & coordinates for every adu
           isAdult: false,
           isPrimary: false,
           fullName: 'Adam Benali',
-          phone: '+213 550 11 22 33',
-          email: 'karim.benali@hotel-oran.dz',
+          phone: '',
+          email: '',
           documentType: 'passport',
           documentNumber: 'P1122334',
         },
@@ -471,6 +510,16 @@ test('search, eventLog diff and police sheet report handle multi-person co-occup
   const completeSheet = buildPoliceSheetDataFromBooking({ booking: multiBooking });
   assert.equal(getPoliceSheetMissingFields(completeSheet, 'fr').length, 0);
   assert.equal(getPoliceSheetCompanionMissingFields(completeSheet, 'fr').length, 0);
+
+  const sheetWithoutCompanionContacts = buildPoliceSheetDataFromBooking({
+    booking: {
+      ...multiBooking,
+      occupantsList: multiBooking.occupantsList?.map((occ) =>
+        occ.isPrimary ? { ...occ, email: '' } : { ...occ, phone: '', email: '' }
+      ),
+    },
+  });
+  assert.equal(getPoliceSheetCompanionMissingFields(sheetWithoutCompanionContacts, 'fr').length, 0);
 
   const incompleteSheet = buildPoliceSheetDataFromBooking({ booking: baseBooking });
   assert.equal(getPoliceSheetMissingFields(incompleteSheet, 'fr').length, 0);

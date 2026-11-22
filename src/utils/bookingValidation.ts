@@ -102,13 +102,12 @@ function personDisplayLabel(
 }
 
 /**
- * Enforces that when a reservation covers more than 1 person (`adults + children > 1`),
- * EVERY occupant (primary guest, every additional adult, and every child) has valid
- * full name, phone, email, and identity document details before saving locally or queuing
- * to the cloud Outbox.
- *
- * When a single-person reservation is submitted, only primary name presence and
- * optional contact syntax are checked (no fake coordinates are invented).
+ * Enforces occupant identity & contact rules before saving locally or queuing to the cloud Outbox:
+ * - Single-person booking: primary full name is required; phone and email are optional (syntax-checked if provided).
+ * - Multi-person booking (`adults + children > 1`):
+ *   - Every occupant (primary, additional adults, children) requires full name and identity document.
+ *   - Primary guest requires a valid phone number; additional adults (2+) and children do NOT require phone or email.
+ *   - Email is optional for everyone (syntax-checked only when provided).
  */
 export function validateBookingOccupants(
   booking: Partial<TimelineBooking>,
@@ -191,7 +190,23 @@ export function validateBookingOccupants(
       });
     }
 
-    if (!isValidPhoneNumber(person.phone)) {
+    const trimmedPhone = person.phone.trim();
+    if (person.isPrimary) {
+      if (!isValidPhoneNumber(trimmedPhone)) {
+        errors.push({
+          personIndex: index,
+          role: person.role,
+          isPrimary: person.isPrimary,
+          field: 'phone',
+          message:
+            language === 'ar'
+              ? `${label}: رقم هاتف صالح مطلوب.`
+              : language === 'en'
+              ? `${label}: valid phone number is required.`
+              : `${label} : un numéro de téléphone valide est obligatoire.`,
+        });
+      }
+    } else if (trimmedPhone && !isValidPhoneNumber(trimmedPhone)) {
       errors.push({
         personIndex: index,
         role: person.role,
@@ -199,14 +214,15 @@ export function validateBookingOccupants(
         field: 'phone',
         message:
           language === 'ar'
-            ? `${label}: رقم هاتف صالح مطلوب.`
+            ? `${label}: رقم الهاتف غير صالح.`
             : language === 'en'
-            ? `${label}: valid phone number is required.`
-            : `${label} : un numéro de téléphone valide est obligatoire.`,
+            ? `${label}: invalid phone number.`
+            : `${label} : le numéro de téléphone est invalide.`,
       });
     }
 
-    if (!isValidEmailAddress(person.email)) {
+    const trimmedEmail = person.email.trim();
+    if (trimmedEmail && !isValidEmailAddress(trimmedEmail)) {
       errors.push({
         personIndex: index,
         role: person.role,
@@ -214,10 +230,10 @@ export function validateBookingOccupants(
         field: 'email',
         message:
           language === 'ar'
-            ? `${label}: بريد إلكتروني صالح مطلوب.`
+            ? `${label}: صيغة البريد الإلكتروني غير صالحة.`
             : language === 'en'
-            ? `${label}: valid email address is required.`
-            : `${label} : une adresse e-mail valide est obligatoire.`,
+            ? `${label}: invalid email address format.`
+            : `${label} : le format de l’adresse e-mail est invalide.`,
       });
     }
 
@@ -274,10 +290,10 @@ export function validateBookingOccupants(
   const summaryError =
     errors.length > 0
       ? language === 'ar'
-        ? `حجز متعدد الأشخاص (${summary.totalOccupants}): يجب إكمال بيانات ووسائل تواصل جميع الأشخاص. ${firstMsg}`
+        ? `حجز متعدد الأشخاص (${summary.totalOccupants}): يجب إكمال هوية كل نزيل وهاتف النزيل الرئيسي. ${firstMsg}`
         : language === 'en'
-        ? `Multi-person booking (${summary.totalOccupants} guests): every person's details and contact info must be filled in. ${firstMsg}`
-        : `Réservation multi-personnes (${summary.totalOccupants} personnes) : tous les détails et coordonnées de chaque personne doivent être renseignés. ${firstMsg}`
+        ? `Multi-person booking (${summary.totalOccupants} guests): complete each occupant's identity and the primary guest's phone. ${firstMsg}`
+        : `Réservation multi-personnes (${summary.totalOccupants} personnes) : complétez l’identité de chaque occupant et le téléphone du titulaire. ${firstMsg}`
       : undefined;
 
   return {
