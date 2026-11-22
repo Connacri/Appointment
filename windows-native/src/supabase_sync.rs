@@ -223,9 +223,20 @@ pub fn pull_bookings(
 
         for row in &rows {
             let remote = parse_remote_booking(row, &expected_workspace)?;
-            let tuple = (remote.updated_at.clone(), remote.id.clone());
+            let tuple = (
+                remote.updated_at.clone(),
+                remote.id.clone(),
+                remote.server_version,
+            );
             if let Some(previous) = page_cursor.as_ref() {
-                if !cursor_is_after(&tuple.0, &tuple.1, &previous.updated_at, &previous.entity_id) {
+                if !cursor_is_after(
+                    &tuple.0,
+                    &tuple.1,
+                    tuple.2,
+                    &previous.updated_at,
+                    &previous.entity_id,
+                    previous.server_version,
+                ) {
                     return Err(
                         "Supabase booking pull page is not strictly ordered after the saved cursor."
                             .into(),
@@ -233,7 +244,14 @@ pub fn pull_bookings(
                 }
             }
             if let Some(previous) = last_cursor.as_ref() {
-                if !cursor_is_after(&tuple.0, &tuple.1, &previous.0, &previous.1) {
+                if !cursor_is_after(
+                    &tuple.0,
+                    &tuple.1,
+                    tuple.2,
+                    &previous.0,
+                    &previous.1,
+                    previous.2,
+                ) {
                     return Err(
                         "Supabase booking pull page contains duplicate or out-of-order rows."
                             .into(),
@@ -265,7 +283,7 @@ pub fn pull_bookings(
             last_cursor = Some(tuple);
         }
 
-        let Some((updated_at, entity_id)) = last_cursor else {
+        let Some((updated_at, entity_id, server_version)) = last_cursor else {
             break;
         };
         database
@@ -276,6 +294,7 @@ pub fn pull_bookings(
                 "bookings",
                 &updated_at,
                 &entity_id,
+                server_version,
             )
             .map_err(|error| format!("Could not persist the booking sync cursor: {error}"))?;
         summary.pages += 1;
@@ -382,14 +401,16 @@ fn booking_pull_path(
     limit: u32,
 ) -> String {
     let mut path = format!(
-        "/rest/v1/bookings?select=*&workspace_id=eq.{workspace_id}&order=updated_at.asc,id.asc&limit={}",
+        "/rest/v1/bookings?select=*&workspace_id=eq.{workspace_id}&order=updated_at.asc,id.asc,version.asc&limit={}",
         limit.clamp(1, 200)
     );
     if let Some(cursor) = cursor {
         let updated_at = encode_query_component(&cursor.updated_at);
         path.push_str(&format!(
-            "&or=%28updated_at.gt.{updated_at},and%28updated_at.eq.{updated_at},id.gt.{}%29%29",
-            cursor.entity_id
+            "&or=%28updated_at.gt.{updated_at},and%28updated_at.eq.{updated_at},id.gt.{}%29,and%28updated_at.eq.{updated_at},id.eq.{},version.gt.{}%29%29",
+            cursor.entity_id,
+            cursor.entity_id,
+            cursor.server_version
         ));
     }
     path
@@ -411,11 +432,16 @@ fn encode_query_component(value: &str) -> String {
 fn cursor_is_after(
     candidate_updated_at: &str,
     candidate_id: &str,
+    candidate_version: i64,
     previous_updated_at: &str,
     previous_id: &str,
+    previous_version: i64,
 ) -> bool {
     candidate_updated_at > previous_updated_at
         || (candidate_updated_at == previous_updated_at && candidate_id > previous_id)
+        || (candidate_updated_at == previous_updated_at
+            && candidate_id == previous_id
+            && candidate_version > previous_version)
 }
 
 fn push_failure_message(failure: PushFailure) -> String {
