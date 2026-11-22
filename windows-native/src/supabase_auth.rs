@@ -32,6 +32,7 @@ pub enum AuthOutcome {
 
 pub struct SupabaseAuthClient {
     transport: WinHttpTransport,
+    project_scope: String,
     publishable_key: String,
     session: Option<AuthSession>,
 }
@@ -43,17 +44,26 @@ impl SupabaseAuthClient {
         {
             return Err("A Supabase publishable key is required.".into());
         }
+        let transport = WinHttpTransport::new(base_url)?;
+        let project_scope = transport.project_scope();
         Ok(Self {
-            transport: WinHttpTransport::new(base_url)?,
+            transport,
+            project_scope,
             publishable_key: publishable_key.trim().to_string(),
             session: None,
         })
     }
     pub fn from_environment() -> Result<Self, String> {
-        let url = std::env::var("APPOINTMENT_SUPABASE_URL")
-            .unwrap_or_else(|_| DEFAULT_SUPABASE_URL.to_string());
-        let key = std::env::var("APPOINTMENT_SUPABASE_PUBLISHABLE_KEY")
-            .unwrap_or_else(|_| DEFAULT_SUPABASE_PUBLISHABLE_KEY.to_string());
+        let custom_url = std::env::var("APPOINTMENT_SUPABASE_URL").ok();
+        let custom_key = std::env::var("APPOINTMENT_SUPABASE_PUBLISHABLE_KEY").ok();
+        let (url, key) = match (custom_url, custom_key) {
+            (Some(url), Some(key)) => (url, key),
+            (Some(_), None) => return Err(
+                "APPOINTMENT_SUPABASE_URL requires its matching APPOINTMENT_SUPABASE_PUBLISHABLE_KEY.".into()
+            ),
+            (None, Some(key)) => (DEFAULT_SUPABASE_URL.to_string(), key),
+            (None, None) => (DEFAULT_SUPABASE_URL.to_string(), DEFAULT_SUPABASE_PUBLISHABLE_KEY.to_string()),
+        };
         Self::new(&url, &key)
     }
     pub fn session(&self) -> Option<&AuthSession> {
@@ -75,12 +85,12 @@ impl SupabaseAuthClient {
         self.install_token_response(response, None)
     }
     pub fn restore_session(&mut self) -> Result<Option<&AuthSession>, String> {
-        let Some(user_id) = credential_vault::read_active_user_id()? else {
+        let Some(user_id) = credential_vault::read_active_user_id(&self.project_scope)? else {
             self.session = None;
             return Ok(None);
         };
-        let Some(refresh_token) = credential_vault::read_refresh_token(&user_id)? else {
-            credential_vault::delete_active_user_id()?;
+        let Some(refresh_token) = credential_vault::read_refresh_token(&self.project_scope, &user_id)? else {
+            credential_vault::delete_active_user_id(&self.project_scope)?;
             self.session = None;
             return Ok(None);
         };
@@ -107,7 +117,7 @@ impl SupabaseAuthClient {
             .as_ref()
             .map(|session| session.user_id.clone())
             .ok_or_else(|| "No authenticated session is available.".to_string())?;
-        let refresh_token = credential_vault::read_refresh_token(&user_id)?
+        let refresh_token = credential_vault::read_refresh_token(&self.project_scope, &user_id)?
             .ok_or_else(|| "The active Supabase refresh token is missing.".to_string())?;
         let body = json!({ "refresh_token": refresh_token });
         let response = self.post("/auth/v1/token?grant_type=refresh_token", &body, None)?;
@@ -119,11 +129,10 @@ impl SupabaseAuthClient {
         }
     }
     pub fn sign_out(&mut self) -> Result<(), String> {
-        let user_id = self
-            .session
-            .as_ref()
-            .map(|session| session.user_id.clone())
-            .or(credential_vault::read_active_user_id()?);
+        let user_id = match self.session.as_ref() {
+            Some(session) => Some(session.user_id.clone()),
+            None => credential_vault::read_active_user_id(&self.project_scope)?,
+        };
         let remote_result = if let Some(session) = self.session.as_ref() {
             self.post_empty("/auth/v1/logout", Some(&session.access_token))
                 .map(|_| ())
@@ -132,8 +141,9 @@ impl SupabaseAuthClient {
         };
         let local_result = (|| -> Result<(), String> {
             if let Some(id) = user_id {
-                credential_vault::delete_refresh_token(&id)?;
-                credential_vault::delete_active_user_id()?;
+                credential_vault::delete_refresh_token(&self.project_scope, &id)?;
+            }
+            credential_vault::delete_active_user_id(&self.project_scope)?;
             }
             Ok(())
         })();
@@ -148,7 +158,7 @@ impl SupabaseAuthClient {
     ) -> Result<AuthOutcome, String> {
         let payload: TokenResponse = parse_response(response)?;
         let Some(access_token) = payload.access_token else {
-            self.session = None;
+            // Confirmation-only signup must not discard an existing authenticated session.
             return Ok(AuthOutcome::EmailConfirmationRequired {
                 user_id: payload.user.map(|user| user.id),
             });
@@ -173,8 +183,8 @@ impl SupabaseAuthClient {
         let expires_at = payload
             .expires_at
             .unwrap_or_else(|| now.saturating_add(expires_in));
-        credential_vault::store_refresh_token(&user_id, &refresh_token)?;
-        credential_vault::store_active_user_id(&user_id)?;
+        credential_vault::store_refresh_token(&self.project_scope, &user_id, &refresh_token)?;
+        credential_vault::store_active_user_id(&self.project_scope, &user_id)?;
         let session = AuthSession {
             user_id,
             email: user.email,
