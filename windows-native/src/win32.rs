@@ -126,9 +126,17 @@ enum AuthTask {
 }
 enum AuthUiOutcome {
     NoSession,
-    Restored { user_id: String, email: Option<String> },
-    Authenticated { user_id: String, email: Option<String> },
-    ConfirmationRequired { email: String },
+    Restored {
+        user_id: String,
+        email: Option<String>,
+    },
+    Authenticated {
+        user_id: String,
+        email: Option<String>,
+    },
+    ConfirmationRequired {
+        email: String,
+    },
     SignedOut,
 }
 struct WorkerCompletion {
@@ -291,7 +299,10 @@ unsafe extern "system" fn window_proc(
             match completion.result {
                 Ok(AuthUiOutcome::NoSession) => {
                     show_login(hwnd, true);
-                    set_status(hwnd, "Aucune session enregistrée. Connectez-vous pour continuer.");
+                    set_status(
+                        hwnd,
+                        "Aucune session enregistrée. Connectez-vous pour continuer.",
+                    );
                 }
                 Ok(AuthUiOutcome::Restored { user_id, email })
                 | Ok(AuthUiOutcome::Authenticated { user_id, email }) => {
@@ -309,12 +320,17 @@ unsafe extern "system" fn window_proc(
                     show_login(hwnd, true);
                     set_status(
                         hwnd,
-                        &format!("Compte créé pour {email}. Vérifiez votre e-mail avant la connexion."),
+                        &format!(
+                            "Compte créé pour {email}. Vérifiez votre e-mail avant la connexion."
+                        ),
                     );
                 }
                 Ok(AuthUiOutcome::SignedOut) => {
                     show_login(hwnd, true);
-                    set_status(hwnd, "Session fermée. Les données locales restent sur cet appareil.");
+                    set_status(
+                        hwnd,
+                        "Session fermée. Les données locales restent sur cet appareil.",
+                    );
                 }
                 Err(error) => {
                     show_login(hwnd, true);
@@ -400,7 +416,10 @@ fn start_auth_task(hwnd: Hwnd, task: AuthTask, client: Option<SupabaseAuthClient
             state.authenticated = false;
         }
         set_busy(hwnd, false);
-        set_status(hwnd, "Impossible de démarrer le processus d’authentification.");
+        set_status(
+            hwnd,
+            "Impossible de démarrer le processus d’authentification.",
+        );
     }
 }
 
@@ -422,14 +441,7 @@ fn map_auth_outcome(
 
 fn post_completion(hwnd_value: usize, completion: WorkerCompletion) {
     let raw = Box::into_raw(Box::new(completion));
-    let posted = unsafe {
-        PostMessageW(
-            hwnd_value as Hwnd,
-            WM_APP_AUTH_COMPLETE,
-            raw as usize,
-            0,
-        )
-    };
+    let posted = unsafe { PostMessageW(hwnd_value as Hwnd, WM_APP_AUTH_COMPLETE, raw as usize, 0) };
     if posted == 0 {
         unsafe { drop(Box::from_raw(raw)) };
     }
@@ -473,7 +485,15 @@ unsafe fn create_status_label(parent: Hwnd, x: i32, y: i32, width: i32, height: 
     );
 }
 
-unsafe fn create_edit(parent: Hwnd, id: usize, password: bool, x: i32, y: i32, width: i32, height: i32) {
+unsafe fn create_edit(
+    parent: Hwnd,
+    id: usize,
+    password: bool,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+) {
     let class = wide("EDIT");
     let mut style = WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL;
     if password {
