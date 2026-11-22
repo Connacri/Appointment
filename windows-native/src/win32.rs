@@ -317,7 +317,7 @@ unsafe extern "system" fn window_proc(
                     if let Some(workspace_id) = workspace_id {
                         start_auth_task_from_state(
                             hwnd,
-                            AuthTask::PushBookings {
+                            AuthTask::SyncBookings {
                                 workspace_id,
                                 limit: 50,
                             },
