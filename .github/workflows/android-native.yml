@@ -6,6 +6,7 @@ on:
     paths:
       - "android/**"
       - "src/App.tsx"
+      - "src/components/LanDiscoveryStatus.tsx"
       - "src/services/p2p/**"
       - "capacitor.config.json"
       - "package.json"
