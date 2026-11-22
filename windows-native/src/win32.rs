@@ -243,8 +243,13 @@ unsafe extern "system" fn window_proc(
             create_button(hwnd, "Se connecter", ID_SIGN_IN, 44, 318, 180, 42);
             create_button(hwnd, "Créer un compte", ID_SIGN_UP, 238, 318, 196, 42);
             create_button(hwnd, "Se déconnecter", ID_SIGN_OUT, 44, 318, 180, 42);
-            create_label(hwnd, "Restauration de session en cours…", 44, 394, 760, 58);
+            create_status_label(hwnd, 44, 394, 760, 58);
             show_control(hwnd, ID_SIGN_OUT, false);
+            {
+                let mut state = app_state().lock().unwrap_or_else(|e| e.into_inner());
+                state.busy = true;
+            }
+            set_busy(hwnd, true);
             set_status(hwnd, "Restauration de session en cours…");
             start_auth_task(hwnd, AuthTask::Restore, None);
             0
@@ -278,10 +283,11 @@ unsafe extern "system" fn window_proc(
                 state.client = completion.client;
                 state.busy = false;
                 state.authenticated = matches!(
-                    completion.result,
+                    &completion.result,
                     Ok(AuthUiOutcome::Restored { .. } | AuthUiOutcome::Authenticated { .. })
                 );
             }
+            set_busy(hwnd, false);
             match completion.result {
                 Ok(AuthUiOutcome::NoSession) => {
                     show_login(hwnd, true);
@@ -443,6 +449,25 @@ unsafe fn create_label(parent: Hwnd, text: &str, x: i32, y: i32, width: i32, hei
         height,
         parent,
         null_mut(),
+        GetModuleHandleW(null()),
+        null_mut(),
+    );
+}
+
+unsafe fn create_status_label(parent: Hwnd, x: i32, y: i32, width: i32, height: i32) {
+    let class = wide("STATIC");
+    let text = wide("Initialisation…");
+    CreateWindowExW(
+        0,
+        class.as_ptr(),
+        text.as_ptr(),
+        WS_CHILD | WS_VISIBLE,
+        x,
+        y,
+        width,
+        height,
+        parent,
+        ID_STATUS as Hmenu,
         GetModuleHandleW(null()),
         null_mut(),
     );
