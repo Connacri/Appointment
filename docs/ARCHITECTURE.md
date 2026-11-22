@@ -121,8 +121,9 @@ exchange, not database-file sharing.
   peerFound, peerExpired and discoveryError events; discovery pauses while
   the Android Activity is backgrounded to avoid a persistent battery/network worker.
 - Android discovery requires local-network permission on OS versions that enforce it:
-  Android 16 compatibility-mode testing uses the Nearby devices grant; Android 17+
-  requires the ACCESS_LOCAL_NETWORK runtime permission. The plugin also acquires
+  Android 16 compatibility mode requests Nearby devices only after the OS denies
+  multicast. ACCESS_LOCAL_NETWORK is requested only when the app targets SDK 37+.
+  The plugin also acquires
   and releases the Wi-Fi multicast lock only while discovery is active.
 - Browser-only web deployments cannot open arbitrary UDP sockets and are not
   discoverable directly. They need a native companion or a separate browser-compatible
