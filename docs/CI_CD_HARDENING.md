@@ -2,7 +2,7 @@
 
 ## Workflow entry points
 
-- `.github/workflows/quality-checks.yml`: runs on pull requests and branch pushes, and is reusable through `workflow_call`.
+- `.github/workflows/quality-checks.yml`: runs on pull requests and is reusable through `workflow_call` / manual dispatch. It has no generic branch-push trigger: feature pushes are checked by the PR synchronization event, and a push to `main` is checked by the Web Deploy workflow before publication. This avoids duplicate quality runs.
 - `.github/workflows/deploy-web.yml`: deploys GitHub Pages from `main` only after the reusable quality gate succeeds.
 - The Pages job uses `upload-pages-artifact@v4`, verifies the returned artifact ID is visible through the workflow-artifacts API before deployment, and keeps `deploy-pages@v4` within its documented 600,000 ms timeout. This preflight distinguishes artifact publication/visibility failures from Pages deployment failures.
 - `.github/workflows/release-and-deploy.yml`: creates Android and Windows releases only for `vX.Y.Z` tags or an explicit manual dispatch. Both entry points run the quality gate first.

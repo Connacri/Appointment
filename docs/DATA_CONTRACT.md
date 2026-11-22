@@ -244,3 +244,38 @@ The independent Rust/Win32 client is a separate implementation target, not a wra
 - The latest mainline capabilities added role-based access control, role management, staff HR/career history, staff notifications, task productivity analytics, bulk dynamic pricing, housekeeping utilities and stock procurement/replenishment. These remain **not migrated** to native Windows unless separately marked implemented in `windows-native/docs/PORTING_MATRIX.md`.
 
 The React Web and Android clients remain authoritative for their existing workflows until native fixture parity, persistence parity, sync convergence and Windows runtime tests pass. A passing native build is not a claim of functional parity.
+
+
+## 9. Role, staff and procurement additions (2026-11-22)
+
+The 2026-11-22 mainline update extends the application domain with role-based UI capabilities,
+staff records and career history, staff-task attribution, staff notifications, supplier
+records, purchase orders and room-consumable deductions:
+
+- `src/types/roles.ts` adds the `chef_du_personnel` role, role icons, shift/employment
+  states, `StaffMemberRecord` and promotion/transfer history. `src/data/roles.ts`
+  defines built-in navigation tabs and permission flags; `src/utils/rolePermissions.ts`
+  resolves role capabilities and persists customized role configuration locally.
+- `src/types/booking.ts` adds supplier and purchase-order structures. `src/utils/staffHr.ts`,
+  `src/utils/staffNotifications.ts`, `src/utils/stockProcurement.ts` and
+  `src/utils/bookingAnalyticsEngine.ts` contain local domain calculations for staffing,
+  derived notifications, stock deductions/procurement messages and task productivity metrics.
+- Current local persistence boundary: role configuration is stored through
+  `saveStoredRolesPayload` in browser `localStorage`; staff, supplier and purchase-order
+  records use `omnibook_staff_members`, `omnibook_stock_suppliers` and
+  `omnibook_purchase_orders`; the selected role and read-notification IDs are also stored
+  in browser `localStorage`. These records are not currently represented as
+  workspace-scoped IndexedDB Outbox entities and are not synchronized to Supabase.
+- Role permission checks in React navigation and views are client-side UI capabilities.
+  They are not a replacement for authenticated server authorization or PostgreSQL RLS,
+  and must not be treated as proof that a user is authorized to mutate remote data.
+- No PostgreSQL migration or generated Supabase type update was included for these new
+  staffing/supplier/procurement records. They remain browser-profile-local and are not
+  multi-user, cross-device or remotely authoritative. Before enabling shared staff,
+  permissions, suppliers or purchase orders, add explicit workspace/establishment ownership,
+  versioned IndexedDB migrations, Outbox/repository mappings, server-side RLS policies,
+  SQL migrations, generated types and tenant-isolation/sync-convergence tests.
+
+The productivity charts and staff notifications are derived from the currently available
+local task, room and stock state; they do not imply a remote event stream, server-side audit
+trail, push-notification delivery or synchronized HR system.

@@ -53,6 +53,16 @@ jobs:
         env:
           VITE_BASE: ./
 
+      - name: Verify GitHub Pages base-path assets
+        run: |
+          set -euo pipefail
+          for asset in favicon.svg apple-touch-icon.png; do
+            test -s "dist/$asset" || { echo "::error::Missing dist/$asset"; exit 1; }
+            grep -Fq "href=\"./$asset\"" dist/index.html || {
+              echo "::error::dist/index.html must reference ./$asset for the repository Pages base path"; exit 1;
+            }
+          done
+
       - name: Ensure GitHub Pages SPA 404.html and .nojekyll
         run: |
           set -euo pipefail
@@ -153,11 +163,14 @@ jobs:
           timeout: 600000
 
       - name: Verify deployed website matches this build
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
         run: |
           set -euo pipefail
           EXPECTED="$(grep -o 'assets/index-[^"]*\.js' dist/index.html | head -n 1)"
           test -n "$EXPECTED" || { echo "::error::No entry asset found in dist/index.html"; exit 1; }
-          BASE="https://connacri.github.io/Appointment"
+          BASE="${PAGE_URL%/}"
+          test -n "$BASE" || { echo "::error::GitHub Pages did not return a deployment URL"; exit 1; }
           LIVE=""
           for attempt in $(seq 1 20); do
             LIVE="$(curl -fsS -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
@@ -173,6 +186,12 @@ jobs:
               exit 1
             fi
             sleep 30
+          done
+
+          for asset in favicon.svg apple-touch-icon.png; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/$asset")
+            echo "$BASE/$asset -> $code"
+            [[ "$code" == "200" ]] || { echo "::error::$asset did not return HTTP 200"; exit 1; }
           done
 
           for path in "" privacy/ privacy/fr/ privacy/en/ privacy/ar/ delete-account/ delete-account/fr/ delete-account/en/ delete-account/ar/; do
