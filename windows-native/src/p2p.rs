@@ -72,7 +72,26 @@ impl P2pEvent {
 }
 
 pub fn happens_before(a: &P2pEvent, b: &P2pEvent) -> bool {
-    a.event_id != b.event_id && b.clock.get(&a.node_id).copied().unwrap_or(0) >= a.sequence
+    if a.event_id == b.event_id {
+        return false;
+    }
+
+    let mut strictly_after = false;
+    for (node_id, a_sequence) in &a.clock {
+        let b_sequence = b.clock.get(node_id).copied().unwrap_or(0);
+        if b_sequence < *a_sequence {
+            return false;
+        }
+        if b_sequence > *a_sequence {
+            strictly_after = true;
+        }
+    }
+    for (node_id, b_sequence) in &b.clock {
+        if !a.clock.contains_key(node_id) && *b_sequence > 0 {
+            strictly_after = true;
+        }
+    }
+    strictly_after
 }
 
 /// Deterministic set-union merge. A duplicate event ID with different bytes is equivocation.
@@ -190,6 +209,29 @@ mod tests {
         let ba = merge_events(&[b], &[a]).unwrap();
         assert_eq!(ab, ba);
         assert!(matches!(record_state(&ab), P2pRecordState::Conflict(events) if events.len() == 2));
+    }
+
+    #[test]
+    fn causal_order_requires_every_vector_clock_component_to_be_observed() {
+        let first = event(
+            "a",
+            2,
+            &[("a", 2), ("c", 5)],
+            Some(json!({"value": "causally prior"})),
+        );
+        let inconsistent_successor = event(
+            "b",
+            2,
+            &[("a", 2), ("b", 2), ("c", 4)],
+            Some(json!({"value": "missing transitive dependency"})),
+        );
+
+        // Seeing A:2 alone is insufficient: A:2 itself had already observed C:5.
+        assert!(!happens_before(&first, &inconsistent_successor));
+        assert!(matches!(
+            record_state(&[first, inconsistent_successor]),
+            P2pRecordState::Conflict(events) if events.len() == 2
+        ));
     }
 
     #[test]
