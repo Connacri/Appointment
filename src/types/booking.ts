@@ -239,6 +239,7 @@ export interface StockItem {
   quantity: number;
   minThreshold: number;
   unitCost: number; // in DA
+  preferredSupplierId?: string;
 }
 
 export interface StockMovement {
@@ -250,6 +251,49 @@ export interface StockMovement {
   reason: string;
   room?: string;
   user: string;
+}
+
+export type SupplierChannel = 'whatsapp' | 'email' | 'sms';
+
+export interface StockSupplier {
+  id: string;
+  name: string;
+  category: string;
+  contactName?: string;
+  phone?: string;
+  email?: string;
+  preferredChannel: SupplierChannel;
+  notes?: string;
+}
+
+export interface PurchaseOrderItem {
+  itemId: string;
+  itemName: string;
+  unit: string;
+  currentQty: number;
+  minThreshold: number;
+  orderQty: number;
+  unitCost: number;
+}
+
+export type PurchaseOrderStatus = 'draft' | 'confirmed' | 'sent' | 'received';
+
+export interface PurchaseOrderRecord {
+  id: string;
+  orderNumber: string;
+  createdAt: string;
+  confirmedAt?: string;
+  sentAt?: string;
+  sentVia?: SupplierChannel | 'copy';
+  receivedAt?: string;
+  supplierId?: string;
+  supplierName: string;
+  supplierPhone?: string;
+  supplierEmail?: string;
+  createdBy: string;
+  status: PurchaseOrderStatus;
+  note?: string;
+  items: PurchaseOrderItem[];
 }
 
 export interface HotelEstablishment {

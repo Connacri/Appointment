@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Menu,
   Search,
@@ -25,6 +26,11 @@ import {
   CalendarSearch,
   History,
   UserCog,
+  Bell,
+  Check,
+  Sparkles,
+  ClipboardList,
+  Boxes,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { getTranslation } from '../i18n/translations';
@@ -33,6 +39,13 @@ import { lockManager, UsbConnectionStatus, UsbDeviceInfo } from '../locks/lockMa
 import { indexedDb, IndexedDbSyncState } from '../db/indexedDb';
 import { ROLE_CATEGORY_META } from '../data/roles';
 import type { RoleCategory } from '../types/roles';
+import { getRoleUiCapabilities } from '../utils/rolePermissions';
+import {
+  deriveStaffNotifications,
+  loadReadNotificationIds,
+  saveReadNotificationIds,
+  type StaffNotification,
+} from '../utils/staffNotifications';
 import { RoleIcon } from './RoleIcon';
 import { BookingFinderModal } from './BookingFinderModal';
 
@@ -67,6 +80,14 @@ export const TopBar: React.FC = () => {
     resourceGroups,
     selectedBuildingGroupId,
     setSelectedBuildingGroupId,
+    tasks,
+    bookings,
+    stockItems,
+    purchaseOrders,
+    activeOperatorName,
+    setFocusedTaskId,
+    setFocusedStockTab,
+    updateTaskStatus,
   } = useApp();
 
   const [usbStatus, setUsbStatus] = useState<UsbConnectionStatus>(lockManager.getStatus());
@@ -77,6 +98,8 @@ export const TopBar: React.FC = () => {
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [roleSearch, setRoleSearch] = useState('');
   const [isSectorMenuOpen, setIsSectorMenuOpen] = useState(false);
+  const [isNotifMenuOpen, setIsNotifMenuOpen] = useState(false);
+  const [readNotifIds, setReadNotifIds] = useState<Set<string>>(() => loadReadNotificationIds());
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isBookingFinderOpen, setIsBookingFinderOpen] = useState(false);
@@ -84,6 +107,35 @@ export const TopBar: React.FC = () => {
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const roleMenuRef = useRef<HTMLDivElement>(null);
   const sectorMenuRef = useRef<HTMLDivElement>(null);
+  const notifMenuRef = useRef<HTMLDivElement>(null);
+
+  const morePopoverRef = useRef<HTMLDivElement>(null);
+  const rolePopoverRef = useRef<HTMLDivElement>(null);
+  const sectorPopoverRef = useRef<HTMLDivElement>(null);
+  const notifPopoverRef = useRef<HTMLDivElement>(null);
+
+  type PopoverRect = { top: number; left: number; width: number; maxHeight: number };
+  const [sectorMenuRect, setSectorMenuRect] = useState<PopoverRect | null>(null);
+  const [roleMenuRect, setRoleMenuRect] = useState<PopoverRect | null>(null);
+  const [notifMenuRect, setNotifMenuRect] = useState<PopoverRect | null>(null);
+  const [moreMenuRect, setMoreMenuRect] = useState<PopoverRect | null>(null);
+
+  const computeClampedPopoverRect = useCallback(
+    (containerEl: HTMLElement | null, desiredWidth: number, alignEnd: boolean): PopoverRect | null => {
+      if (!containerEl || typeof window === 'undefined') return null;
+      const rect = containerEl.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const margin = 8;
+      const width = Math.min(desiredWidth, Math.max(200, vw - margin * 2));
+      const preferredLeft = alignEnd ? rect.right - width : rect.left;
+      const left = Math.max(margin, Math.min(preferredLeft, vw - width - margin));
+      const top = Math.min(rect.bottom + 6, Math.max(margin, vh - 200));
+      const maxHeight = Math.max(180, vh - top - 12);
+      return { top, left, width, maxHeight };
+    },
+    []
+  );
 
   // Subscribe to USB connection status
   useEffect(() => {
@@ -102,47 +154,111 @@ export const TopBar: React.FC = () => {
     return unsub;
   }, []);
 
-  // Click outside listener for dropdowns (mouse & touch)
+  // Click outside + Escape listener for dropdowns (including portaled popovers)
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node;
-      if (moreMenuRef.current && !moreMenuRef.current.contains(target)) {
+      if (
+        moreMenuRef.current &&
+        !moreMenuRef.current.contains(target) &&
+        (!morePopoverRef.current || !morePopoverRef.current.contains(target))
+      ) {
         setIsMoreMenuOpen(false);
       }
-      if (roleMenuRef.current && !roleMenuRef.current.contains(target)) {
+      if (
+        roleMenuRef.current &&
+        !roleMenuRef.current.contains(target) &&
+        (!rolePopoverRef.current || !rolePopoverRef.current.contains(target))
+      ) {
         setIsRoleMenuOpen(false);
       }
-      if (sectorMenuRef.current && !sectorMenuRef.current.contains(target)) {
+      if (
+        sectorMenuRef.current &&
+        !sectorMenuRef.current.contains(target) &&
+        (!sectorPopoverRef.current || !sectorPopoverRef.current.contains(target))
+      ) {
         setIsSectorMenuOpen(false);
+      }
+      if (
+        notifMenuRef.current &&
+        !notifMenuRef.current.contains(target) &&
+        (!notifPopoverRef.current || !notifPopoverRef.current.contains(target))
+      ) {
+        setIsNotifMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsMoreMenuOpen(false);
+        setIsRoleMenuOpen(false);
+        setIsSectorMenuOpen(false);
+        setIsNotifMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('touchstart', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
+  const isRtlDir = language === 'ar';
+
+  // Keep open popover coordinates clamped within viewport on resize
+  useEffect(() => {
+    const updateOpenRects = () => {
+      if (isSectorMenuOpen) setSectorMenuRect(computeClampedPopoverRect(sectorMenuRef.current, 232, isRtlDir));
+      if (isRoleMenuOpen) setRoleMenuRect(computeClampedPopoverRect(roleMenuRef.current, 288, isRtlDir));
+      if (isNotifMenuOpen) setNotifMenuRect(computeClampedPopoverRect(notifMenuRef.current, 320, !isRtlDir));
+      if (isMoreMenuOpen) setMoreMenuRect(computeClampedPopoverRect(moreMenuRef.current, 256, !isRtlDir));
+    };
+    updateOpenRects();
+    if (!isSectorMenuOpen && !isRoleMenuOpen && !isNotifMenuOpen && !isMoreMenuOpen) return;
+    window.addEventListener('resize', updateOpenRects, { passive: true });
+    return () => window.removeEventListener('resize', updateOpenRects);
+  }, [isSectorMenuOpen, isRoleMenuOpen, isNotifMenuOpen, isMoreMenuOpen, isRtlDir, computeClampedPopoverRect]);
+
   const toggleSectorMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsSectorMenuOpen((prev) => !prev);
+    const next = !isSectorMenuOpen;
+    if (next) setSectorMenuRect(computeClampedPopoverRect(sectorMenuRef.current, 232, isRtlDir));
+    setIsSectorMenuOpen(next);
     setIsRoleMenuOpen(false);
     setIsMoreMenuOpen(false);
+    setIsNotifMenuOpen(false);
   };
 
   const toggleRoleMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsRoleMenuOpen((prev) => !prev);
+    const next = !isRoleMenuOpen;
+    if (next) setRoleMenuRect(computeClampedPopoverRect(roleMenuRef.current, 288, isRtlDir));
+    setIsRoleMenuOpen(next);
     setIsSectorMenuOpen(false);
     setIsMoreMenuOpen(false);
+    setIsNotifMenuOpen(false);
   };
 
   const toggleMoreMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsMoreMenuOpen((prev) => !prev);
+    const next = !isMoreMenuOpen;
+    if (next) setMoreMenuRect(computeClampedPopoverRect(moreMenuRef.current, 256, !isRtlDir));
+    setIsMoreMenuOpen(next);
     setIsSectorMenuOpen(false);
     setIsRoleMenuOpen(false);
+    setIsNotifMenuOpen(false);
+  };
+
+  const toggleNotifMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = !isNotifMenuOpen;
+    if (next) setNotifMenuRect(computeClampedPopoverRect(notifMenuRef.current, 320, !isRtlDir));
+    setIsNotifMenuOpen(next);
+    setIsSectorMenuOpen(false);
+    setIsRoleMenuOpen(false);
+    setIsMoreMenuOpen(false);
   };
 
   // Physical USB WebHID connect handler
@@ -189,8 +305,73 @@ export const TopBar: React.FC = () => {
   };
 
   const currentRoleObj = activeRoleDefinition;
+  const uiCaps = useMemo(() => getRoleUiCapabilities(currentRoleObj), [currentRoleObj]);
 
   const isRtl = language === 'ar';
+
+  const domainRooms = useMemo(
+    () => resourceGroups.filter((group) => group.sector === currentDomain).flatMap((group) => group.resources),
+    [resourceGroups, currentDomain]
+  );
+
+  const domainBookings = useMemo(
+    () => bookings.filter((b) => b.sector === currentDomain),
+    [bookings, currentDomain]
+  );
+
+  const staffNotifications = useMemo(
+    () =>
+      deriveStaffNotifications({
+        role: currentRoleObj,
+        tasks,
+        rooms: domainRooms,
+        bookings: domainBookings,
+        stockItems,
+        purchaseOrders,
+        language,
+        activeOperatorName,
+      }),
+    [currentRoleObj, tasks, domainRooms, domainBookings, stockItems, purchaseOrders, language, activeOperatorName]
+  );
+
+  const unreadNotifCount = useMemo(
+    () => staffNotifications.filter((n) => !readNotifIds.has(n.id)).length,
+    [staffNotifications, readNotifIds]
+  );
+
+  const markNotificationRead = (id: string) => {
+    setReadNotifIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      saveReadNotificationIds(next);
+      return next;
+    });
+  };
+
+  const markAllNotificationsRead = () => {
+    setReadNotifIds((prev) => {
+      const next = new Set(prev);
+      for (const n of staffNotifications) next.add(n.id);
+      saveReadNotificationIds(next);
+      return next;
+    });
+  };
+
+  const handleOpenNotification = (notif: StaffNotification) => {
+    markNotificationRead(notif.id);
+    if (notif.taskId) {
+      setFocusedTaskId(notif.taskId);
+    }
+    if (
+      notif.kind === 'stock_rupture' ||
+      notif.kind === 'stock_low' ||
+      notif.kind === 'purchase_order_draft'
+    ) {
+      setFocusedStockTab('reorder');
+    }
+    setActiveView(notif.targetView);
+    setIsNotifMenuOpen(false);
+  };
 
   // Only buildings that really exist in the local IndexedDB inventory are offered.
   // ResourceGroup ids are local building ids, never Supabase establishment ids.
@@ -261,11 +442,19 @@ export const TopBar: React.FC = () => {
               <ChevronDown size={13} className={`text-slate-400 shrink-0 transition-transform ${isSectorMenuOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {isSectorMenuOpen && (
+            {isSectorMenuOpen && sectorMenuRect && typeof document !== 'undefined' && createPortal(
               <div
+                ref={sectorPopoverRef}
                 role="menu"
                 dir={isRtl ? 'rtl' : 'ltr'}
-                className="absolute top-full mt-1.5 left-0 rtl:left-auto rtl:right-0 w-56 max-w-[calc(100vw-1rem)] max-h-[70vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-1.5 z-[100] text-xs pms-dropdown"
+                style={{
+                  position: 'fixed',
+                  top: `${sectorMenuRect.top}px`,
+                  left: `${sectorMenuRect.left}px`,
+                  width: `${sectorMenuRect.width}px`,
+                  maxHeight: `${sectorMenuRect.maxHeight}px`,
+                }}
+                className="overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-1.5 z-[140] text-xs pms-dropdown"
               >
                 <div className="px-2 py-1 text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 mb-1">
                   {getTranslation('sectorSelectBuilding', language)}
@@ -275,17 +464,19 @@ export const TopBar: React.FC = () => {
                     <p className="text-slate-600 dark:text-slate-300">
                       {getTranslation('topbarNoLocalBuildings', language)}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsEstablishmentModalOpen(true);
-                        setIsSectorMenuOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg bg-blue-600 text-white font-semibold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    >
-                      <Building2 size={14} className="shrink-0" />
-                      <span>{getTranslation('topbarAddBuilding', language)}</span>
-                    </button>
+                    {uiCaps.canUseAdminSystemTools && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEstablishmentModalOpen(true);
+                          setIsSectorMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg bg-blue-600 text-white font-semibold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      >
+                        <Building2 size={14} className="shrink-0" />
+                        <span>{getTranslation('topbarAddBuilding', language)}</span>
+                      </button>
+                    )}
                   </div>
                 ) : (
                   (['hotel', 'resort'] as const).map((sector) => {
@@ -348,7 +539,8 @@ export const TopBar: React.FC = () => {
                     );
                   })
                 )}
-              </div>
+              </div>,
+              document.body
             )}
           </div>
 
@@ -374,11 +566,19 @@ export const TopBar: React.FC = () => {
               <ChevronDown size={13} className={`text-slate-400 shrink-0 transition-transform ${isRoleMenuOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {isRoleMenuOpen && (
+            {isRoleMenuOpen && roleMenuRect && typeof document !== 'undefined' && createPortal(
               <div
+                ref={rolePopoverRef}
                 role="menu"
                 dir={isRtl ? 'rtl' : 'ltr'}
-                className="absolute top-full mt-1.5 right-0 sm:right-auto sm:left-0 rtl:right-auto rtl:left-0 sm:rtl:left-auto sm:rtl:right-0 w-72 max-w-[calc(100vw-1rem)] max-h-[75vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-2 z-[100] text-xs pms-dropdown space-y-2"
+                style={{
+                  position: 'fixed',
+                  top: `${roleMenuRect.top}px`,
+                  left: `${roleMenuRect.left}px`,
+                  width: `${roleMenuRect.width}px`,
+                  maxHeight: `${roleMenuRect.maxHeight}px`,
+                }}
+                className="overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-2 z-[140] text-xs pms-dropdown space-y-2"
               >
                 <div className="px-1.5 pb-1.5 border-b border-slate-100 dark:border-slate-800 space-y-1.5">
                   <div className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 flex items-center justify-between">
@@ -470,7 +670,8 @@ export const TopBar: React.FC = () => {
                     </button>
                   </div>
                 )}
-              </div>
+              </div>,
+              document.body
             )}
           </div>
         </div>
@@ -483,7 +684,11 @@ export const TopBar: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={language === 'fr' ? 'Rechercher...' : language === 'ar' ? 'بحث...' : 'Search...'}
+              placeholder={
+                uiCaps.canViewPlanningOrBookings
+                  ? (language === 'fr' ? 'Rechercher...' : language === 'ar' ? 'بحث...' : 'Search...')
+                  : (language === 'fr' ? 'Filtrer chambre / tâche...' : language === 'ar' ? 'تصفية غرفة / مهمة...' : 'Filter room / task...')
+              }
               className="w-full h-9 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs pl-8 pr-6 rtl:pl-6 rtl:pr-8 rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium transition-colors"
             />
             {searchQuery && (
@@ -501,18 +706,151 @@ export const TopBar: React.FC = () => {
 
         {/* RIGHT SECTION: Primary actions & More menu (streamlined per breakpoint to prevent overflow) */}
         <div className="pms-app-topbar-actions flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-visible">
-          {/* Global reservation finder: shown in Row 1 from sm+ and in Row 2 beside Search on <sm */}
-          <button
-            type="button"
-            data-testid="open-booking-finder"
-            onClick={() => setIsBookingFinderOpen(true)}
-            className="hidden sm:flex h-9 w-9 2xl:w-auto 2xl:px-2.5 items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer shrink-0"
-            title={getTranslation('bookingFinderOpen', language)}
-            aria-label={getTranslation('bookingFinderOpen', language)}
-          >
-            <CalendarSearch size={14} className="shrink-0" />
-            <span className="hidden 2xl:inline text-xs font-semibold whitespace-nowrap">{getTranslation('bookingFinderOpen', language)}</span>
-          </button>
+          {/* Staff & Operational Notifications Bell */}
+          {!currentRoleObj.permissions.isClientPortal && (
+            <div className="relative shrink-0 overflow-visible" ref={notifMenuRef}>
+              <button
+                type="button"
+                data-testid="staff-notifications-btn"
+                onClick={toggleNotifMenu}
+                aria-haspopup="menu"
+                aria-expanded={isNotifMenuOpen}
+                aria-label={language === 'fr' ? 'Notifications opérationnelles' : language === 'ar' ? 'إشعارات العمل' : 'Operational notifications'}
+                title={language === 'fr' ? 'Notifications & tâches à traiter' : language === 'ar' ? 'الإشعارات والمهام' : 'Notifications & open tasks'}
+                className={`relative flex h-9 min-w-9 px-2 items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold shadow-2xs transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  unreadNotifCount > 0
+                    ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-950/60'
+                    : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Bell size={15} className={unreadNotifCount > 0 ? 'text-amber-600 dark:text-amber-300 shrink-0' : 'shrink-0'} />
+                {unreadNotifCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-extrabold leading-none tabular-nums">
+                    {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+                  </span>
+                )}
+              </button>
+
+              {isNotifMenuOpen && notifMenuRect && typeof document !== 'undefined' && createPortal(
+                <div
+                  ref={notifPopoverRef}
+                  role="menu"
+                  dir={isRtl ? 'rtl' : 'ltr'}
+                  style={{
+                    position: 'fixed',
+                    top: `${notifMenuRect.top}px`,
+                    left: `${notifMenuRect.left}px`,
+                    width: `${notifMenuRect.width}px`,
+                    maxHeight: `${notifMenuRect.maxHeight}px`,
+                  }}
+                  className="overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2.5 z-[140] text-xs space-y-2 pms-dropdown pms-dropdown-end"
+                >
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
+                      <Bell size={14} className="text-amber-500" />
+                      <span>{language === 'fr' ? 'Notifications & Tâches' : language === 'ar' ? 'الإشعارات والمهام' : 'Notifications & Tasks'}</span>
+                      <span className="text-[10px] font-mono text-slate-400">({staffNotifications.length})</span>
+                    </div>
+                    {unreadNotifCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={markAllNotificationsRead}
+                        className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      >
+                        {language === 'fr' ? 'Tout lu' : language === 'ar' ? 'قراءة الكل' : 'Mark all read'}
+                      </button>
+                    )}
+                  </div>
+
+                  {staffNotifications.length === 0 ? (
+                    <div className="py-6 text-center text-slate-500 dark:text-slate-400 space-y-1">
+                      <CheckCircle2 size={24} className="mx-auto text-emerald-500 opacity-80" />
+                      <p className="font-semibold text-slate-700 dark:text-slate-300">
+                        {language === 'fr' ? 'Aucune alerte en attente' : language === 'ar' ? 'لا توجد تنبيهات معلقة' : 'No pending notifications'}
+                      </p>
+                      <p className="text-[11px]">
+                        {language === 'fr' ? 'Toutes les chambres et tâches sont à jour.' : language === 'ar' ? 'جميع الغرف والمهام مكتملة.' : 'All rooms and tasks are up to date.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {staffNotifications.slice(0, 14).map((notif) => {
+                        const isRead = readNotifIds.has(notif.id);
+                        return (
+                          <div
+                            key={notif.id}
+                            className={`rounded-xl border p-2 transition-colors ${
+                              notif.severity === 'urgent'
+                                ? 'border-rose-200 dark:border-rose-900/50 bg-rose-50/70 dark:bg-rose-950/30'
+                                : !isRead
+                                ? 'border-blue-200 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20'
+                                : 'border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleOpenNotification(notif)}
+                              className="w-full text-left rtl:text-right cursor-pointer"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white truncate">
+                                  {notif.kind === 'room_dirty' || notif.kind === 'room_cleaning' ? (
+                                    <Sparkles size={12} className="text-amber-500 shrink-0" />
+                                  ) : notif.kind === 'stock_rupture' || notif.kind === 'stock_low' ? (
+                                    <AlertTriangle size={12} className={notif.severity === 'urgent' ? 'text-rose-500 shrink-0' : 'text-amber-500 shrink-0'} />
+                                  ) : notif.kind === 'purchase_order_draft' ? (
+                                    <Boxes size={12} className="text-blue-500 shrink-0" />
+                                  ) : (
+                                    <ClipboardList size={12} className={notif.severity === 'urgent' ? 'text-rose-500 shrink-0' : 'text-blue-500 shrink-0'} />
+                                  )}
+                                  <span className="truncate">{notif.title}</span>
+                                </span>
+                                {!isRead && <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />}
+                              </div>
+                              <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2">
+                                {notif.description}
+                              </p>
+                            </button>
+                            {notif.taskId && currentRoleObj.permissions.canManageTasks && (
+                              <div className="mt-1.5 flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateTaskStatus(notif.taskId!, 'done');
+                                    markNotificationRead(notif.id);
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 text-[10px] font-bold cursor-pointer"
+                                >
+                                  <Check size={11} />
+                                  <span>{language === 'fr' ? 'Achever' : language === 'ar' ? 'إتمام' : 'Complete'}</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>,
+                document.body
+              )}
+            </div>
+          )}
+
+          {/* Global reservation finder: shown only for roles with planning/booking access */}
+          {uiCaps.canViewPlanningOrBookings && (
+            <button
+              type="button"
+              data-testid="open-booking-finder"
+              onClick={() => setIsBookingFinderOpen(true)}
+              className="hidden sm:flex h-9 w-9 2xl:w-auto 2xl:px-2.5 items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer shrink-0"
+              title={getTranslation('bookingFinderOpen', language)}
+              aria-label={getTranslation('bookingFinderOpen', language)}
+            >
+              <CalendarSearch size={14} className="shrink-0" />
+              <span className="hidden 2xl:inline text-xs font-semibold whitespace-nowrap">{getTranslation('bookingFinderOpen', language)}</span>
+            </button>
+          )}
 
           {/* Bidirectional Supabase Auto-Sync + Force Sync Button (Row 1 from sm+, Row 2 on <sm) */}
           {(() => {
@@ -583,90 +921,96 @@ export const TopBar: React.FC = () => {
           <button type="button" disabled={isRefreshing} onClick={() => { setIsRefreshing(true); window.dispatchEvent(new CustomEvent('appointment-refresh-request', { detail: { onComplete: () => setIsRefreshing(false) } })); }} className="hidden lg:flex h-9 w-9 2xl:w-auto 2xl:px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 text-slate-700 dark:text-slate-200 text-xs font-semibold items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" title={language === 'fr' ? 'Actualiser toutes les pages' : language === 'ar' ? 'تحديث جميع الصفحات' : 'Refresh all pages'} aria-label={language === 'fr' ? 'Actualiser' : language === 'ar' ? 'تحديث' : 'Refresh'}>
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''}/><span className="hidden 2xl:inline">{language === 'fr' ? 'Actualiser' : language === 'ar' ? 'تحديث' : 'Refresh'}</span>
           </button>
-          {/* Local database sync indicator */}
-          <button
-            type="button"
-            onClick={() => setIsIndexedDBOpen(true)}
-            className="hidden lg:flex h-9 px-2 2xl:px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            title={`${
-              language === 'fr' ? 'Stockage local' : language === 'ar' ? 'التخزين المحلي' : 'Local storage'
-            }: ${
-              indexedDbSync === 'synced'
-                ? (language === 'fr' ? 'Disponible' : language === 'ar' ? 'متاح ومؤمّن' : 'Available')
-                : indexedDbSync === 'syncing'
-                ? (language === 'fr' ? 'Écriture locale en cours...' : language === 'ar' ? 'جارٍ الحفظ محلياً...' : 'Writing...')
-                : (language === 'fr' ? 'Mode hors ligne' : language === 'ar' ? 'وضع غير متصل' : 'Offline mode')
-            } — ${language === 'fr' ? 'Cliquer pour consulter' : language === 'ar' ? 'اضغط للمعاينة' : 'Click to inspect'}`}
-          >
-            <Database size={14} className={indexedDbSync === 'synced' ? 'text-emerald-600 dark:text-emerald-400' : indexedDbSync === 'syncing' ? 'text-blue-600 dark:text-blue-400' : 'text-rose-600 dark:text-rose-400'} />
-            <span className={`w-2 h-2 rounded-full ${indexedDbSync === 'synced' ? 'bg-emerald-500 animate-pulse' : indexedDbSync === 'syncing' ? 'bg-blue-500 animate-spin' : 'bg-rose-500'}`} />
-            <span className="hidden 2xl:inline">{language === 'fr' ? 'Local' : language === 'ar' ? 'محلي' : 'Local'}</span>
-          </button>
-
-          {/* USB Hardware Button */}
-          <button
-            type="button"
-            onClick={handlePhysicalUsbClick}
-            className={`hidden lg:flex h-9 px-2 xl:px-2.5 rounded-xl border text-xs font-semibold items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              usbStatus === 'connected'
-                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
-                : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
-            }`}
-            title={
-              usbStatus === 'connected'
-                ? (language === 'fr'
-                    ? `Encodeur USB proUSB connecté${usbDevice?.machineCode ? ` — machine code ${usbDevice.machineCode}` : ''}`
-                    : language === 'ar'
-                    ? `جهاز تشفير proUSB متصل${usbDevice?.machineCode ? ` — الرمز ${usbDevice.machineCode}` : ''}`
-                    : `proUSB encoder connected${usbDevice?.machineCode ? ` — machine code ${usbDevice.machineCode}` : ''}`)
-                : (language === 'fr'
-                    ? 'Encodeur USB proUSB — Cliquez pour autoriser WebHID'
-                    : language === 'ar'
-                    ? 'جهاز تشفير proUSB — اضغط للسماح بـ WebHID'
-                    : 'proUSB USB encoder — Click to authorize WebHID')
-            }
-          >
-            <span className="relative flex h-2 w-2">
-              {usbStatus === 'connected' && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              )}
-              <span
-                className={`relative inline-flex rounded-full h-2 w-2 ${
-                  usbStatus === 'connected' ? 'bg-white' : 'bg-rose-500'
-                }`}
-              />
-            </span>
-            <Usb size={14} />
-            <span className="whitespace-nowrap hidden xl:inline">
-              USB
-              <span className="hidden 2xl:inline">
-                {' '}• {usbStatus === 'connected' ? (usbDevice?.readerLabel ?? (language === 'fr' ? 'Prêt' : language === 'ar' ? 'جاهز' : 'Ready')) : (language === 'fr' ? 'Connecter' : language === 'ar' ? 'اتصال' : 'Connect')}
-              </span>
-            </span>
-          </button>
-
-          {/* Global Currency Switcher */}
-          <div className="pms-app-topbar-currency hidden sm:flex h-9 items-center bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-2 text-xs font-mono font-bold text-amber-600 dark:text-amber-400 shadow-2xs shrink-0">
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 mr-1 rtl:mr-0 rtl:ml-1 font-sans hidden 2xl:inline">
-              {language === 'fr' ? 'Devise:' : language === 'ar' ? 'العملة:' : 'Currency:'}
-            </span>
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              aria-label={language === 'fr' ? 'Devise globale' : language === 'ar' ? 'العملة العامة' : 'Global currency'}
-              className="bg-transparent text-amber-600 dark:text-amber-400 font-bold focus:outline-none cursor-pointer"
-              title={language === 'fr' ? "Changer la devise globale de l'établissement" : language === 'ar' ? 'تغيير العملة العامة للمنشأة' : 'Change establishment global currency'}
+          {/* Local database sync indicator (Admin / Manager / Reception only) */}
+          {uiCaps.canUseAdminSystemTools && (
+            <button
+              type="button"
+              onClick={() => setIsIndexedDBOpen(true)}
+              className="hidden lg:flex h-9 px-2 2xl:px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              title={`${
+                language === 'fr' ? 'Stockage local' : language === 'ar' ? 'التخزين المحلي' : 'Local storage'
+              }: ${
+                indexedDbSync === 'synced'
+                  ? (language === 'fr' ? 'Disponible' : language === 'ar' ? 'متاح ومؤمّن' : 'Available')
+                  : indexedDbSync === 'syncing'
+                  ? (language === 'fr' ? 'Écriture locale en cours...' : language === 'ar' ? 'جارٍ الحفظ محلياً...' : 'Writing...')
+                  : (language === 'fr' ? 'Mode hors ligne' : language === 'ar' ? 'وضع غير متصل' : 'Offline mode')
+              } — ${language === 'fr' ? 'Cliquer pour consulter' : language === 'ar' ? 'اضغط للمعاينة' : 'Click to inspect'}`}
             >
-              <option value="DZD" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇩🇿 DZD (DA)</option>
-              <option value="DA" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇩🇿 DA</option>
-              <option value="EUR" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇪🇺 EUR (€)</option>
-              <option value="USD" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇺🇸 USD ($)</option>
-              <option value="GBP" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇬🇧 GBP (£)</option>
-              <option value="SAR" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇸🇦 SAR (﷼)</option>
-              <option value="RMB" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇨🇳 RMB (¥)</option>
-              <option value="CAD" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇨🇦 CAD ($)</option>
-            </select>
-          </div>
+              <Database size={14} className={indexedDbSync === 'synced' ? 'text-emerald-600 dark:text-emerald-400' : indexedDbSync === 'syncing' ? 'text-blue-600 dark:text-blue-400' : 'text-rose-600 dark:text-rose-400'} />
+              <span className={`w-2 h-2 rounded-full ${indexedDbSync === 'synced' ? 'bg-emerald-500 animate-pulse' : indexedDbSync === 'syncing' ? 'bg-blue-500 animate-spin' : 'bg-rose-500'}`} />
+              <span className="hidden 2xl:inline">{language === 'fr' ? 'Local' : language === 'ar' ? 'محلي' : 'Local'}</span>
+            </button>
+          )}
+
+          {/* USB Hardware Button (Key card / Lock roles only) */}
+          {uiCaps.canUseUsbTools && (
+            <button
+              type="button"
+              onClick={handlePhysicalUsbClick}
+              className={`hidden lg:flex h-9 px-2 xl:px-2.5 rounded-xl border text-xs font-semibold items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                usbStatus === 'connected'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
+              }`}
+              title={
+                usbStatus === 'connected'
+                  ? (language === 'fr'
+                      ? `Encodeur USB proUSB connecté${usbDevice?.machineCode ? ` — machine code ${usbDevice.machineCode}` : ''}`
+                      : language === 'ar'
+                      ? `جهاز تشفير proUSB متصل${usbDevice?.machineCode ? ` — الرمز ${usbDevice.machineCode}` : ''}`
+                      : `proUSB encoder connected${usbDevice?.machineCode ? ` — machine code ${usbDevice.machineCode}` : ''}`)
+                  : (language === 'fr'
+                      ? 'Encodeur USB proUSB — Cliquez pour autoriser WebHID'
+                      : language === 'ar'
+                      ? 'جهاز تشفير proUSB — اضغط للسماح بـ WebHID'
+                      : 'proUSB USB encoder — Click to authorize WebHID')
+              }
+            >
+              <span className="relative flex h-2 w-2">
+                {usbStatus === 'connected' && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                )}
+                <span
+                  className={`relative inline-flex rounded-full h-2 w-2 ${
+                    usbStatus === 'connected' ? 'bg-white' : 'bg-rose-500'
+                  }`}
+                />
+              </span>
+              <Usb size={14} />
+              <span className="whitespace-nowrap hidden xl:inline">
+                USB
+                <span className="hidden 2xl:inline">
+                  {' '}• {usbStatus === 'connected' ? (usbDevice?.readerLabel ?? (language === 'fr' ? 'Prêt' : language === 'ar' ? 'جاهز' : 'Ready')) : (language === 'fr' ? 'Connecter' : language === 'ar' ? 'اتصال' : 'Connect')}
+                </span>
+              </span>
+            </button>
+          )}
+
+          {/* Global Currency Switcher (Finance / Booking roles only) */}
+          {uiCaps.canUseCurrencySwitcher && (
+            <div className="pms-app-topbar-currency hidden sm:flex h-9 items-center bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-2 text-xs font-mono font-bold text-amber-600 dark:text-amber-400 shadow-2xs shrink-0">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 mr-1 rtl:mr-0 rtl:ml-1 font-sans hidden 2xl:inline">
+                {language === 'fr' ? 'Devise:' : language === 'ar' ? 'العملة:' : 'Currency:'}
+              </span>
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                aria-label={language === 'fr' ? 'Devise globale' : language === 'ar' ? 'العملة العامة' : 'Global currency'}
+                className="bg-transparent text-amber-600 dark:text-amber-400 font-bold focus:outline-none cursor-pointer"
+                title={language === 'fr' ? "Changer la devise globale de l'établissement" : language === 'ar' ? 'تغيير العملة العامة للمنشأة' : 'Change establishment global currency'}
+              >
+                <option value="DZD" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇩🇿 DZD (DA)</option>
+                <option value="DA" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇩🇿 DA</option>
+                <option value="EUR" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇪🇺 EUR (€)</option>
+                <option value="USD" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇺🇸 USD ($)</option>
+                <option value="GBP" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇬🇧 GBP (£)</option>
+                <option value="SAR" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇸🇦 SAR (﷼)</option>
+                <option value="RMB" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇨🇳 RMB (¥)</option>
+                <option value="CAD" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">🇨🇦 CAD ($)</option>
+              </select>
+            </div>
+          )}
 
           {/* Primary Action Button: + Nouveau */}
           {(activeRoleDefinition.permissions.canManageBookings || activeRoleDefinition.permissions.isClientPortal) && (
@@ -706,11 +1050,19 @@ export const TopBar: React.FC = () => {
               )}
             </button>
 
-            {isMoreMenuOpen && (
+            {isMoreMenuOpen && moreMenuRect && typeof document !== 'undefined' && createPortal(
               <div
+                ref={morePopoverRef}
                 role="menu"
                 dir={isRtl ? 'rtl' : 'ltr'}
-                className="absolute top-full mt-1.5 right-0 rtl:right-auto rtl:left-0 w-64 max-w-[calc(100vw-1rem)] max-h-[75vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-2 z-[100] text-xs space-y-1 pms-dropdown pms-dropdown-end text-slate-700 dark:text-slate-200"
+                style={{
+                  position: 'fixed',
+                  top: `${moreMenuRect.top}px`,
+                  left: `${moreMenuRect.left}px`,
+                  width: `${moreMenuRect.width}px`,
+                  maxHeight: `${moreMenuRect.maxHeight}px`,
+                }}
+                className="overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-2 z-[140] text-xs space-y-1 pms-dropdown pms-dropdown-end text-slate-700 dark:text-slate-200"
               >
                 {/* Audio feedback toggle */}
                 <button
@@ -763,74 +1115,82 @@ export const TopBar: React.FC = () => {
                   <span>{language === 'fr' ? 'Actualiser toutes les pages' : language === 'ar' ? 'تحديث جميع الصفحات' : 'Refresh all pages'}</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handlePhysicalUsbClick();
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="lg:hidden w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left rtl:text-right"
-                >
-                  <span className="flex items-center gap-2 min-w-0">
-                    <Usb size={14} className={usbStatus === 'connected' ? 'text-emerald-500 shrink-0' : 'text-slate-500 shrink-0'} />
-                    <span className="truncate">
-                      {usbStatus === 'connected'
-                        ? (language === 'fr' ? 'Encodeur proUSB (Connecté)' : language === 'ar' ? 'مبرمج proUSB (متصل)' : 'proUSB Encoder (Connected)')
-                        : (language === 'fr' ? 'Connecter Encodeur USB' : language === 'ar' ? 'توصيل مبرمج USB' : 'Connect USB Encoder')}
-                    </span>
-                  </span>
-                </button>
-
-                <div className="sm:hidden flex items-center justify-between gap-2 px-2.5 py-1.5">
-                  <span className="text-slate-500 dark:text-slate-400 font-semibold">
-                    {language === 'fr' ? 'Devise' : language === 'ar' ? 'العملة' : 'Currency'}
-                  </span>
-                  <select
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value)}
-                    aria-label={language === 'fr' ? 'Devise' : language === 'ar' ? 'العملة' : 'Currency'}
-                    className="h-8 px-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-amber-600 dark:text-amber-400 font-mono font-bold text-xs"
+                {uiCaps.canUseUsbTools && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handlePhysicalUsbClick();
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className="lg:hidden w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left rtl:text-right"
                   >
-                    <option value="DZD">🇩🇿 DZD (DA)</option>
-                    <option value="DA">🇩🇿 DA</option>
-                    <option value="EUR">🇪🇺 EUR (€)</option>
-                    <option value="USD">🇺🇸 USD ($)</option>
-                    <option value="GBP">🇬🇧 GBP (£)</option>
-                    <option value="SAR">🇸🇦 SAR (﷼)</option>
-                    <option value="RMB">🇨🇳 RMB (¥)</option>
-                    <option value="CAD">🇨🇦 CAD ($)</option>
-                  </select>
-                </div>
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Usb size={14} className={usbStatus === 'connected' ? 'text-emerald-500 shrink-0' : 'text-slate-500 shrink-0'} />
+                      <span className="truncate">
+                        {usbStatus === 'connected'
+                          ? (language === 'fr' ? 'Encodeur proUSB (Connecté)' : language === 'ar' ? 'مبرمج proUSB (متصل)' : 'proUSB Encoder (Connected)')
+                          : (language === 'fr' ? 'Connecter Encodeur USB' : language === 'ar' ? 'توصيل مبرمج USB' : 'Connect USB Encoder')}
+                      </span>
+                    </span>
+                  </button>
+                )}
+
+                {uiCaps.canUseCurrencySwitcher && (
+                  <div className="sm:hidden flex items-center justify-between gap-2 px-2.5 py-1.5">
+                    <span className="text-slate-500 dark:text-slate-400 font-semibold">
+                      {language === 'fr' ? 'Devise' : language === 'ar' ? 'العملة' : 'Currency'}
+                    </span>
+                    <select
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                      aria-label={language === 'fr' ? 'Devise' : language === 'ar' ? 'العملة' : 'Currency'}
+                      className="h-8 px-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-amber-600 dark:text-amber-400 font-mono font-bold text-xs"
+                    >
+                      <option value="DZD">🇩🇿 DZD (DA)</option>
+                      <option value="DA">🇩🇿 DA</option>
+                      <option value="EUR">🇪🇺 EUR (€)</option>
+                      <option value="USD">🇺🇸 USD ($)</option>
+                      <option value="GBP">🇬🇧 GBP (£)</option>
+                      <option value="SAR">🇸🇦 SAR (﷼)</option>
+                      <option value="RMB">🇨🇳 RMB (¥)</option>
+                      <option value="CAD">🇨🇦 CAD ($)</option>
+                    </select>
+                  </div>
+                )}
 
                 {/* Establishment Setup */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEstablishmentModalOpen(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer text-left rtl:text-right"
-                >
-                  <Sliders size={14} className="text-blue-500 shrink-0" />
-                  <span>
-                    {language === 'fr' ? 'Paramètres Établissement' : language === 'ar' ? 'إعدادات المنشأة' : 'Property Settings'}
-                  </span>
-                </button>
+                {uiCaps.canUseAdminSystemTools && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEstablishmentModalOpen(true);
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer text-left rtl:text-right"
+                  >
+                    <Sliders size={14} className="text-blue-500 shrink-0" />
+                    <span>
+                      {language === 'fr' ? 'Paramètres Établissement' : language === 'ar' ? 'إعدادات المنشأة' : 'Property Settings'}
+                    </span>
+                  </button>
+                )}
 
                 {/* Local data inspector */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsIndexedDBOpen(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer text-left rtl:text-right"
-                >
-                  <Database size={14} className="text-emerald-500 shrink-0" />
-                  <span>
-                    {language === 'fr' ? 'Inspecteur des données locales' : language === 'ar' ? 'فاحص البيانات المحلية' : 'Local Data Inspector'}
-                  </span>
-                </button>
+                {uiCaps.canUseAdminSystemTools && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsIndexedDBOpen(true);
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer text-left rtl:text-right"
+                  >
+                    <Database size={14} className="text-emerald-500 shrink-0" />
+                    <span>
+                      {language === 'fr' ? 'Inspecteur des données locales' : language === 'ar' ? 'فاحص البيانات المحلية' : 'Local Data Inspector'}
+                    </span>
+                  </button>
+                )}
 
                 {/* Event Log shortcut */}
                 {activeRoleDefinition.allowedTabs.includes('events') && (
@@ -848,19 +1208,21 @@ export const TopBar: React.FC = () => {
                 )}
 
                 {/* CI/CD & AGENTS.md Specs */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCockpitOpen(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer text-left rtl:text-right"
-                >
-                  <FileCode size={14} className="text-cyan-500 shrink-0" />
-                  <span>
-                    {language === 'fr' ? 'Spécifications AGENTS.md' : language === 'ar' ? 'مواصفات AGENTS.md' : 'AGENTS.md Specifications'}
-                  </span>
-                </button>
+                {uiCaps.canUseAdminSystemTools && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCockpitOpen(true);
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer text-left rtl:text-right"
+                  >
+                    <FileCode size={14} className="text-cyan-500 shrink-0" />
+                    <span>
+                      {language === 'fr' ? 'Spécifications AGENTS.md' : language === 'ar' ? 'مواصفات AGENTS.md' : 'AGENTS.md Specifications'}
+                    </span>
+                  </button>
+                )}
 
                 {/* Legal & Privacy */}
                 <button
@@ -897,7 +1259,8 @@ export const TopBar: React.FC = () => {
                       : '✨ About (FORSLOG & Developer)'}
                   </span>
                 </button>
-              </div>
+              </div>,
+              document.body
             )}
           </div>
         </div>
@@ -911,7 +1274,11 @@ export const TopBar: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={language === 'fr' ? 'Rechercher un séjour, client, chambre...' : language === 'ar' ? 'بحث عن حجز أو نزيل أو غرفة...' : 'Search booking, guest, room...'}
+            placeholder={
+              uiCaps.canViewPlanningOrBookings
+                ? (language === 'fr' ? 'Rechercher un séjour, client, chambre...' : language === 'ar' ? 'بحث عن حجز أو نزيل أو غرفة...' : 'Search booking, guest, room...')
+                : (language === 'fr' ? 'Filtrer chambre ou tâche...' : language === 'ar' ? 'تصفية غرفة أو مهمة...' : 'Filter room or task...')
+            }
             className="w-full h-9 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs pl-8 pr-7 rtl:pl-7 rtl:pr-8 rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium transition-colors"
           />
           {searchQuery && (
@@ -927,15 +1294,17 @@ export const TopBar: React.FC = () => {
         </div>
 
         {/* Mobile Booking Finder shortcut (<sm only; sm+ uses Row 1 button) */}
-        <button
-          type="button"
-          onClick={() => setIsBookingFinderOpen(true)}
-          className="sm:hidden flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer shrink-0"
-          title={getTranslation('bookingFinderOpen', language)}
-          aria-label={getTranslation('bookingFinderOpen', language)}
-        >
-          <CalendarSearch size={14} className="shrink-0" />
-        </button>
+        {uiCaps.canViewPlanningOrBookings && (
+          <button
+            type="button"
+            onClick={() => setIsBookingFinderOpen(true)}
+            className="sm:hidden flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer shrink-0"
+            title={getTranslation('bookingFinderOpen', language)}
+            aria-label={getTranslation('bookingFinderOpen', language)}
+          >
+            <CalendarSearch size={14} className="shrink-0" />
+          </button>
+        )}
 
         {/* Mobile Cloud Sync shortcut (<sm only; sm+ uses Row 1 button) */}
         {(() => {
@@ -979,10 +1348,12 @@ export const TopBar: React.FC = () => {
         })()}
       </div>
 
-      <BookingFinderModal
-        isOpen={isBookingFinderOpen}
-        onClose={() => setIsBookingFinderOpen(false)}
-      />
+      {uiCaps.canViewPlanningOrBookings && (
+        <BookingFinderModal
+          isOpen={isBookingFinderOpen}
+          onClose={() => setIsBookingFinderOpen(false)}
+        />
+      )}
     </header>
   );
 };

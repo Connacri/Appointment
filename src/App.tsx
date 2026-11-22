@@ -216,6 +216,7 @@ const MainLayout: React.FC = () => {
     hasOnboarded,
     refreshWorkspaces,
     establishmentProfile,
+    activeRoleDefinition,
   } = useApp();
 
   useBrandIconSync(establishmentProfile?.logoUrl, establishmentProfile?.name);
@@ -301,7 +302,7 @@ const MainLayout: React.FC = () => {
           <main key={activeView} className="flex-1 flex flex-col overflow-hidden relative pms-fade">
             <ViewErrorBoundary language={language}>
               <Suspense fallback={<ViewFallback />}>
-                {activeView === 'planning' && (
+                {activeView === 'planning' && activeRoleDefinition.allowedTabs.includes('planning') && (
                   <>
                     <PlanningTimeline />
                     <LegendBar />
@@ -365,11 +366,13 @@ const MainLayout: React.FC = () => {
       <SyncTerminal />
 
       {/* Global Interactive Modals — mounted on demand */}
-      <BookingModal />
+      {(activeRoleDefinition.permissions.canManageBookings ||
+        activeRoleDefinition.allowedTabs.includes('planning') ||
+        activeRoleDefinition.allowedTabs.includes('my_bookings')) && <BookingModal />}
       <Suspense fallback={null}>
-        {isCockpitOpen && <AgentsCockpitModal />}
+        {isCockpitOpen && (activeRoleDefinition.permissions.canManageRoles || activeRoleDefinition.permissions.canManageBookings) && <AgentsCockpitModal />}
         {isLegalModalOpen && <LegalModal />}
-        {isIndexedDBOpen && (
+        {isIndexedDBOpen && (activeRoleDefinition.permissions.canManageRoles || activeRoleDefinition.permissions.canManageBookings) && (
           <IndexedDbInspectorModal
             isOpen={isIndexedDBOpen}
             onClose={() => setIsIndexedDBOpen(false)}
@@ -387,7 +390,7 @@ const MainLayout: React.FC = () => {
             onClose={() => setIsQrScannerOpen(false)}
           />
         )}
-        {isSetupModalVisible && (
+        {isSetupModalVisible && (activeRoleDefinition.permissions.canManageRoles || activeRoleDefinition.permissions.canManageBookings || !hasOnboarded) && (
           <EstablishmentSetupModal
             isOpen={isSetupModalVisible}
             onClose={() => setIsEstablishmentModalOpen(false)}

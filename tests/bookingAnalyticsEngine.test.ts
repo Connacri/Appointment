@@ -288,3 +288,139 @@ test('computeBookingAnalyticsSnapshot computes period-over-period comparison, fl
   assert.ok(f7.projectedOccupancyPct >= f7.confirmedOccupancyPct);
   assert.ok(snap.recommendations.length > 0);
 });
+
+test('computeBookingAnalyticsSnapshot computes tasksAnalytics attribution (who did what and how many) and detects workload imbalance', () => {
+  const teamTasks: PmsTask[] = [
+    {
+      id: 'hk_1',
+      room: '101',
+      typeId: 'clean',
+      typeName: 'Nettoyage départ',
+      category: 'Ménage',
+      assignee: 'Amina',
+      date: '2026-11-16',
+      status: 'done',
+      priority: 'normal',
+      completedBy: 'Amina',
+      completedAt: '2026-11-16 11:00',
+      consumedItems: [{ itemId: 'savon', itemName: 'Savon', quantity: 2 }],
+    },
+    {
+      id: 'hk_2',
+      room: '201',
+      typeId: 'clean',
+      typeName: 'Recouche VIP',
+      category: 'Ménage',
+      assignee: 'Sonia',
+      date: '2026-11-17',
+      status: 'done',
+      priority: 'urgent',
+      completedBy: 'Amina', // Amina completed Sonia's task -> Amina gets credit
+      completedAt: '2026-11-17 12:30',
+    },
+    {
+      id: 'hk_3',
+      room: '101',
+      typeId: 'linen',
+      typeName: 'Changement draps',
+      category: 'Linge',
+      assignee: 'Amina',
+      date: '2026-11-18',
+      status: 'done',
+      priority: 'normal',
+      completedBy: 'Amina',
+      completedAt: '2026-11-18 10:15',
+    },
+    {
+      id: 'hk_4',
+      room: '201',
+      typeId: 'clean',
+      typeName: 'Contrôle minibar',
+      category: 'Minibar & accueil',
+      assignee: 'Amina',
+      date: '2026-11-19',
+      status: 'doing',
+      priority: 'normal',
+    },
+    {
+      id: 'hk_5',
+      room: '202',
+      typeId: 'clean',
+      typeName: 'Nettoyage complet',
+      category: 'Ménage',
+      assignee: 'Amina',
+      date: '2026-11-20',
+      status: 'pending',
+      priority: 'normal',
+    },
+    {
+      id: 'hk_6',
+      room: '101',
+      typeId: 'linen',
+      typeName: 'Serviettes',
+      category: 'Linge',
+      assignee: 'Sonia',
+      date: '2026-11-20',
+      status: 'done',
+      priority: 'normal',
+      completedBy: 'Sonia',
+      completedAt: '2026-11-20 09:00',
+    },
+    // Previous period task for N vs N-1 delta
+    {
+      id: 'hk_prev',
+      room: '101',
+      typeId: 'clean',
+      typeName: 'Nettoyage',
+      category: 'Ménage',
+      assignee: 'Sonia',
+      date: '2026-11-09',
+      status: 'done',
+      priority: 'normal',
+      completedBy: 'Sonia',
+      completedAt: '2026-11-09 14:00',
+    },
+  ];
+
+  const snap = computeBookingAnalyticsSnapshot({
+    bookings: sampleBookings,
+    rooms,
+    groups,
+    tasks: teamTasks,
+    stockItems,
+    stockMovements,
+    eventLogs,
+    invoiceDocs: [],
+    range: '7d',
+    currency: 'EUR',
+    domain: 'hotel',
+    language: 'fr',
+    now: fixedNow,
+  });
+
+  assert.equal(snap.tasksAnalytics.totalTasks, 6);
+  assert.equal(snap.tasksAnalytics.prevTotalTasks, 1);
+  assert.equal(snap.tasksAnalytics.completedTasks, 4);
+  assert.equal(snap.tasksAnalytics.doingTasks, 1);
+  assert.equal(snap.tasksAnalytics.pendingTasks, 1);
+  assert.equal(snap.tasksAnalytics.completionRatePct, 67);
+  assert.equal(snap.tasksAnalytics.prevCompletionRatePct, 100);
+
+  const amina = snap.tasksAnalytics.staffWorkload.find((s) => s.staffName === 'Amina');
+  const sonia = snap.tasksAnalytics.staffWorkload.find((s) => s.staffName === 'Sonia');
+  assert.ok(amina);
+  assert.ok(sonia);
+  assert.equal(amina.completedCount, 3);
+  assert.equal(amina.assignedTotal, 5);
+  assert.equal(amina.consumedUnits, 2);
+  assert.equal(amina.balanceStatus, 'overloaded');
+
+  assert.equal(sonia.completedCount, 1);
+  assert.equal(sonia.prevCompletedCount, 1);
+  assert.equal(sonia.assignedTotal, 1);
+  assert.equal(sonia.balanceStatus, 'available');
+
+  assert.equal(snap.tasksAnalytics.imbalanceDetected, true);
+  assert.ok(snap.recommendations.some((r) => r.id === 'rec-ops-rebalance'));
+});
+

@@ -212,9 +212,71 @@ export interface StockRunwayStat {
   riskLevel: 'critical' | 'warning' | 'healthy';
 }
 
+export interface TaskCategoryStat {
+  category: PmsTask['category'];
+  label: { fr: string; en: string; ar: string };
+  total: number;
+  prevTotal: number;
+  done: number;
+  doing: number;
+  pending: number;
+  cancelled: number;
+  urgent: number;
+  completionRatePct: number;
+  sharePct: number;
+}
+
+export interface StaffWorkloadStat {
+  staffName: string;
+  assignedTotal: number;
+  completedCount: number;
+  prevCompletedCount: number;
+  doingCount: number;
+  pendingCount: number;
+  urgentHandled: number;
+  completionRatePct: number;
+  workloadSharePct: number;
+  roomsCount: number;
+  roomsList: string[];
+  consumedUnits: number;
+  categoryBreakdown: Array<{ category: PmsTask['category']; count: number; done: number }>;
+  balanceStatus: 'overloaded' | 'balanced' | 'available';
+}
+
+export interface TaskExecutionLogItem {
+  id: string;
+  room: string;
+  typeName: string;
+  category: PmsTask['category'];
+  status: PmsTask['status'];
+  priority: PmsTask['priority'];
+  assignee: string;
+  executor: string;
+  date: string;
+  completedAt?: string;
+}
+
+export interface TasksAnalyticsSummary {
+  totalTasks: number;
+  prevTotalTasks: number;
+  completedTasks: number;
+  prevCompletedTasks: number;
+  doingTasks: number;
+  pendingTasks: number;
+  cancelledTasks: number;
+  urgentOpenTasks: number;
+  completionRatePct: number;
+  prevCompletionRatePct: number;
+  avgTasksPerStaff: number;
+  imbalanceDetected: boolean;
+  byCategory: TaskCategoryStat[];
+  staffWorkload: StaffWorkloadStat[];
+  recentExecutions: TaskExecutionLogItem[];
+}
+
 export interface ManagerRecommendation {
   id: string;
-  category: 'yield' | 'prevention' | 'quality' | 'stock' | 'upsell';
+  category: 'yield' | 'prevention' | 'quality' | 'stock' | 'upsell' | 'operations';
   priority: 'high' | 'medium' | 'low';
   title: { fr: string; en: string; ar: string };
   rationale: { fr: string; en: string; ar: string };
@@ -237,6 +299,8 @@ export interface BookingAnalyticsSnapshot {
     cancelRatePct: MetricDelta;
     maintenanceTasks: MetricDelta;
     alertsCount: MetricDelta;
+    tasksTotal: MetricDelta;
+    tasksCompletionRate: MetricDelta;
   };
   trendPoints: ComparativeTrendPoint[];
   forecasts: ForecastHorizonPoint[];
@@ -262,6 +326,7 @@ export interface BookingAnalyticsSnapshot {
   complaintsAndAlerts: ComplaintAlertRecord[];
   forgottenStoredCount: number;
   stockRunway: StockRunwayStat[];
+  tasksAnalytics: TasksAnalyticsSummary;
   recommendations: ManagerRecommendation[];
 }
 
@@ -1867,6 +1932,308 @@ export function computeBookingAnalyticsSnapshot(input: BookingAnalyticsInput): B
     });
   }
 
+  // Operational Tasks & Staff Productivity ("Qui a fait quoi et combien")
+  const TASK_CATEGORY_ORDER: PmsTask['category'][] = [
+    'Ménage',
+    'Linge',
+    'Minibar & accueil',
+    'Livraison',
+    'Maintenance',
+  ];
+  const TASK_CATEGORY_LABELS: Record<PmsTask['category'], { fr: string; en: string; ar: string }> = {
+    'Ménage': { fr: 'Ménage & Rotations', en: 'Housekeeping & Turnover', ar: 'التنظيف والتجهيز' },
+    'Linge': { fr: 'Linge & Literie', en: 'Linen & Bedding', ar: 'البياضات والمفروشات' },
+    'Minibar & accueil': { fr: 'Minibar & Accueil', en: 'Minibar & Welcome', ar: 'الميني بار والترحيب' },
+    'Livraison': { fr: 'Livraisons Client', en: 'Guest Deliveries', ar: 'توصيل الطلبات' },
+    'Maintenance': { fr: 'Maintenance & Technique', en: 'Maintenance & Repair', ar: 'الصيانة التقنية' },
+  };
+
+  const getEffectiveTaskDate = (task: PmsTask): string =>
+    task.status === 'done' && task.completedAt && /^\d{4}-\d{2}-\d{2}/.test(task.completedAt)
+      ? task.completedAt.slice(0, 10)
+      : task.date;
+
+  const unassignedLabel =
+    language === 'fr' ? 'Non assigné' : language === 'ar' ? 'غير مسند' : 'Unassigned';
+
+  const curPeriodTasks = tasks.filter((tk) => {
+    const d = getEffectiveTaskDate(tk);
+    return d >= from && d < toExclusive;
+  });
+  const prevPeriodTasks = tasks.filter((tk) => {
+    const d = getEffectiveTaskDate(tk);
+    return d >= prevFrom && d < prevToExclusive;
+  });
+
+  const nonCancelledCurTasks = curPeriodTasks.filter((tk) => tk.status !== 'cancel');
+  const nonCancelledPrevTasks = prevPeriodTasks.filter((tk) => tk.status !== 'cancel');
+
+  const completedTasksCount = nonCancelledCurTasks.filter((tk) => tk.status === 'done').length;
+  const prevCompletedTasksCount = nonCancelledPrevTasks.filter((tk) => tk.status === 'done').length;
+  const doingTasksCount = nonCancelledCurTasks.filter((tk) => tk.status === 'doing').length;
+  const pendingTasksCount = nonCancelledCurTasks.filter((tk) => tk.status === 'pending').length;
+  const cancelledTasksCount = curPeriodTasks.filter((tk) => tk.status === 'cancel').length;
+  const urgentOpenTasksCount = nonCancelledCurTasks.filter(
+    (tk) => tk.priority === 'urgent' && tk.status !== 'done'
+  ).length;
+
+  const completionRatePct =
+    nonCancelledCurTasks.length > 0
+      ? Math.round((completedTasksCount / nonCancelledCurTasks.length) * 100)
+      : 0;
+  const prevCompletionRatePct =
+    nonCancelledPrevTasks.length > 0
+      ? Math.round((prevCompletedTasksCount / nonCancelledPrevTasks.length) * 100)
+      : 0;
+
+  const catBuckets = new Map<
+    PmsTask['category'],
+    {
+      total: number;
+      prevTotal: number;
+      done: number;
+      doing: number;
+      pending: number;
+      cancelled: number;
+      urgent: number;
+    }
+  >();
+  for (const cat of TASK_CATEGORY_ORDER) {
+    catBuckets.set(cat, { total: 0, prevTotal: 0, done: 0, doing: 0, pending: 0, cancelled: 0, urgent: 0 });
+  }
+  for (const tk of curPeriodTasks) {
+    const b = catBuckets.get(tk.category) ?? {
+      total: 0,
+      prevTotal: 0,
+      done: 0,
+      doing: 0,
+      pending: 0,
+      cancelled: 0,
+      urgent: 0,
+    };
+    if (tk.status === 'cancel') {
+      b.cancelled += 1;
+    } else {
+      b.total += 1;
+      if (tk.status === 'done') b.done += 1;
+      else if (tk.status === 'doing') b.doing += 1;
+      else b.pending += 1;
+      if (tk.priority === 'urgent') b.urgent += 1;
+    }
+    catBuckets.set(tk.category, b);
+  }
+  for (const tk of nonCancelledPrevTasks) {
+    const b = catBuckets.get(tk.category);
+    if (b) b.prevTotal += 1;
+  }
+
+  const byCategory: TaskCategoryStat[] = TASK_CATEGORY_ORDER.map((cat) => {
+    const b = catBuckets.get(cat)!;
+    return {
+      category: cat,
+      label: TASK_CATEGORY_LABELS[cat],
+      total: b.total,
+      prevTotal: b.prevTotal,
+      done: b.done,
+      doing: b.doing,
+      pending: b.pending,
+      cancelled: b.cancelled,
+      urgent: b.urgent,
+      completionRatePct: b.total > 0 ? Math.round((b.done / b.total) * 100) : 0,
+      sharePct:
+        nonCancelledCurTasks.length > 0 ? Math.round((b.total / nonCancelledCurTasks.length) * 100) : 0,
+    };
+  }).filter((c) => c.total > 0 || c.prevTotal > 0 || c.cancelled > 0);
+
+  // Staff workload & execution attribution
+  const staffMap = new Map<
+    string,
+    {
+      assignedTotal: number;
+      completedCount: number;
+      prevCompletedCount: number;
+      doingCount: number;
+      pendingCount: number;
+      urgentHandled: number;
+      rooms: Set<string>;
+      consumedUnits: number;
+      catMap: Map<PmsTask['category'], { count: number; done: number }>;
+    }
+  >();
+
+  const ensureStaff = (name: string) => {
+    let entry = staffMap.get(name);
+    if (!entry) {
+      entry = {
+        assignedTotal: 0,
+        completedCount: 0,
+        prevCompletedCount: 0,
+        doingCount: 0,
+        pendingCount: 0,
+        urgentHandled: 0,
+        rooms: new Set(),
+        consumedUnits: 0,
+        catMap: new Map(),
+      };
+      staffMap.set(name, entry);
+    }
+    return entry;
+  };
+
+  for (const tk of nonCancelledCurTasks) {
+    const executor =
+      tk.status === 'done'
+        ? tk.completedBy?.trim() || tk.assignee?.trim() || unassignedLabel
+        : tk.assignee?.trim() || unassignedLabel;
+    const st = ensureStaff(executor);
+    st.assignedTotal += 1;
+    if (tk.status === 'done') st.completedCount += 1;
+    else if (tk.status === 'doing') st.doingCount += 1;
+    else st.pendingCount += 1;
+    if (tk.priority === 'urgent') st.urgentHandled += 1;
+    if (tk.room?.trim()) st.rooms.add(tk.room.trim());
+    const consumed = (tk.consumedItems || []).reduce((sum, ci) => sum + (ci.quantity || 0), 0);
+    st.consumedUnits += consumed;
+    const catEntry = st.catMap.get(tk.category) ?? { count: 0, done: 0 };
+    catEntry.count += 1;
+    if (tk.status === 'done') catEntry.done += 1;
+    st.catMap.set(tk.category, catEntry);
+  }
+
+  for (const tk of nonCancelledPrevTasks) {
+    if (tk.status !== 'done') continue;
+    const prevExecutor = tk.completedBy?.trim() || tk.assignee?.trim() || unassignedLabel;
+    const st = ensureStaff(prevExecutor);
+    st.prevCompletedCount += 1;
+  }
+
+  const activeStaffEntries = [...staffMap.entries()].filter(([, v]) => v.assignedTotal > 0);
+  const activeStaffCount = activeStaffEntries.length;
+  const avgTasksPerStaff =
+    activeStaffCount > 0
+      ? Math.round((nonCancelledCurTasks.length / activeStaffCount) * 10) / 10
+      : 0;
+  const assignedCounts = activeStaffEntries.map(([, v]) => v.assignedTotal);
+  const minAssigned = assignedCounts.length > 0 ? Math.min(...assignedCounts) : 0;
+  const maxAssigned = assignedCounts.length > 0 ? Math.max(...assignedCounts) : 0;
+
+  const staffWorkload: StaffWorkloadStat[] = [...staffMap.entries()]
+    .filter(([, v]) => v.assignedTotal > 0 || v.prevCompletedCount > 0)
+    .map(([staffName, v]) => {
+      const workloadSharePct =
+        nonCancelledCurTasks.length > 0
+          ? Math.round((v.assignedTotal / nonCancelledCurTasks.length) * 100)
+          : 0;
+
+      let balanceStatus: StaffWorkloadStat['balanceStatus'] = 'balanced';
+      if (activeStaffCount >= 2 && nonCancelledCurTasks.length >= 3 && maxAssigned - minAssigned >= 2) {
+        const overloadedLimit = Math.max(avgTasksPerStaff * 1.35, avgTasksPerStaff + 1.5);
+        const availableLimit = Math.max(0, avgTasksPerStaff * 0.65);
+        if (v.assignedTotal >= overloadedLimit || (workloadSharePct >= 50 && v.assignedTotal - minAssigned >= 2)) {
+          balanceStatus = 'overloaded';
+        } else if (v.assignedTotal <= availableLimit) {
+          balanceStatus = 'available';
+        }
+      }
+
+      const categoryBreakdown = [...v.catMap.entries()]
+        .map(([category, stats]) => ({ category, count: stats.count, done: stats.done }))
+        .sort((a, b) => b.count - a.count);
+
+      return {
+        staffName,
+        assignedTotal: v.assignedTotal,
+        completedCount: v.completedCount,
+        prevCompletedCount: v.prevCompletedCount,
+        doingCount: v.doingCount,
+        pendingCount: v.pendingCount,
+        urgentHandled: v.urgentHandled,
+        completionRatePct:
+          v.assignedTotal > 0 ? Math.round((v.completedCount / v.assignedTotal) * 100) : 0,
+        workloadSharePct,
+        roomsCount: v.rooms.size,
+        roomsList: [...v.rooms],
+        consumedUnits: v.consumedUnits,
+        categoryBreakdown,
+        balanceStatus,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.completedCount - a.completedCount ||
+        b.assignedTotal - a.assignedTotal ||
+        a.staffName.localeCompare(b.staffName)
+    );
+
+  const imbalanceDetected =
+    staffWorkload.some((s) => s.balanceStatus === 'overloaded') &&
+    staffWorkload.some((s) => s.balanceStatus === 'available');
+
+  const recentExecutions: TaskExecutionLogItem[] = nonCancelledCurTasks
+    .map((tk) => ({
+      id: tk.id,
+      room: tk.room,
+      typeName: tk.typeName,
+      category: tk.category,
+      status: tk.status,
+      priority: tk.priority,
+      assignee: tk.assignee?.trim() || unassignedLabel,
+      executor:
+        tk.status === 'done'
+          ? tk.completedBy?.trim() || tk.assignee?.trim() || unassignedLabel
+          : tk.assignee?.trim() || unassignedLabel,
+      date: tk.date,
+      completedAt: tk.completedAt,
+    }))
+    .sort((a, b) => (b.completedAt || b.date).localeCompare(a.completedAt || a.date))
+    .slice(0, 20);
+
+  const tasksAnalytics: TasksAnalyticsSummary = {
+    totalTasks: nonCancelledCurTasks.length,
+    prevTotalTasks: nonCancelledPrevTasks.length,
+    completedTasks: completedTasksCount,
+    prevCompletedTasks: prevCompletedTasksCount,
+    doingTasks: doingTasksCount,
+    pendingTasks: pendingTasksCount,
+    cancelledTasks: cancelledTasksCount,
+    urgentOpenTasks: urgentOpenTasksCount,
+    completionRatePct,
+    prevCompletionRatePct,
+    avgTasksPerStaff,
+    imbalanceDetected,
+    byCategory,
+    staffWorkload,
+    recentExecutions,
+  };
+
+  if (imbalanceDetected) {
+    const overloaded = staffWorkload.find((s) => s.balanceStatus === 'overloaded');
+    const available = [...staffWorkload].reverse().find((s) => s.balanceStatus === 'available');
+    if (overloaded && available) {
+      recommendations.push({
+        id: 'rec-ops-rebalance',
+        category: 'operations',
+        priority: 'medium',
+        title: {
+          fr: 'Rééquilibrer la charge de travail des équipes',
+          en: 'Rebalance housekeeping & operational workload',
+          ar: 'إعادة توزيع أعباء العمل بين الفريق',
+        },
+        rationale: {
+          fr: `${overloaded.staffName} concentre ${overloaded.assignedTotal} tâches (${overloaded.workloadSharePct}%) contre ${available.assignedTotal} pour ${available.staffName}.`,
+          en: `${overloaded.staffName} holds ${overloaded.assignedTotal} tasks (${overloaded.workloadSharePct}%) versus ${available.assignedTotal} for ${available.staffName}.`,
+          ar: `يتحمل ${overloaded.staffName} عدد ${overloaded.assignedTotal} مهام (${overloaded.workloadSharePct}%) مقابل ${available.assignedTotal} لـ ${available.staffName}.`,
+        },
+        action: {
+          fr: `Réaffecter ${Math.max(1, Math.floor((overloaded.assignedTotal - available.assignedTotal) / 2))} tâche(s) ouverte(s) de ${overloaded.staffName} vers ${available.staffName}.`,
+          en: `Reassign ${Math.max(1, Math.floor((overloaded.assignedTotal - available.assignedTotal) / 2))} open task(s) from ${overloaded.staffName} to ${available.staffName}.`,
+          ar: `إعادة إسناد ${Math.max(1, Math.floor((overloaded.assignedTotal - available.assignedTotal) / 2))} مهام مفتوحة من ${overloaded.staffName} إلى ${available.staffName}.`,
+        },
+        metricBadge: `${overloaded.workloadSharePct}% max`,
+      });
+    }
+  }
+
   return {
     range,
     today,
@@ -1882,6 +2249,8 @@ export function computeBookingAnalyticsSnapshot(input: BookingAnalyticsInput): B
       cancelRatePct: makeDelta(cur.summary.cancelRatePct, prev.summary.cancelRatePct),
       maintenanceTasks: makeDelta(cur.summary.maintenanceTasksCount, prev.summary.maintenanceTasksCount),
       alertsCount: makeDelta(cur.summary.alertsCount, prev.summary.alertsCount),
+      tasksTotal: makeDelta(tasksAnalytics.totalTasks, tasksAnalytics.prevTotalTasks),
+      tasksCompletionRate: makeDelta(tasksAnalytics.completionRatePct, tasksAnalytics.prevCompletionRatePct),
     },
     trendPoints,
     forecasts,
@@ -1907,6 +2276,7 @@ export function computeBookingAnalyticsSnapshot(input: BookingAnalyticsInput): B
     complaintsAndAlerts,
     forgottenStoredCount,
     stockRunway,
+    tasksAnalytics,
     recommendations,
   };
 }

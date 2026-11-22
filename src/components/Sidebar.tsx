@@ -42,6 +42,7 @@ import { DomainType } from '../types/booking';
 import { APP_THEMES } from '../data/themes';
 import { ROLE_CATEGORY_META } from '../data/roles';
 import type { RoleCategory, AppTabId } from '../types/roles';
+import { getRoleUiCapabilities } from '../utils/rolePermissions';
 import { RoleIcon } from './RoleIcon';
 import { supabase } from '../services/supabase/supabaseClient';
 import { resolveAppIconHref } from '../utils/faviconSync';
@@ -96,6 +97,7 @@ export const Sidebar: React.FC = () => {
   const [isMobileProfileExpanded, setIsMobileProfileExpanded] = useState(false);
   const [isMobilePreferencesExpanded, setIsMobilePreferencesExpanded] = useState(false);
   const isRtl = language === 'ar';
+  const uiCaps = getRoleUiCapabilities(activeRoleDefinition);
 
   // Keep the page fixed while the mobile navigation drawer is open.
   useEffect(() => {
@@ -236,7 +238,10 @@ export const Sidebar: React.FC = () => {
     },
     {
       id: 'roles',
-      label: getTranslation('navRolesPermissions', language),
+      label:
+        activeRoleDefinition.id === 'chef_du_personnel'
+          ? (language === 'fr' ? 'Personnel, Affectation & Rôles' : language === 'ar' ? 'الموظفون والترقيات والأدوار' : 'Staff, HR & Roles')
+          : getTranslation('navRolesPermissions', language),
       icon: UserCog,
       view: 'roles' as AppTabId,
       domains: ['hotel', 'resort'] as DomainType[],
@@ -465,71 +470,77 @@ export const Sidebar: React.FC = () => {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <label className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950 px-2.5 py-2 text-[11px] text-slate-700 dark:text-slate-300">
-                    <span>{language === 'fr' ? 'Devise' : language === 'ar' ? 'العملة' : 'Currency'}</span>
-                    <select value={currency} onChange={(event) => setCurrency(event.target.value)} className="max-w-[5.5rem] min-w-0 bg-transparent text-right rtl:text-left text-[11px] font-bold text-amber-600 dark:text-amber-300 outline-none">
-                      <option value="DZD">DZD (DA)</option><option value="DA">DA</option><option value="EUR">EUR (€)</option><option value="USD">USD ($)</option><option value="GBP">GBP (£)</option><option value="SAR">SAR</option><option value="RMB">RMB (¥)</option><option value="CAD">CAD ($)</option>
-                    </select>
-                  </label>
-                  <button type="button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950 px-2 text-[11px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors">
+                  {uiCaps.canUseCurrencySwitcher && (
+                    <label className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950 px-2.5 py-2 text-[11px] text-slate-700 dark:text-slate-300">
+                      <span>{language === 'fr' ? 'Devise' : language === 'ar' ? 'العملة' : 'Currency'}</span>
+                      <select value={currency} onChange={(event) => setCurrency(event.target.value)} className="max-w-[5.5rem] min-w-0 bg-transparent text-right rtl:text-left text-[11px] font-bold text-amber-600 dark:text-amber-300 outline-none">
+                        <option value="DZD">DZD (DA)</option><option value="DA">DA</option><option value="EUR">EUR (€)</option><option value="USD">USD ($)</option><option value="GBP">GBP (£)</option><option value="SAR">SAR</option><option value="RMB">RMB (¥)</option><option value="CAD">CAD ($)</option>
+                      </select>
+                    </label>
+                  )}
+                  <button type="button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className={`flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950 px-2 text-[11px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors ${!uiCaps.canUseCurrencySwitcher ? 'col-span-2' : ''}`}>
                     {theme === 'dark' ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} className="text-blue-500" />}
                     {theme === 'dark' ? (language === 'fr' ? 'Mode clair' : language === 'ar' ? 'الوضع النهاري' : 'Light mode') : (language === 'fr' ? 'Mode sombre' : language === 'ar' ? 'الوضع الليلي' : 'Dark mode')}
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={toggleSound} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950 px-2 text-[11px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors">
+                  <button type="button" onClick={toggleSound} className={`flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950 px-2 text-[11px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors ${!uiCaps.canUseAdminSystemTools ? 'col-span-2' : ''}`}>
                     {isSoundEnabled ? <Volume2 size={14} className="text-emerald-500" /> : <VolumeX size={14} className="text-slate-400" />}
                     {isSoundEnabled ? (language === 'fr' ? 'Sons activés' : language === 'ar' ? 'الأصوات مفعلة' : 'Sound on') : (language === 'fr' ? 'Sons coupés' : language === 'ar' ? 'الأصوات معطلة' : 'Sound off')}
                   </button>
-                  <button type="button" onClick={() => { setIsEstablishmentModalOpen(true); setIsSidebarMobileOpen(false); }} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950 px-2 text-[11px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors">
-                    <Sliders size={14} className="text-blue-500" />
-                    {language === 'fr' ? 'Établissement' : language === 'ar' ? 'المؤسسة' : 'Property'}
-                  </button>
+                  {uiCaps.canUseAdminSystemTools && (
+                    <button type="button" onClick={() => { setIsEstablishmentModalOpen(true); setIsSidebarMobileOpen(false); }} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950 px-2 text-[11px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors">
+                      <Sliders size={14} className="text-blue-500" />
+                      {language === 'fr' ? 'Établissement' : language === 'ar' ? 'المؤسسة' : 'Property'}
+                    </button>
+                  )}
                 </div>
 
                 {/* Multi-Theme Selector */}
-                <div className="space-y-1.5 pt-2 border-t border-slate-200 dark:border-slate-800/80">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <Palette size={13} className="text-amber-500" />
-                      {getTranslation('chooseTheme', language)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => { setIsThemeModalOpen(true); setIsSidebarMobileOpen(false); }}
-                      className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                    >
-                      {language === 'fr' ? 'Galerie (8 thèmes)' : language === 'ar' ? 'معرض السمات (8)' : 'Gallery (8 themes)'}
-                    </button>
+                {!uiCaps.isFocusedOperationalRole && (
+                  <div className="space-y-1.5 pt-2 border-t border-slate-200 dark:border-slate-800/80">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <Palette size={13} className="text-amber-500" />
+                        {getTranslation('chooseTheme', language)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setIsThemeModalOpen(true); setIsSidebarMobileOpen(false); }}
+                        className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      >
+                        {language === 'fr' ? 'Galerie (8 thèmes)' : language === 'ar' ? 'معرض السمات (8)' : 'Gallery (8 themes)'}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {APP_THEMES.map((t) => {
+                        const isSelected = appTheme === t.id;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setAppTheme(t.id)}
+                            className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border text-[10px] font-medium transition-all cursor-pointer ${
+                              isSelected
+                                ? 'border-blue-500 bg-blue-50/80 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 ring-1 ring-blue-500/40 font-bold shadow-2xs'
+                                : 'border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-700'
+                            }`}
+                            title={t.subtitle[language] || t.subtitle.fr}
+                          >
+                            <div className="flex items-center gap-0.5 w-full h-2 rounded overflow-hidden shadow-2xs">
+                              {t.colors.slice(0, 3).map((c, i) => (
+                                <div key={i} className="flex-1 h-full" style={{ backgroundColor: c }} />
+                              ))}
+                            </div>
+                            <span className="truncate w-full text-center text-[9px] leading-tight">
+                              {t.name[language]?.split(' ')[0] || t.name.fr.split(' ')[0]}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {APP_THEMES.map((t) => {
-                      const isSelected = appTheme === t.id;
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => setAppTheme(t.id)}
-                          className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border text-[10px] font-medium transition-all cursor-pointer ${
-                            isSelected
-                              ? 'border-blue-500 bg-blue-50/80 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 ring-1 ring-blue-500/40 font-bold shadow-2xs'
-                              : 'border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-700'
-                          }`}
-                          title={t.subtitle[language] || t.subtitle.fr}
-                        >
-                          <div className="flex items-center gap-0.5 w-full h-2 rounded overflow-hidden shadow-2xs">
-                            {t.colors.slice(0, 3).map((c, i) => (
-                              <div key={i} className="flex-1 h-full" style={{ backgroundColor: c }} />
-                            ))}
-                          </div>
-                          <span className="truncate w-full text-center text-[9px] leading-tight">
-                            {t.name[language]?.split(' ')[0] || t.name.fr.split(' ')[0]}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                )}
               </div>
             )}
           </section>
@@ -540,28 +551,30 @@ export const Sidebar: React.FC = () => {
         {/* Sidebar Footer: Theme Gallery, Mode Switcher, IndexedDB, Legal & About */}
         <div className={`border-t border-slate-200 dark:border-white/5 space-y-1.5 bg-slate-100/60 dark:bg-slate-950/40 shrink-0 ${showCompact ? 'p-1.5 flex flex-col items-center' : 'p-3'}`}>
           {/* Visual Themes Modal Opener */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsThemeModalOpen(true);
-              setIsSidebarMobileOpen(false);
-            }}
-            className={`cursor-pointer transition-colors shadow-2xs ${
-              showCompact
-                ? 'mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-850'
-                : 'w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-850'
-            }`}
-            title={language === 'fr' ? 'Changer de thème visuel et de palette' : language === 'ar' ? 'تغيير السمة ولوحة الألوان' : 'Change theme & visual palette'}
-            aria-label={language === 'fr' ? 'Thèmes Visuels' : language === 'ar' ? 'السمات والألوان' : 'Visual Themes'}
-          >
-            <Palette size={16} className="text-amber-500 shrink-0" />
-            {!showCompact && (
-              <div className="flex items-center justify-between w-full">
-                <span className="truncate">{language === 'fr' ? 'Thèmes Visuels' : language === 'ar' ? 'السمات والألوان' : 'Visual Themes'}</span>
-                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded">8+</span>
-              </div>
-            )}
-          </button>
+          {!uiCaps.isFocusedOperationalRole && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsThemeModalOpen(true);
+                setIsSidebarMobileOpen(false);
+              }}
+              className={`cursor-pointer transition-colors shadow-2xs ${
+                showCompact
+                  ? 'mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-850'
+                  : 'w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-850'
+              }`}
+              title={language === 'fr' ? 'Changer de thème visuel et de palette' : language === 'ar' ? 'تغيير السمة ولوحة الألوان' : 'Change theme & visual palette'}
+              aria-label={language === 'fr' ? 'Thèmes Visuels' : language === 'ar' ? 'السمات والألوان' : 'Visual Themes'}
+            >
+              <Palette size={16} className="text-amber-500 shrink-0" />
+              {!showCompact && (
+                <div className="flex items-center justify-between w-full">
+                  <span className="truncate">{language === 'fr' ? 'Thèmes Visuels' : language === 'ar' ? 'السمات والألوان' : 'Visual Themes'}</span>
+                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded">8+</span>
+                </div>
+              )}
+            </button>
+          )}
 
           {/* Quick Light/Dark Toggle */}
           <button
@@ -585,28 +598,30 @@ export const Sidebar: React.FC = () => {
           </button>
 
           {/* Local Data (IndexedDB) */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsIndexedDBOpen(true);
-              setIsSidebarMobileOpen(false);
-            }}
-            className={`cursor-pointer transition-colors shadow-2xs ${
-              showCompact
-                ? 'mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-850'
-                : 'w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-850'
-            }`}
-            title={language === 'fr' ? 'Consulter les données enregistrées localement' : language === 'ar' ? 'عرض البيانات المخزنة محلياً' : 'Inspect locally stored data'}
-            aria-label={language === 'fr' ? 'Données locales' : language === 'ar' ? 'البيانات المحلية' : 'Local Data'}
-          >
-            <Database size={16} className="text-cyan-500 shrink-0" />
-            {!showCompact && (
-              <div className="flex items-center justify-between w-full">
-                <span className="truncate">{language === 'fr' ? 'Données locales' : language === 'ar' ? 'البيانات المحلية' : 'Local Data'}</span>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{language === 'fr' ? 'Navigateur' : language === 'ar' ? 'المتصفح' : 'Browser'}</span>
-              </div>
-            )}
-          </button>
+          {uiCaps.canUseAdminSystemTools && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsIndexedDBOpen(true);
+                setIsSidebarMobileOpen(false);
+              }}
+              className={`cursor-pointer transition-colors shadow-2xs ${
+                showCompact
+                  ? 'mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-850'
+                  : 'w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-850'
+              }`}
+              title={language === 'fr' ? 'Consulter les données enregistrées localement' : language === 'ar' ? 'عرض البيانات المخزنة محلياً' : 'Inspect locally stored data'}
+              aria-label={language === 'fr' ? 'Données locales' : language === 'ar' ? 'البيانات المحلية' : 'Local Data'}
+            >
+              <Database size={16} className="text-cyan-500 shrink-0" />
+              {!showCompact && (
+                <div className="flex items-center justify-between w-full">
+                  <span className="truncate">{language === 'fr' ? 'Données locales' : language === 'ar' ? 'البيانات المحلية' : 'Local Data'}</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{language === 'fr' ? 'Navigateur' : language === 'ar' ? 'المتصفح' : 'Browser'}</span>
+                </div>
+              )}
+            </button>
+          )}
 
           {/* Legal Modal */}
           <button
@@ -632,60 +647,64 @@ export const Sidebar: React.FC = () => {
           </button>
 
           {/* Appointment Académie & Tutoriels (Directly above À Propos) */}
-          <button
-            type="button"
-            onClick={() => {
-              setActiveView('help');
-              setIsSidebarMobileOpen(false);
-            }}
-            className={`cursor-pointer transition-colors shadow-2xs ${
-              activeView === 'help'
-                ? 'bg-blue-600 text-white font-bold shadow-sm'
-                : showCompact
-                ? 'mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60'
-                : 'w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-blue-50/80 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60'
-            }`}
-            title={language === 'fr' ? 'Appointment Académie & Tutoriels' : language === 'ar' ? 'أكاديمية ودروس Appointment' : 'Appointment Academy & Tutorials'}
-            aria-label={language === 'fr' ? 'Appointment Académie' : language === 'ar' ? 'أكاديمية Appointment' : 'Appointment Academy'}
-          >
-            <GraduationCap size={16} className={`shrink-0 ${activeView === 'help' ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} />
-            {!showCompact && (
-              <div className="flex items-center justify-between w-full">
-                <span className="truncate font-bold">
-                  {language === 'fr' ? 'Appointment Académie' : language === 'ar' ? 'أكاديمية Appointment' : 'Appointment Academy'}
-                </span>
-                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold ${
-                  activeView === 'help' ? 'bg-white/20 text-white' : 'bg-blue-200/70 dark:bg-blue-900/70 text-blue-800 dark:text-blue-200'
-                }`}>
-                  PRO
-                </span>
-              </div>
-            )}
-          </button>
+          {!uiCaps.isFocusedOperationalRole && (
+            <button
+              type="button"
+              onClick={() => {
+                setActiveView('help');
+                setIsSidebarMobileOpen(false);
+              }}
+              className={`cursor-pointer transition-colors shadow-2xs ${
+                activeView === 'help'
+                  ? 'bg-blue-600 text-white font-bold shadow-sm'
+                  : showCompact
+                  ? 'mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60'
+                  : 'w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-blue-50/80 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60'
+              }`}
+              title={language === 'fr' ? 'Appointment Académie & Tutoriels' : language === 'ar' ? 'أكاديمية ودروس Appointment' : 'Appointment Academy & Tutorials'}
+              aria-label={language === 'fr' ? 'Appointment Académie' : language === 'ar' ? 'أكاديمية Appointment' : 'Appointment Academy'}
+            >
+              <GraduationCap size={16} className={`shrink-0 ${activeView === 'help' ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} />
+              {!showCompact && (
+                <div className="flex items-center justify-between w-full">
+                  <span className="truncate font-bold">
+                    {language === 'fr' ? 'Appointment Académie' : language === 'ar' ? 'أكاديمية Appointment' : 'Appointment Academy'}
+                  </span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold ${
+                    activeView === 'help' ? 'bg-white/20 text-white' : 'bg-blue-200/70 dark:bg-blue-900/70 text-blue-800 dark:text-blue-200'
+                  }`}>
+                    PRO
+                  </span>
+                </div>
+              )}
+            </button>
+          )}
 
           {/* About Modal */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsAboutModalOpen(true);
-              setIsSidebarMobileOpen(false);
-            }}
-            className={`cursor-pointer transition-colors ${
-              showCompact
-                ? 'mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl text-cyan-700 dark:text-cyan-400 hover:text-cyan-900 dark:hover:text-cyan-200 bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800/40 hover:bg-cyan-100 dark:hover:bg-cyan-900/40'
-                : 'w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold text-cyan-700 dark:text-cyan-400 hover:text-cyan-900 dark:hover:text-cyan-200 bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800/40 hover:bg-cyan-100 dark:hover:bg-cyan-900/40'
-            }`}
-            title={language === 'fr' ? 'À Propos de FORSLOG LTD et du Développeur S.M. Ramzi Guedouar' : language === 'ar' ? 'حول FORSLOG LTD والمطور رمزي قدوار' : 'About FORSLOG LTD & Developer S.M. Ramzi Guedouar'}
-            aria-label="About"
-          >
-            <Info size={16} className="shrink-0 text-cyan-600 dark:text-cyan-400" />
-            {!showCompact && (
-              <div className="flex items-center justify-between w-full">
-                <span className="truncate">{language === 'fr' ? 'À Propos' : language === 'ar' ? 'حول النظام' : 'About'}</span>
-                <span className="text-[10px] text-cyan-800 dark:text-cyan-300 font-mono bg-cyan-200/70 dark:bg-cyan-900/60 px-1.5 py-0.5 rounded">FORSLOG</span>
-              </div>
-            )}
-          </button>
+          {!uiCaps.isFocusedOperationalRole && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsAboutModalOpen(true);
+                setIsSidebarMobileOpen(false);
+              }}
+              className={`cursor-pointer transition-colors ${
+                showCompact
+                  ? 'mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl text-cyan-700 dark:text-cyan-400 hover:text-cyan-900 dark:hover:text-cyan-200 bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800/40 hover:bg-cyan-100 dark:hover:bg-cyan-900/40'
+                  : 'w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold text-cyan-700 dark:text-cyan-400 hover:text-cyan-900 dark:hover:text-cyan-200 bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800/40 hover:bg-cyan-100 dark:hover:bg-cyan-900/40'
+              }`}
+              title={language === 'fr' ? 'À Propos de FORSLOG LTD et du Développeur S.M. Ramzi Guedouar' : language === 'ar' ? 'حول FORSLOG LTD والمطور رمزي قدوار' : 'About FORSLOG LTD & Developer S.M. Ramzi Guedouar'}
+              aria-label="About"
+            >
+              <Info size={16} className="shrink-0 text-cyan-600 dark:text-cyan-400" />
+              {!showCompact && (
+                <div className="flex items-center justify-between w-full">
+                  <span className="truncate">{language === 'fr' ? 'À Propos' : language === 'ar' ? 'حول النظام' : 'About'}</span>
+                  <span className="text-[10px] text-cyan-800 dark:text-cyan-300 font-mono bg-cyan-200/70 dark:bg-cyan-900/60 px-1.5 py-0.5 rounded">FORSLOG</span>
+                </div>
+              )}
+            </button>
+          )}
 
           {/* Déconnexion / Logout */}
           <button

@@ -19,6 +19,7 @@ import {
   ShieldAlert,
   User,
   UserCog,
+  Users,
 } from 'lucide-react';
 import type { RoleIconName } from '../types/roles';
 
@@ -42,6 +43,7 @@ const ICON_MAP: Record<RoleIconName, React.ComponentType<{ size?: number; classN
   ShieldAlert,
   User,
   UserCog,
+  Users,
 };
 
 export const getRoleIconComponent = (iconName?: RoleIconName) => {

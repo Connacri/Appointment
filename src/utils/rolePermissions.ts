@@ -175,3 +175,43 @@ export function slugifyCustomRoleId(name: string, existingIds: string[]): string
   }
   return `${candidate}_${idx}`;
 }
+
+export interface RoleUiCapabilities {
+  canViewPlanningOrBookings: boolean;
+  canUseCurrencySwitcher: boolean;
+  canUseUsbTools: boolean;
+  canUseAdminSystemTools: boolean;
+  isFocusedOperationalRole: boolean;
+}
+
+export function getRoleUiCapabilities(role: RoleDefinition): RoleUiCapabilities {
+  const canViewPlanningOrBookings =
+    role.permissions.canManageBookings ||
+    role.allowedTabs.includes('planning') ||
+    role.allowedTabs.includes('my_bookings');
+  const canUseCurrencySwitcher =
+    role.permissions.canManageBookings ||
+    role.allowedTabs.includes('billing') ||
+    role.allowedTabs.includes('pricing') ||
+    role.allowedTabs.includes('analytics') ||
+    role.allowedTabs.includes('planning');
+  const canUseUsbTools =
+    role.permissions.canIssueKeyCards || role.allowedTabs.includes('prousb');
+  const canUseAdminSystemTools =
+    role.permissions.canManageRoles || role.permissions.canManageBookings;
+  const isFocusedOperationalRole =
+    !role.permissions.isClientPortal &&
+    !canViewPlanningOrBookings &&
+    !canUseAdminSystemTools &&
+    !role.allowedTabs.includes('analytics') &&
+    !role.allowedTabs.includes('billing');
+
+  return {
+    canViewPlanningOrBookings,
+    canUseCurrencySwitcher,
+    canUseUsbTools,
+    canUseAdminSystemTools,
+    isFocusedOperationalRole,
+  };
+}
+

@@ -20,6 +20,7 @@ export type BuiltInRoleId =
   | 'admin'
   | 'manager'
   | 'responsable'
+  | 'chef_du_personnel'
   | 'receptionist'
   | 'concierge'
   | 'night_auditor'
@@ -65,7 +66,8 @@ export type RoleIconName =
   | 'Flower2'
   | 'ShieldAlert'
   | 'User'
-  | 'UserCog';
+  | 'UserCog'
+  | 'Users';
 
 export interface RolePermissions {
   canManageBookings: boolean;
@@ -99,4 +101,33 @@ export interface StoredRolesPayload {
     allowedTabs?: AppTabId[];
     permissions?: Partial<RolePermissions>;
   }>;
+}
+
+export type StaffShiftType = 'Matin' | 'Soir' | 'Nuit' | 'Polyvalent';
+export type StaffEmploymentStatus = 'active' | 'on_leave' | 'inactive';
+export type StaffCareerChangeType = 'hired' | 'assigned' | 'promoted' | 'transferred';
+
+export interface StaffPromotionEntry {
+  id: string;
+  date: string;
+  type: StaffCareerChangeType;
+  fromRoleId?: UserRole;
+  toRoleId: UserRole;
+  fromAssignment?: string;
+  toAssignment: string;
+  note?: string;
+  approvedBy: string;
+}
+
+export interface StaffMemberRecord {
+  id: string;
+  fullName: string;
+  phone?: string;
+  roleId: UserRole;
+  assignment: string;
+  shift: StaffShiftType;
+  defaultTasks: string[];
+  status: StaffEmploymentStatus;
+  hiredAt: string;
+  history: StaffPromotionEntry[];
 }

@@ -14,11 +14,14 @@ import {
   PmsTask,
   StockItem,
   StockMovement,
+  StockSupplier,
+  PurchaseOrderRecord,
   HotelEstablishment,
   InvoiceRecord,
   InvoiceItem,
   DocumentType,
 } from '../types/booking';
+import { applyStockDeductions, type StockDeductionLine } from '../utils/stockProcurement';
 import {
   initialResourceGroups,
   initialBookings,
@@ -87,6 +90,10 @@ import type {
   RoleDefinition,
   RoleIconName,
   RolePermissions,
+  StaffCareerChangeType,
+  StaffEmploymentStatus,
+  StaffMemberRecord,
+  StaffShiftType,
   StoredRolesPayload,
 } from '../types/roles';
 import { BUILT_IN_ROLES } from '../data/roles';
@@ -101,6 +108,12 @@ import {
   saveStoredRolesPayload,
   slugifyCustomRoleId,
 } from '../utils/rolePermissions';
+import {
+  applyStaffAssignmentUpdate,
+  applyStaffPromotionOrTransfer,
+  buildStaffMemberRecord,
+  mapRoleToTaskCategory,
+} from '../utils/staffHr';
 
 export type ActiveAppView =
   | 'planning'
@@ -162,6 +175,50 @@ interface AppContextType {
   deleteCustomRole: (roleId: UserRole) => boolean;
   resetBuiltInRoles: () => void;
   hasCustomizedBuiltInRoles: boolean;
+  staffMembers: StaffMemberRecord[];
+  createStaffMember: (input: {
+    fullName: string;
+    phone?: string;
+    roleId: UserRole;
+    assignment: string;
+    shift: StaffShiftType;
+    defaultTasks: string[];
+    status?: StaffEmploymentStatus;
+    note?: string;
+    createInitialTasks?: boolean;
+    initialRoom?: string;
+  }) => StaffMemberRecord;
+  updateStaffAssignment: (
+    staffId: string,
+    patch: {
+      assignment: string;
+      shift: StaffShiftType;
+      status?: StaffEmploymentStatus;
+      defaultTasks?: string[];
+      note?: string;
+    }
+  ) => void;
+  promoteOrTransferStaff: (
+    staffId: string,
+    change: {
+      newRoleId: UserRole;
+      newAssignment?: string;
+      newShift?: StaffShiftType;
+      defaultTasks?: string[];
+      changeType: Extract<StaffCareerChangeType, 'promoted' | 'transferred'>;
+      note?: string;
+    }
+  ) => void;
+  assignTaskToStaff: (
+    staffId: string,
+    input: {
+      room: string;
+      taskTitle: string;
+      priority?: 'normal' | 'urgent';
+      note?: string;
+    }
+  ) => void;
+  deleteStaffMember: (staffId: string) => void;
   clientProfile: ClientProfile;
   setClientProfile: (profile: ClientProfile) => void;
   activeSector: SectorType | 'all';
@@ -232,18 +289,49 @@ interface AppContextType {
   setCurrency: (c: string) => void;
   tasks: PmsTask[];
   addTask: (task: Omit<PmsTask, 'id'>) => void;
-  updateTaskStatus: (id: string, status: PmsTask['status']) => void;
+  updateTaskStatus: (id: string, status: PmsTask['status'], completedByOverride?: string) => void;
   toggleSubtask: (taskId: string, subtaskId: string) => void;
   deleteTask: (id: string) => void;
   generateTurnoverTasksForCheckout: (roomName: string) => void;
+  activeOperatorName: string;
+  setActiveOperatorName: (name: string) => void;
+  focusedTaskId: string | null;
+  setFocusedTaskId: (id: string | null) => void;
   stockItems: StockItem[];
   stockMovements: StockMovement[];
   addStockMovement: (itemId: string, delta: number, reason: string, room?: string) => void;
+  addStockItem: (item: Omit<StockItem, 'id'>) => StockItem;
+  seedStandardStockCatalog: () => number;
   updateStockItem: (item: StockItem) => void;
   deleteStockItem: (id: string) => void;
+  recordRoomReplenishment: (input: {
+    roomId?: string;
+    roomName: string;
+    items: StockDeductionLine[];
+    markRoomClean?: boolean;
+    note?: string;
+    operatorName?: string;
+  }) => { deductedCount: number; lowStockTriggered: StockItem[]; rupturedItems: StockItem[] };
+  suppliers: StockSupplier[];
+  saveSupplier: (supplier: Omit<StockSupplier, 'id'> & { id?: string }) => StockSupplier;
+  deleteSupplier: (id: string) => void;
+  purchaseOrders: PurchaseOrderRecord[];
+  createPurchaseOrder: (
+    input: Omit<PurchaseOrderRecord, 'id' | 'orderNumber' | 'createdAt' | 'createdBy'> & {
+      orderNumber?: string;
+      createdBy?: string;
+    }
+  ) => PurchaseOrderRecord;
+  updatePurchaseOrder: (po: PurchaseOrderRecord) => void;
+  deletePurchaseOrder: (id: string) => void;
+  markPurchaseOrderReceived: (id: string) => void;
+  focusedStockTab: 'stock' | 'movements' | 'reorder' | 'suppliers' | null;
+  setFocusedStockTab: (tab: 'stock' | 'movements' | 'reorder' | 'suppliers' | null) => void;
   dynamicRates: Record<string, Record<string, number>>;
   setDynamicRate: (roomType: string, date: string, price: number) => void;
   applyDynamicRatesBulk: (roomType: string, rates: Record<string, number>) => void;
+  clearDynamicRate: (roomType: string, date: string) => void;
+  clearDynamicRatesMonth: (roomType: string, yearMonth: string) => void;
   isSoundEnabled: boolean;
   toggleSound: () => boolean;
   playFeedback: (type: AudioFeedbackType, options?: AudioFeedbackOptions) => void;
@@ -334,8 +422,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const languageRef = useRef<Language>(language);
   languageRef.current = language;
   const clientProfileRef = useRef<ClientProfile | null>(null);
+  const [activeOperatorName, setActiveOperatorNameState] = useState<string>(() => {
+    if (typeof localStorage === 'undefined') return '';
+    return localStorage.getItem('omnibook_active_operator') || '';
+  });
+  const activeOperatorNameRef = useRef<string>(activeOperatorName);
+  activeOperatorNameRef.current = activeOperatorName;
+
+  const setActiveOperatorName = useCallback((name: string) => {
+    const cleaned = name.trim();
+    setActiveOperatorNameState(cleaned);
+    activeOperatorNameRef.current = cleaned;
+    try {
+      if (cleaned) {
+        localStorage.setItem('omnibook_active_operator', cleaned);
+      } else {
+        localStorage.removeItem('omnibook_active_operator');
+      }
+    } catch {
+      // Ignore storage error
+    }
+  }, []);
+
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
 
   const resolveActorLabel = useCallback((role: UserRole): string => {
+    const operatorName = activeOperatorNameRef.current.trim();
+    if (operatorName) return operatorName;
     const profileName = clientProfileRef.current?.name?.trim();
     if (profileName) return profileName;
     const roleDef = resolveRoleDefinition(rolesRef.current, role);
@@ -413,8 +526,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setCurrentRole = (r: UserRole) => {
     const normalized = normalizeLegacyRoleId(r);
+    const targetDef = resolveRoleDefinition(rolesRef.current, normalized);
     if (normalized !== currentRole) {
-      const targetDef = resolveRoleDefinition(rolesRef.current, normalized);
       const prevDef = resolveRoleDefinition(rolesRef.current, currentRole);
       logEvent({
         category: 'system',
@@ -427,6 +540,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setCurrentRoleState(normalized);
     localStorage.setItem('omnibook_role', normalized);
+    if (!isTabAllowedForRole(targetDef, activeView)) {
+      setActiveView(resolveFallbackTabForRole(targetDef, activeView));
+    }
+    if (!targetDef.permissions.canManageBookings && !targetDef.allowedTabs.includes('planning') && !targetDef.allowedTabs.includes('my_bookings')) {
+      setSelectedBooking(null);
+      setIsNewBookingModalOpen(false);
+    }
+    if (!targetDef.permissions.canManageRoles && !targetDef.permissions.canManageBookings) {
+      setIsEstablishmentModalOpen(false);
+      setIsIndexedDBOpen(false);
+      setIsCockpitOpen(false);
+    }
   };
 
   const persistRolesConfig = useCallback((updater: (prev: StoredRolesPayload) => StoredRolesPayload) => {
@@ -686,6 +811,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return [];
   });
+  const stockItemsRef = useRef<StockItem[]>(stockItems);
+  stockItemsRef.current = stockItems;
 
   const [stockMovements, setStockMovements] = useState<StockMovement[]>(() => {
     const saved = localStorage.getItem('omnibook_stock_movements');
@@ -693,6 +820,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const demoMovementIds = new Set(['sm_1', 'sm_2', 'sm_3']);
         return (JSON.parse(saved) as StockMovement[]).filter((movement) => !demoMovementIds.has(movement.id));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [];
+  });
+
+  const [suppliers, setSuppliers] = useState<StockSupplier[]>(() => {
+    const saved = localStorage.getItem('omnibook_stock_suppliers');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? (parsed as StockSupplier[]) : [];
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [];
+  });
+
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderRecord[]>(() => {
+    const saved = localStorage.getItem('omnibook_purchase_orders');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? (parsed as PurchaseOrderRecord[]) : [];
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [];
+  });
+
+  const [focusedStockTab, setFocusedStockTab] = useState<'stock' | 'movements' | 'reorder' | 'suppliers' | null>(null);
+
+  // HR Staff Directory & Career History
+  const [staffMembers, setStaffMembers] = useState<StaffMemberRecord[]>(() => {
+    const saved = localStorage.getItem('omnibook_staff_members');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? (parsed as StaffMemberRecord[]) : [];
       } catch (e) {
         console.error(e);
       }
@@ -1457,6 +1626,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const byId = new Map(prev.map((s) => [s.id, s]));
           for (const item of result.remoteStockItems) byId.set(item.id, item);
           const next = [...byId.values()];
+          stockItemsRef.current = next;
           localStorage.setItem('omnibook_stock_items', JSON.stringify(next));
           return next;
         });
@@ -2421,7 +2591,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const updateTaskStatus = (id: string, status: PmsTask['status']) => {
+  const updateTaskStatus = (id: string, status: PmsTask['status'], completedByOverride?: string) => {
     if (status === 'done') {
       playSuccessFeedback();
     } else {
@@ -2429,14 +2599,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const targetTask = tasks.find((t) => t.id === id);
+    const resolvedExecutor =
+      completedByOverride?.trim() ||
+      activeOperatorNameRef.current.trim() ||
+      clientProfileRef.current?.name?.trim() ||
+      targetTask?.assignee?.trim() ||
+      resolveActorLabel(currentRoleRef.current);
+
     if (targetTask) {
       logEvent({
         category: 'task',
         action: 'task.status_changed',
         severity: status === 'done' ? 'success' : status === 'cancel' ? 'warn' : 'info',
         title: `Tâche ${targetTask.room} · ${targetTask.typeName} → ${status}`,
-        description: `Statut tâche : ${targetTask.status} → ${status} (${targetTask.assignee})`,
+        description:
+          status === 'done'
+            ? `Achevée par ${resolvedExecutor} (assignée à ${targetTask.assignee})`
+            : `Statut tâche : ${targetTask.status} → ${status} (${targetTask.assignee})`,
         target: { type: 'task', id, label: targetTask.typeName, secondaryLabel: targetTask.room },
+        metadata: status === 'done' ? { completedBy: resolvedExecutor, assignee: targetTask.assignee } : undefined,
         changes: [{ field: 'Statut tâche', before: targetTask.status, after: status }],
       });
     }
@@ -2445,6 +2626,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated = prev.map((t) => {
         if (t.id === id) {
           const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
+          const taskExecutor =
+            completedByOverride?.trim() ||
+            activeOperatorNameRef.current.trim() ||
+            clientProfileRef.current?.name?.trim() ||
+            t.assignee?.trim() ||
+            resolveActorLabel(currentRoleRef.current);
           if (status === 'done' && t.status !== 'done' && t.consumedItems?.length) {
             t.consumedItems.forEach((c) => {
               addStockMovement(c.itemId, -c.quantity, `Consommation tâche: ${t.typeName}`, t.room);
@@ -2459,8 +2646,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return {
             ...t,
             status,
-            completedAt: status === 'done' ? nowStr : t.completedAt,
-            completedBy: status === 'done' ? resolveActorLabel(currentRoleRef.current) : t.completedBy,
+            completedAt: status === 'done' ? nowStr : undefined,
+            completedBy: status === 'done' ? taskExecutor : undefined,
           };
         }
         return t;
@@ -2598,19 +2785,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addStockMovement = (itemId: string, delta: number, reason: string, room?: string) => {
     const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    const targetItem = stockItems.find((s) => s.id === itemId);
+    const currentList = stockItemsRef.current;
+    const targetItem = currentList.find((s) => s.id === itemId);
     const prevQty = targetItem?.quantity ?? 0;
     const nextQty = Math.max(0, prevQty + delta);
-    setStockItems((prev) => {
-      const updated = prev.map((item) => {
-        if (item.id === itemId) {
-          return { ...item, quantity: Math.max(0, item.quantity + delta) };
-        }
-        return item;
-      });
-      localStorage.setItem('omnibook_stock_items', JSON.stringify(updated));
-      return updated;
-    });
+    const updatedList = currentList.map((item) =>
+      item.id === itemId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
+    );
+    stockItemsRef.current = updatedList;
+    setStockItems(updatedList);
+    localStorage.setItem('omnibook_stock_items', JSON.stringify(updatedList));
 
     const newMovement: StockMovement = {
       id: `mov_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -2641,13 +2825,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const updateStockItem = (updatedItem: StockItem) => {
-    const existing = stockItems.find((item) => item.id === updatedItem.id);
-    setStockItems((prev) => {
-      const updated = prev.map((item) => (item.id === updatedItem.id ? updatedItem : item));
-      localStorage.setItem('omnibook_stock_items', JSON.stringify(updated));
-      return updated;
+  const addStockItem = (input: Omit<StockItem, 'id'>): StockItem => {
+    const newItem: StockItem = {
+      ...input,
+      id: `stk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    };
+    const next = [newItem, ...stockItemsRef.current];
+    stockItemsRef.current = next;
+    setStockItems(next);
+    localStorage.setItem('omnibook_stock_items', JSON.stringify(next));
+    logEvent({
+      category: 'stock',
+      action: 'stock.item_created',
+      severity: 'success',
+      title: `Article ajouté au stock · ${newItem.name}`,
+      description: `${newItem.quantity} ${newItem.unit} (seuil min ${newItem.minThreshold}) · ${newItem.category}`,
+      target: { type: 'stock_item', id: newItem.id, label: newItem.name, secondaryLabel: newItem.category },
     });
+    return newItem;
+  };
+
+  const seedStandardStockCatalog = (): number => {
+    const existingIds = new Set(stockItemsRef.current.map((s) => s.id));
+    const existingNames = new Set(stockItemsRef.current.map((s) => s.name.trim().toLowerCase()));
+    const toAdd: StockItem[] = [];
+    for (const template of initialStockItems) {
+      const candidateId = `std_${template.id}`;
+      if (existingIds.has(candidateId) || existingIds.has(template.id) || existingNames.has(template.name.trim().toLowerCase())) {
+        continue;
+      }
+      toAdd.push({ ...template, id: candidateId });
+    }
+    if (toAdd.length === 0) return 0;
+    const next = [...stockItemsRef.current, ...toAdd];
+    stockItemsRef.current = next;
+    setStockItems(next);
+    localStorage.setItem('omnibook_stock_items', JSON.stringify(next));
+    logEvent({
+      category: 'stock',
+      action: 'stock.catalog_seeded',
+      severity: 'success',
+      title: `Catalogue hôtelier standard chargé`,
+      description: `${toAdd.length} consommables hôteliers ajoutés à l'économat.`,
+      metadata: { addedCount: toAdd.length },
+    });
+    return toAdd.length;
+  };
+
+  const updateStockItem = (updatedItem: StockItem) => {
+    const existing = stockItemsRef.current.find((item) => item.id === updatedItem.id);
+    const updated = stockItemsRef.current.map((item) => (item.id === updatedItem.id ? updatedItem : item));
+    stockItemsRef.current = updated;
+    setStockItems(updated);
+    localStorage.setItem('omnibook_stock_items', JSON.stringify(updated));
     logEvent({
       category: 'stock',
       action: 'stock.item_updated',
@@ -2665,12 +2895,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteStockItem = (id: string) => {
-    const existing = stockItems.find((item) => item.id === id);
-    setStockItems((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      localStorage.setItem('omnibook_stock_items', JSON.stringify(updated));
-      return updated;
-    });
+    const existing = stockItemsRef.current.find((item) => item.id === id);
+    const updated = stockItemsRef.current.filter((item) => item.id !== id);
+    stockItemsRef.current = updated;
+    setStockItems(updated);
+    localStorage.setItem('omnibook_stock_items', JSON.stringify(updated));
     if (existing) {
       logEvent({
         category: 'stock',
@@ -2681,6 +2910,178 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         target: { type: 'stock_item', id, label: existing.name, secondaryLabel: existing.category },
       });
     }
+  };
+
+  const recordRoomReplenishment: AppContextType['recordRoomReplenishment'] = (input) => {
+    const { roomId, roomName, items, markRoomClean, note, operatorName } = input;
+    const result = applyStockDeductions(stockItemsRef.current, items);
+    const actor = operatorName?.trim() || resolveActorLabel(currentRoleRef.current);
+    const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    const reasonText = note?.trim() ? `Réalimentation chambre · ${note.trim()}` : 'Réalimentation chambre';
+
+    if (result.appliedLines.length > 0) {
+      stockItemsRef.current = result.updatedStockItems;
+      setStockItems(result.updatedStockItems);
+      localStorage.setItem('omnibook_stock_items', JSON.stringify(result.updatedStockItems));
+
+      const newMovements: StockMovement[] = result.appliedLines.map((line, idx) => ({
+        id: `mov_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: nowStr,
+        itemId: line.item.id,
+        itemName: line.item.name,
+        delta: -line.deductedQty,
+        reason: reasonText,
+        room: roomName,
+        user: actor,
+      }));
+
+      setStockMovements((prev) => {
+        const updated = [...newMovements, ...prev].slice(0, 200);
+        localStorage.setItem('omnibook_stock_movements', JSON.stringify(updated));
+        return updated;
+      });
+
+      logEvent({
+        category: 'stock',
+        action: 'stock.room_replenishment',
+        severity: result.lowStockTriggered.length > 0 ? 'warn' : 'success',
+        title: `Réalimentation validée · ${roomName}`,
+        description: `${result.appliedLines.length} consommable(s) déduit(s) du stock par ${actor}.`,
+        target: { type: 'resource', id: roomId, label: roomName },
+        metadata: {
+          deductedItems: result.appliedLines.map((l) => `${l.item.name} ×${l.deductedQty}`).join(', '),
+          lowStockCount: result.lowStockTriggered.length,
+        },
+        resourceId: roomId,
+      });
+
+      if (result.lowStockTriggered.length > 0) {
+        logEvent({
+          category: 'stock',
+          action: 'stock.low_threshold_alert',
+          severity: 'warn',
+          title: `Alerte rupture / seuil bas · ${result.lowStockTriggered.map((i) => i.name).join(', ')}`,
+          description: `${result.rupturedItems.length} rupture(s) et ${result.lowStockTriggered.length} article(s) à commander suite à la réalimentation ${roomName}.`,
+          metadata: {
+            rupturedIds: result.rupturedItems.map((i) => i.id).join(', '),
+            lowStockIds: result.lowStockTriggered.map((i) => i.id).join(', '),
+          },
+        });
+      }
+    }
+
+    if (markRoomClean && roomId) {
+      updateHousekeepingStatus(roomId, 'clean');
+    }
+
+    return {
+      deductedCount: result.appliedLines.length,
+      lowStockTriggered: result.lowStockTriggered,
+      rupturedItems: result.rupturedItems,
+    };
+  };
+
+  const saveSupplier: AppContextType['saveSupplier'] = (input) => {
+    const id = input.id || `sup_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const record: StockSupplier = {
+      id,
+      name: input.name.trim(),
+      category: input.category.trim() || 'Général',
+      contactName: input.contactName?.trim() || undefined,
+      phone: input.phone?.trim() || undefined,
+      email: input.email?.trim() || undefined,
+      preferredChannel: input.preferredChannel || 'whatsapp',
+      notes: input.notes?.trim() || undefined,
+    };
+    setSuppliers((prev) => {
+      const exists = prev.some((s) => s.id === id);
+      const updated = exists ? prev.map((s) => (s.id === id ? record : s)) : [record, ...prev];
+      localStorage.setItem('omnibook_stock_suppliers', JSON.stringify(updated));
+      return updated;
+    });
+    logEvent({
+      category: 'stock',
+      action: input.id ? 'stock.supplier_updated' : 'stock.supplier_created',
+      severity: 'info',
+      title: `Fournisseur enregistré · ${record.name}`,
+      description: `Canal préféré : ${record.preferredChannel.toUpperCase()}${record.phone ? ` · ${record.phone}` : ''}`,
+    });
+    return record;
+  };
+
+  const deleteSupplier = (id: string) => {
+    setSuppliers((prev) => {
+      const updated = prev.filter((s) => s.id !== id);
+      localStorage.setItem('omnibook_stock_suppliers', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const createPurchaseOrder: AppContextType['createPurchaseOrder'] = (input) => {
+    const nowIso = new Date().toISOString();
+    const record: PurchaseOrderRecord = {
+      ...input,
+      id: `po_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      orderNumber:
+        input.orderNumber?.trim() ||
+        `CMD-${nowIso.slice(0, 7).replace('-', '')}-${String(Math.floor(100 + Math.random() * 900))}`,
+      createdAt: nowIso,
+      createdBy: input.createdBy?.trim() || resolveActorLabel(currentRoleRef.current),
+    };
+    setPurchaseOrders((prev) => {
+      const updated = [record, ...prev];
+      localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
+      return updated;
+    });
+    logEvent({
+      category: 'stock',
+      action: 'stock.purchase_order_created',
+      severity: record.status === 'confirmed' ? 'success' : 'info',
+      title: `Commande ${record.orderNumber} (${record.status}) · ${record.supplierName}`,
+      description: `${record.items.length} ligne(s) préparée(s) par ${record.createdBy}.`,
+    });
+    return record;
+  };
+
+  const updatePurchaseOrder = (po: PurchaseOrderRecord) => {
+    setPurchaseOrders((prev) => {
+      const updated = prev.map((item) => (item.id === po.id ? po : item));
+      localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
+      return updated;
+    });
+    logEvent({
+      category: 'stock',
+      action: 'stock.purchase_order_updated',
+      severity: po.status === 'sent' || po.status === 'confirmed' ? 'success' : 'info',
+      title: `Commande ${po.orderNumber} (${po.status}) · ${po.supplierName}`,
+      description: po.sentVia
+        ? `Envoyée au fournisseur via ${po.sentVia.toUpperCase()}.`
+        : `${po.items.length} article(s) — statut ${po.status}.`,
+    });
+  };
+
+  const deletePurchaseOrder = (id: string) => {
+    setPurchaseOrders((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const markPurchaseOrderReceived = (id: string) => {
+    const targetPo = purchaseOrders.find((p) => p.id === id);
+    if (!targetPo || targetPo.status === 'received') return;
+    for (const line of targetPo.items) {
+      if (line.orderQty > 0) {
+        addStockMovement(line.itemId, line.orderQty, `Réception commande ${targetPo.orderNumber}`);
+      }
+    }
+    const nowIso = new Date().toISOString();
+    updatePurchaseOrder({
+      ...targetPo,
+      status: 'received',
+      receivedAt: nowIso,
+    });
   };
 
   const setDynamicRate = (roomType: string, date: string, price: number) => {
@@ -2719,14 +3120,196 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const clearDynamicRate = (roomType: string, date: string) => {
+    setDynamicRates((prev) => {
+      const typeRates = { ...(prev[roomType] || {}) };
+      if (!(date in typeRates)) return prev;
+      delete typeRates[date];
+      const next = { ...prev, [roomType]: typeRates };
+      localStorage.setItem('omnibook_dynamic_rates', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const clearDynamicRatesMonth = (roomType: string, yearMonth: string) => {
+    let removedCount = 0;
+    setDynamicRates((prev) => {
+      const typeRates = { ...(prev[roomType] || {}) };
+      for (const dateKey of Object.keys(typeRates)) {
+        if (dateKey.startsWith(`${yearMonth}-`)) {
+          delete typeRates[dateKey];
+          removedCount++;
+        }
+      }
+      const next = { ...prev, [roomType]: typeRates };
+      localStorage.setItem('omnibook_dynamic_rates', JSON.stringify(next));
+      return next;
+    });
+    logEvent({
+      category: 'billing',
+      action: 'pricing.month_reset',
+      severity: 'info',
+      title: `Tarifs réinitialisés · ${roomType} (${yearMonth})`,
+      description: `${removedCount} surcharge(s) réinitialisée(s) au tarif de base.`,
+      target: { type: 'rate', label: roomType, secondaryLabel: yearMonth },
+    });
+  };
+
+  const createStaffMember: AppContextType['createStaffMember'] = (input) => {
+    const approvedBy = resolveActorLabel(currentRoleRef.current);
+    const record = buildStaffMemberRecord({
+      fullName: input.fullName,
+      phone: input.phone,
+      roleId: input.roleId,
+      assignment: input.assignment,
+      shift: input.shift,
+      defaultTasks: input.defaultTasks,
+      status: input.status || 'active',
+      note: input.note,
+      approvedBy,
+    });
+
+    setStaffMembers((prev) => {
+      const updated = [record, ...prev];
+      localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
+      return updated;
+    });
+
+    const roleDef = resolveRoleDefinition(rolesRef.current, input.roleId);
+    logEvent({
+      category: 'system',
+      action: 'staff.member_created',
+      severity: 'success',
+      title: `Personnel créé · ${record.fullName} (${roleDef.label.fr})`,
+      description: `Affectation : ${record.assignment} · Shift ${record.shift} · ${record.defaultTasks.length} tâche(s).`,
+      metadata: { roleId: record.roleId, assignment: record.assignment, shift: record.shift },
+    });
+
+    if (input.createInitialTasks && record.defaultTasks.length > 0) {
+      const targetRoom = input.initialRoom?.trim() || record.assignment || 'Étage 1';
+      const category = mapRoleToTaskCategory(roleDef);
+      const todayDate = new Date().toISOString().slice(0, 10);
+      record.defaultTasks.forEach((taskTitle) => {
+        addTask({
+          room: targetRoom,
+          typeId: 'custom',
+          typeName: taskTitle,
+          category,
+          assignee: record.fullName,
+          date: todayDate,
+          status: 'pending',
+          priority: 'normal',
+          note: `${roleDef.label.fr} · ${record.assignment} (${record.shift})`,
+        });
+      });
+    }
+
+    return record;
+  };
+
+  const updateStaffAssignment: AppContextType['updateStaffAssignment'] = (staffId, patch) => {
+    const approvedBy = resolveActorLabel(currentRoleRef.current);
+    const target = staffMembers.find((s) => s.id === staffId);
+    if (!target) return;
+
+    setStaffMembers((prev) => {
+      const updated = prev.map((member) =>
+        member.id === staffId
+          ? applyStaffAssignmentUpdate(member, { ...patch, approvedBy })
+          : member
+      );
+      localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
+      return updated;
+    });
+
+    logEvent({
+      category: 'system',
+      action: 'staff.assignment_updated',
+      severity: 'info',
+      title: `Affectation mise à jour · ${target.fullName}`,
+      description: `${target.assignment} → ${patch.assignment} (${patch.shift})${patch.note ? ` · ${patch.note}` : ''}`,
+      changes: [
+        ...(target.assignment !== patch.assignment ? [{ field: 'Affectation', before: target.assignment, after: patch.assignment }] : []),
+        ...(target.shift !== patch.shift ? [{ field: 'Shift', before: target.shift, after: patch.shift }] : []),
+      ],
+    });
+  };
+
+  const promoteOrTransferStaff: AppContextType['promoteOrTransferStaff'] = (staffId, change) => {
+    const approvedBy = resolveActorLabel(currentRoleRef.current);
+    const target = staffMembers.find((s) => s.id === staffId);
+    if (!target) return;
+
+    const fromRole = resolveRoleDefinition(rolesRef.current, target.roleId);
+    const toRole = resolveRoleDefinition(rolesRef.current, change.newRoleId);
+
+    setStaffMembers((prev) => {
+      const updated = prev.map((member) =>
+        member.id === staffId
+          ? applyStaffPromotionOrTransfer(member, { ...change, approvedBy })
+          : member
+      );
+      localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
+      return updated;
+    });
+
+    logEvent({
+      category: 'system',
+      action: change.changeType === 'promoted' ? 'staff.promoted' : 'staff.transferred',
+      severity: 'success',
+      title: `${change.changeType === 'promoted' ? 'Promotion' : 'Mutation / Changement de poste'} · ${target.fullName}`,
+      description: `${fromRole.label.fr} → ${toRole.label.fr}${change.newAssignment ? ` · ${change.newAssignment}` : ''}`,
+      changes: [{ field: 'Poste / Rôle', before: fromRole.label.fr, after: toRole.label.fr }],
+    });
+  };
+
+  const assignTaskToStaff: AppContextType['assignTaskToStaff'] = (staffId, input) => {
+    const target = staffMembers.find((s) => s.id === staffId);
+    if (!target) return;
+    const roleDef = resolveRoleDefinition(rolesRef.current, target.roleId);
+    addTask({
+      room: input.room.trim() || target.assignment || '101',
+      typeId: 'custom',
+      typeName: input.taskTitle.trim(),
+      category: mapRoleToTaskCategory(roleDef),
+      assignee: target.fullName,
+      date: new Date().toISOString().slice(0, 10),
+      status: 'pending',
+      priority: input.priority || 'normal',
+      note: input.note?.trim() || `${roleDef.label.fr} · ${target.assignment} (${target.shift})`,
+    });
+  };
+
+  const deleteStaffMember = (staffId: string) => {
+    const target = staffMembers.find((s) => s.id === staffId);
+    setStaffMembers((prev) => {
+      const updated = prev.filter((m) => m.id !== staffId);
+      localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
+      return updated;
+    });
+    if (target) {
+      logEvent({
+        category: 'system',
+        action: 'staff.member_deleted',
+        severity: 'warn',
+        title: `Fiche personnel retirée · ${target.fullName}`,
+        description: `Ancien poste : ${resolveRoleDefinition(rolesRef.current, target.roleId).label.fr} (${target.assignment}).`,
+      });
+    }
+  };
+
   const purgeAllUserData = async (): Promise<void> => {
     // Reset all user-owned in-memory collections.
     setBookings([]);
     setSelectedBooking(null);
     setResourceGroups([]);
     setTasks([]);
+    stockItemsRef.current = [];
     setStockItems([]);
     setStockMovements([]);
+    setSuppliers([]);
+    setPurchaseOrders([]);
+    setStaffMembers([]);
     setDynamicRates({});
     setPersistedEventLogs([]);
     setEstablishmentProfileState(DEFAULT_ESTABLISHMENT_PROFILE);
@@ -2836,6 +3419,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteCustomRole,
         resetBuiltInRoles,
         hasCustomizedBuiltInRoles,
+        staffMembers,
+        createStaffMember,
+        updateStaffAssignment,
+        promoteOrTransferStaff,
+        assignTaskToStaff,
+        deleteStaffMember,
         clientProfile,
         setClientProfile,
         activeSector,
@@ -2902,14 +3491,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleSubtask,
         deleteTask,
         generateTurnoverTasksForCheckout,
+        activeOperatorName,
+        setActiveOperatorName,
+        focusedTaskId,
+        setFocusedTaskId,
         stockItems,
         stockMovements,
         addStockMovement,
+        addStockItem,
+        seedStandardStockCatalog,
         updateStockItem,
         deleteStockItem,
+        recordRoomReplenishment,
+        suppliers,
+        saveSupplier,
+        deleteSupplier,
+        purchaseOrders,
+        createPurchaseOrder,
+        updatePurchaseOrder,
+        deletePurchaseOrder,
+        markPurchaseOrderReceived,
+        focusedStockTab,
+        setFocusedStockTab,
         dynamicRates,
         setDynamicRate,
         applyDynamicRatesBulk,
+        clearDynamicRate,
+        clearDynamicRatesMonth,
         isSoundEnabled,
         toggleSound,
         playFeedback,

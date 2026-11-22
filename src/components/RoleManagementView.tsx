@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -13,6 +13,7 @@ import {
   Sparkles,
   Trash2,
   UserCog,
+  Users,
   X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -32,6 +33,7 @@ import type {
   RolePermissions,
 } from '../types/roles';
 import { RoleIcon } from './RoleIcon';
+import { StaffHrPanel } from './StaffHrPanel';
 
 interface RoleFormState {
   editingRoleId: string | null;
@@ -189,10 +191,20 @@ export const RoleManagementView: React.FC = () => {
     resetBuiltInRoles,
     hasCustomizedBuiltInRoles,
     activeRoleDefinition,
+    staffMembers,
     playFeedback,
   } = useApp();
 
   const isRtl = language === 'ar';
+  const [activeSubTab, setActiveSubTab] = useState<'staff' | 'roles'>(() =>
+    activeRoleDefinition.id === 'chef_du_personnel' ? 'staff' : 'roles'
+  );
+  useEffect(() => {
+    if (activeRoleDefinition.id === 'chef_du_personnel') {
+      setActiveSubTab('staff');
+    }
+  }, [activeRoleDefinition.id]);
+
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<RoleCategory | 'all'>('all');
   const [formState, setFormState] = useState<RoleFormState>(createEmptyFormState);
@@ -492,16 +504,61 @@ export const RoleManagementView: React.FC = () => {
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={handleStartCreate}
-            className="min-h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            <Plus size={15} />
-            <span>{getTranslation('rolesNewRoleBtn', language)}</span>
-          </button>
+          {activeSubTab === 'roles' && (
+            <button
+              type="button"
+              onClick={handleStartCreate}
+              className="min-h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <Plus size={15} />
+              <span>{getTranslation('rolesNewRoleBtn', language)}</span>
+            </button>
+          )}
         </div>
       </header>
+
+      {/* Sub-navigation: Personnel & Affectations / Promotions vs Rôles & Permissions */}
+      <div className="grid grid-cols-2 sm:inline-flex gap-1.5 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('staff')}
+          aria-pressed={activeSubTab === 'staff'}
+          className={`min-h-[44px] px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer ${
+            activeSubTab === 'staff'
+              ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Users size={15} />
+          <span>
+            {language === 'fr'
+              ? `Personnel & Affectations (${staffMembers.length})`
+              : language === 'ar'
+              ? `الموظفون والتوزيع (${staffMembers.length})`
+              : `Staff & Promotions (${staffMembers.length})`}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('roles')}
+          aria-pressed={activeSubTab === 'roles'}
+          className={`min-h-[44px] px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer ${
+            activeSubTab === 'roles'
+              ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <UserCog size={15} />
+          <span>
+            {language === 'fr'
+              ? `Rôles & Permissions (${roles.length})`
+              : language === 'ar'
+              ? `الأدوار والصلاحيات (${roles.length})`
+              : `Roles & Permissions (${roles.length})`}
+          </span>
+        </button>
+      </div>
 
       {/* Feedback Banner */}
       {notice && (
@@ -524,7 +581,10 @@ export const RoleManagementView: React.FC = () => {
         </div>
       )}
 
-      {/* Main Split Grid: Roles Directory (left) + Role Builder Form (right) */}
+      {activeSubTab === 'staff' ? (
+        <StaffHrPanel onToast={showToast} />
+      ) : (
+      /* Main Split Grid: Roles Directory (left) + Role Builder Form (right) */
       <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_1fr] gap-5 items-start">
         {/* LEFT: Roles Catalog */}
         <section className="space-y-3 min-w-0">
@@ -1128,6 +1188,7 @@ export const RoleManagementView: React.FC = () => {
           </form>
         </section>
       </div>
+      )}
     </div>
   );
 };

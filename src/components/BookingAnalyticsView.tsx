@@ -22,6 +22,8 @@ import {
   Layers,
   MessageSquareWarning,
   UtensilsCrossed,
+  UserCheck,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { InvoiceRecord } from '../types/booking';
@@ -45,6 +47,7 @@ type SectionFilter =
   | 'inventory'
   | 'guests'
   | 'extras'
+  | 'tasks_team'
   | 'prevention'
   | 'billing_stock';
 type RoomSortMode = 'most_used' | 'least_used' | 'maintenance';
@@ -690,6 +693,19 @@ export const BookingAnalyticsView: React.FC = () => {
         String(f.expectedCheckouts),
         String(f.confidencePct),
       ]),
+      ['', '', '', '', '', '', '', ''],
+      ['=== PRODUCTIVITÉ TÂCHES & ÉQUIPE (QUI A FAIT QUOI) ===', '', '', '', '', '', '', ''],
+      ['Agent', 'Assignées', 'Achevées', 'Achevées N-1', 'En cours / À faire', 'Achèvement (%)', 'Part charge (%)', 'Équilibre'],
+      ...snapshot.tasksAnalytics.staffWorkload.map((st) => [
+        st.staffName,
+        String(st.assignedTotal),
+        String(st.completedCount),
+        String(st.prevCompletedCount),
+        String(st.doingCount + st.pendingCount),
+        String(st.completionRatePct),
+        String(st.workloadSharePct),
+        st.balanceStatus,
+      ]),
     ];
     const csv = rows
       .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(';'))
@@ -707,6 +723,7 @@ export const BookingAnalyticsView: React.FC = () => {
   const showInventory = sectionFilter === 'all' || sectionFilter === 'inventory';
   const showGuests = sectionFilter === 'all' || sectionFilter === 'guests';
   const showExtras = sectionFilter === 'all' || sectionFilter === 'extras';
+  const showTasksTeam = sectionFilter === 'all' || sectionFilter === 'tasks_team';
   const showPrevention = sectionFilter === 'all' || sectionFilter === 'prevention';
   const showBillingStock = sectionFilter === 'all' || sectionFilter === 'billing_stock';
 
@@ -877,6 +894,39 @@ export const BookingAnalyticsView: React.FC = () => {
                   <div className="mt-0.5 text-sm font-semibold text-slate-900 tabular-nums dark:text-[#E8E8EC]">
                     {current.maintenanceTasksCount} / {snapshot.complaintsAndAlerts.length}
                   </div>
+                </div>
+              </div>
+
+              {/* Tasks & Team Quick Bar */}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-3.5 py-2.5 text-xs dark:border-white/[0.06] dark:bg-white/[0.03]">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck size={15} className="text-emerald-600 dark:text-[#67C380]" />
+                  <span className="font-semibold text-slate-700 dark:text-[#D4D4DC]">
+                    {t('Tâches & Exécution équipe', 'Tasks & Team Execution', 'المهام وأداء الفريق')}:
+                  </span>
+                  <span className="font-bold text-slate-900 tabular-nums dark:text-white">
+                    {snapshot.tasksAnalytics.completedTasks} / {snapshot.tasksAnalytics.totalTasks}{' '}
+                    ({snapshot.tasksAnalytics.completionRatePct}%)
+                  </span>
+                  {renderDeltaBadge(deltas.tasksCompletionRate, { isPts: true })}
+                </div>
+                <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                  {snapshot.tasksAnalytics.staffWorkload[0] && (
+                    <span>
+                      {t('Top', 'Top', 'الأكثر إنجازاً')}:{' '}
+                      <strong className="text-slate-800 dark:text-white">
+                        {snapshot.tasksAnalytics.staffWorkload[0].staffName} (
+                        {snapshot.tasksAnalytics.staffWorkload[0].completedCount})
+                      </strong>
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSectionFilter('tasks_team')}
+                    className="font-bold text-sky-600 hover:underline dark:text-[#87CEFA] cursor-pointer"
+                  >
+                    {t('Voir répartition →', 'View split →', 'عرض التوزيع ←')}
+                  </button>
                 </div>
               </div>
             </section>
@@ -1369,6 +1419,7 @@ export const BookingAnalyticsView: React.FC = () => {
               ['inventory', t('Chambres & Étages', 'Rooms & Floors', 'الغرف والطوابق')],
               ['guests', t('Clients, Âges & Besoins', 'Guests, Ages & Needs', 'العملاء والأعمار والاحتياجات')],
               ['extras', t('Extras, Formules & Additifs', 'Extras & Additives', 'الإضافات والوجبات')],
+              ['tasks_team', t('Tâches & Productivité Équipe', 'Tasks & Staff Workload', 'المهام وإنتاجية الفريق')],
               ['prevention', t('Pannes, Prévention & Doléances', 'Failures & Complaints', 'الأعطال والوقاية والشكاوى')],
               ['billing_stock', t('Facturation & Stock', 'Billing & Stock', 'الفوترة والمخزون')],
             ] as Array<[SectionFilter, string]>
@@ -2034,6 +2085,290 @@ export const BookingAnalyticsView: React.FC = () => {
               </div>
             </section>
           </div>
+        )}
+
+        {/* SECTION 4B: TÂCHES & RÉPARTITION DU TRAVAIL ("QUI A FAIT QUOI ET COMBIEN") */}
+        {showTasksTeam && (
+          <section className="space-y-5">
+            <div className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/[0.06] dark:bg-[#1E1E22] dark:shadow-none sm:p-6">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-white/[0.06]">
+                <div className="flex items-center gap-3 min-w-0">
+                  <UserCheck size={18} className="shrink-0 text-emerald-600 dark:text-[#67C380]" />
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F4F4F6]">
+                      {t(
+                        'Tâches & Productivité Équipe — Qui a fait quoi et combien',
+                        'Tasks & Staff Productivity — Who Did What & How Much',
+                        'المهام وإنتاجية الفريق — من أنجز ماذا وكم'
+                      )}
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-[#8E8E98]">
+                      {t(
+                        'Mesure des réalisations individuelles, répartition de la charge par agent et comparaison N vs N-1.',
+                        'Tracks individual task completions, workload share per staff member, and N vs N-1 progress.',
+                        'قياس الإنجازات الفردية وتوزيع أعباء العمل والمقارنة مع الفترة السابقة.'
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {snapshot.tasksAnalytics.imbalanceDetected ? (
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-800 dark:bg-amber-500/20 dark:text-[#FFA84B]">
+                    {t('Déséquilibre de charge détecté', 'Workload imbalance detected', 'عدم توازن في توزيع المهام')}
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-500/15 dark:text-[#67C380]">
+                    {t('Répartition équilibrée', 'Balanced workload', 'توزيع متوازن')}
+                  </span>
+                )}
+              </div>
+
+              {/* 4 Tasks KPIs */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                    <span>{t('Tâches période', 'Total tasks', 'إجمالي المهام')}</span>
+                    {renderDeltaBadge(deltas.tasksTotal)}
+                  </div>
+                  <div className="mt-1 text-xl font-bold text-slate-900 tabular-nums dark:text-white">
+                    {snapshot.tasksAnalytics.totalTasks}
+                  </div>
+                  <div className="text-[10px] text-slate-500 tabular-nums dark:text-[#8E8E98]">
+                    {t('N-1', 'Prev', 'السابق')}: {snapshot.tasksAnalytics.prevTotalTasks}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                    <span>{t('Achevées', 'Completed', 'المكتملة')}</span>
+                    {renderDeltaBadge(deltas.tasksCompletionRate, { isPts: true })}
+                  </div>
+                  <div className="mt-1 text-xl font-bold text-emerald-700 tabular-nums dark:text-[#67C380]">
+                    {snapshot.tasksAnalytics.completionRatePct}%
+                  </div>
+                  <div className="text-[10px] text-slate-500 tabular-nums dark:text-[#8E8E98]">
+                    {snapshot.tasksAnalytics.completedTasks} / {snapshot.tasksAnalytics.totalTasks}{' '}
+                    {t('tâches', 'tasks', 'مهمة')}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                    {t('En cours / À faire', 'Doing / Pending', 'قيد التنفيذ / معلقة')}
+                  </div>
+                  <div className="mt-1 text-xl font-bold text-amber-600 tabular-nums dark:text-[#FFA84B]">
+                    {snapshot.tasksAnalytics.doingTasks + snapshot.tasksAnalytics.pendingTasks}
+                  </div>
+                  <div className="text-[10px] text-slate-500 tabular-nums dark:text-[#8E8E98]">
+                    {snapshot.tasksAnalytics.urgentOpenTasks} {t('urgentes ouvertes', 'urgent open', 'عاجلة مفتوحة')}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                  <div className="text-[11px] text-slate-500 dark:text-[#8E8E98]">
+                    {t('Charge moy. / agent', 'Avg tasks / staff', 'المعدل لكل موظف')}
+                  </div>
+                  <div className="mt-1 text-xl font-bold text-slate-900 tabular-nums dark:text-white">
+                    {snapshot.tasksAnalytics.avgTasksPerStaff}
+                  </div>
+                  <div className="text-[10px] text-slate-500 tabular-nums dark:text-[#8E8E98]">
+                    {snapshot.tasksAnalytics.staffWorkload.length}{' '}
+                    {t('intervenant(s) actif(s)', 'active staff', 'موظف نشط')}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-12">
+                {/* Staff Leaderboard: Qui a fait quoi et combien */}
+                <div className="space-y-3 xl:col-span-7">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-white">
+                    <span>
+                      {t('Performance & Répartition par personnel', 'Staff Output & Workload Split', 'الأداء وتوزيع العمل حسب الموظف')}
+                    </span>
+                    <span className="text-[11px] font-normal text-slate-500 dark:text-[#8E8E98]">
+                      {t('Classement par tâches achevées', 'Ranked by completed tasks', 'مرتب حسب المهام المنجزة')}
+                    </span>
+                  </div>
+
+                  {snapshot.tasksAnalytics.staffWorkload.length > 0 ? (
+                    <div className="max-h-[420px] space-y-2.5 overflow-y-auto pe-1">
+                      {snapshot.tasksAnalytics.staffWorkload.map((st, idx) => {
+                        const statusPill =
+                          st.balanceStatus === 'overloaded'
+                            ? {
+                                lbl: t('Surcharge', 'Overloaded', 'ضغط مرتفع'),
+                                cls: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-[#FF7369]',
+                                bar: 'bg-rose-500 dark:bg-[#FF7369]',
+                              }
+                            : st.balanceStatus === 'available'
+                            ? {
+                                lbl: t('Disponible', 'Available', 'متاح للتكليف'),
+                                cls: 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-[#87CEFA]',
+                                bar: 'bg-sky-500 dark:bg-[#87CEFA]',
+                              }
+                            : {
+                                lbl: t('Équilibré', 'Balanced', 'متوازن'),
+                                cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-[#67C380]',
+                                bar: 'bg-emerald-500 dark:bg-[#67C380]',
+                              };
+
+                        return (
+                          <div
+                            key={st.staffName}
+                            className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5 dark:border-white/[0.06] dark:bg-white/[0.02]"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[11px] font-bold text-white dark:bg-white dark:text-[#141416] tabular-nums">
+                                  {idx + 1}
+                                </span>
+                                <span className="truncate font-bold text-slate-900 dark:text-white">
+                                  {st.staffName}
+                                </span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${statusPill.cls}`}>
+                                  {statusPill.lbl}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 text-[11px] tabular-nums">
+                                <span className="font-bold text-emerald-700 dark:text-[#67C380]">
+                                  {st.completedCount} {t('achevée(s)', 'done', 'منجزة')}
+                                </span>
+                                <span className="text-slate-400">
+                                  / {st.assignedTotal} ({st.completionRatePct}%)
+                                </span>
+                                {st.prevCompletedCount > 0 && (
+                                  <span className="text-slate-400 dark:text-[#787882]">
+                                    · N-1: {st.prevCompletedCount}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="mt-2">
+                              <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500 tabular-nums dark:text-[#8E8E98]">
+                                <span>
+                                  {t('Part de charge', 'Workload share', 'نسبة العبء')}: {st.workloadSharePct}%
+                                </span>
+                                <span>
+                                  {st.roomsCount} {t('chambre(s)', 'room(s)', 'غرف')}
+                                  {st.doingCount + st.pendingCount > 0
+                                    ? ` · ${st.doingCount + st.pendingCount} ${t('en attente/cours', 'open', 'مفتوحة')}`
+                                    : ''}
+                                  {st.consumedUnits > 0 ? ` · ${st.consumedUnits} ${t('u. stock', 'stock u.', 'وحدات')}` : ''}
+                                </span>
+                              </div>
+                              {progress(st.workloadSharePct, statusPill.bar)}
+                            </div>
+
+                            {st.categoryBreakdown.length > 0 && (
+                              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                                {st.categoryBreakdown.map((cb) => (
+                                  <span
+                                    key={cb.category}
+                                    className="rounded-md border border-slate-200/80 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 tabular-nums dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-[#D4D4DC]"
+                                  >
+                                    {cb.category}: {cb.done}/{cb.count}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="py-8 text-center text-xs text-slate-500 dark:text-[#8E8E98]">
+                      {t('Aucune tâche enregistrée sur la période.', 'No tasks recorded in this period.', 'لا توجد مهام مسجلة في هذه الفترة.')}
+                    </p>
+                  )}
+                </div>
+
+                {/* Right Column: Tasks by Category + Recent Execution Feed */}
+                <div className="space-y-5 xl:col-span-5">
+                  <div>
+                    <div className="mb-2.5 text-xs font-bold text-slate-800 dark:text-white">
+                      {t('Volume & achèvement par catégorie', 'Volume & Completion by Category', 'الحجم والإنجاز حسب الفئة')}
+                    </div>
+                    {snapshot.tasksAnalytics.byCategory.length > 0 ? (
+                      <div className="space-y-2.5">
+                        {snapshot.tasksAnalytics.byCategory.map((cat) => (
+                          <div key={cat.category} className="space-y-1">
+                            <div className="flex items-center justify-between gap-2 text-xs">
+                              <span className="truncate font-medium text-slate-800 dark:text-[#E8E8EC]">
+                                {cat.label[language] || cat.label.fr}
+                              </span>
+                              <span className="shrink-0 font-bold text-slate-900 tabular-nums dark:text-white">
+                                {cat.done}/{cat.total} ({cat.completionRatePct}%){' '}
+                                <span className="text-[10px] font-normal text-slate-400">
+                                  · N-1: {cat.prevTotal}
+                                </span>
+                              </span>
+                            </div>
+                            {progress(
+                              cat.completionRatePct,
+                              cat.completionRatePct >= 75
+                                ? 'bg-emerald-500 dark:bg-[#67C380]'
+                                : cat.completionRatePct >= 40
+                                ? 'bg-sky-500 dark:bg-[#87CEFA]'
+                                : 'bg-amber-500 dark:bg-[#FFA84B]'
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="py-4 text-xs text-slate-500 dark:text-[#8E8E98]">
+                        {t('Aucune catégorie active.', 'No active categories.', 'لا توجد فئات نشطة.')}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-4 dark:border-white/[0.06]">
+                    <div className="mb-2.5 text-xs font-bold text-slate-800 dark:text-white">
+                      {t('Dernières interventions & validations', 'Recent Executions & Sign-offs', 'أحدث المهام والاعتمادات')}
+                    </div>
+                    <div className="max-h-56 space-y-2 overflow-y-auto pe-1">
+                      {snapshot.tasksAnalytics.recentExecutions.slice(0, 8).map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2 text-xs dark:border-white/[0.05] dark:bg-white/[0.02]"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold text-slate-900 dark:text-white">
+                              {item.room} · {item.typeName}
+                            </div>
+                            <div className="truncate text-[10px] text-slate-500 dark:text-[#8E8E98]">
+                              {item.executor} · {item.category} · {item.completedAt || item.date}
+                            </div>
+                          </div>
+                          <span
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              item.status === 'done'
+                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-[#67C380]'
+                                : item.status === 'doing'
+                                ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-[#FFA84B]'
+                                : 'bg-slate-100 text-slate-600 dark:bg-white/[0.08] dark:text-[#D4D4DC]'
+                            }`}
+                          >
+                            {item.status === 'done'
+                              ? t('Achevée', 'Done', 'منجزة')
+                              : item.status === 'doing'
+                              ? t('En cours', 'Doing', 'جارية')
+                              : t('À faire', 'Open', 'معلقة')}
+                          </span>
+                        </div>
+                      ))}
+                      {!snapshot.tasksAnalytics.recentExecutions.length && (
+                        <p className="py-4 text-xs text-slate-500 dark:text-[#8E8E98]">
+                          {t('Aucune exécution récente.', 'No recent executions.', 'لا توجد عمليات حديثة.')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
         )}
 
         {/* SECTION 5: PRÉVENTION, PANNES TECHNIQUES, DOLÉANCES & RUPTURES STOCK */}
