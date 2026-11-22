@@ -64,12 +64,22 @@ pub fn push_due_bookings(
         .map(|session| session.user_id.clone())
         .ok_or_else(|| "An authenticated Supabase session is required.".to_string())?;
 
-    let due_entries = database
-        .pending_outbox(&expected_workspace, limit.min(500))
-        .map_err(|error| format!("Could not read the local Outbox: {error}"))?;
     let mut summary = PushSummary::default();
+    let batch_limit = limit.min(500);
 
-    for entry in due_entries {
+    // Re-read one event after every ACK. An earlier event may advance the server
+    // version and rebase later events for the same booking in SQLite; processing
+    // a previously fetched Vec would keep stale base_server_version values.
+    for _ in 0..batch_limit {
+        let Some(entry) = database
+            .pending_outbox(&expected_workspace, 1)
+            .map_err(|error| format!("Could not read the local Outbox: {error}"))?
+            .into_iter()
+            .next()
+        else {
+            break;
+        };
+
         match push_one(client, &user_id, &expected_workspace, &entry) {
             Ok(server_version) => {
                 let acknowledged = database
