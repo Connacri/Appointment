@@ -56,7 +56,11 @@ impl Drop for CredentialGuard {
     }
 }
 
-pub fn store_refresh_token(project_scope: &str, user_id: &str, refresh_token: &str) -> Result<(), String> {
+pub fn store_refresh_token(
+    project_scope: &str,
+    user_id: &str,
+    refresh_token: &str,
+) -> Result<(), String> {
     let target = credential_target(project_scope, user_id)?;
     write_credential(
         &target,
@@ -162,14 +166,21 @@ fn delete_credential(target: &str) -> Result<(), String> {
 }
 fn credential_target(project_scope: &str, user_id: &str) -> Result<String, String> {
     validate_project_scope(project_scope)?;
-    Ok(format!("{TARGET_PREFIX}/{project_scope}/{}", normalize_user_id(user_id)?))
+    Ok(format!(
+        "{TARGET_PREFIX}/{project_scope}/{}",
+        normalize_user_id(user_id)?
+    ))
 }
 fn active_user_target(project_scope: &str) -> Result<String, String> {
     validate_project_scope(project_scope)?;
     Ok(format!("{ACTIVE_USER_PREFIX}/{project_scope}"))
 }
 fn validate_project_scope(project_scope: &str) -> Result<(), String> {
-    if project_scope.len() != 16 || !project_scope.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) {
+    if project_scope.len() != 16
+        || !project_scope
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+    {
         return Err("A normalized 16-character Supabase project scope is required.".into());
     }
     Ok(())
