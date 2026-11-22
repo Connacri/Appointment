@@ -7,7 +7,9 @@ pub mod booking_mapper;
 pub mod credential_vault;
 pub mod database;
 pub mod domain;
+pub mod supabase_auth;
 mod win32;
+mod winhttp;
 
 fn main() {
     let _database = match initialize_local_database() {
