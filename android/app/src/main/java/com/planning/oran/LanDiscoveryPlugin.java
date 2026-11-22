@@ -71,32 +71,44 @@ public final class LanDiscoveryPlugin extends Plugin {
     private volatile MulticastSocket socket;
     private volatile Thread worker;
     private volatile boolean discoveryRequested;
+    private volatile boolean permissionGranted;
     private volatile String nodeId;
     private WifiManager.MulticastLock multicastLock;
 
     @PluginMethod
     public void startDiscovery(PluginCall call) {
+        discoveryRequested = true;
         try {
             nodeId = getOrCreateNodeId();
             String missingAlias = requiredPermissionAlias();
             if (missingAlias != null && !hasPermission(missingAlias)) {
-                saveCall(call);
+                permissionGranted = false;
                 requestPermissionForAlias(missingAlias, call, "lanPermissionCallback");
                 return;
             }
+            permissionGranted = true;
             startForCall(call);
         } catch (Exception error) {
+            discoveryRequested = false;
+            permissionGranted = false;
             call.reject("Impossible d'initialiser l'identité P2P : " + error.getMessage());
         }
     }
 
     @PermissionCallback
     private void lanPermissionCallback(PluginCall call) {
+        if (!discoveryRequested) {
+            call.reject("La découverte LAN a été annulée.");
+            return;
+        }
         String alias = requiredPermissionAlias();
         if (alias != null && !hasPermission(alias)) {
+            discoveryRequested = false;
+            permissionGranted = false;
             call.reject("L'autorisation Android d'accès au réseau local est nécessaire à la découverte des appareils Appointment.");
             return;
         }
+        permissionGranted = true;
         startForCall(call);
     }
 
@@ -116,6 +128,7 @@ public final class LanDiscoveryPlugin extends Plugin {
     @PluginMethod
     public void stopDiscovery(PluginCall call) {
         discoveryRequested = false;
+        permissionGranted = false;
         stopWorker();
         call.resolve();
     }
@@ -370,7 +383,7 @@ public final class LanDiscoveryPlugin extends Plugin {
     @Override
     protected void handleOnResume() {
         super.handleOnResume();
-        if (discoveryRequested) {
+        if (discoveryRequested && permissionGranted) {
             try {
                 startWorker();
             } catch (Exception error) {
@@ -384,6 +397,7 @@ public final class LanDiscoveryPlugin extends Plugin {
     @Override
     protected void handleOnDestroy() {
         discoveryRequested = false;
+        permissionGranted = false;
         stopWorker();
         super.handleOnDestroy();
     }
