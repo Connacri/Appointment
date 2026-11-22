@@ -194,11 +194,17 @@ fn validate_announcement(
     own_peer_id: &str,
     source: SocketAddr,
 ) -> Option<DiscoveredPeer> {
+    let std::net::IpAddr::V4(source_ip) = source.ip() else {
+        return None;
+    };
+    let octets = source_ip.octets();
+    let shared_address_space = octets[0] == 100 && (64..=127).contains(&octets[1]);
     if message.protocol_version != DISCOVERY_PROTOCOL_VERSION
-        || source.ip().is_unspecified()
-        || source.ip().is_multicast()
-        || source.ip().is_broadcast()
-        || source.ip().is_loopback()
+        || source_ip.is_unspecified()
+        || source_ip.is_multicast()
+        || source_ip.is_broadcast()
+        || source_ip.is_loopback()
+        || !(source_ip.is_private() || source_ip.is_link_local() || shared_address_space)
     {
         return None;
     }
@@ -258,6 +264,24 @@ mod tests {
             )
             .is_none());
         }
+    }
+
+    #[test]
+    fn discovery_rejects_non_lan_ipv4_sources() {
+        let own = "a1b2c3d4-e5f6-47a8-9012-1234567890ab";
+        let remote = "b1b2c3d4-e5f6-47a8-9012-1234567890ab";
+        assert!(validate_announcement(
+            announcement(remote),
+            own,
+            SocketAddr::from(([203, 0, 113, 10], DISCOVERY_PORT))
+        )
+        .is_none());
+        assert!(validate_announcement(
+            announcement(remote),
+            own,
+            SocketAddr::from(([100, 96, 0, 2], DISCOVERY_PORT))
+        )
+        .is_some());
     }
 
     #[test]
