@@ -742,6 +742,7 @@ mod tests {
             OutboxStats {
                 pending: 1,
                 failed: 0,
+                conflict: 0,
                 synced: 0
             }
         );
@@ -750,7 +751,61 @@ mod tests {
             OutboxStats {
                 pending: 0,
                 failed: 0,
+                conflict: 0,
                 synced: 1
+            }
+        );
+    }
+
+    #[test]
+    fn server_ack_rebases_later_offline_mutations() {
+        let mut db = database();
+        let mut first = booking("b-ack");
+        db.upsert_booking("w-1", &first, "idem-first").unwrap();
+        first.guest_name = "Updated Guest".into();
+        db.upsert_booking("w-1", &first, "idem-second").unwrap();
+
+        let entries = db.pending_outbox("w-1", 10).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].base_server_version, 0);
+        assert_eq!(entries[1].base_server_version, 0);
+
+        assert!(db
+            .acknowledge_outbox("w-1", &entries[0].id, 7)
+            .unwrap());
+        let later = db.pending_outbox("w-1", 10).unwrap();
+        assert_eq!(later.len(), 1);
+        assert_eq!(later[0].id, entries[1].id);
+        assert_eq!(later[0].base_server_version, 7);
+
+        let local_server_version: i64 = db
+            .connection
+            .query_row(
+                "SELECT server_version FROM bookings WHERE workspace_id='w-1' AND id='b-ack'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(local_server_version, 7);
+    }
+
+    #[test]
+    fn conflicts_are_terminal_until_explicit_resolution() {
+        let mut db = database();
+        db.upsert_booking("w-1", &booking("b-conflict"), "idem-conflict")
+            .unwrap();
+        let entry = db.pending_outbox("w-1", 1).unwrap().remove(0);
+        assert!(db
+            .mark_outbox_conflict("w-1", &entry.id, "server version changed")
+            .unwrap());
+        assert!(db.pending_outbox("w-1", 10).unwrap().is_empty());
+        assert_eq!(
+            db.outbox_stats("w-1").unwrap(),
+            OutboxStats {
+                pending: 0,
+                failed: 0,
+                conflict: 1,
+                synced: 0,
             }
         );
     }
