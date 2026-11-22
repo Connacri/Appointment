@@ -143,6 +143,15 @@ impl HttpsEndpoint {
             base_path: path.trim_end_matches('/').to_string(),
         })
     }
+    fn scope_id(&self) -> String {
+        let canonical = format!("{}:{}{}", self.host, self.port, self.base_path);
+        let mut hash = 0xcbf29ce484222325u64;
+        for byte in canonical.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        format!("{hash:016x}")
+    }
     fn request_path(&self, path: &str) -> Result<String, String> {
         if !path.starts_with('/')
             || path.starts_with("//")
@@ -168,6 +177,10 @@ impl WinHttpTransport {
         Ok(Self {
             endpoint: HttpsEndpoint::parse(base_url)?,
         })
+    }
+    /// Stable, non-secret identifier for this exact HTTPS endpoint.
+    pub fn project_scope(&self) -> String {
+        self.endpoint.scope_id()
     }
     pub fn post(
         &self,
@@ -349,5 +362,13 @@ mod tests {
         assert!(HttpsEndpoint::parse("https://project.supabase.co/../admin").is_err());
         assert!(HttpsEndpoint::parse("https://project.supabase.co:0").is_err());
         assert!(HttpsEndpoint::parse("https://project.supabase.co:bad").is_err());
+    }
+    #[test]
+    fn project_scope_is_stable_and_changes_with_endpoint() {
+        let a = HttpsEndpoint::parse("https://project.supabase.co").unwrap();
+        let b = HttpsEndpoint::parse("https://project.supabase.co/other").unwrap();
+        assert_eq!(a.scope_id(), a.scope_id());
+        assert_ne!(a.scope_id(), b.scope_id());
+        assert_eq!(a.scope_id().len(), 16);
     }
 }
