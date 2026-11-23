@@ -110,13 +110,15 @@ impl PmsDatabase {
         ensure_workspace(&tx, workspace_id)?;
         let event = create_local_event_in_transaction(
             &tx,
-            workspace_id,
-            node_id,
-            entity,
-            entity_id,
-            operation,
-            payload,
-            created_at,
+            NewP2pEvent {
+                workspace_id,
+                node_id,
+                entity,
+                entity_id,
+                operation,
+                payload,
+                created_at,
+            },
         )?;
         tx.commit().map_err(|e| e.to_string())?;
         Ok(event)
@@ -203,14 +205,17 @@ impl PmsDatabase {
 
 fn create_local_event_in_transaction(
     tx: &Transaction<'_>,
-    workspace_id: &str,
-    node_id: &str,
-    entity: &str,
-    entity_id: &str,
-    operation: P2pOperation,
-    payload: Option<Value>,
-    created_at: &str,
+    draft: NewP2pEvent<'_>,
 ) -> Result<P2pEvent, String> {
+    let NewP2pEvent {
+        workspace_id,
+        node_id,
+        entity,
+        entity_id,
+        operation,
+        payload,
+        created_at,
+    } = draft;
     let mut clock = BTreeMap::<String, u64>::new();
     {
         let mut statement = tx
