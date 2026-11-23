@@ -55,7 +55,9 @@ pub struct PmsDatabase {
     connection: Connection,
 }
 
-fn user_table_row_counts(connection: &Connection) -> rusqlite::Result<std::collections::BTreeMap<String, i64>> {
+fn user_table_row_counts(
+    connection: &Connection,
+) -> rusqlite::Result<std::collections::BTreeMap<String, i64>> {
     let mut statement = connection.prepare(
         "SELECT name FROM sqlite_master
          WHERE type='table' AND name NOT LIKE 'sqlite_%'
@@ -972,7 +974,10 @@ mod migration_safety_tests {
             .unwrap();
 
         assert_eq!(payloads, vec!["preserve-me", "also-preserve-me"]);
-        assert_eq!(user_table_row_counts(&connection).unwrap(), user_table_row_counts(&backup).unwrap());
+        assert_eq!(
+            user_table_row_counts(&connection).unwrap(),
+            user_table_row_counts(&backup).unwrap()
+        );
         assert_eq!(integrity, "ok");
 
         // Restore drill: copy the verified snapshot to a fresh database path,
@@ -991,7 +996,12 @@ mod migration_safety_tests {
                 .unwrap()
         };
         assert_eq!(restored_payloads, vec!["preserve-me", "also-preserve-me"]);
-        assert_eq!(restored.query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0)).unwrap(), "ok");
+        assert_eq!(
+            restored
+                .query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
+                .unwrap(),
+            "ok"
+        );
     }
 
     #[test]
