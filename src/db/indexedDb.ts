@@ -645,7 +645,7 @@ class IndexedDbStore {
       await this.openStore();
 
       if (this.idb) {
-        const tx = this.idb.transaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'issuedCards', 'resourceGroups', 'eventLogs'], 'readwrite');
+        const tx = this.idb.transaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'issuedCards', 'resourceGroups', 'eventLogs', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pPeerCursors', 'p2pRecordFrontiers'], 'readwrite');
         tx.objectStore('bookings').clear();
         tx.objectStore('invoices').clear();
         tx.objectStore('resources').clear();
@@ -655,6 +655,11 @@ class IndexedDbStore {
         tx.objectStore('issuedCards').clear();
         tx.objectStore('resourceGroups').clear();
         tx.objectStore('eventLogs').clear();
+        tx.objectStore('p2pEvents').clear();
+        tx.objectStore('p2pClock').clear();
+        tx.objectStore('p2pMeta').clear();
+        tx.objectStore('p2pPeerCursors').clear();
+        tx.objectStore('p2pRecordFrontiers').clear();
         await waitForTransactionCompletion(tx, 'clear all stores');
       }
 
