@@ -703,6 +703,9 @@ impl PmsDatabase {
             || batch.expected_cursor < 0
             || batch.next_cursor < batch.expected_cursor
             || batch.events.len() > 500
+            // Never advance a durable peer cursor for an empty page: doing so can
+            // permanently skip events if a transport returns an incomplete page.
+            || (batch.events.is_empty() && batch.next_cursor != batch.expected_cursor)
             || (!batch.events.is_empty() && batch.next_cursor == batch.expected_cursor)
         {
             return Err("invalid P2P inbound batch identity, cursor range or page size".into());
