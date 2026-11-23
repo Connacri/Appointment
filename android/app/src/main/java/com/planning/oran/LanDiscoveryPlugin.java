@@ -76,6 +76,19 @@ public final class LanDiscoveryPlugin extends Plugin {
     private WifiManager.MulticastLock multicastLock;
 
     @PluginMethod
+    public void resetNodeIdentity(PluginCall call) {
+        try {
+            String rotated = persistNodeId(UUID.randomUUID().toString());
+            nodeId = rotated;
+            JSObject result = new JSObject();
+            result.put("nodeId", rotated);
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Impossible de renouveler l'identité P2P locale : " + error.getMessage());
+        }
+    }
+
+    @PluginMethod
     public void getNodeIdentity(PluginCall call) {
         try {
             JSObject result = new JSObject();
