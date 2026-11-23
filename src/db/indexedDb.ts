@@ -30,6 +30,24 @@ import {
   supportsNativeLanDiscovery,
 } from '../services/p2p/LanDiscoveryBridge';
 
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+function businessPayloadForComparison(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const copy = { ...(value as Record<string, unknown>) };
+  delete copy.workspaceId;
+  delete copy.syncVersion;
+  delete copy.deletedAt;
+  return copy;
+}
+
 export interface IndexedDbQueryOptions<T> {
   where?: (item: T) => boolean;
   offset?: number;
@@ -435,7 +453,7 @@ class IndexedDbStore {
 
   // Generic paginated box query with true storage-side cursor pagination (IndexedDB §11 pattern)
   public async queryStore<T>(
-    storeName: 'bookings' | 'invoices' | 'resources',
+    storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups',
     options?: IndexedDbQueryOptions<T>
   ): Promise<{ data: T[]; total: number }> {
     await this.openStore();
@@ -552,7 +570,7 @@ class IndexedDbStore {
 
   // Atomically replace a collection snapshot. This removes rows deleted from app state.
   public async replaceAll<T extends { id: string }>(
-    storeName: 'bookings' | 'invoices' | 'resources',
+    storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups',
     items: T[]
   ): Promise<void> {
     const normalizedItems =
@@ -599,7 +617,7 @@ class IndexedDbStore {
 
   // Put / Upsert
   public async put<T extends { id: string }>(
-    storeName: 'bookings' | 'invoices' | 'resources',
+    storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups',
     item: T
   ): Promise<void> {
     const normalizedItem =
@@ -633,7 +651,7 @@ class IndexedDbStore {
 
   // Remove — guarantees complete deletion from both IDB and fallback store
   public async remove(
-    storeName: 'bookings' | 'invoices' | 'resources',
+    storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups',
     id: string
   ): Promise<void> {
     this.beginSyncOp();
@@ -1077,6 +1095,170 @@ class IndexedDbStore {
   }
 
   /**
+   * Reconcile a full UI snapshot without inferring deletions from absence.
+   * Each changed row, Outbox intent and P2P event is committed atomically; batches
+   * are bounded and event creation is serialized to preserve vector-clock sequence.
+   */
+  public async reconcileSnapshotWithOutbox<T extends { id: string }>(
+    storeName: 'bookings' | 'resources' | 'resourceGroups',
+    items: readonly T[],
+    entity: OutboxEntity,
+    contextForItem: (item: T) => OutboxMutationContext,
+    excludedIds: ReadonlySet<string> = new Set(),
+  ): Promise<{ queued: number; unchanged: number; blocked: number }> {
+    await this.openStore();
+    if (!this.idb) {
+      throw new Error('Snapshot reconciliation requires IndexedDB; localStorage fallback is not safe for P2P.');
+    }
+    const report = { queued: 0, unchanged: 0, blocked: 0 };
+    const chunkSize = 100;
+    for (let offset = 0; offset < items.length; offset += chunkSize) {
+      const chunk = items.slice(offset, offset + chunkSize).filter((item) =>
+        Boolean(item.id?.trim()) && !excludedIds.has(item.id)
+      );
+      if (chunk.length === 0) continue;
+      await this.getP2pNodeId();
+      const tx = this.createStrictTransaction([
+        storeName,
+        'workspaceEntities',
+        'tombstones',
+        'outbox',
+        'p2pEvents',
+        'p2pClock',
+        'p2pMeta',
+        'p2pRecordFrontiers',
+      ]);
+      const store = tx.objectStore(storeName);
+      const workspaceEntities = tx.objectStore('workspaceEntities');
+      const tombstones = tx.objectStore('tombstones');
+      const frontiers = tx.objectStore('p2pRecordFrontiers');
+      const prepared: Array<{
+        item: T;
+        context: OutboxMutationContext;
+        current?: { version?: number; establishmentId?: string; payload?: Record<string, unknown> };
+        tombstone?: TombstoneRecord;
+        frontier?: { status?: string };
+        ready: number;
+      }> = chunk.map((item) => ({
+        item,
+        context: contextForItem(item),
+        ready: 0,
+      }));
+      let readyCount = 0;
+      const abort = () => { try { tx.abort(); } catch { /* already inactive */ } };
+
+      const processNext = (index: number): void => {
+        if (index >= prepared.length) return;
+        const entry = prepared[index];
+        if (!entry.context.workspaceId.trim()) {
+          report.blocked += 1;
+          processNext(index + 1);
+          return;
+        }
+        if (entry.frontier?.status === 'conflict' || entry.frontier?.status === 'blocked_pending_local') {
+          report.blocked += 1;
+          processNext(index + 1);
+          return;
+        }
+        const baseItem = storeName === 'bookings'
+          ? (migrateBookingRecordV7(entry.item as Partial<TimelineBooking>) as T)
+          : entry.item;
+        const establishmentId = entry.context.establishmentId ?? entry.current?.establishmentId;
+        const candidate = {
+          ...baseItem,
+          workspaceId: entry.context.workspaceId,
+          establishmentId,
+          deletedAt: null,
+        } as T & Record<string, unknown>;
+        const currentPayload = entry.current?.payload;
+        if (
+          entry.current
+          && !entry.tombstone
+          && currentPayload
+          && stableSerialize(businessPayloadForComparison(currentPayload))
+            === stableSerialize(businessPayloadForComparison(candidate))
+        ) {
+          store.put(currentPayload as T);
+          report.unchanged += 1;
+          processNext(index + 1);
+          return;
+        }
+
+        const version = Math.max(entry.current?.version ?? 0, entry.tombstone?.version ?? 0) + 1;
+        const now = new Date().toISOString();
+        const persisted = { ...candidate, syncVersion: version };
+        workspaceEntities.put({
+          workspaceId: entry.context.workspaceId,
+          establishmentId,
+          entity,
+          entityId: entry.item.id,
+          version,
+          updatedAt: now,
+          payload: persisted,
+        });
+        store.put(persisted);
+        tombstones.delete(`${entry.context.workspaceId}:${entity}:${entry.item.id}`);
+        tx.objectStore('outbox').add(
+          this.createOutboxRecord(
+            entry.context,
+            entity,
+            entry.item.id,
+            'upsert',
+            version,
+            persisted as Record<string, unknown>,
+            now,
+          ),
+        );
+        this.appendLocalP2pEvent(
+          tx,
+          entry.context.workspaceId,
+          entity,
+          entry.item.id,
+          'upsert',
+          persisted as Record<string, unknown>,
+          now,
+          () => {
+            report.queued += 1;
+            processNext(index + 1);
+          },
+        );
+      };
+
+      prepared.forEach((entry) => {
+        const tombstoneId = `${entry.context.workspaceId}:${entity}:${entry.item.id}`;
+        const requests = [
+          workspaceEntities.get([entry.context.workspaceId, entity, entry.item.id]),
+          tombstones.get(tombstoneId),
+          frontiers.get([entry.context.workspaceId, entity, entry.item.id]),
+        ];
+        requests[0].onsuccess = () => {
+          entry.current = requests[0].result as typeof entry.current;
+          entry.ready += 1;
+          readyCount += 1;
+          if (readyCount === prepared.length * 3) processNext(0);
+        };
+        requests[1].onsuccess = () => {
+          entry.tombstone = requests[1].result as TombstoneRecord | undefined;
+          entry.ready += 1;
+          readyCount += 1;
+          if (readyCount === prepared.length * 3) processNext(0);
+        };
+        requests[2].onsuccess = () => {
+          entry.frontier = requests[2].result as typeof entry.frontier;
+          entry.ready += 1;
+          readyCount += 1;
+          if (readyCount === prepared.length * 3) processNext(0);
+        };
+        requests.forEach((request) => { request.onerror = abort; });
+      });
+
+      await waitForTransactionCompletion(tx, `reconcileSnapshotWithOutbox ${entity}`);
+    }
+    this.emitOutboxChange();
+    return report;
+  }
+
+  /**
    * Append a local immutable P2P event and advance every observed vector-clock component
    * inside the caller's existing business+Outbox IndexedDB transaction.
    */
@@ -1088,6 +1270,7 @@ class IndexedDbStore {
     operation: P2pOperation,
     payload: Record<string, unknown> | null,
     createdAt: string,
+    onQueued?: () => void,
   ): void {
     const metaStore = tx.objectStore('p2pMeta');
     const clockStore = tx.objectStore('p2pClock');
@@ -1133,6 +1316,7 @@ class IndexedDbStore {
         for (const [clockNodeId, sequence] of Object.entries(event.clock)) {
           clockStore.put({ workspaceId, nodeId: clockNodeId, sequence });
         }
+        onQueued?.();
       } catch (error) {
         tx.abort();
         throw error;
@@ -1166,7 +1350,7 @@ class IndexedDbStore {
 
   /** Opt-in only: demo/bootstrap data must never call this method. */
   public async putWithOutbox<T extends { id: string }>(
-    storeName: 'bookings' | 'invoices' | 'resources', item: T,
+    storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups', item: T,
     context: OutboxMutationContext, entity: OutboxEntity
   ): Promise<void> {
     if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox writes.');
@@ -1240,7 +1424,7 @@ class IndexedDbStore {
    * Opt-in only: demo/bootstrap data must never call this method.
    */
   public async putWithOutboxByKey<T extends { id: string }>(
-    storeName: 'bookings' | 'invoices' | 'resources',
+    storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups',
     item: T,
     context: OutboxMutationContext,
     entity: OutboxEntity,
@@ -1413,7 +1597,7 @@ class IndexedDbStore {
 
   /** Atomically delete the local row and retain a workspace-scoped tombstone + delete intent. */
   public async deleteWithOutbox(
-    storeName: 'bookings' | 'invoices' | 'resources', entityId: string,
+    storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups', entityId: string,
     context: OutboxMutationContext, entity: OutboxEntity
   ): Promise<void> {
     if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox deletes.');
