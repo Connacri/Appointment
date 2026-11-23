@@ -2643,6 +2643,26 @@ mod tests {
     }
 
     #[test]
+    fn empty_inbound_page_cannot_advance_peer_cursor_and_skip_events() {
+        let mut db = database();
+        let result = db.apply_received_p2p_batch(P2pInboundBatch {
+            workspace_id: "w-1",
+            peer_id: "peer-a",
+            expected_cursor: 0,
+            next_cursor: 1,
+            events: &[],
+        });
+        assert!(result.is_err());
+        let cursor: Option<i64> = db.connection.query_row(
+            "SELECT cursor FROM p2p_peer_cursors WHERE workspace_id='w-1' AND peer_id='peer-a'",
+            [],
+            |row| row.get(0),
+        ).optional().unwrap();
+        assert_eq!(cursor, None);
+        assert_eq!(db.p2p_event_count("w-1").unwrap(), 0);
+    }
+
+    #[test]
     fn remote_booking_merge_applies_newer_rows_and_ignores_stale_versions() {
         let db = database();
         let mut remote = booking("b-remote");
