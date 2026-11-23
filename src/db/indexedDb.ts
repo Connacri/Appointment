@@ -1166,8 +1166,9 @@ class IndexedDbStore {
           workspaceId: entry.context.workspaceId,
           deletedAt: null,
         } as T & Record<string, unknown>;
-        if (establishmentId) candidate.establishmentId = establishmentId;
-        else delete candidate.establishmentId;
+        const candidateRecord = candidate as Record<string, unknown>;
+        if (establishmentId) candidateRecord.establishmentId = establishmentId;
+        else delete candidateRecord.establishmentId;
         const currentPayload = entry.current?.payload;
         if (
           entry.current
