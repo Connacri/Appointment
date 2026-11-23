@@ -1226,6 +1226,18 @@ mod tests {
         assert_eq!(events[0].event.entity_id, "b-p2p");
         assert_eq!(events[0].event.operation, crate::p2p::P2pOperation::Upsert);
 
+        // Exact retry must not append a second business mutation or P2P event.
+        db.upsert_booking(
+            "w-1",
+            &booking("b-p2p"),
+            "idem-p2p-create",
+            "node-a",
+            "2026-11-23T08:30:00Z",
+        )
+        .unwrap();
+        assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 1);
+        assert_eq!(db.p2p_event_count("w-1").unwrap(), 1);
+
         assert!(db
             .delete_booking(
                 "w-1",
