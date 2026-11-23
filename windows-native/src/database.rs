@@ -108,13 +108,10 @@ fn backup_before_migration_if_needed(
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|error| rusqlite::Error::InvalidParameterName(error.to_string()))?
         .as_nanos();
-    let backup_path = database_path.with_file_name(format!(
-        "{file_name}.pre-migration-{timestamp}.sqlite3"
-    ));
+    let backup_path =
+        database_path.with_file_name(format!("{file_name}.pre-migration-{timestamp}.sqlite3"));
     let backup_path_text = backup_path.to_str().ok_or_else(|| {
-        rusqlite::Error::InvalidParameterName(
-            "pre-migration backup path is not valid UTF-8".into(),
-        )
+        rusqlite::Error::InvalidParameterName("pre-migration backup path is not valid UTF-8".into())
     })?;
 
     // VACUUM INTO uses SQLite's online snapshot semantics and includes committed
@@ -122,8 +119,7 @@ fn backup_before_migration_if_needed(
     connection.execute("VACUUM INTO ?1", params![backup_path_text])?;
 
     let backup = Connection::open(&backup_path)?;
-    let integrity: String =
-        backup.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+    let integrity: String = backup.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
     if integrity != "ok" {
         return Err(rusqlite::Error::InvalidParameterName(format!(
             "pre-migration backup integrity check failed: {integrity}; source database was not migrated"
@@ -913,7 +909,9 @@ mod migration_safety_tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("legacy.sqlite3");
         let connection = Connection::open(&path).unwrap();
-        connection.pragma_update(None, "journal_mode", "WAL").unwrap();
+        connection
+            .pragma_update(None, "journal_mode", "WAL")
+            .unwrap();
         connection
             .execute_batch(
                 "CREATE TABLE legacy_records(id TEXT PRIMARY KEY, payload TEXT NOT NULL);
@@ -956,7 +954,9 @@ mod migration_safety_tests {
 
         assert!(backup_before_migration_if_needed(&connection, &path).is_err());
         let row_count: i64 = connection
-            .query_row("SELECT COUNT(*) FROM protected_records", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM protected_records", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(row_count, 1);
     }
