@@ -457,7 +457,9 @@ Android/Web IndexedDB schema v8 now creates durable P2P event, vector-clock, sha
 node identity, peer-cursor and record-frontier stores. Outbox-backed local upserts,
 deletes and outbox-only entity mutations append their event and update the vector clock
 and local frontier in the same strict-durability IndexedDB transaction as the business
-projection and Outbox entry. React booking/resource/resource-group snapshots now use a
+projection and Outbox entry. Pre-v8 workspace rows with no local P2P frontier are
+backfilled as immutable events without rewriting their business payload. React
+booking/resource/resource-group snapshots now use a
 bounded, version-aware reconciliation path: unchanged rows are no-ops, missing rows are
 never inferred as deletions, unscoped/cross-workspace rows are rejected, and a snapshot
 cannot resurrect a tombstoned row. Direct business-store writes and physical deletes
