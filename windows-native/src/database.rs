@@ -2278,7 +2278,7 @@ mod tests {
     }
 
     #[test]
-    fn local_schema_v6_tracks_pms_entities_server_versions_cursors_and_p2p_events() {
+    fn local_schema_v7_tracks_inbound_p2p_cursors_and_conflict_frontiers() {
         let db = database();
         let outbox_sql: String = db
             .connection
@@ -2326,6 +2326,22 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
+        let peer_cursors_exists: bool = db
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='p2p_peer_cursors')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let record_frontiers_exists: bool = db
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='p2p_record_frontiers')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(version, 7);
         assert!(outbox_sql.contains("'conflict'"));
         assert!(
@@ -2344,6 +2360,8 @@ mod tests {
             p2p_clock_exists,
             "v6 must create the persisted vector clock"
         );
+        assert!(peer_cursors_exists, "v7 must persist peer transport cursors");
+        assert!(record_frontiers_exists, "v7 must persist resolved and conflicting event frontiers");
     }
 
     #[test]
