@@ -77,6 +77,18 @@ test('merges replicas by set union and is idempotent', () => {
   assert.deepEqual(mergeP2pEvents(merged, [a, b]), merged);
 });
 
+test('exact P2P event replay remains idempotent across IndexedDB replicas', () => {
+  const original = event('node-a', 4, { 'node-a': 4 }, {
+    id: 'booking-1',
+    futureField: { preserved: true },
+  });
+  const replayed = { ...original, clock: { ...original.clock }, payload: { ...original.payload } };
+
+  const merged = mergeP2pEvents([original], [replayed]);
+  assert.equal(merged.length, 1);
+  assert.deepEqual(merged[0], original);
+});
+
 test('rejects node equivocation instead of accepting conflicting duplicate IDs', () => {
   const original = event('node-a', 1, { 'node-a': 1 }, { value: 'original' });
   const forged = event('node-a', 1, { 'node-a': 1 }, { value: 'forged' });
