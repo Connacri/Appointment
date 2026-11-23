@@ -71,6 +71,9 @@ test('empty inbound pages cannot advance a durable peer cursor', () => {
   assert.equal(validateP2pCursorAdvance(0, 1, 0), false);
   assert.equal(validateP2pCursorAdvance(4, 5, 1), true);
   assert.equal(validateP2pCursorAdvance(4, 4, 1), false);
+  assert.equal(validateP2pCursorAdvance(-1, 0, 0), false);
+  assert.equal(validateP2pCursorAdvance(0, 1.5, 1), false);
+  assert.equal(validateP2pCursorAdvance(0, 1, -1), false);
 });
 
 test('rotating the installation identity prevents event sequence ID reuse after purge', () => {
