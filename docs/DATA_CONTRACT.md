@@ -5,6 +5,53 @@
 
 ## 1. Non-negotiable invariant
 
+## Zero-loss data policy (release gate)
+
+Appointment MUST fail closed rather than discard or silently replace user data.
+
+1. **No destructive schema migration.** Every migration is additive or performs a verified
+   copy-and-swap inside one SQLite transaction. Before any production migration, the
+   application must create and verify a SQLite online-backup snapshot (including WAL
+   contents), retain the previous schema/data, and abort startup if the backup cannot
+   be completed. A failed migration must leave the original database readable.
+2. **No implicit workspace reuse.** Reusing a workspace ID with a different owner or
+   metadata is an error. Never infer ownership from a local workspace name.
+3. **No equal-version overwrite.** A lower server/entity version is stale and ignored;
+   an equal version with identical content is an idempotent replay; an equal version
+   with different content is a conflict and must preserve the existing record and
+   quarantine the incoming mutation for explicit resolution.
+4. **No physical business-record deletion.** Deletions are versioned tombstones with
+   durable Outbox/P2P events. Tombstones cannot be garbage-collected until all known
+   replicas and the server have acknowledged a retention/checkpoint boundary.
+5. **Atomic local writes.** Business mutation, version increment, tombstone (if any),
+   Outbox entry, and P2P event must commit in the same SQLite/IndexedDB transaction.
+   If any component fails, the entire mutation rolls back.
+6. **ACK is evidence, not an assumption.** A mutation is marked synced only after the
+   server confirms the exact idempotency key/entity/version and the ACK is committed
+   locally. A timeout is an unknown outcome and is retried idempotently, never treated
+   as success.
+7. **Pull is replay-safe.** Apply a remote page and advance its cursor in one transaction.
+   Never advance the cursor past an unapplied row. Replays are expected and must be safe.
+8. **Preserve unknown fields and source provenance.** Do not reconstruct complete
+   records from a partial projection. Unknown JSON fields and import provenance survive
+   read/write cycles.
+9. **Backups and restore are tested.** Release validation must exercise backup integrity,
+   restore to a separate file, migration from every supported schema, crash/rollback
+   behavior, disk-full/write-failure handling, and preservation of pending/conflicted
+   Outbox entries.
+10. **No "zero data loss" claim without proof.** P2P partitions can create concurrent
+    writes; without quorum/coordinator, convergence is possible but global linearizability
+    is not. Conflicts must remain visible and recoverable, never silently resolved.
+
+Current implementation status: native SQLite has a durable workspace-scoped P2P event log
+and merged vector clock; equal-version entity conflicts are rejected, stale writes are
+ignored, workspace identity mismatch is rejected, and generic physical entity deletion
+is disabled pending tombstone/Outbox integration. **Pre-migration online backups and
+atomic coupling of every business mutation to the P2P event log are still release
+blockers.** Do not enable production P2P synchronization until these gates are implemented
+and tested.
+
+
 A feature that reads, writes, imports, exports, caches, synchronizes, deletes or displays
 business data is incomplete until all affected layers agree: business rules; domain models
 and runtime validation; IndexedDB schema/upgrades; PostgreSQL schema/migrations/constraints;
