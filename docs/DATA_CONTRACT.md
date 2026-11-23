@@ -432,18 +432,29 @@ backgrounded. Android 16 normally permits target-SDK-36 LAN access; if its opt-i
 compatibility restriction blocks multicast, the plugin requests Nearby devices.
 ACCESS_LOCAL_NETWORK is required only when the app targets SDK 37 or higher.
 
-Native Windows SQLite now persists a workspace-scoped append-only event log and
+Native Windows SQLite persists a workspace-scoped append-only event log and
 merged vector clock (schema v6). Local event creation and clock advancement share one
 SQLite transaction; exact replays are idempotent and event-ID equivocation is rejected.
-This log is not yet wired atomically into booking/entity mutations, and Android's
-IndexedDB event log is not yet implemented.
+New native local-mutation APIs for bookings and generic entities now write the business
+row, Supabase Outbox record, P2P event and vector-clock advancement in the same SQLite
+transaction. Injected P2P append failures are covered by rollback tests proving that
+the business row and Outbox entry are not committed.
+
+This is an API-level safety boundary, not yet production activation: existing Outbox-only
+booking/entity APIs still exist for non-P2P paths, and native UI/application call sites
+have not yet been migrated to the atomic APIs. Remote event receipt is currently only
+durable event append; applying a remote event to business state, its cursor and conflict
+frontier in one transaction is not yet implemented. Android's IndexedDB event log and
+equivalent atomic local-mutation APIs are not yet implemented.
 
 Before enabling P2P data synchronization in production, the implementation still
-requires encrypted and authenticated peer pairing, workspace-level authorization,
-atomic event-log integration with local business writes on every platform, replay
-protection, bounded anti-entropy/checkpointing, tombstone retention, and
-domain-specific conflict resolution with UI workflows. Every gate must be implemented
-and tested.
+requires migration of every local business write path to the atomic APIs (or removal of
+the Outbox-only local mutation paths), an atomic inbound apply + cursor + conflict
+transaction, Android IndexedDB parity, encrypted and authenticated peer pairing,
+workspace-level authorization, replay protection, bounded anti-entropy/checkpointing,
+tombstone retention, and domain-specific conflict resolution with UI workflows.
+Every gate must be implemented and tested. P2P business replication remains disabled
+until all gates pass.
 
 **Partition invariant:** with no coordinator or quorum, independent peers may accept
 conflicting operations while disconnected. Appointment cannot guarantee globally
