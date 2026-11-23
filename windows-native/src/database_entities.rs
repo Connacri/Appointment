@@ -364,6 +364,65 @@ mod tests {
     }
 
     #[test]
+    fn local_entity_outbox_and_p2p_event_commit_together() {
+        let db = db();
+        let payload = r#"{"id":"resource-1","status":"active","futureField":{"v":2}}"#;
+        db.upsert_entity_record_with_p2p(
+            "ws-a",
+            "resources",
+            "resource-1",
+            payload,
+            1,
+            "2026-11-23T08:40:00Z",
+            "idem-resource-1",
+            "node-a",
+            "2026-11-23T08:40:00Z",
+        )
+        .unwrap();
+
+        assert_eq!(
+            db.get_entity_record("ws-a", "resources", "resource-1")
+                .unwrap()
+                .unwrap()
+                .payload,
+            payload
+        );
+        assert_eq!(db.pending_outbox("ws-a", 10).unwrap().len(), 1);
+        assert_eq!(db.p2p_event_count("ws-a").unwrap(), 1);
+    }
+
+    #[test]
+    fn generic_entity_p2p_append_failure_rolls_back_record_and_outbox() {
+        let db = db();
+        db.connection
+            .execute_batch(
+                "CREATE TRIGGER fail_p2p_event
+                 BEFORE INSERT ON p2p_events
+                 BEGIN SELECT RAISE(ABORT, 'injected P2P append failure'); END;",
+            )
+            .unwrap();
+
+        let result = db.upsert_entity_record_with_p2p(
+            "ws-a",
+            "resources",
+            "resource-rollback",
+            r#"{"id":"resource-rollback"}"#,
+            1,
+            "2026-11-23T08:41:00Z",
+            "idem-resource-rollback",
+            "node-a",
+            "2026-11-23T08:41:00Z",
+        );
+        assert!(result.is_err());
+        assert!(db
+            .get_entity_record("ws-a", "resources", "resource-rollback")
+            .unwrap()
+            .is_none());
+        assert!(db.pending_outbox("ws-a", 10).unwrap().is_empty());
+        assert_eq!(db.p2p_event_count("ws-a").unwrap(), 0);
+    }
+
+    #[test]
     fn entity_pagination_is_keyset_ordered_and_bounded() {
         let db = db();
         for id in ["a", "b", "c"] {
