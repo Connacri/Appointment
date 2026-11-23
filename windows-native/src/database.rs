@@ -574,11 +574,13 @@ impl PmsDatabase {
                 payload,
                 version
             ],
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
         tx.execute(
             "DELETE FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2",
             params![workspace_id, normalized_booking.id],
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
         tx.execute(
             "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,base_server_version,payload)
              VALUES (?1,?2,?3,'booking',?4,'upsert',?5,?6,?7)",
@@ -627,13 +629,14 @@ impl PmsDatabase {
             tx.commit().map_err(|e| e.to_string())?;
             return Ok(true);
         }
-        let existing: Option<(i64, i64)> = tx.query_row(
-            "SELECT version + 1, server_version FROM bookings WHERE workspace_id=?1 AND id=?2",
-            params![workspace_id, booking_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .optional()
-        .map_err(|e| e.to_string())?;
+        let existing: Option<(i64, i64)> = tx
+            .query_row(
+                "SELECT version + 1, server_version FROM bookings WHERE workspace_id=?1 AND id=?2",
+                params![workspace_id, booking_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
         let Some((version, base_server_version)) = existing else {
             tx.commit().map_err(|e| e.to_string())?;
             return Ok(false);
@@ -641,7 +644,8 @@ impl PmsDatabase {
         tx.execute(
             "DELETE FROM bookings WHERE workspace_id=?1 AND id=?2",
             params![workspace_id, booking_id],
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
         tx.execute(
             "INSERT INTO tombstones(workspace_id,entity,entity_id,version,server_version) VALUES (?1,'booking',?2,?3,?4)
              ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET version=excluded.version, server_version=excluded.server_version, deleted_at=CURRENT_TIMESTAMP",
@@ -1238,7 +1242,8 @@ mod tests {
     #[test]
     fn booking_and_outbox_commit_atomically() {
         let mut db = database();
-        db.upsert_booking_outbox_only("w-1", &booking("b-1"), "idem-1").unwrap();
+        db.upsert_booking_outbox_only("w-1", &booking("b-1"), "idem-1")
+            .unwrap();
         assert!(db.get_booking("w-1", "b-1").unwrap().is_some());
         assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 1);
     }
@@ -1290,7 +1295,10 @@ mod tests {
         assert_eq!(db.p2p_event_count("w-1").unwrap(), 2);
         let deletion = db.list_p2p_events_after("w-1", 1, 10).unwrap();
         assert_eq!(deletion.len(), 1);
-        assert_eq!(deletion[0].event.operation, crate::p2p::P2pOperation::Delete);
+        assert_eq!(
+            deletion[0].event.operation,
+            crate::p2p::P2pOperation::Delete
+        );
     }
 
     #[test]
@@ -1383,7 +1391,8 @@ mod tests {
             },
         ]);
 
-        db.upsert_booking_outbox_only("w-1", &item, "idem-family").unwrap();
+        db.upsert_booking_outbox_only("w-1", &item, "idem-family")
+            .unwrap();
         let restored = db.get_booking("w-1", "b-family").unwrap().unwrap();
         assert_eq!(restored.adults, Some(2));
         assert_eq!(restored.occupants_list.as_ref().unwrap().len(), 2);
@@ -1429,7 +1438,8 @@ mod tests {
     fn idempotent_retry_does_not_duplicate_outbox() {
         let mut db = database();
         let item = booking("b-1");
-        db.upsert_booking_outbox_only("w-1", &item, "same-key").unwrap();
+        db.upsert_booking_outbox_only("w-1", &item, "same-key")
+            .unwrap();
         db.upsert_booking_outbox_only("w-1", &item, "same-key").unwrap();
         assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 1);
         assert!(db
@@ -1527,9 +1537,11 @@ mod tests {
     fn server_ack_rebases_later_offline_mutations() {
         let mut db = database();
         let mut first = booking("b-ack");
-        db.upsert_booking_outbox_only("w-1", &first, "idem-first").unwrap();
+        db.upsert_booking_outbox_only("w-1", &first, "idem-first")
+            .unwrap();
         first.guest_name = "Updated Guest".into();
-        db.upsert_booking_outbox_only("w-1", &first, "idem-second").unwrap();
+        db.upsert_booking_outbox_only("w-1", &first, "idem-second")
+            .unwrap();
 
         let entries = db.pending_outbox("w-1", 10).unwrap();
         assert_eq!(entries.len(), 2);
@@ -1906,9 +1918,12 @@ mod tests {
     fn recreation_keeps_version_monotonic_after_tombstone() {
         let mut db = database();
         let item = booking("b-1");
-        db.upsert_booking_outbox_only("w-1", &item, "idem-1").unwrap();
-        db.delete_booking_outbox_only("w-1", "b-1", "idem-2").unwrap();
-        db.upsert_booking_outbox_only("w-1", &item, "idem-3").unwrap();
+        db.upsert_booking_outbox_only("w-1", &item, "idem-1")
+            .unwrap();
+        db.delete_booking_outbox_only("w-1", "b-1", "idem-2")
+            .unwrap();
+        db.upsert_booking_outbox_only("w-1", &item, "idem-3")
+            .unwrap();
         let version: i64 = db
             .connection
             .query_row(
