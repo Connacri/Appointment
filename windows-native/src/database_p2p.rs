@@ -48,6 +48,13 @@ pub(super) fn migrate(connection: &Connection) -> rusqlite::Result<()> {
            ON p2p_events(workspace_id, entity, entity_id, local_order);
          CREATE INDEX idx_p2p_events_workspace_node_sequence
            ON p2p_events(workspace_id, node_id, sequence);
+         CREATE TABLE p2p_clock (
+           workspace_id TEXT NOT NULL,
+           node_id TEXT NOT NULL,
+           sequence INTEGER NOT NULL CHECK(sequence > 0),
+           PRIMARY KEY(workspace_id, node_id),
+           FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+         );
          INSERT OR IGNORE INTO schema_migrations(version) VALUES (6);
          COMMIT;",
     )?;
@@ -91,8 +98,8 @@ impl PmsDatabase {
         {
             let mut statement = tx
                 .prepare(
-                    "SELECT node_id, MAX(sequence) FROM p2p_events
-                     WHERE workspace_id=?1 GROUP BY node_id",
+                    "SELECT node_id, sequence FROM p2p_clock
+                     WHERE workspace_id=?1 ORDER BY node_id",
                 )
                 .map_err(|e| e.to_string())?;
             let rows = statement
@@ -263,6 +270,18 @@ fn insert_event(tx: &Transaction<'_>, event: &P2pEvent) -> Result<(), String> {
     .map_err(|error| {
         format!("Could not append P2P event (duplicate node sequence or database constraint): {error}")
     })?;
+
+    // Merge every component, not only the sender's own sequence. A received
+    // event can prove causal knowledge of events that have not arrived yet.
+    for (node_id, sequence) in &event.clock {
+        tx.execute(
+            "INSERT INTO p2p_clock(workspace_id,node_id,sequence) VALUES (?1,?2,?3)
+             ON CONFLICT(workspace_id,node_id) DO UPDATE SET
+               sequence=MAX(p2p_clock.sequence, excluded.sequence)",
+            params![event.workspace_id, node_id, sequence],
+        )
+        .map_err(|error| format!("Could not merge P2P vector clock: {error}"))?;
+    }
     Ok(())
 }
 
@@ -317,6 +336,38 @@ mod tests {
         forged.payload = Some(json!({"guest": "Mallory"}));
         assert!(replica.append_p2p_event(&forged).is_err());
         assert_eq!(replica.p2p_event_count("workspace-a").unwrap(), 1);
+    }
+
+    #[test]
+    fn received_vector_clock_dependencies_survive_restart_and_advance_local_sequence() {
+        let replica = database();
+        let remote = P2pEvent {
+            protocol_version: 1,
+            event_id: "node-b:1".into(),
+            node_id: "node-b".into(),
+            sequence: 1,
+            workspace_id: "workspace-a".into(),
+            entity: "booking".into(),
+            entity_id: "booking-1".into(),
+            operation: P2pOperation::Upsert,
+            payload: Some(json!({"guest": "Remote"})),
+            clock: BTreeMap::from([
+                ("node-a".into(), 4),
+                ("node-b".into(), 1),
+            ]),
+            created_at: "2026-11-23T08:00:00Z".into(),
+        };
+        assert!(replica.append_p2p_event(&remote).unwrap());
+
+        let local = replica.create_local_p2p_event(
+            "workspace-a", "node-a", "booking", "booking-2",
+            P2pOperation::Upsert, Some(json!({"guest": "Local"})),
+            "2026-11-23T08:01:00Z",
+        ).unwrap();
+
+        assert_eq!(local.sequence, 5);
+        assert_eq!(local.clock.get("node-a"), Some(&5));
+        assert_eq!(local.clock.get("node-b"), Some(&1));
     }
 
     #[test]
