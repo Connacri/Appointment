@@ -252,8 +252,8 @@ impl PmsDatabase {
                         "entity version collision: equal version carries different payload".into(),
                     );
                 }
-                tx.commit().map_err(|e| e.to_string())?;
-                return Ok(());
+                // Keep going: a same-version legacy row still needs its durable
+                // Outbox intent and P2P event before it is considered replicated.
             }
             _ => {}
         }
