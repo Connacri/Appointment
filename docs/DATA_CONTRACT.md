@@ -432,6 +432,11 @@ backgrounded. Android 16 normally permits target-SDK-36 LAN access; if its opt-i
 compatibility restriction blocks multicast, the plugin requests Nearby devices.
 ACCESS_LOCAL_NETWORK is required only when the app targets SDK 37 or higher.
 
+File-backed native SQLite runs in WAL mode with `synchronous=FULL`; the commit
+boundary therefore requests durable WAL persistence before a successful mutation is
+reported. Windows Native CI verifies formatting, tests, Clippy, release compilation and
+the installer/browser-independence checks.
+
 Native Windows SQLite schema v7 persists the workspace-scoped append-only event log,
 merged vector clock, peer transport cursors and per-record causal frontiers. Canonical
 local mutation APIs `upsert_booking`, `delete_booking`, `upsert_entity_record` and
