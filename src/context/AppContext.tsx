@@ -1219,7 +1219,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .find((item) => item.id === booking.resourceId);
         return {
           workspaceId: workspace.activeWorkspaceId,
-          establishmentId: booking.establishmentId
+          establishmentId: (booking as TimelineBooking & { establishmentId?: string }).establishmentId
             ?? resource?.establishmentId
             ?? (selectedEstablishmentId !== 'all'
               ? selectedEstablishmentId
@@ -1260,7 +1260,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         'resourceGroups',
         groupMetadata,
         'resource_group',
-        (group) => contextForEstablishment(group.establishmentId),
+        (group) => contextForEstablishment(group.resources[0]?.establishmentId),
         DEMO_GROUP_IDS,
       ),
       indexedDb.reconcileSnapshotWithOutbox(
