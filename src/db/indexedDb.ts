@@ -1055,7 +1055,7 @@ class IndexedDbStore {
       const exists = events.some((event) =>
         event.createdAt === record.createdAt
         && event.operation === record.operation
-        && JSON.stringify(event.payload) === JSON.stringify(record.payload)
+        && stableSerialize(event.payload) === stableSerialize(record.payload)
       );
       if (!exists) {
         this.appendLocalP2pEvent(
@@ -1476,7 +1476,7 @@ class IndexedDbStore {
         existing.entity !== entity
         || existing.entityId !== item.id
         || existing.operation !== 'upsert'
-        || JSON.stringify(existing.payload) !== JSON.stringify(expectedPayload)
+        || stableSerialize(existing.payload) !== stableSerialize(expectedPayload)
       ) {
         throw new Error('Idempotency key collision: existing Outbox intent does not match this mutation.');
       }
@@ -1580,7 +1580,7 @@ class IndexedDbStore {
         || existing.entityId !== entityId
         || existing.operation !== operation
         || existing.version !== version
-        || JSON.stringify(existing.payload) !== JSON.stringify(payload)
+        || stableSerialize(existing.payload) !== stableSerialize(payload)
       ) {
         throw new Error('Idempotency key collision: existing Outbox intent does not match this mutation.');
       }
