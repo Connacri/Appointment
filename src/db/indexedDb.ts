@@ -363,13 +363,13 @@ class IndexedDbStore {
   }
 
   /** Atomically replace a dedicated operational store; IndexedDB remains authoritative. */
-  public async replaceStore<T extends { id: string }>(storeName: 'issuedCards' | 'resourceGroups', items: T[]): Promise<void> {
+  public async replaceStoreForMigration<T extends { id: string }>(storeName: 'issuedCards' | 'resourceGroups', items: T[]): Promise<void> {
     await this.openStore();
     if (!this.idb) {
       localStorage.setItem(`ob_${storeName}`, JSON.stringify(items));
       return;
     }
-    const tx = this.idb.transaction(storeName, 'readwrite');
+    const tx = this.createStrictTransaction([storeName]);
     const store = tx.objectStore(storeName);
     store.clear();
     for (const item of items) store.put(item);
@@ -569,7 +569,7 @@ class IndexedDbStore {
   }
 
   // Atomically replace a collection snapshot. This removes rows deleted from app state.
-  public async replaceAll<T extends { id: string }>(
+  public async replaceAllForMigration<T extends { id: string }>(
     storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups',
     items: T[]
   ): Promise<void> {
