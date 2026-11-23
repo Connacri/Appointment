@@ -1274,10 +1274,19 @@ class IndexedDbStore {
         req.onerror = () => resolve(undefined);
       });
       if (!current) {
-        const persisted = { ...item, workspaceId: context.workspaceId, establishmentId: context.establishmentId, deletedAt: null };
-        store.put(persisted);
+        const persisted = existing.payload ?? {
+          ...expectedBaseItem,
+          workspaceId: context.workspaceId,
+          establishmentId: context.establishmentId,
+          syncVersion: existing.version,
+          deletedAt: null,
+        };
+        store.put(persisted as T);
       }
-      this.ensureP2pEventForOutbox(storeTx, existing);
+      // Never replay an older Outbox snapshot over a newer local projection.
+      if (!current || JSON.stringify(current) === JSON.stringify(existing.payload)) {
+        this.ensureP2pEventForOutbox(storeTx, existing);
+      }
       await waitForTransactionCompletion(storeTx, `putWithOutboxByKey-idempotent ${entity}/${item.id}`);
       this.emitOutboxChange();
       return;
@@ -1357,10 +1366,18 @@ class IndexedDbStore {
       }
       await this.getP2pNodeId();
       const existingTx = this.idb.transaction(
-        ['p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'],
+        ['workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'],
         'readwrite',
       );
-      this.ensureP2pEventForOutbox(existingTx, existing);
+      const currentRequest = existingTx.objectStore('workspaceEntities')
+        .get([context.workspaceId, entity, entityId]);
+      currentRequest.onsuccess = () => {
+        const current = currentRequest.result as { version?: number } | undefined;
+        if (!current || (current.version ?? 0) <= existing.version) {
+          this.ensureP2pEventForOutbox(existingTx, existing);
+        }
+      };
+      currentRequest.onerror = () => existingTx.abort();
       await waitForTransactionCompletion(existingTx, `enqueueOutboxOnly-backfill ${entity}/${entityId}`);
       this.emitOutboxChange();
       return;
