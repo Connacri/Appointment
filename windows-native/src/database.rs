@@ -196,6 +196,7 @@ impl PmsDatabase {
         let connection = Connection::open(path)?;
         connection.pragma_update(None, "foreign_keys", "ON")?;
         connection.pragma_update(None, "journal_mode", "WAL")?;
+        connection.pragma_update(None, "synchronous", "FULL")?;
         connection.busy_timeout(std::time::Duration::from_secs(5))?;
         backup_before_migration_if_needed(&connection, path)?;
         Self::from_connection(connection)
