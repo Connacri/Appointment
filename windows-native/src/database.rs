@@ -402,8 +402,10 @@ impl PmsDatabase {
                UNION ALL
                SELECT version FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2
              )",
-            params![workspace_id, normalized_booking.id], |row| row.get(0)
-        ).map_err(|e| e.to_string())?;
+            params![workspace_id, normalized_booking.id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
         let base_server_version: i64 = tx.query_row(
             "SELECT COALESCE(MAX(server_version), 0) FROM (
                SELECT server_version FROM bookings WHERE workspace_id=?1 AND id=?2
@@ -435,7 +437,15 @@ impl PmsDatabase {
         tx.execute(
             "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,base_server_version,payload)
              VALUES (?1,?2,?3,'booking',?4,'upsert',?5,?6,?7)",
-            params![Uuid::new_v4().to_string(), idempotency_key, workspace_id, normalized_booking.id, version, base_server_version, payload],
+            params![
+                Uuid::new_v4().to_string(),
+                idempotency_key,
+                workspace_id,
+                normalized_booking.id,
+                version,
+                base_server_version,
+                payload
+            ],
         ).map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())
     }
@@ -487,12 +497,18 @@ impl PmsDatabase {
         tx.execute(
             "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,base_server_version,payload)
              VALUES (?1,?2,?3,'booking',?4,'delete',?5,?6,NULL)",
-            params![Uuid::new_v4().to_string(), idempotency_key, workspace_id, booking_id, version, base_server_version],
+            params![
+                Uuid::new_v4().to_string(),
+                idempotency_key,
+                workspace_id,
+                booking_id,
+                version,
+                base_server_version
+            ],
         ).map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
         Ok(true)
     }
-
 
     /// Persist a local booking mutation, Supabase Outbox row and P2P event atomically.
     /// Production P2P callers must use this method instead of the Outbox-only API.
@@ -507,7 +523,10 @@ impl PmsDatabase {
         let mut normalized_booking = booking.clone();
         normalized_booking.normalize_occupants();
         normalized_booking.validate()?;
-        if idempotency_key.trim().is_empty() || node_id.trim().is_empty() || created_at.trim().is_empty() {
+        if idempotency_key.trim().is_empty()
+            || node_id.trim().is_empty()
+            || created_at.trim().is_empty()
+        {
             return Err("idempotency_key, node_id and created_at are required".into());
         }
         let payload = serde_json::to_string(&normalized_booking).map_err(|e| e.to_string())?;
@@ -548,7 +567,13 @@ impl PmsDatabase {
              VALUES (?1,?2,?3,?4,?5,CURRENT_TIMESTAMP)
              ON CONFLICT(workspace_id,id) DO UPDATE SET resource_id=excluded.resource_id,
              payload=excluded.payload, version=excluded.version, updated_at=CURRENT_TIMESTAMP",
-            params![workspace_id, normalized_booking.id, normalized_booking.resource_id, payload, version],
+            params![
+                workspace_id,
+                normalized_booking.id,
+                normalized_booking.resource_id,
+                payload,
+                version
+            ],
         ).map_err(|e| e.to_string())?;
         tx.execute(
             "DELETE FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2",
@@ -583,11 +608,22 @@ impl PmsDatabase {
         node_id: &str,
         created_at: &str,
     ) -> Result<bool, String> {
-        if idempotency_key.trim().is_empty() || node_id.trim().is_empty() || created_at.trim().is_empty() {
+        if idempotency_key.trim().is_empty()
+            || node_id.trim().is_empty()
+            || created_at.trim().is_empty()
+        {
             return Err("idempotency_key, node_id and created_at are required".into());
         }
         let tx = self.connection.transaction().map_err(|e| e.to_string())?;
-        if check_idempotency(&tx, idempotency_key, workspace_id, "booking", booking_id, "delete", None)? {
+        if check_idempotency(
+            &tx,
+            idempotency_key,
+            workspace_id,
+            "booking",
+            booking_id,
+            "delete",
+            None,
+        )? {
             tx.commit().map_err(|e| e.to_string())?;
             return Ok(true);
         }
@@ -595,7 +631,9 @@ impl PmsDatabase {
             "SELECT version + 1, server_version FROM bookings WHERE workspace_id=?1 AND id=?2",
             params![workspace_id, booking_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
-        ).optional().map_err(|e| e.to_string())?;
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
         let Some((version, base_server_version)) = existing else {
             tx.commit().map_err(|e| e.to_string())?;
             return Ok(false);
