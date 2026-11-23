@@ -74,7 +74,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     setBookings,
     setSelectedEstablishmentId,
     setHasOnboarded,
-    workspace,
+    activeWorkspaceId,
     selectedEstablishmentId,
   } = useApp();
   const isRtl = language === 'ar';
@@ -198,7 +198,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
         building: String(bNo),
         floor: String(fNo),
         wing: roomWing.trim() || undefined,
-        workspaceId: workspace.activeWorkspaceId,
+        workspaceId: activeWorkspaceId,
         establishmentId: selectedEstablishmentId !== 'all'
           ? selectedEstablishmentId
           : establishmentProfile?.id,
@@ -211,10 +211,10 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     const nextGroup = {
       ...existing,
       id: groupId,
-      workspaceId: workspace.activeWorkspaceId,
+      workspaceId: activeWorkspaceId,
       establishmentId: selectedEstablishmentId !== 'all'
         ? selectedEstablishmentId
-        : existing?.establishmentId ?? establishmentProfile?.id,
+        : existing?.resources[0]?.establishmentId ?? establishmentProfile?.id,
       name: { fr: buildingName.trim(), en: buildingName.trim(), ar: buildingName.trim() },
       sector: 'hotel' as const,
       icon: 'Building',
@@ -239,17 +239,17 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
       );
       const importedGroups = planning.resourceGroups.map((group) => ({
         ...group,
-        workspaceId: workspace.activeWorkspaceId,
+        workspaceId: activeWorkspaceId,
         establishmentId: importedEstablishmentId,
         resources: group.resources.map((resource) => ({
           ...resource,
-          workspaceId: workspace.activeWorkspaceId,
+          workspaceId: activeWorkspaceId,
           establishmentId: importedEstablishmentId,
         })),
       }));
       const importedBookings = planning.bookings.map((booking) => ({
         ...booking,
-        workspaceId: workspace.activeWorkspaceId,
+        workspaceId: activeWorkspaceId,
         establishmentId: importedEstablishmentId,
       }));
       setResourceGroups((current) => [
