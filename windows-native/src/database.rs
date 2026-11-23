@@ -1410,7 +1410,8 @@ mod tests {
     #[test]
     fn workspace_queries_never_leak_rows() {
         let mut db = database();
-        db.upsert_booking_outbox_only("w-1", &booking("b-1"), "idem-1").unwrap();
+        db.upsert_booking_outbox_only("w-1", &booking("b-1"), "idem-1")
+            .unwrap();
         assert!(db.get_booking("w-2", "b-1").unwrap().is_none());
         assert!(db.list_bookings("w-2", 0, 20).unwrap().is_empty());
         assert!(db.pending_outbox("w-2", 20).unwrap().is_empty());
@@ -1419,7 +1420,8 @@ mod tests {
     #[test]
     fn delete_writes_tombstone_and_outbox_atomically() {
         let mut db = database();
-        db.upsert_booking_outbox_only("w-1", &booking("b-1"), "idem-1").unwrap();
+        db.upsert_booking_outbox_only("w-1", &booking("b-1"), "idem-1")
+            .unwrap();
         assert!(db.delete_booking_outbox_only("w-1", "b-1", "idem-2").unwrap());
         assert!(db.get_booking("w-1", "b-1").unwrap().is_none());
         assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 2);
@@ -1440,7 +1442,8 @@ mod tests {
         let item = booking("b-1");
         db.upsert_booking_outbox_only("w-1", &item, "same-key")
             .unwrap();
-        db.upsert_booking_outbox_only("w-1", &item, "same-key").unwrap();
+        db.upsert_booking_outbox_only("w-1", &item, "same-key")
+            .unwrap();
         assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 1);
         assert!(db
             .upsert_booking_outbox_only("w-1", &booking("b-2"), "same-key")
@@ -1450,7 +1453,8 @@ mod tests {
     #[test]
     fn outbox_retry_state_is_workspace_scoped_and_late_ack_is_accepted() {
         let mut db = database();
-        db.upsert_booking_outbox_only("w-1", &booking("b-1"), "idem-1").unwrap();
+        db.upsert_booking_outbox_only("w-1", &booking("b-1"), "idem-1")
+            .unwrap();
         let entry = db.pending_outbox("w-1", 1).unwrap().remove(0);
         assert!(!db.mark_outbox_synced("w-2", &entry.id).unwrap());
         assert!(db
