@@ -707,7 +707,11 @@ impl PmsDatabase {
         {
             return Err("invalid P2P inbound batch identity, cursor range or page size".into());
         }
-        if batch.events.iter().any(|event| event.workspace_id != batch.workspace_id) {
+        if batch
+            .events
+            .iter()
+            .any(|event| event.workspace_id != batch.workspace_id)
+        {
             return Err("P2P inbound batch contains an event from another workspace".into());
         }
 
@@ -831,7 +835,13 @@ impl PmsDatabase {
                  ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
                    status='resolved', frontier_json=excluded.frontier_json,
                    applied_event_id=excluded.applied_event_id, updated_at=CURRENT_TIMESTAMP",
-                params![batch.workspace_id, entity, entity_id, json, frontier.event_id],
+                params![
+                    batch.workspace_id,
+                    entity,
+                    entity_id,
+                    json,
+                    frontier.event_id
+                ],
             )
             .map_err(|e| e.to_string())?;
         }
@@ -1343,8 +1353,8 @@ fn reconcile_p2p_frontier_in_transaction(
                 return Ok(());
             }
             apply_p2p_event_projection(tx, &event)?;
-            let json = serde_json::to_string(std::slice::from_ref(&event))
-                .map_err(|e| e.to_string())?;
+            let json =
+                serde_json::to_string(std::slice::from_ref(&event)).map_err(|e| e.to_string())?;
             tx.execute(
                 "INSERT INTO p2p_record_frontiers(
                    workspace_id,entity,entity_id,status,frontier_json,applied_event_id
@@ -1360,10 +1370,7 @@ fn reconcile_p2p_frontier_in_transaction(
     }
 }
 
-fn apply_p2p_event_projection(
-    tx: &Transaction<'_>,
-    event: &P2pEvent,
-) -> Result<bool, String> {
+fn apply_p2p_event_projection(tx: &Transaction<'_>, event: &P2pEvent) -> Result<bool, String> {
     let workspace_id = event.workspace_id.as_str();
     let entity = event.entity.as_str();
     let entity_id = event.entity_id.as_str();
@@ -1371,7 +1378,10 @@ fn apply_p2p_event_projection(
     if entity == "booking" {
         match event.operation {
             P2pOperation::Upsert => {
-                let value = event.payload.as_ref().ok_or("booking upsert has no payload")?;
+                let value = event
+                    .payload
+                    .as_ref()
+                    .ok_or("booking upsert has no payload")?;
                 let mut booking: Booking =
                     serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
                 if booking.id != entity_id {
@@ -1450,9 +1460,13 @@ fn apply_p2p_event_projection(
                 if current.is_none() && tombstone.is_some() {
                     return Ok(false);
                 }
-                let version = current.map(|row| row.0).unwrap_or(0)
-                    .max(tombstone.map(|row| row.0).unwrap_or(0)) + 1;
-                let server_version = current.map(|row| row.1)
+                let version = current
+                    .map(|row| row.0)
+                    .unwrap_or(0)
+                    .max(tombstone.map(|row| row.0).unwrap_or(0))
+                    + 1;
+                let server_version = current
+                    .map(|row| row.1)
                     .or_else(|| tombstone.map(|row| row.1))
                     .unwrap_or(0);
                 tx.execute(
@@ -1475,7 +1489,10 @@ fn apply_p2p_event_projection(
     } else {
         match event.operation {
             P2pOperation::Upsert => {
-                let value = event.payload.as_ref().ok_or("entity upsert has no payload")?;
+                let value = event
+                    .payload
+                    .as_ref()
+                    .ok_or("entity upsert has no payload")?;
                 if !value.is_object() {
                     return Err("P2P entity payload must be a JSON object".into());
                 }
@@ -1537,7 +1554,10 @@ fn apply_p2p_event_projection(
                 if existing_version.is_none() && tombstone_version.is_some() {
                     return Ok(false);
                 }
-                let version = existing_version.unwrap_or(0).max(tombstone_version.unwrap_or(0)) + 1;
+                let version = existing_version
+                    .unwrap_or(0)
+                    .max(tombstone_version.unwrap_or(0))
+                    + 1;
                 tx.execute(
                     "DELETE FROM entity_records WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
                     params![workspace_id, entity, entity_id],
@@ -1707,7 +1727,10 @@ mod tests {
             entity_id: entity_id.into(),
             operation,
             payload,
-            clock: clock.iter().map(|(node, seq)| ((*node).into(), *seq)).collect(),
+            clock: clock
+                .iter()
+                .map(|(node, seq)| ((*node).into(), *seq))
+                .collect(),
             created_at: "2026-11-23T09:00:00Z".into(),
         }
     }
@@ -1737,21 +1760,26 @@ mod tests {
         assert_eq!(report.applied_records, 1);
         assert_eq!(db.get_booking("w-1", "b-inbound").unwrap(), Some(remote));
         assert_eq!(db.p2p_event_count("w-1").unwrap(), 1);
-        let cursor: i64 = db.connection.query_row(
-            "SELECT cursor FROM p2p_peer_cursors WHERE workspace_id='w-1' AND peer_id='peer-b'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let cursor: i64 = db
+            .connection
+            .query_row(
+                "SELECT cursor FROM p2p_peer_cursors WHERE workspace_id='w-1' AND peer_id='peer-b'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(cursor, 1);
 
         // The same page cannot be committed twice with a stale expected cursor.
-        assert!(db.apply_received_p2p_batch(P2pInboundBatch {
-            workspace_id: "w-1",
-            peer_id: "peer-b",
-            expected_cursor: 0,
-            next_cursor: 1,
-            events: std::slice::from_ref(&event),
-        }).is_err());
+        assert!(db
+            .apply_received_p2p_batch(P2pInboundBatch {
+                workspace_id: "w-1",
+                peer_id: "peer-b",
+                expected_cursor: 0,
+                next_cursor: 1,
+                events: std::slice::from_ref(&event),
+            })
+            .is_err());
         assert_eq!(db.p2p_event_count("w-1").unwrap(), 1);
     }
 
@@ -1789,7 +1817,13 @@ mod tests {
 
         assert_eq!(report.conflicts, 1);
         assert_eq!(report.applied_records, 0);
-        assert_eq!(db.get_booking("w-1", "b-conflict").unwrap().unwrap().guest_name, "Local version");
+        assert_eq!(
+            db.get_booking("w-1", "b-conflict")
+                .unwrap()
+                .unwrap()
+                .guest_name,
+            "Local version"
+        );
         let status: String = db.connection.query_row(
             "SELECT status FROM p2p_record_frontiers WHERE workspace_id='w-1' AND entity='booking' AND entity_id='b-conflict'",
             [],
@@ -1875,7 +1909,10 @@ mod tests {
         assert!(db.acknowledge_outbox("w-1", &local_outbox.id, 17).unwrap());
 
         assert_eq!(
-            db.get_booking("w-1", "b-reconcile").unwrap().unwrap().guest_name,
+            db.get_booking("w-1", "b-reconcile")
+                .unwrap()
+                .unwrap()
+                .guest_name,
             "Remote successor"
         );
         let status: String = db.connection.query_row(
@@ -1890,11 +1927,13 @@ mod tests {
     #[test]
     fn inbound_projection_failure_rolls_back_event_and_peer_cursor() {
         let mut db = database();
-        db.connection.execute_batch(
-            "CREATE TRIGGER fail_inbound_booking
-             BEFORE INSERT ON bookings
-             BEGIN SELECT RAISE(ABORT, 'injected projection failure'); END;",
-        ).unwrap();
+        db.connection
+            .execute_batch(
+                "CREATE TRIGGER fail_inbound_booking
+                 BEFORE INSERT ON bookings
+                 BEGIN SELECT RAISE(ABORT, 'injected projection failure'); END;",
+            )
+            .unwrap();
         let event = remote_event(
             "node-b",
             1,
@@ -1918,7 +1957,10 @@ mod tests {
             |row| row.get(0),
         ).unwrap();
         assert!(!cursor_exists);
-        assert!(db.get_booking("w-1", "b-rollback-inbound").unwrap().is_none());
+        assert!(db
+            .get_booking("w-1", "b-rollback-inbound")
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -2483,8 +2525,14 @@ mod tests {
             p2p_clock_exists,
             "v6 must create the persisted vector clock"
         );
-        assert!(peer_cursors_exists, "v7 must persist peer transport cursors");
-        assert!(record_frontiers_exists, "v7 must persist resolved and conflicting event frontiers");
+        assert!(
+            peer_cursors_exists,
+            "v7 must persist peer transport cursors"
+        );
+        assert!(
+            record_frontiers_exists,
+            "v7 must persist resolved and conflicting event frontiers"
+        );
     }
 
     #[test]
