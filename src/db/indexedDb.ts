@@ -1356,7 +1356,9 @@ class IndexedDbStore {
         storeName === 'bookings'
           ? (migrateBookingRecordV7(item as Partial<TimelineBooking>) as T)
           : item;
-      const establishmentId = context.establishmentId ?? current?.establishmentId;
+      const establishmentId = context.establishmentId
+        ?? current?.establishmentId
+        ?? (baseItem as T & { establishmentId?: string }).establishmentId;
       const candidate = {
         ...baseItem,
         workspaceId: context.workspaceId,
@@ -1447,7 +1449,9 @@ class IndexedDbStore {
       const expectedPayload = {
         ...expectedBaseItem,
         workspaceId: context.workspaceId,
-        establishmentId: context.establishmentId,
+        establishmentId: context.establishmentId
+          ?? (expectedBaseItem as T & { establishmentId?: string }).establishmentId
+          ?? existing.establishmentId,
         syncVersion: existing.version,
         deletedAt: null,
       };
