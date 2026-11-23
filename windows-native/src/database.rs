@@ -1206,6 +1206,68 @@ mod tests {
     }
 
     #[test]
+    fn local_booking_mutation_outbox_and_p2p_event_commit_together() {
+        let mut db = database();
+        db.upsert_booking_with_p2p(
+            "w-1",
+            &booking("b-p2p"),
+            "idem-p2p-create",
+            "node-a",
+            "2026-11-23T08:30:00Z",
+        )
+        .unwrap();
+
+        assert!(db.get_booking("w-1", "b-p2p").unwrap().is_some());
+        assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 1);
+        assert_eq!(db.p2p_event_count("w-1").unwrap(), 1);
+        let events = db.list_p2p_events_after("w-1", 0, 10).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event.entity, "booking");
+        assert_eq!(events[0].event.entity_id, "b-p2p");
+        assert_eq!(events[0].event.operation, crate::p2p::P2pOperation::Upsert);
+
+        assert!(db
+            .delete_booking_with_p2p(
+                "w-1",
+                "b-p2p",
+                "idem-p2p-delete",
+                "node-a",
+                "2026-11-23T08:31:00Z",
+            )
+            .unwrap());
+        assert!(db.get_booking("w-1", "b-p2p").unwrap().is_none());
+        assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 2);
+        assert_eq!(db.p2p_event_count("w-1").unwrap(), 2);
+        let deletion = db.list_p2p_events_after("w-1", 1, 10).unwrap();
+        assert_eq!(deletion.len(), 1);
+        assert_eq!(deletion[0].event.operation, crate::p2p::P2pOperation::Delete);
+    }
+
+    #[test]
+    fn p2p_append_failure_rolls_back_booking_and_outbox_mutation() {
+        let mut db = database();
+        db.connection
+            .execute_batch(
+                "CREATE TRIGGER fail_p2p_event
+                 BEFORE INSERT ON p2p_events
+                 BEGIN SELECT RAISE(ABORT, 'injected P2P append failure'); END;",
+            )
+            .unwrap();
+
+        let result = db.upsert_booking_with_p2p(
+            "w-1",
+            &booking("b-rollback"),
+            "idem-rollback",
+            "node-a",
+            "2026-11-23T08:32:00Z",
+        );
+        assert!(result.is_err());
+        assert!(db.get_booking("w-1", "b-rollback").unwrap().is_none());
+        assert!(db.pending_outbox("w-1", 10).unwrap().is_empty());
+        assert_eq!(db.p2p_event_count("w-1").unwrap(), 0);
+    }
+
+    #[test]
     fn disk_database_reopens_with_workspace_outbox_and_generic_entities() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("appointment.sqlite3");
