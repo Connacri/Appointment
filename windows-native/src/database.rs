@@ -2153,7 +2153,7 @@ mod tests {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(schema_version, 6);
+        assert_eq!(schema_version, 7);
     }
 
     #[test]
