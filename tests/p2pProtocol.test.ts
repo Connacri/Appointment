@@ -46,6 +46,33 @@ test('builds a monotonically increasing local clock', () => {
   });
 });
 
+test('rotating the installation identity prevents event sequence ID reuse after purge', () => {
+  const beforePurge = createP2pEvent({
+    nodeId: 'node-before-purge',
+    workspaceId: 'workspace-1',
+    entity: 'booking',
+    entityId: 'booking-1',
+    operation: 'upsert',
+    payload: { id: 'booking-1' },
+    createdAt: '2026-11-23T09:00:00.000Z',
+    observedClock: {},
+  });
+  const afterPurge = createP2pEvent({
+    nodeId: 'node-after-purge',
+    workspaceId: 'workspace-1',
+    entity: 'booking',
+    entityId: 'booking-1',
+    operation: 'upsert',
+    payload: { id: 'booking-1' },
+    createdAt: '2026-11-23T09:01:00.000Z',
+    observedClock: {},
+  });
+
+  assert.equal(beforePurge.sequence, 1);
+  assert.equal(afterPurge.sequence, 1);
+  assert.notEqual(beforePurge.eventId, afterPurge.eventId);
+});
+
 test('creates a validated durable-mutation event without losing unknown payload fields', () => {
   const payload = {
     id: 'resource-1',
