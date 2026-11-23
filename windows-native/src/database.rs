@@ -55,9 +55,105 @@ pub struct PmsDatabase {
     connection: Connection,
 }
 
+fn backup_before_migration_if_needed(
+    connection: &Connection,
+    database_path: &std::path::Path,
+) -> rusqlite::Result<Option<std::path::PathBuf>> {
+    let table_count: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM sqlite_master
+         WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+        [],
+        |row| row.get(0),
+    )?;
+    if table_count == 0 {
+        return Ok(None);
+    }
+
+    let has_migrations: bool = connection.query_row(
+        "SELECT EXISTS(
+           SELECT 1 FROM sqlite_master
+           WHERE type='table' AND name='schema_migrations'
+         )",
+        [],
+        |row| row.get(0),
+    )?;
+    let current_version = if has_migrations {
+        connection.query_row(
+            "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+            [],
+            |row| row.get::<_, i64>(0),
+        )?
+    } else {
+        0
+    };
+
+    if current_version > CURRENT_SCHEMA_VERSION {
+        return Err(rusqlite::Error::InvalidParameterName(format!(
+            "database schema version {current_version} is newer than this application supports ({CURRENT_SCHEMA_VERSION}); refusing downgrade"
+        )));
+    }
+    if current_version == CURRENT_SCHEMA_VERSION {
+        return Ok(None);
+    }
+
+    let file_name = database_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            rusqlite::Error::InvalidParameterName(
+                "database path has no valid file name for pre-migration backup".into(),
+            )
+        })?;
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| rusqlite::Error::InvalidParameterName(error.to_string()))?
+        .as_nanos();
+    let backup_path = database_path.with_file_name(format!(
+        "{file_name}.pre-migration-{timestamp}.sqlite3"
+    ));
+    let backup_path_text = backup_path.to_str().ok_or_else(|| {
+        rusqlite::Error::InvalidParameterName(
+            "pre-migration backup path is not valid UTF-8".into(),
+        )
+    })?;
+
+    // VACUUM INTO uses SQLite's online snapshot semantics and includes committed
+    // WAL content. It does not mutate the source database.
+    connection.execute("VACUUM INTO ?1", params![backup_path_text])?;
+
+    let backup = Connection::open(&backup_path)?;
+    let integrity: String =
+        backup.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+    if integrity != "ok" {
+        return Err(rusqlite::Error::InvalidParameterName(format!(
+            "pre-migration backup integrity check failed: {integrity}; source database was not migrated"
+        )));
+    }
+
+    let backup_tables: i64 = backup.query_row(
+        "SELECT COUNT(*) FROM sqlite_master
+         WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+        [],
+        |row| row.get(0),
+    )?;
+    if backup_tables != table_count {
+        return Err(rusqlite::Error::InvalidParameterName(
+            "pre-migration backup table count mismatch; source database was not migrated".into(),
+        ));
+    }
+    Ok(Some(backup_path))
+}
+
+const CURRENT_SCHEMA_VERSION: i64 = 6;
+
 impl PmsDatabase {
     pub fn open(path: impl AsRef<std::path::Path>) -> rusqlite::Result<Self> {
+        let path = path.as_ref();
         let connection = Connection::open(path)?;
+        connection.pragma_update(None, "foreign_keys", "ON")?;
+        connection.pragma_update(None, "journal_mode", "WAL")?;
+        connection.busy_timeout(std::time::Duration::from_secs(5))?;
+        backup_before_migration_if_needed(&connection, path)?;
         Self::from_connection(connection)
     }
 
