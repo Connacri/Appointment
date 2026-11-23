@@ -15,6 +15,7 @@ import type { EventLogEntry } from '../types/eventLog';
 import { EVENT_LOG_MAX_ENTRIES, sortEventLogsDesc } from '../utils/eventLog';
 import { waitForTransactionCompletion } from './indexedDbTransaction';
 import { migrateBookingRecordV7 } from './bookingMigration';
+import { nextP2pClock, validateP2pEvent, type P2pEvent, type P2pOperation } from '../services/p2p/protocol';
 
 export interface IndexedDbQueryOptions<T> {
   where?: (item: T) => boolean;
@@ -70,7 +71,7 @@ export interface OutboxSummary {
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 7;
+  private dbVersion = 8;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -218,6 +219,25 @@ class IndexedDbStore {
           eventLogs.createIndex('timestamp', 'timestamp', { unique: false });
           eventLogs.createIndex('category', 'category', { unique: false });
           eventLogs.createIndex('workspaceId', 'workspaceId', { unique: false });
+        }
+        // P2P v8 stores are additive. Existing operational rows are never rewritten.
+        if (!db.objectStoreNames.contains('p2pEvents')) {
+          const events = db.createObjectStore('p2pEvents', { keyPath: ['workspaceId', 'eventId'] });
+          events.createIndex('workspaceEntity', ['workspaceId', 'entity', 'entityId'], { unique: false });
+          events.createIndex('workspaceNodeSequence', ['workspaceId', 'nodeId', 'sequence'], { unique: true });
+        }
+        if (!db.objectStoreNames.contains('p2pClock')) {
+          const clock = db.createObjectStore('p2pClock', { keyPath: ['workspaceId', 'nodeId'] });
+          clock.createIndex('workspaceId', 'workspaceId', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('p2pMeta')) {
+          db.createObjectStore('p2pMeta', { keyPath: 'key' });
+        }
+        if (!db.objectStoreNames.contains('p2pPeerCursors')) {
+          db.createObjectStore('p2pPeerCursors', { keyPath: ['workspaceId', 'peerId'] });
+        }
+        if (!db.objectStoreNames.contains('p2pRecordFrontiers')) {
+          db.createObjectStore('p2pRecordFrontiers', { keyPath: ['workspaceId', 'entity', 'entityId'] });
         }
 
         // v7 upgrade: index sector+startDate and normalize existing local booking records without data loss.
@@ -665,6 +685,77 @@ class IndexedDbStore {
       entity, entityId, operation, version, payload,
       status: 'pending', attempts: 0, createdAt: now, nextAttemptAt: now,
     };
+  }
+
+  /**
+   * Append a local immutable P2P event and advance every observed vector-clock component
+   * inside the caller's existing business+Outbox IndexedDB transaction.
+   */
+  private appendLocalP2pEvent(
+    tx: IDBTransaction,
+    workspaceId: string,
+    entity: OutboxEntity,
+    entityId: string,
+    operation: P2pOperation,
+    payload: Record<string, unknown> | null,
+    createdAt: string,
+  ): void {
+    const metaStore = tx.objectStore('p2pMeta');
+    const clockStore = tx.objectStore('p2pClock');
+    let nodeId: string | undefined;
+    let clockRows: Array<{ workspaceId: string; nodeId: string; sequence: number }> = [];
+    let metaReady = false;
+    let clockReady = false;
+
+    const finish = () => {
+      if (!metaReady || !clockReady) return;
+      try {
+        nodeId ??= this.createId();
+        metaStore.put({ key: 'nodeId', value: nodeId });
+        const observed = Object.fromEntries(clockRows.map((row) => [row.nodeId, row.sequence]));
+        const next = nextP2pClock(observed, nodeId);
+        const event: P2pEvent = {
+          protocolVersion: 1,
+          eventId: `${nodeId}:${next.sequence}`,
+          nodeId,
+          sequence: next.sequence,
+          workspaceId,
+          entity,
+          entityId,
+          operation,
+          payload,
+          clock: next.clock,
+          createdAt,
+        };
+        validateP2pEvent(event);
+        if (new TextEncoder().encode(JSON.stringify(event)).byteLength > 1024 * 1024) {
+          throw new Error('P2P event exceeds the 1 MiB persistence limit.');
+        }
+        tx.objectStore('p2pEvents').add(event);
+        for (const [clockNodeId, sequence] of Object.entries(next.clock)) {
+          clockStore.put({ workspaceId, nodeId: clockNodeId, sequence });
+        }
+      } catch (error) {
+        tx.abort();
+        throw error;
+      }
+    };
+
+    const metaRequest = metaStore.get('nodeId');
+    metaRequest.onsuccess = () => {
+      nodeId = (metaRequest.result as { value?: string } | undefined)?.value;
+      metaReady = true;
+      finish();
+    };
+    metaRequest.onerror = () => tx.abort();
+
+    const clockRequest = clockStore.index('workspaceId').getAll(workspaceId);
+    clockRequest.onsuccess = () => {
+      clockRows = clockRequest.result as Array<{ workspaceId: string; nodeId: string; sequence: number }>;
+      clockReady = true;
+      finish();
+    };
+    clockRequest.onerror = () => tx.abort();
   }
 
   /** Opt-in only: demo/bootstrap data must never call this method. */
