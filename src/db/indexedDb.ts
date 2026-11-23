@@ -397,7 +397,7 @@ class IndexedDbStore {
       return;
     }
 
-    const tx = this.idb.transaction('eventLogs', 'readwrite');
+    const tx = this.createStrictTransaction(['eventLogs']);
     const store = tx.objectStore('eventLogs');
     store.put(entry);
 
@@ -581,7 +581,7 @@ class IndexedDbStore {
     try {
       await this.openStore();
       if (this.idb) {
-        const tx = this.idb.transaction(storeName, 'readwrite');
+        const tx = this.createStrictTransaction([storeName]);
         const store = tx.objectStore(storeName);
         const existingRequest = store.getAll();
         existingRequest.onsuccess = () => {
@@ -1580,7 +1580,7 @@ class IndexedDbStore {
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
     await this.getP2pNodeId();
-    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'], 'readwrite');
+    const tx = this.createStrictTransaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers']);
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const tombstones = tx.objectStore('tombstones');
