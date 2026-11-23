@@ -9,6 +9,7 @@ import {
   nextP2pClock,
   validateP2pEvent,
   validateP2pCursorAdvance,
+  getP2pRecordState,
   type P2pEvent,
 } from '../src/services/p2p/protocol';
 
@@ -132,6 +133,15 @@ test('merges replicas by set union and is idempotent', () => {
   const merged = mergeP2pEvents([a], [b, a]);
   assert.equal(merged.length, 2);
   assert.deepEqual(mergeP2pEvents(merged, [a, b]), merged);
+});
+
+test('concurrent P2P branches remain an explicit conflict, never last-writer-wins', () => {
+  const left = event('node-left', 1, { 'node-left': 1 }, { id: 'booking-3', guest: 'Left' });
+  const right = event('node-right', 1, { 'node-right': 1 }, { id: 'booking-3', guest: 'Right' });
+
+  const state = getP2pRecordState(mergeP2pEvents([left], [right]));
+  assert.equal(state.kind, 'conflict');
+  if (state.kind === 'conflict') assert.equal(state.events.length, 2);
 });
 
 test('exact P2P event replay remains idempotent across IndexedDB replicas', () => {
