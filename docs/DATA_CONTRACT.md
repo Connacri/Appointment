@@ -44,12 +44,13 @@ Appointment MUST fail closed rather than discard or silently replace user data.
     is not. Conflicts must remain visible and recoverable, never silently resolved.
 
 Current implementation status: native SQLite now creates a verified SQLite
-`VACUUM INTO` snapshot before upgrading an existing older schema, checks backup
-integrity and table count, and refuses to open a database created by a newer schema.
+`VACUUM INTO` snapshot before upgrading an existing older schema, checks SQLite
+integrity, exact user-table inventory and per-table row counts, and refuses to open a
+database created by a newer schema. A restore-drill test copies the verified snapshot
+to a fresh database path and verifies that all source rows remain readable.
 Equal-version entity conflicts are rejected, stale writes are ignored, workspace
 identity mismatch is rejected, and generic physical entity deletion is disabled pending
-tombstone/Outbox integration. Backup restore drills, row-level backup verification,
-and atomic coupling of every business mutation to the P2P event log remain release
+tombstone/Outbox integration. Broader crash/disk-full restore drills and atomic coupling of every business mutation to the P2P event log remain release
 blockers. Do not enable production P2P synchronization until these gates are implemented
 and tested.
 
