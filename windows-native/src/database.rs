@@ -493,6 +493,143 @@ impl PmsDatabase {
         Ok(true)
     }
 
+
+    /// Persist a local booking mutation, Supabase Outbox row and P2P event atomically.
+    /// Production P2P callers must use this method instead of the Outbox-only API.
+    pub fn upsert_booking_with_p2p(
+        &mut self,
+        workspace_id: &str,
+        booking: &Booking,
+        idempotency_key: &str,
+        node_id: &str,
+        created_at: &str,
+    ) -> Result<(), String> {
+        let mut normalized_booking = booking.clone();
+        normalized_booking.normalize_occupants();
+        normalized_booking.validate()?;
+        if idempotency_key.trim().is_empty() || node_id.trim().is_empty() || created_at.trim().is_empty() {
+            return Err("idempotency_key, node_id and created_at are required".into());
+        }
+        let payload = serde_json::to_string(&normalized_booking).map_err(|e| e.to_string())?;
+        let event_payload = serde_json::from_str(&payload).map_err(|e| e.to_string())?;
+        let tx = self.connection.transaction().map_err(|e| e.to_string())?;
+        ensure_workspace_exists(&tx, workspace_id)?;
+        if check_idempotency(
+            &tx,
+            idempotency_key,
+            workspace_id,
+            "booking",
+            &normalized_booking.id,
+            "upsert",
+            Some(&payload),
+        )? {
+            tx.commit().map_err(|e| e.to_string())?;
+            return Ok(());
+        }
+        let version: i64 = tx.query_row(
+            "SELECT COALESCE(MAX(version), 0) + 1 FROM (
+               SELECT version FROM bookings WHERE workspace_id=?1 AND id=?2
+               UNION ALL
+               SELECT version FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2
+             )",
+            params![workspace_id, normalized_booking.id], |row| row.get(0)
+        ).map_err(|e| e.to_string())?;
+        let base_server_version: i64 = tx.query_row(
+            "SELECT COALESCE(MAX(server_version), 0) FROM (
+               SELECT server_version FROM bookings WHERE workspace_id=?1 AND id=?2
+               UNION ALL
+               SELECT server_version FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2
+             )",
+            params![workspace_id, normalized_booking.id],
+            |row| row.get(0),
+        ).map_err(|e| e.to_string())?;
+        tx.execute(
+            "INSERT INTO bookings(workspace_id,id,resource_id,payload,version,updated_at)
+             VALUES (?1,?2,?3,?4,?5,CURRENT_TIMESTAMP)
+             ON CONFLICT(workspace_id,id) DO UPDATE SET resource_id=excluded.resource_id,
+             payload=excluded.payload, version=excluded.version, updated_at=CURRENT_TIMESTAMP",
+            params![workspace_id, normalized_booking.id, normalized_booking.resource_id, payload, version],
+        ).map_err(|e| e.to_string())?;
+        tx.execute(
+            "DELETE FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2",
+            params![workspace_id, normalized_booking.id],
+        ).map_err(|e| e.to_string())?;
+        tx.execute(
+            "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,base_server_version,payload)
+             VALUES (?1,?2,?3,'booking',?4,'upsert',?5,?6,?7)",
+            params![Uuid::new_v4().to_string(), idempotency_key, workspace_id, normalized_booking.id, version, base_server_version, payload],
+        ).map_err(|e| e.to_string())?;
+        database_p2p::create_local_event_in_transaction(
+            &tx,
+            NewP2pEvent {
+                workspace_id,
+                node_id,
+                entity: "booking",
+                entity_id: &normalized_booking.id,
+                operation: crate::p2p::P2pOperation::Upsert,
+                payload: Some(event_payload),
+                created_at,
+            },
+        )?;
+        tx.commit().map_err(|e| e.to_string())
+    }
+
+    /// Persist a booking tombstone, Supabase Outbox row and P2P delete event atomically.
+    pub fn delete_booking_with_p2p(
+        &mut self,
+        workspace_id: &str,
+        booking_id: &str,
+        idempotency_key: &str,
+        node_id: &str,
+        created_at: &str,
+    ) -> Result<bool, String> {
+        if idempotency_key.trim().is_empty() || node_id.trim().is_empty() || created_at.trim().is_empty() {
+            return Err("idempotency_key, node_id and created_at are required".into());
+        }
+        let tx = self.connection.transaction().map_err(|e| e.to_string())?;
+        if check_idempotency(&tx, idempotency_key, workspace_id, "booking", booking_id, "delete", None)? {
+            tx.commit().map_err(|e| e.to_string())?;
+            return Ok(true);
+        }
+        let existing: Option<(i64, i64)> = tx.query_row(
+            "SELECT version + 1, server_version FROM bookings WHERE workspace_id=?1 AND id=?2",
+            params![workspace_id, booking_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).optional().map_err(|e| e.to_string())?;
+        let Some((version, base_server_version)) = existing else {
+            tx.commit().map_err(|e| e.to_string())?;
+            return Ok(false);
+        };
+        tx.execute(
+            "DELETE FROM bookings WHERE workspace_id=?1 AND id=?2",
+            params![workspace_id, booking_id],
+        ).map_err(|e| e.to_string())?;
+        tx.execute(
+            "INSERT INTO tombstones(workspace_id,entity,entity_id,version,server_version) VALUES (?1,'booking',?2,?3,?4)
+             ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET version=excluded.version, server_version=excluded.server_version, deleted_at=CURRENT_TIMESTAMP",
+            params![workspace_id, booking_id, version, base_server_version],
+        ).map_err(|e| e.to_string())?;
+        tx.execute(
+            "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,base_server_version,payload)
+             VALUES (?1,?2,?3,'booking',?4,'delete',?5,?6,NULL)",
+            params![Uuid::new_v4().to_string(), idempotency_key, workspace_id, booking_id, version, base_server_version],
+        ).map_err(|e| e.to_string())?;
+        database_p2p::create_local_event_in_transaction(
+            &tx,
+            NewP2pEvent {
+                workspace_id,
+                node_id,
+                entity: "booking",
+                entity_id: booking_id,
+                operation: crate::p2p::P2pOperation::Delete,
+                payload: None,
+                created_at,
+            },
+        )?;
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(true)
+    }
+
     pub fn get_booking(
         &self,
         workspace_id: &str,
