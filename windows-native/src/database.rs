@@ -1851,6 +1851,25 @@ mod tests {
             )
             .unwrap();
         assert_eq!(status, "conflict");
+
+        let mut attempted_local = booking("b-conflict");
+        attempted_local.guest_name = "Unreviewed local overwrite".into();
+        assert!(db
+            .upsert_booking(
+                "w-1",
+                &attempted_local,
+                "idem-conflict-overwrite",
+                "node-a",
+                "2026-11-23T09:01:00Z",
+            )
+            .is_err());
+        assert_eq!(
+            db.get_booking("w-1", "b-conflict")
+                .unwrap()
+                .unwrap()
+                .guest_name,
+            "Local version"
+        );
     }
 
     #[test]
