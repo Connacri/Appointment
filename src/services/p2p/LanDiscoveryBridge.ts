@@ -18,7 +18,8 @@ export interface LanDiscoveryError {
 }
 
 interface LanDiscoveryPlugin {
-  startDiscovery(): Promise<LanDiscoveryStartResult>;
+  startDiscovery(options?: { nodeId?: string }): Promise<LanDiscoveryStartResult>;
+  getNodeIdentity(): Promise<{ nodeId: string }>;
   stopDiscovery(): Promise<void>;
   requestAndroid16CompatibilityPermission(): Promise<LanDiscoveryStartResult>;
   addListener(
@@ -46,9 +47,16 @@ export function supportsNativeLanDiscovery(): boolean {
  * It shares only protocolVersion + peerId over IPv4 multicast; workspace data,
  * credentials and business records are never included in discovery packets.
  */
-export async function startNativeLanDiscovery(): Promise<LanDiscoveryStartResult> {
+export async function getNativeLanNodeIdentity(): Promise<string> {
+  if (!supportsNativeLanDiscovery()) {
+    throw new Error('Native LAN identity is available only in the Android APK.');
+  }
+  return (await LanDiscovery.getNodeIdentity()).nodeId;
+}
+
+export async function startNativeLanDiscovery(nodeId?: string): Promise<LanDiscoveryStartResult> {
   if (!supportsNativeLanDiscovery()) {
     throw new Error('Native LAN discovery is available only in the Android APK.');
   }
-  return LanDiscovery.startDiscovery();
+  return LanDiscovery.startDiscovery(nodeId ? { nodeId } : undefined);
 }
