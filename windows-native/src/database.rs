@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::Booking;
+use crate::p2p::{record_state, P2pEvent, P2pOperation, P2pRecordState};
 
 #[path = "database_entities.rs"]
 mod database_entities;
@@ -50,6 +51,23 @@ pub enum RemoteBookingApply {
     SkippedPending,
     SkippedTombstone,
     Stale,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct P2pInboundBatch<'a> {
+    pub workspace_id: &'a str,
+    pub peer_id: &'a str,
+    pub expected_cursor: i64,
+    pub next_cursor: i64,
+    pub events: &'a [P2pEvent],
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct P2pApplyReport {
+    pub appended_events: u64,
+    pub applied_records: u64,
+    pub conflicts: u64,
+    pub blocked_by_pending_local: u64,
 }
 
 pub struct PmsDatabase {
@@ -674,6 +692,162 @@ impl PmsDatabase {
         Ok(true)
     }
 
+    /// Receive a transport page atomically: append events, compute causal frontiers,
+    /// apply resolved projections, persist conflicts and advance the peer cursor.
+    pub fn apply_received_p2p_batch(
+        &mut self,
+        batch: P2pInboundBatch<'_>,
+    ) -> Result<P2pApplyReport, String> {
+        if batch.workspace_id.trim().is_empty()
+            || batch.peer_id.trim().is_empty()
+            || batch.expected_cursor < 0
+            || batch.next_cursor < batch.expected_cursor
+            || batch.events.len() > 500
+            || (!batch.events.is_empty() && batch.next_cursor == batch.expected_cursor)
+        {
+            return Err("invalid P2P inbound batch identity, cursor range or page size".into());
+        }
+        if batch.events.iter().any(|event| event.workspace_id != batch.workspace_id) {
+            return Err("P2P inbound batch contains an event from another workspace".into());
+        }
+
+        let tx = self.connection.transaction().map_err(|e| e.to_string())?;
+        ensure_workspace_exists(&tx, batch.workspace_id)?;
+        let persisted_cursor: Option<i64> = tx
+            .query_row(
+                "SELECT cursor FROM p2p_peer_cursors WHERE workspace_id=?1 AND peer_id=?2",
+                params![batch.workspace_id, batch.peer_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        let persisted_cursor = persisted_cursor.unwrap_or(0);
+        if persisted_cursor != batch.expected_cursor {
+            return Err(format!(
+                "P2P cursor mismatch: expected {}, persisted {}",
+                batch.expected_cursor, persisted_cursor
+            ));
+        }
+
+        let mut report = P2pApplyReport::default();
+        let mut affected = std::collections::BTreeSet::<(String, String)>::new();
+        for event in batch.events {
+            if database_p2p::append_received_event_in_transaction(&tx, event)? {
+                report.appended_events += 1;
+            }
+            affected.insert((event.entity.clone(), event.entity_id.clone()));
+        }
+
+        for (entity, entity_id) in affected {
+            let mut statement = tx
+                .prepare(
+                    "SELECT event_json FROM p2p_events
+                     WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3
+                     ORDER BY local_order",
+                )
+                .map_err(|e| e.to_string())?;
+            let rows = statement
+                .query_map(params![batch.workspace_id, entity, entity_id], |row| {
+                    row.get::<_, String>(0)
+                })
+                .map_err(|e| e.to_string())?;
+            let mut record_events = Vec::new();
+            for row in rows {
+                let raw = row.map_err(|e| e.to_string())?;
+                record_events.push(serde_json::from_str::<P2pEvent>(&raw).map_err(|e| {
+                    format!("stored P2P event is invalid; refusing projection update: {e}")
+                })?);
+            }
+            drop(statement);
+
+            let frontier = match record_state(&record_events) {
+                P2pRecordState::Missing => continue,
+                P2pRecordState::Conflict(frontier) => {
+                    let json = serde_json::to_string(&frontier).map_err(|e| e.to_string())?;
+                    tx.execute(
+                        "INSERT INTO p2p_record_frontiers(
+                           workspace_id,entity,entity_id,status,frontier_json,applied_event_id
+                         ) VALUES (?1,?2,?3,'conflict',?4,NULL)
+                         ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
+                           status='conflict', frontier_json=excluded.frontier_json,
+                           applied_event_id=NULL, updated_at=CURRENT_TIMESTAMP",
+                        params![batch.workspace_id, entity, entity_id, json],
+                    )
+                    .map_err(|e| e.to_string())?;
+                    report.conflicts += 1;
+                    continue;
+                }
+                P2pRecordState::Resolved(event) => event,
+            };
+
+            let pending_local: bool = tx
+                .query_row(
+                    "SELECT EXISTS(
+                       SELECT 1 FROM outbox
+                       WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3
+                         AND status IN ('pending','failed','conflict')
+                     )",
+                    params![batch.workspace_id, entity, entity_id],
+                    |row| row.get(0),
+                )
+                .map_err(|e| e.to_string())?;
+            if pending_local {
+                let json = serde_json::to_string(std::slice::from_ref(&frontier))
+                    .map_err(|e| e.to_string())?;
+                tx.execute(
+                    "INSERT INTO p2p_record_frontiers(
+                       workspace_id,entity,entity_id,status,frontier_json,applied_event_id
+                     ) VALUES (?1,?2,?3,'blocked_pending_local',?4,NULL)
+                     ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
+                       status='blocked_pending_local', frontier_json=excluded.frontier_json,
+                       applied_event_id=NULL, updated_at=CURRENT_TIMESTAMP",
+                    params![batch.workspace_id, entity, entity_id, json],
+                )
+                .map_err(|e| e.to_string())?;
+                report.blocked_by_pending_local += 1;
+                continue;
+            }
+
+            let already_applied: Option<String> = tx
+                .query_row(
+                    "SELECT applied_event_id FROM p2p_record_frontiers
+                     WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3 AND status='resolved'",
+                    params![batch.workspace_id, entity, entity_id],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(|e| e.to_string())?;
+            if already_applied.as_deref() != Some(frontier.event_id.as_str())
+                && apply_p2p_event_projection(&tx, &frontier)?
+            {
+                report.applied_records += 1;
+            }
+            let json = serde_json::to_string(std::slice::from_ref(&frontier))
+                .map_err(|e| e.to_string())?;
+            tx.execute(
+                "INSERT INTO p2p_record_frontiers(
+                   workspace_id,entity,entity_id,status,frontier_json,applied_event_id
+                 ) VALUES (?1,?2,?3,'resolved',?4,?5)
+                 ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
+                   status='resolved', frontier_json=excluded.frontier_json,
+                   applied_event_id=excluded.applied_event_id, updated_at=CURRENT_TIMESTAMP",
+                params![batch.workspace_id, entity, entity_id, json, frontier.event_id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+
+        tx.execute(
+            "INSERT INTO p2p_peer_cursors(workspace_id,peer_id,cursor)
+             VALUES (?1,?2,?3)
+             ON CONFLICT(workspace_id,peer_id) DO UPDATE SET
+               cursor=excluded.cursor, updated_at=CURRENT_TIMESTAMP",
+            params![batch.workspace_id, batch.peer_id, batch.next_cursor],
+        )
+        .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(report)
+    }
+
     pub fn get_booking(
         &self,
         workspace_id: &str,
@@ -1108,6 +1282,198 @@ fn ensure_workspace_exists(tx: &Transaction<'_>, workspace_id: &str) -> Result<(
         return Err(format!("workspace '{workspace_id}' does not exist"));
     }
     Ok(())
+}
+
+fn apply_p2p_event_projection(
+    tx: &Transaction<'_>,
+    event: &P2pEvent,
+) -> Result<bool, String> {
+    let workspace_id = event.workspace_id.as_str();
+    let entity = event.entity.as_str();
+    let entity_id = event.entity_id.as_str();
+
+    if entity == "booking" {
+        match event.operation {
+            P2pOperation::Upsert => {
+                let value = event.payload.as_ref().ok_or("booking upsert has no payload")?;
+                let mut booking: Booking =
+                    serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+                if booking.id != entity_id {
+                    return Err("P2P booking payload ID does not match event entity ID".into());
+                }
+                booking.normalize_occupants();
+                booking.validate()?;
+                let payload = serde_json::to_string(value).map_err(|e| e.to_string())?;
+                let current: Option<String> = tx
+                    .query_row(
+                        "SELECT payload FROM bookings WHERE workspace_id=?1 AND id=?2",
+                        params![workspace_id, entity_id],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .map_err(|e| e.to_string())?;
+                if current.as_deref() == Some(payload.as_str()) {
+                    return Ok(false);
+                }
+                let version: i64 = tx
+                    .query_row(
+                        "SELECT COALESCE(MAX(version),0)+1 FROM (
+                           SELECT version FROM bookings WHERE workspace_id=?1 AND id=?2
+                           UNION ALL
+                           SELECT version FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2
+                         )",
+                        params![workspace_id, entity_id],
+                        |row| row.get(0),
+                    )
+                    .map_err(|e| e.to_string())?;
+                let server_version: i64 = tx
+                    .query_row(
+                        "SELECT COALESCE(
+                           (SELECT server_version FROM bookings WHERE workspace_id=?1 AND id=?2),
+                           (SELECT server_version FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2),
+                           0
+                         )",
+                        params![workspace_id, entity_id],
+                        |row| row.get(0),
+                    )
+                    .map_err(|e| e.to_string())?;
+                tx.execute(
+                    "INSERT INTO bookings(workspace_id,id,resource_id,payload,version,updated_at,server_version)
+                     VALUES (?1,?2,?3,?4,?5,?6,?7)
+                     ON CONFLICT(workspace_id,id) DO UPDATE SET
+                       resource_id=excluded.resource_id, payload=excluded.payload,
+                       version=excluded.version, updated_at=excluded.updated_at",
+                    params![workspace_id, entity_id, booking.resource_id, payload, version, event.created_at, server_version],
+                )
+                .map_err(|e| e.to_string())?;
+                tx.execute(
+                    "DELETE FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2",
+                    params![workspace_id, entity_id],
+                )
+                .map_err(|e| e.to_string())?;
+                Ok(true)
+            }
+            P2pOperation::Delete => {
+                let exists: bool = tx
+                    .query_row(
+                        "SELECT EXISTS(SELECT 1 FROM bookings WHERE workspace_id=?1 AND id=?2)",
+                        params![workspace_id, entity_id],
+                        |row| row.get(0),
+                    )
+                    .map_err(|e| e.to_string())?;
+                if !exists {
+                    return Ok(false);
+                }
+                let (version, server_version): (i64, i64) = tx
+                    .query_row(
+                        "SELECT version+1, server_version FROM bookings WHERE workspace_id=?1 AND id=?2",
+                        params![workspace_id, entity_id],
+                        |row| Ok((row.get(0)?, row.get(1)?)),
+                    )
+                    .map_err(|e| e.to_string())?;
+                tx.execute(
+                    "DELETE FROM bookings WHERE workspace_id=?1 AND id=?2",
+                    params![workspace_id, entity_id],
+                )
+                .map_err(|e| e.to_string())?;
+                tx.execute(
+                    "INSERT INTO tombstones(workspace_id,entity,entity_id,version,server_version)
+                     VALUES (?1,'booking',?2,?3,?4)
+                     ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
+                       version=excluded.version, server_version=excluded.server_version,
+                       deleted_at=CURRENT_TIMESTAMP",
+                    params![workspace_id, entity_id, version, server_version],
+                )
+                .map_err(|e| e.to_string())?;
+                Ok(true)
+            }
+        }
+    } else {
+        match event.operation {
+            P2pOperation::Upsert => {
+                let value = event.payload.as_ref().ok_or("entity upsert has no payload")?;
+                if !value.is_object() {
+                    return Err("P2P entity payload must be a JSON object".into());
+                }
+                let payload = serde_json::to_string(value).map_err(|e| e.to_string())?;
+                let current: Option<String> = tx
+                    .query_row(
+                        "SELECT payload FROM entity_records WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+                        params![workspace_id, entity, entity_id],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .map_err(|e| e.to_string())?;
+                if current.as_deref() == Some(payload.as_str()) {
+                    return Ok(false);
+                }
+                let version: i64 = tx
+                    .query_row(
+                        "SELECT COALESCE(MAX(version),0)+1 FROM (
+                           SELECT version FROM entity_records WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3
+                           UNION ALL
+                           SELECT version FROM tombstones WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3
+                         )",
+                        params![workspace_id, entity, entity_id],
+                        |row| row.get(0),
+                    )
+                    .map_err(|e| e.to_string())?;
+                tx.execute(
+                    "INSERT INTO entity_records(workspace_id,entity,entity_id,payload,version,updated_at)
+                     VALUES (?1,?2,?3,?4,?5,?6)
+                     ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
+                       payload=excluded.payload, version=excluded.version, updated_at=excluded.updated_at",
+                    params![workspace_id, entity, entity_id, payload, version, event.created_at],
+                )
+                .map_err(|e| e.to_string())?;
+                tx.execute(
+                    "DELETE FROM tombstones WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+                    params![workspace_id, entity, entity_id],
+                )
+                .map_err(|e| e.to_string())?;
+                Ok(true)
+            }
+            P2pOperation::Delete => {
+                let existing_version: Option<i64> = tx
+                    .query_row(
+                        "SELECT version FROM entity_records WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+                        params![workspace_id, entity, entity_id],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .map_err(|e| e.to_string())?;
+                let tombstone_version: Option<i64> = tx
+                    .query_row(
+                        "SELECT version FROM tombstones WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+                        params![workspace_id, entity, entity_id],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .map_err(|e| e.to_string())?;
+                if existing_version.is_none() && tombstone_version.is_some() {
+                    return Ok(false);
+                }
+                if existing_version.is_none() && tombstone_version.is_none() {
+                    return Ok(false);
+                }
+                let version = existing_version.unwrap_or(0).max(tombstone_version.unwrap_or(0)) + 1;
+                tx.execute(
+                    "DELETE FROM entity_records WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+                    params![workspace_id, entity, entity_id],
+                )
+                .map_err(|e| e.to_string())?;
+                tx.execute(
+                    "INSERT INTO tombstones(workspace_id,entity,entity_id,version,server_version)
+                     VALUES (?1,?2,?3,?4,0)
+                     ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
+                       version=excluded.version, deleted_at=CURRENT_TIMESTAMP",
+                    params![workspace_id, entity, entity_id, version],
+                )
+                .map_err(|e| e.to_string())?;
+                Ok(true)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
