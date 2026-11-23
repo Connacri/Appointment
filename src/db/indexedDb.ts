@@ -15,7 +15,7 @@ import type { EventLogEntry } from '../types/eventLog';
 import { EVENT_LOG_MAX_ENTRIES, sortEventLogsDesc } from '../utils/eventLog';
 import { waitForTransactionCompletion } from './indexedDbTransaction';
 import { migrateBookingRecordV7 } from './bookingMigration';
-import { nextP2pClock, validateP2pEvent, type P2pEvent, type P2pOperation } from '../services/p2p/protocol';
+import { createP2pEvent, type P2pOperation } from '../services/p2p/protocol';
 
 export interface IndexedDbQueryOptions<T> {
   where?: (item: T) => boolean;
@@ -718,26 +718,18 @@ class IndexedDbStore {
         nodeId ??= this.createId();
         metaStore.put({ key: 'nodeId', value: nodeId });
         const observed = Object.fromEntries(clockRows.map((row) => [row.nodeId, row.sequence]));
-        const next = nextP2pClock(observed, nodeId);
-        const event: P2pEvent = {
-          protocolVersion: 1,
-          eventId: `${nodeId}:${next.sequence}`,
+        const event = createP2pEvent({
           nodeId,
-          sequence: next.sequence,
           workspaceId,
           entity,
           entityId,
           operation,
           payload,
-          clock: next.clock,
           createdAt,
-        };
-        validateP2pEvent(event);
-        if (new TextEncoder().encode(JSON.stringify(event)).byteLength > 1024 * 1024) {
-          throw new Error('P2P event exceeds the 1 MiB persistence limit.');
-        }
+          observedClock: observed,
+        });
         tx.objectStore('p2pEvents').add(event);
-        for (const [clockNodeId, sequence] of Object.entries(next.clock)) {
+        for (const [clockNodeId, sequence] of Object.entries(event.clock)) {
           clockStore.put({ workspaceId, nodeId: clockNodeId, sequence });
         }
       } catch (error) {
