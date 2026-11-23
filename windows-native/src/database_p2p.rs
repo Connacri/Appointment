@@ -277,6 +277,22 @@ pub(super) fn create_local_event_in_transaction(
         payload,
         created_at,
     } = draft;
+    let existing_frontier: Option<String> = tx
+        .query_row(
+            "SELECT status FROM p2p_record_frontiers
+             WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+            params![workspace_id, entity, entity_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if matches!(existing_frontier.as_deref(), Some("conflict" | "blocked_pending_local")) {
+        return Err(
+            "P2P record has an unresolved conflict or pending-local frontier; explicit reconciliation is required before another local mutation"
+                .into(),
+        );
+    }
+
     let mut clock = BTreeMap::<String, u64>::new();
     {
         let mut statement = tx
@@ -323,6 +339,18 @@ pub(super) fn create_local_event_in_transaction(
     validate_event_size(&event)?;
     event.validate().map_err(str::to_string)?;
     insert_event(tx, &event)?;
+    let frontier_json = serde_json::to_string(std::slice::from_ref(&event))
+        .map_err(|e| e.to_string())?;
+    tx.execute(
+        "INSERT INTO p2p_record_frontiers(
+           workspace_id,entity,entity_id,status,frontier_json,applied_event_id
+         ) VALUES (?1,?2,?3,'resolved',?4,?5)
+         ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
+           status='resolved', frontier_json=excluded.frontier_json,
+           applied_event_id=excluded.applied_event_id, updated_at=CURRENT_TIMESTAMP",
+        params![workspace_id, entity, entity_id, frontier_json, event.event_id],
+    )
+    .map_err(|e| format!("Could not persist local P2P record frontier: {e}"))?;
     Ok(event)
 }
 
