@@ -1123,7 +1123,7 @@ class IndexedDbStore {
       const prepared: Array<{
         item: T;
         context: OutboxMutationContext;
-        current?: { version?: number; establishmentId?: string; payload?: Record<string, unknown> };
+        current?: { version?: number; establishmentId?: string; updatedAt?: string; payload?: Record<string, unknown> };
         tombstone?: TombstoneRecord;
         frontier?: { status?: string };
       }> = chunk.map((item) => ({
@@ -1192,8 +1192,26 @@ class IndexedDbStore {
             === stableSerialize(businessPayloadForComparison(candidate))
         ) {
           store.put(currentPayload as T);
-          report.unchanged += 1;
-          processNext(index + 1);
+          if (entry.frontier?.status === 'resolved') {
+            report.unchanged += 1;
+            processNext(index + 1);
+            return;
+          }
+          // Backfill the P2P frontier for pre-v8 rows without changing business data.
+          this.appendLocalP2pEvent(
+            tx,
+            entry.context.workspaceId,
+            entity,
+            entry.item.id,
+            'upsert',
+            currentPayload,
+            entry.current.updatedAt ?? new Date().toISOString(),
+            () => {
+              report.queued += 1;
+              report.unchanged += 1;
+              processNext(index + 1);
+            },
+          );
           return;
         }
 
