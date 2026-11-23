@@ -995,6 +995,8 @@ impl PmsDatabase {
                 params![workspace_id, entity_id, local_version, server_version],
             )?;
         }
+        reconcile_p2p_frontier_in_transaction(&tx, workspace_id, &entity, &entity_id)
+            .map_err(rusqlite::Error::InvalidParameterName)?;
         tx.commit()?;
         Ok(true)
     }
@@ -1282,6 +1284,80 @@ fn ensure_workspace_exists(tx: &Transaction<'_>, workspace_id: &str) -> Result<(
         return Err(format!("workspace '{workspace_id}' does not exist"));
     }
     Ok(())
+}
+
+fn reconcile_p2p_frontier_in_transaction(
+    tx: &Transaction<'_>,
+    workspace_id: &str,
+    entity: &str,
+    entity_id: &str,
+) -> Result<(), String> {
+    let mut statement = tx
+        .prepare(
+            "SELECT event_json FROM p2p_events
+             WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3
+             ORDER BY local_order",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = statement
+        .query_map(params![workspace_id, entity, entity_id], |row| {
+            row.get::<_, String>(0)
+        })
+        .map_err(|e| e.to_string())?;
+    let mut events = Vec::new();
+    for row in rows {
+        events.push(
+            serde_json::from_str::<P2pEvent>(&row.map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?,
+        );
+    }
+    drop(statement);
+
+    match record_state(&events) {
+        P2pRecordState::Missing => Ok(()),
+        P2pRecordState::Conflict(frontier) => {
+            let json = serde_json::to_string(&frontier).map_err(|e| e.to_string())?;
+            tx.execute(
+                "INSERT INTO p2p_record_frontiers(
+                   workspace_id,entity,entity_id,status,frontier_json,applied_event_id
+                 ) VALUES (?1,?2,?3,'conflict',?4,NULL)
+                 ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
+                   status='conflict', frontier_json=excluded.frontier_json,
+                   applied_event_id=NULL, updated_at=CURRENT_TIMESTAMP",
+                params![workspace_id, entity, entity_id, json],
+            )
+            .map_err(|e| e.to_string())?;
+            Ok(())
+        }
+        P2pRecordState::Resolved(event) => {
+            let pending: bool = tx
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM outbox
+                     WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3
+                       AND status IN ('pending','failed','conflict'))",
+                    params![workspace_id, entity, entity_id],
+                    |row| row.get(0),
+                )
+                .map_err(|e| e.to_string())?;
+            if pending {
+                return Ok(());
+            }
+            apply_p2p_event_projection(tx, &event)?;
+            let json = serde_json::to_string(std::slice::from_ref(&event))
+                .map_err(|e| e.to_string())?;
+            tx.execute(
+                "INSERT INTO p2p_record_frontiers(
+                   workspace_id,entity,entity_id,status,frontier_json,applied_event_id
+                 ) VALUES (?1,?2,?3,'resolved',?4,?5)
+                 ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
+                   status='resolved', frontier_json=excluded.frontier_json,
+                   applied_event_id=excluded.applied_event_id, updated_at=CURRENT_TIMESTAMP",
+                params![workspace_id, entity, entity_id, json, event.event_id],
+            )
+            .map_err(|e| e.to_string())?;
+            Ok(())
+        }
+    }
 }
 
 fn apply_p2p_event_projection(
