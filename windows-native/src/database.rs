@@ -1748,17 +1748,22 @@ mod tests {
             P2pOperation::Upsert,
             Some(serde_json::to_value(remote.clone()).unwrap()),
         );
-        let report = db.apply_received_p2p_batch(P2pInboundBatch {
-            workspace_id: "w-1",
-            peer_id: "peer-b",
-            expected_cursor: 0,
-            next_cursor: 1,
-            events: std::slice::from_ref(&event),
-        }).unwrap();
+        let report = db
+            .apply_received_p2p_batch(P2pInboundBatch {
+                workspace_id: "w-1",
+                peer_id: "peer-b",
+                expected_cursor: 0,
+                next_cursor: 1,
+                events: std::slice::from_ref(&event),
+            })
+            .unwrap();
 
         assert_eq!(report.appended_events, 1);
         assert_eq!(report.applied_records, 1);
-        assert_eq!(db.get_booking("w-1", "b-inbound").unwrap(), Some(remote));
+        assert_eq!(
+            db.get_booking("w-1", "b-inbound").unwrap(),
+            Some(remote)
+        );
         assert_eq!(db.p2p_event_count("w-1").unwrap(), 1);
         let cursor: i64 = db
             .connection
@@ -1794,7 +1799,8 @@ mod tests {
             "idem-conflict-local",
             "node-a",
             "2026-11-23T08:59:00Z",
-        ).unwrap();
+        )
+        .unwrap();
 
         let mut remote = booking("b-conflict");
         remote.guest_name = "Remote version".into();
@@ -1807,13 +1813,15 @@ mod tests {
             P2pOperation::Upsert,
             Some(serde_json::to_value(remote).unwrap()),
         );
-        let report = db.apply_received_p2p_batch(P2pInboundBatch {
-            workspace_id: "w-1",
-            peer_id: "peer-b",
-            expected_cursor: 0,
-            next_cursor: 1,
-            events: std::slice::from_ref(&event),
-        }).unwrap();
+        let report = db
+            .apply_received_p2p_batch(P2pInboundBatch {
+                workspace_id: "w-1",
+                peer_id: "peer-b",
+                expected_cursor: 0,
+                next_cursor: 1,
+                events: std::slice::from_ref(&event),
+            })
+            .unwrap();
 
         assert_eq!(report.conflicts, 1);
         assert_eq!(report.applied_records, 0);
@@ -1824,11 +1832,14 @@ mod tests {
                 .guest_name,
             "Local version"
         );
-        let status: String = db.connection.query_row(
-            "SELECT status FROM p2p_record_frontiers WHERE workspace_id='w-1' AND entity='booking' AND entity_id='b-conflict'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let status: String = db
+            .connection
+            .query_row(
+                "SELECT status FROM p2p_record_frontiers WHERE workspace_id='w-1' AND entity='booking' AND entity_id='b-conflict'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(status, "conflict");
     }
 
@@ -1843,7 +1854,8 @@ mod tests {
             "idem-pending-inbound",
             "node-a",
             "2026-11-23T08:59:00Z",
-        ).unwrap();
+        )
+        .unwrap();
 
         let mut remote = booking("b-pending-inbound");
         remote.guest_name = "Remote successor".into();
@@ -1856,21 +1868,32 @@ mod tests {
             P2pOperation::Upsert,
             Some(serde_json::to_value(remote).unwrap()),
         );
-        let report = db.apply_received_p2p_batch(P2pInboundBatch {
-            workspace_id: "w-1",
-            peer_id: "peer-b",
-            expected_cursor: 0,
-            next_cursor: 1,
-            events: std::slice::from_ref(&event),
-        }).unwrap();
+        let report = db
+            .apply_received_p2p_batch(P2pInboundBatch {
+                workspace_id: "w-1",
+                peer_id: "peer-b",
+                expected_cursor: 0,
+                next_cursor: 1,
+                events: std::slice::from_ref(&event),
+            })
+            .unwrap();
 
         assert_eq!(report.blocked_by_pending_local, 1);
-        assert_eq!(db.get_booking("w-1", "b-pending-inbound").unwrap().unwrap().guest_name, "Local pending");
-        let status: String = db.connection.query_row(
-            "SELECT status FROM p2p_record_frontiers WHERE workspace_id='w-1' AND entity='booking' AND entity_id='b-pending-inbound'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        assert_eq!(
+            db.get_booking("w-1", "b-pending-inbound")
+                .unwrap()
+                .unwrap()
+                .guest_name,
+            "Local pending"
+        );
+        let status: String = db
+            .connection
+            .query_row(
+                "SELECT status FROM p2p_record_frontiers WHERE workspace_id='w-1' AND entity='booking' AND entity_id='b-pending-inbound'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(status, "blocked_pending_local");
     }
 
@@ -1885,7 +1908,8 @@ mod tests {
             "idem-reconcile-local",
             "node-a",
             "2026-11-23T08:59:00Z",
-        ).unwrap();
+        )
+        .unwrap();
         let mut remote = booking("b-reconcile");
         remote.guest_name = "Remote successor".into();
         let event = remote_event(
@@ -1897,13 +1921,15 @@ mod tests {
             P2pOperation::Upsert,
             Some(serde_json::to_value(remote).unwrap()),
         );
-        let report = db.apply_received_p2p_batch(P2pInboundBatch {
-            workspace_id: "w-1",
-            peer_id: "peer-b",
-            expected_cursor: 0,
-            next_cursor: 1,
-            events: std::slice::from_ref(&event),
-        }).unwrap();
+        let report = db
+            .apply_received_p2p_batch(P2pInboundBatch {
+                workspace_id: "w-1",
+                peer_id: "peer-b",
+                expected_cursor: 0,
+                next_cursor: 1,
+                events: std::slice::from_ref(&event),
+            })
+            .unwrap();
         assert_eq!(report.blocked_by_pending_local, 1);
         let local_outbox = db.pending_outbox("w-1", 10).unwrap().remove(0);
         assert!(db.acknowledge_outbox("w-1", &local_outbox.id, 17).unwrap());
@@ -1915,12 +1941,15 @@ mod tests {
                 .guest_name,
             "Remote successor"
         );
-        let status: String = db.connection.query_row(
-            "SELECT status FROM p2p_record_frontiers
-             WHERE workspace_id='w-1' AND entity='booking' AND entity_id='b-reconcile'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let status: String = db
+            .connection
+            .query_row(
+                "SELECT status FROM p2p_record_frontiers
+                 WHERE workspace_id='w-1' AND entity='booking' AND entity_id='b-reconcile'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(status, "resolved");
     }
 
@@ -1943,13 +1972,15 @@ mod tests {
             P2pOperation::Upsert,
             Some(serde_json::to_value(booking("b-rollback-inbound")).unwrap()),
         );
-        assert!(db.apply_received_p2p_batch(P2pInboundBatch {
-            workspace_id: "w-1",
-            peer_id: "peer-b",
-            expected_cursor: 0,
-            next_cursor: 1,
-            events: std::slice::from_ref(&event),
-        }).is_err());
+        assert!(db
+            .apply_received_p2p_batch(P2pInboundBatch {
+                workspace_id: "w-1",
+                peer_id: "peer-b",
+                expected_cursor: 0,
+                next_cursor: 1,
+                events: std::slice::from_ref(&event),
+            })
+            .is_err());
         assert_eq!(db.p2p_event_count("w-1").unwrap(), 0);
         let cursor_exists: bool = db.connection.query_row(
             "SELECT EXISTS(SELECT 1 FROM p2p_peer_cursors WHERE workspace_id='w-1' AND peer_id='peer-b')",
@@ -1980,13 +2011,15 @@ mod tests {
             P2pOperation::Upsert,
             Some(payload),
         );
-        let report = db.apply_received_p2p_batch(P2pInboundBatch {
-            workspace_id: "w-1",
-            peer_id: "peer-b",
-            expected_cursor: 0,
-            next_cursor: 1,
-            events: std::slice::from_ref(&event),
-        }).unwrap();
+        let report = db
+            .apply_received_p2p_batch(P2pInboundBatch {
+                workspace_id: "w-1",
+                peer_id: "peer-b",
+                expected_cursor: 0,
+                next_cursor: 1,
+                events: std::slice::from_ref(&event),
+            })
+            .unwrap();
         assert_eq!(report.applied_records, 1);
         let stored = db.get_entity_record("w-1", "resources", "resource-inbound").unwrap().unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&stored.payload).unwrap();
