@@ -1088,6 +1088,17 @@ class IndexedDbStore {
     if (!this.idb) {
       throw new Error('Snapshot reconciliation requires IndexedDB; localStorage fallback is not safe for P2P.');
     }
+    const expectedEntity = storeName === 'bookings' ? 'booking'
+      : storeName === 'resources' ? 'resource'
+        : 'resource_group';
+    if (entity !== expectedEntity) {
+      throw new Error(`Store/entity mismatch: ${storeName} cannot reconcile as ${entity}.`);
+    }
+    const seenIds = new Set<string>();
+    for (const item of items) {
+      if (seenIds.has(item.id)) throw new Error(`Duplicate entity ID in snapshot: ${item.id}`);
+      seenIds.add(item.id);
+    }
     const report = { queued: 0, unchanged: 0, blocked: 0 };
     const chunkSize = 100;
     for (let offset = 0; offset < items.length; offset += chunkSize) {
@@ -1134,6 +1145,12 @@ class IndexedDbStore {
           return;
         }
         if (entry.frontier?.status === 'conflict' || entry.frontier?.status === 'blocked_pending_local') {
+          report.blocked += 1;
+          processNext(index + 1);
+          return;
+        }
+        if (entry.tombstone && !entry.current) {
+          // A snapshot cannot resurrect a tombstoned row. Restoration must be an explicit mutation.
           report.blocked += 1;
           processNext(index + 1);
           return;
