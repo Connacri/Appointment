@@ -569,6 +569,77 @@ mod tests {
     }
 
     #[test]
+    fn generic_entity_delete_commits_tombstone_outbox_and_p2p_event_together() {
+        let db = db();
+        db.upsert_entity_record_unreplicated(
+            "ws-a",
+            "resources",
+            "resource-delete",
+            r#"{"id":"resource-delete","name":"Room 101"}"#,
+            1,
+            "2026-11-23T08:50:00Z",
+        ).unwrap();
+        assert!(db.delete_entity_record(LocalEntityDelete {
+            workspace_id: "ws-a",
+            entity: "resources",
+            entity_id: "resource-delete",
+            idempotency_key: "idem-resource-delete",
+            node_id: "node-a",
+            created_at: "2026-11-23T08:51:00Z",
+        }).unwrap());
+
+        assert!(db.get_entity_record("ws-a", "resources", "resource-delete").unwrap().is_none());
+        let tombstone_version: i64 = db.connection.query_row(
+            "SELECT version FROM tombstones
+             WHERE workspace_id='ws-a' AND entity='resources' AND entity_id='resource-delete'",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(tombstone_version, 2);
+        let outbox = db.pending_outbox("ws-a", 10).unwrap();
+        assert_eq!(outbox.len(), 1);
+        assert_eq!(outbox[0].operation, "delete");
+        assert_eq!(db.p2p_event_count("ws-a").unwrap(), 1);
+    }
+
+    #[test]
+    fn generic_entity_delete_rolls_back_when_p2p_append_fails() {
+        let db = db();
+        db.upsert_entity_record_unreplicated(
+            "ws-a",
+            "resources",
+            "resource-delete-rollback",
+            r#"{"id":"resource-delete-rollback"}"#,
+            1,
+            "2026-11-23T08:52:00Z",
+        ).unwrap();
+        db.connection.execute_batch(
+            "CREATE TRIGGER fail_p2p_event
+             BEFORE INSERT ON p2p_events
+             BEGIN SELECT RAISE(ABORT, 'injected P2P append failure'); END;",
+        ).unwrap();
+
+        assert!(db.delete_entity_record(LocalEntityDelete {
+            workspace_id: "ws-a",
+            entity: "resources",
+            entity_id: "resource-delete-rollback",
+            idempotency_key: "idem-resource-delete-rollback",
+            node_id: "node-a",
+            created_at: "2026-11-23T08:53:00Z",
+        }).is_err());
+        assert!(db.get_entity_record("ws-a", "resources", "resource-delete-rollback").unwrap().is_some());
+        let tombstone_exists: bool = db.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM tombstones
+             WHERE workspace_id='ws-a' AND entity='resources' AND entity_id='resource-delete-rollback')",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(!tombstone_exists);
+        assert!(db.pending_outbox("ws-a", 10).unwrap().is_empty());
+        assert_eq!(db.p2p_event_count("ws-a").unwrap(), 0);
+    }
+
+    #[test]
     fn entity_pagination_is_keyset_ordered_and_bounded() {
         let db = db();
         for id in ["a", "b", "c"] {
