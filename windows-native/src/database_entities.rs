@@ -241,7 +241,14 @@ impl PmsDatabase {
              ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
                payload=excluded.payload, version=excluded.version, updated_at=excluded.updated_at
              WHERE excluded.version > entity_records.version",
-            params![workspace_id, entity, entity_id, payload, version, updated_at],
+            params![
+                workspace_id,
+                entity,
+                entity_id,
+                payload,
+                version,
+                updated_at
+            ],
         )
         .map_err(|e| e.to_string())?;
         tx.execute(
