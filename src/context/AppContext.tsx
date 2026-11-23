@@ -1173,9 +1173,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         hydratedGroups = [...hydratedGroups, ...fallbackGroups.values()];
         // Commit the merged, demo-filtered migration before deleting legacy snapshots.
         await Promise.all([
-          indexedDb.replaceAll('bookings', realBookings),
-          indexedDb.replaceAll('resources', sourceResources),
-          indexedDb.replaceStore('resourceGroups', groupMetadata),
+          indexedDb.replaceAllForMigration('bookings', realBookings),
+          indexedDb.replaceAllForMigration('resources', sourceResources),
+          indexedDb.replaceStoreForMigration('resourceGroups', groupMetadata),
         ]);
         try {
           localStorage.removeItem('omnibook_bookings');
