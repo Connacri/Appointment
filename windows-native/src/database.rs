@@ -1389,7 +1389,7 @@ fn apply_p2p_event_projection(tx: &Transaction<'_>, event: &P2pEvent) -> Result<
                 }
                 booking.normalize_occupants();
                 booking.validate()?;
-                let payload = serde_json::to_string(value).map_err(|e| e.to_string())?;
+                let payload = serde_json::to_string(&booking).map_err(|e| e.to_string())?;
                 let current: Option<String> = tx
                     .query_row(
                         "SELECT payload FROM bookings WHERE workspace_id=?1 AND id=?2",
@@ -1399,6 +1399,11 @@ fn apply_p2p_event_projection(tx: &Transaction<'_>, event: &P2pEvent) -> Result<
                     .optional()
                     .map_err(|e| e.to_string())?;
                 if current.as_deref() == Some(payload.as_str()) {
+                    tx.execute(
+                        "DELETE FROM tombstones WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2",
+                        params![workspace_id, entity_id],
+                    )
+                    .map_err(|e| e.to_string())?;
                     return Ok(false);
                 }
                 let version: i64 = tx
@@ -1506,6 +1511,11 @@ fn apply_p2p_event_projection(tx: &Transaction<'_>, event: &P2pEvent) -> Result<
                     .optional()
                     .map_err(|e| e.to_string())?;
                 if current.as_deref() == Some(payload.as_str()) {
+                    tx.execute(
+                        "DELETE FROM tombstones WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+                        params![workspace_id, entity, entity_id],
+                    )
+                    .map_err(|e| e.to_string())?;
                     return Ok(false);
                 }
                 let version: i64 = tx
