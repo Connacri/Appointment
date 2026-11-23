@@ -80,7 +80,9 @@ impl PmsDatabase {
             || entity_id.trim().is_empty()
             || created_at.trim().is_empty()
         {
-            return Err("P2P workspace, node, entity, entity ID and timestamp are required.".into());
+            return Err(
+                "P2P workspace, node, entity, entity ID and timestamp are required.".into(),
+            );
         }
         if entity.len() > 128 || entity_id.len() > 256 || node_id.len() > 128 {
             return Err("P2P event identity fields exceed their size limits.".into());
@@ -91,7 +93,10 @@ impl PmsDatabase {
             }
         }
 
-        let tx = self.connection.unchecked_transaction().map_err(|e| e.to_string())?;
+        let tx = self
+            .connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
         ensure_workspace(&tx, workspace_id)?;
 
         let mut clock = BTreeMap::<String, u64>::new();
@@ -268,7 +273,9 @@ fn insert_event(tx: &Transaction<'_>, event: &P2pEvent) -> Result<(), String> {
         ],
     )
     .map_err(|error| {
-        format!("Could not append P2P event (duplicate node sequence or database constraint): {error}")
+        format!(
+            "Could not append P2P event (duplicate node sequence or database constraint): {error}"
+        )
     })?;
 
     // Merge every component, not only the sender's own sequence. A received
@@ -293,24 +300,38 @@ mod tests {
 
     fn database() -> PmsDatabase {
         let db = PmsDatabase::in_memory().unwrap();
-        db.ensure_workspace("workspace-a", "owner-a", "Workspace A").unwrap();
-        db.ensure_workspace("workspace-b", "owner-b", "Workspace B").unwrap();
+        db.ensure_workspace("workspace-a", "owner-a", "Workspace A")
+            .unwrap();
+        db.ensure_workspace("workspace-b", "owner-b", "Workspace B")
+            .unwrap();
         db
     }
 
     #[test]
     fn local_events_are_durable_and_advance_workspace_vector_clock() {
         let db = database();
-        let first = db.create_local_p2p_event(
-            "workspace-a", "node-a", "booking", "booking-1",
-            P2pOperation::Upsert, Some(json!({"guest": "Alice"})),
-            "2026-11-23T08:00:00Z",
-        ).unwrap();
-        let second = db.create_local_p2p_event(
-            "workspace-a", "node-a", "booking", "booking-1",
-            P2pOperation::Upsert, Some(json!({"guest": "Bob"})),
-            "2026-11-23T08:01:00Z",
-        ).unwrap();
+        let first = db
+            .create_local_p2p_event(
+                "workspace-a",
+                "node-a",
+                "booking",
+                "booking-1",
+                P2pOperation::Upsert,
+                Some(json!({"guest": "Alice"})),
+                "2026-11-23T08:00:00Z",
+            )
+            .unwrap();
+        let second = db
+            .create_local_p2p_event(
+                "workspace-a",
+                "node-a",
+                "booking",
+                "booking-1",
+                P2pOperation::Upsert,
+                Some(json!({"guest": "Bob"})),
+                "2026-11-23T08:01:00Z",
+            )
+            .unwrap();
 
         assert_eq!(first.sequence, 1);
         assert_eq!(second.sequence, 2);
@@ -321,11 +342,17 @@ mod tests {
     #[test]
     fn received_events_are_idempotent_and_equivocation_is_rejected() {
         let db = database();
-        let event = db.create_local_p2p_event(
-            "workspace-a", "node-a", "booking", "booking-1",
-            P2pOperation::Upsert, Some(json!({"guest": "Alice"})),
-            "2026-11-23T08:00:00Z",
-        ).unwrap();
+        let event = db
+            .create_local_p2p_event(
+                "workspace-a",
+                "node-a",
+                "booking",
+                "booking-1",
+                P2pOperation::Upsert,
+                Some(json!({"guest": "Alice"})),
+                "2026-11-23T08:00:00Z",
+            )
+            .unwrap();
 
         // A second local database represents another replica receiving this event.
         let replica = database();
@@ -351,19 +378,22 @@ mod tests {
             entity_id: "booking-1".into(),
             operation: P2pOperation::Upsert,
             payload: Some(json!({"guest": "Remote"})),
-            clock: BTreeMap::from([
-                ("node-a".into(), 4),
-                ("node-b".into(), 1),
-            ]),
+            clock: BTreeMap::from([("node-a".into(), 4), ("node-b".into(), 1)]),
             created_at: "2026-11-23T08:00:00Z".into(),
         };
         assert!(replica.append_p2p_event(&remote).unwrap());
 
-        let local = replica.create_local_p2p_event(
-            "workspace-a", "node-a", "booking", "booking-2",
-            P2pOperation::Upsert, Some(json!({"guest": "Local"})),
-            "2026-11-23T08:01:00Z",
-        ).unwrap();
+        let local = replica
+            .create_local_p2p_event(
+                "workspace-a",
+                "node-a",
+                "booking",
+                "booking-2",
+                P2pOperation::Upsert,
+                Some(json!({"guest": "Local"})),
+                "2026-11-23T08:01:00Z",
+            )
+            .unwrap();
 
         assert_eq!(local.sequence, 5);
         assert_eq!(local.clock.get("node-a"), Some(&5));
@@ -374,22 +404,32 @@ mod tests {
     fn event_pages_are_stable_and_workspace_isolated() {
         let db = database();
         db.create_local_p2p_event(
-            "workspace-a", "node-a", "booking", "booking-1",
-            P2pOperation::Upsert, Some(json!({"guest": "Alice"})),
+            "workspace-a",
+            "node-a",
+            "booking",
+            "booking-1",
+            P2pOperation::Upsert,
+            Some(json!({"guest": "Alice"})),
             "2026-11-23T08:00:00Z",
-        ).unwrap();
+        )
+        .unwrap();
         db.create_local_p2p_event(
-            "workspace-b", "node-b", "booking", "booking-2",
-            P2pOperation::Delete, None,
+            "workspace-b",
+            "node-b",
+            "booking",
+            "booking-2",
+            P2pOperation::Delete,
+            None,
             "2026-11-23T08:01:00Z",
-        ).unwrap();
+        )
+        .unwrap();
 
         let first_page = db.list_p2p_events_after("workspace-a", 0, 1).unwrap();
         assert_eq!(first_page.len(), 1);
         assert_eq!(first_page[0].event.entity_id, "booking-1");
-        let second_page = db.list_p2p_events_after(
-            "workspace-a", first_page[0].local_order, 10
-        ).unwrap();
+        let second_page = db
+            .list_p2p_events_after("workspace-a", first_page[0].local_order, 10)
+            .unwrap();
         assert!(second_page.is_empty());
         assert_eq!(db.p2p_event_count("workspace-a").unwrap(), 1);
         assert_eq!(db.p2p_event_count("workspace-b").unwrap(), 1);
@@ -399,10 +439,16 @@ mod tests {
     fn event_payload_and_vector_clock_are_bounded() {
         let db = database();
         let oversized = "x".repeat(MAX_P2P_EVENT_BYTES + 1);
-        assert!(db.create_local_p2p_event(
-            "workspace-a", "node-a", "booking", "booking-1",
-            P2pOperation::Upsert, Some(json!({"blob": oversized})),
-            "2026-11-23T08:00:00Z",
-        ).is_err());
+        assert!(db
+            .create_local_p2p_event(
+                "workspace-a",
+                "node-a",
+                "booking",
+                "booking-1",
+                P2pOperation::Upsert,
+                Some(json!({"blob": oversized})),
+                "2026-11-23T08:00:00Z",
+            )
+            .is_err());
     }
 }
