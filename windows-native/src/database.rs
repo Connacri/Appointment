@@ -1422,7 +1422,9 @@ mod tests {
         let mut db = database();
         db.upsert_booking_outbox_only("w-1", &booking("b-1"), "idem-1")
             .unwrap();
-        assert!(db.delete_booking_outbox_only("w-1", "b-1", "idem-2").unwrap());
+        assert!(db
+            .delete_booking_outbox_only("w-1", "b-1", "idem-2")
+            .unwrap());
         assert!(db.get_booking("w-1", "b-1").unwrap().is_none());
         assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 2);
         let count: i64 = db
