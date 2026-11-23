@@ -1760,10 +1760,7 @@ mod tests {
 
         assert_eq!(report.appended_events, 1);
         assert_eq!(report.applied_records, 1);
-        assert_eq!(
-            db.get_booking("w-1", "b-inbound").unwrap(),
-            Some(remote)
-        );
+        assert_eq!(db.get_booking("w-1", "b-inbound").unwrap(), Some(remote));
         assert_eq!(db.p2p_event_count("w-1").unwrap(), 1);
         let cursor: i64 = db
             .connection
@@ -2021,7 +2018,10 @@ mod tests {
             })
             .unwrap();
         assert_eq!(report.applied_records, 1);
-        let stored = db.get_entity_record("w-1", "resources", "resource-inbound").unwrap().unwrap();
+        let stored = db
+            .get_entity_record("w-1", "resources", "resource-inbound")
+            .unwrap()
+            .unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&stored.payload).unwrap();
         assert_eq!(parsed["futureField"]["must"], "survive");
     }
