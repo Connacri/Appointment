@@ -121,7 +121,7 @@ impl PmsDatabase {
             .optional()?;
 
         match current {
-            Some((current_payload, current_version)) if version < current_version => {
+            Some((_, current_version)) if version < current_version => {
                 // Stale replication is ignored; it must never replace newer local data.
             }
             Some((current_payload, current_version)) if version == current_version => {
@@ -302,6 +302,36 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["c"]
         );
+    }
+
+    #[test]
+    fn equal_version_with_different_payload_is_rejected_without_overwrite() {
+        let db = db();
+        db.upsert_entity_record(
+            "ws-a",
+            "invoices",
+            "i-2",
+            r#"{"id":"i-2","status":"paid"}"#,
+            7,
+            "2026-11-22T10:00:00Z",
+        )
+        .unwrap();
+
+        let conflict = db.upsert_entity_record(
+            "ws-a",
+            "invoices",
+            "i-2",
+            r#"{"id":"i-2","status":"draft"}"#,
+            7,
+            "2026-11-22T11:00:00Z",
+        );
+        assert!(conflict.is_err());
+        let stored = db
+            .get_entity_record("ws-a", "invoices", "i-2")
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.payload, r#"{"id":"i-2","status":"paid"}"#);
+        assert_eq!(stored.version, 7);
     }
 
     #[test]
