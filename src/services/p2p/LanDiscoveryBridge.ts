@@ -20,6 +20,7 @@ export interface LanDiscoveryError {
 interface LanDiscoveryPlugin {
   startDiscovery(options?: { nodeId?: string }): Promise<LanDiscoveryStartResult>;
   getNodeIdentity(): Promise<{ nodeId: string }>;
+  resetNodeIdentity(): Promise<{ nodeId: string }>;
   stopDiscovery(): Promise<void>;
   requestAndroid16CompatibilityPermission(): Promise<LanDiscoveryStartResult>;
   addListener(
@@ -52,6 +53,13 @@ export async function getNativeLanNodeIdentity(): Promise<string> {
     throw new Error('Native LAN identity is available only in the Android APK.');
   }
   return (await LanDiscovery.getNodeIdentity()).nodeId;
+}
+
+export async function resetNativeLanNodeIdentity(): Promise<string> {
+  if (!supportsNativeLanDiscovery()) {
+    throw new Error('Native LAN identity reset is available only in the Android APK.');
+  }
+  return (await LanDiscovery.resetNodeIdentity()).nodeId;
 }
 
 export async function startNativeLanDiscovery(nodeId?: string): Promise<LanDiscoveryStartResult> {
