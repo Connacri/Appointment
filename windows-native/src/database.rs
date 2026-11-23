@@ -979,6 +979,7 @@ mod migration_safety_tests {
             user_table_row_counts(&backup).unwrap()
         );
         assert_eq!(integrity, "ok");
+        drop(backup);
 
         // Restore drill: copy the verified snapshot to a fresh database path,
         // reopen it, and prove that all rows remain readable.
