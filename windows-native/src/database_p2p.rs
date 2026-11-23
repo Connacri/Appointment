@@ -71,6 +71,67 @@ pub(super) fn migrate(connection: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+pub(super) fn migrate_v7(connection: &Connection) -> rusqlite::Result<()> {
+    let applied: bool = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=7)",
+        [],
+        |row| row.get(0),
+    )?;
+    if applied {
+        return Ok(());
+    }
+    connection.execute_batch(
+        "BEGIN IMMEDIATE;
+         CREATE TABLE p2p_peer_cursors (
+           workspace_id TEXT NOT NULL,
+           peer_id TEXT NOT NULL,
+           cursor INTEGER NOT NULL CHECK(cursor >= 0),
+           updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           PRIMARY KEY(workspace_id, peer_id),
+           FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+         );
+         CREATE TABLE p2p_record_frontiers (
+           workspace_id TEXT NOT NULL,
+           entity TEXT NOT NULL,
+           entity_id TEXT NOT NULL,
+           status TEXT NOT NULL CHECK(status IN ('resolved','conflict','blocked_pending_local')),
+           frontier_json TEXT NOT NULL CHECK(json_valid(frontier_json)),
+           applied_event_id TEXT,
+           updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           PRIMARY KEY(workspace_id, entity, entity_id),
+           FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+         );
+         INSERT OR IGNORE INTO schema_migrations(version) VALUES (7);
+         COMMIT;",
+    )?;
+    Ok(())
+}
+
+pub(super) fn append_received_event_in_transaction(
+    tx: &Transaction<'_>,
+    event: &P2pEvent,
+) -> Result<bool, String> {
+    validate_event_size(event)?;
+    event.validate().map_err(str::to_string)?;
+    let existing: Option<String> = tx
+        .query_row(
+            "SELECT event_json FROM p2p_events WHERE workspace_id=?1 AND event_id=?2",
+            params![event.workspace_id, event.event_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if let Some(existing) = existing {
+        let incoming = serde_json::to_string(event).map_err(|e| e.to_string())?;
+        if existing != incoming {
+            return Err("P2P event ID collision or node equivocation.".into());
+        }
+        return Ok(false);
+    }
+    insert_event(tx, event)?;
+    Ok(true)
+}
+
 impl PmsDatabase {
     /// Create and durably append one local event in a single SQLite transaction.
     /// The event's vector clock is derived from the workspace's persisted event log.
