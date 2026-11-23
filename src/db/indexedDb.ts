@@ -1037,6 +1037,32 @@ class IndexedDbStore {
     return resolvedNodeId;
   }
 
+  /** Backfill an event for a legacy Outbox intent without duplicating an exact event. */
+  private ensureP2pEventForOutbox(tx: IDBTransaction, record: OutboxRecord): void {
+    const request = tx.objectStore('p2pEvents').index('workspaceEntity')
+      .getAll(IDBKeyRange.only([record.workspaceId, record.entity, record.entityId]));
+    request.onsuccess = () => {
+      const events = request.result as P2pEvent[];
+      const exists = events.some((event) =>
+        event.createdAt === record.createdAt
+        && event.operation === record.operation
+        && JSON.stringify(event.payload) === JSON.stringify(record.payload)
+      );
+      if (!exists) {
+        this.appendLocalP2pEvent(
+          tx,
+          record.workspaceId,
+          record.entity,
+          record.entityId,
+          record.operation,
+          record.payload,
+          record.createdAt,
+        );
+      }
+    };
+    request.onerror = () => tx.abort();
+  }
+
   /**
    * Append a local immutable P2P event and advance every observed vector-clock component
    * inside the caller's existing business+Outbox IndexedDB transaction.
@@ -1214,10 +1240,22 @@ class IndexedDbStore {
 
     const existing = await this.getOutboxRecordByIdempotencyKey(context.workspaceId, idempotencyKey);
     if (existing) {
+      if (
+        existing.entity !== entity
+        || existing.entityId !== item.id
+        || existing.operation !== 'upsert'
+        || JSON.stringify(existing.payload) !== JSON.stringify(item)
+      ) {
+        throw new Error('Idempotency key collision: existing Outbox intent does not match this mutation.');
+      }
       // Idempotent backfill: keep the existing Outbox intent and only restore a
       // missing operational row. Never overwrite newer local state with the
       // snapshot the plan was built from.
-      const storeTx = this.idb.transaction(storeName, 'readwrite');
+      await this.getP2pNodeId();
+      const storeTx = this.idb.transaction(
+        [storeName, 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'],
+        'readwrite',
+      );
       const store = storeTx.objectStore(storeName);
       const current = await new Promise<T | undefined>((resolve) => {
         const req = store.get(item.id);
@@ -1228,6 +1266,7 @@ class IndexedDbStore {
         const persisted = { ...item, workspaceId: context.workspaceId, establishmentId: context.establishmentId, deletedAt: null };
         store.put(persisted);
       }
+      this.ensureP2pEventForOutbox(storeTx, existing);
       await waitForTransactionCompletion(storeTx, `putWithOutboxByKey-idempotent ${entity}/${item.id}`);
       this.emitOutboxChange();
       return;
@@ -1296,6 +1335,22 @@ class IndexedDbStore {
 
     const existing = await this.getOutboxRecordByIdempotencyKey(context.workspaceId, idempotencyKey);
     if (existing) {
+      if (
+        existing.entity !== entity
+        || existing.entityId !== entityId
+        || existing.operation !== operation
+        || existing.version !== version
+        || JSON.stringify(existing.payload) !== JSON.stringify(payload)
+      ) {
+        throw new Error('Idempotency key collision: existing Outbox intent does not match this mutation.');
+      }
+      await this.getP2pNodeId();
+      const existingTx = this.idb.transaction(
+        ['p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'],
+        'readwrite',
+      );
+      this.ensureP2pEventForOutbox(existingTx, existing);
+      await waitForTransactionCompletion(existingTx, `enqueueOutboxOnly-backfill ${entity}/${entityId}`);
       this.emitOutboxChange();
       return;
     }
