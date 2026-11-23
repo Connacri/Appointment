@@ -370,10 +370,7 @@ impl PmsDatabase {
     }
 
     /// Local entity deletion: tombstone, Outbox and P2P event commit together.
-    pub fn delete_entity_record(
-        &self,
-        mutation: LocalEntityDelete<'_>,
-    ) -> Result<bool, String> {
+    pub fn delete_entity_record(&self, mutation: LocalEntityDelete<'_>) -> Result<bool, String> {
         let LocalEntityDelete {
             workspace_id,
             entity,
@@ -389,14 +386,22 @@ impl PmsDatabase {
             || node_id.trim().is_empty()
             || created_at.trim().is_empty()
         {
-            return Err("workspace, entity identity, idempotency key, node ID and timestamp are required".into());
+            return Err(
+                "workspace, entity identity, idempotency key, node ID and timestamp are required"
+                    .into(),
+            );
         }
-        let tx = self.connection.unchecked_transaction().map_err(|e| e.to_string())?;
-        let workspace_exists: bool = tx.query_row(
-            "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=?1)",
-            params![workspace_id],
-            |row| row.get(0),
-        ).map_err(|e| e.to_string())?;
+        let tx = self
+            .connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
+        let workspace_exists: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=?1)",
+                params![workspace_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
         if !workspace_exists {
             return Err("workspace does not exist".into());
         }
@@ -413,18 +418,24 @@ impl PmsDatabase {
             return Ok(true);
         }
 
-        let current_version: Option<i64> = tx.query_row(
-            "SELECT version FROM entity_records
-             WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
-            params![workspace_id, entity, entity_id],
-            |row| row.get(0),
-        ).optional().map_err(|e| e.to_string())?;
-        let tombstone: Option<(i64, i64)> = tx.query_row(
-            "SELECT version, server_version FROM tombstones
-             WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
-            params![workspace_id, entity, entity_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ).optional().map_err(|e| e.to_string())?;
+        let current_version: Option<i64> = tx
+            .query_row(
+                "SELECT version FROM entity_records
+                 WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+                params![workspace_id, entity, entity_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        let tombstone: Option<(i64, i64)> = tx
+            .query_row(
+                "SELECT version, server_version FROM tombstones
+                 WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+                params![workspace_id, entity, entity_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
         let Some(current_version) = current_version else {
             tx.commit().map_err(|e| e.to_string())?;
             return Ok(false);
@@ -435,15 +446,23 @@ impl PmsDatabase {
         tx.execute(
             "DELETE FROM entity_records WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
             params![workspace_id, entity, entity_id],
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
         tx.execute(
             "INSERT INTO tombstones(workspace_id,entity,entity_id,version,server_version)
              VALUES (?1,?2,?3,?4,?5)
              ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
                version=excluded.version, server_version=excluded.server_version,
                deleted_at=CURRENT_TIMESTAMP",
-            params![workspace_id, entity, entity_id, version, base_server_version],
-        ).map_err(|e| e.to_string())?;
+            params![
+                workspace_id,
+                entity,
+                entity_id,
+                version,
+                base_server_version
+            ],
+        )
+        .map_err(|e| e.to_string())?;
         tx.execute(
             "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,base_server_version,payload)
              VALUES (?1,?2,?3,?4,?5,'delete',?6,?7,NULL)",
@@ -578,17 +597,23 @@ mod tests {
             r#"{"id":"resource-delete","name":"Room 101"}"#,
             1,
             "2026-11-23T08:50:00Z",
-        ).unwrap();
-        assert!(db.delete_entity_record(LocalEntityDelete {
-            workspace_id: "ws-a",
-            entity: "resources",
-            entity_id: "resource-delete",
-            idempotency_key: "idem-resource-delete",
-            node_id: "node-a",
-            created_at: "2026-11-23T08:51:00Z",
-        }).unwrap());
+        )
+        .unwrap();
+        assert!(db
+            .delete_entity_record(LocalEntityDelete {
+                workspace_id: "ws-a",
+                entity: "resources",
+                entity_id: "resource-delete",
+                idempotency_key: "idem-resource-delete",
+                node_id: "node-a",
+                created_at: "2026-11-23T08:51:00Z",
+            })
+            .unwrap());
 
-        assert!(db.get_entity_record("ws-a", "resources", "resource-delete").unwrap().is_none());
+        assert!(db
+            .get_entity_record("ws-a", "resources", "resource-delete")
+            .unwrap()
+            .is_none());
         let tombstone_version: i64 = db.connection.query_row(
             "SELECT version FROM tombstones
              WHERE workspace_id='ws-a' AND entity='resources' AND entity_id='resource-delete'",
@@ -612,22 +637,30 @@ mod tests {
             r#"{"id":"resource-delete-rollback"}"#,
             1,
             "2026-11-23T08:52:00Z",
-        ).unwrap();
-        db.connection.execute_batch(
-            "CREATE TRIGGER fail_p2p_event
-             BEFORE INSERT ON p2p_events
-             BEGIN SELECT RAISE(ABORT, 'injected P2P append failure'); END;",
-        ).unwrap();
+        )
+        .unwrap();
+        db.connection
+            .execute_batch(
+                "CREATE TRIGGER fail_p2p_event
+                 BEFORE INSERT ON p2p_events
+                 BEGIN SELECT RAISE(ABORT, 'injected P2P append failure'); END;",
+            )
+            .unwrap();
 
-        assert!(db.delete_entity_record(LocalEntityDelete {
-            workspace_id: "ws-a",
-            entity: "resources",
-            entity_id: "resource-delete-rollback",
-            idempotency_key: "idem-resource-delete-rollback",
-            node_id: "node-a",
-            created_at: "2026-11-23T08:53:00Z",
-        }).is_err());
-        assert!(db.get_entity_record("ws-a", "resources", "resource-delete-rollback").unwrap().is_some());
+        assert!(db
+            .delete_entity_record(LocalEntityDelete {
+                workspace_id: "ws-a",
+                entity: "resources",
+                entity_id: "resource-delete-rollback",
+                idempotency_key: "idem-resource-delete-rollback",
+                node_id: "node-a",
+                created_at: "2026-11-23T08:53:00Z",
+            })
+            .is_err());
+        assert!(db
+            .get_entity_record("ws-a", "resources", "resource-delete-rollback")
+            .unwrap()
+            .is_some());
         let tombstone_exists: bool = db.connection.query_row(
             "SELECT EXISTS(SELECT 1 FROM tombstones
              WHERE workspace_id='ws-a' AND entity='resources' AND entity_id='resource-delete-rollback')",
