@@ -20,6 +20,7 @@ import {
   getP2pRecordState,
   mergeP2pEvents,
   validateP2pEvent,
+  validateP2pCursorAdvance,
   type P2pEvent,
   type P2pOperation,
 } from '../services/p2p/protocol';
@@ -733,10 +734,8 @@ class IndexedDbStore {
       || !batch.peerId.trim()
       || !Number.isSafeInteger(batch.expectedCursor)
       || !Number.isSafeInteger(batch.nextCursor)
-      || batch.expectedCursor < 0
-      || batch.nextCursor < batch.expectedCursor
       || batch.events.length > 500
-      || (batch.events.length > 0 && batch.nextCursor === batch.expectedCursor)
+      || !validateP2pCursorAdvance(batch.expectedCursor, batch.nextCursor, batch.events.length)
     ) throw new Error('Invalid P2P inbound batch identity, cursor or page size.');
     for (const event of batch.events) {
       validateP2pEvent(event);
