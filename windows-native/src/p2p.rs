@@ -60,10 +60,16 @@ impl P2pEvent {
         if self.clock.get(&self.node_id).copied() != Some(self.sequence) {
             return Err("P2P event clock must contain its own node sequence");
         }
+        if self.clock.len() > 256 {
+            return Err("P2P event clock exceeds the supported 256-node limit");
+        }
+        if self.entity.len() > 128 || self.entity_id.len() > 256 || self.node_id.len() > 128 {
+            return Err("P2P event identity fields exceed their size limits");
+        }
         if self
             .clock
             .iter()
-            .any(|(node, sequence)| node.trim().is_empty() || *sequence == 0)
+            .any(|(node, sequence)| node.trim().is_empty() || *sequence == 0 || node.len() > 128)
         {
             return Err("P2P event clock contains an invalid node or sequence");
         }
