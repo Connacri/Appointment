@@ -219,6 +219,16 @@ impl PmsDatabase {
              ON CONFLICT(id) DO NOTHING",
             params![workspace_id, owner_user_id, name],
         )?;
+        let stored: (String, String) = self.connection.query_row(
+            "SELECT owner_user_id, name FROM workspaces WHERE id=?1",
+            params![workspace_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        if stored.0 != owner_user_id || stored.1 != name {
+            return Err(rusqlite::Error::InvalidParameterName(
+                "workspace ID already exists with different owner or metadata; refusing silent reuse".into(),
+            ));
+        }
         Ok(())
     }
 
