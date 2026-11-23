@@ -8,6 +8,7 @@ import {
   mergeP2pEvents,
   nextP2pClock,
   validateP2pEvent,
+  validateP2pCursorAdvance,
   type P2pEvent,
 } from '../src/services/p2p/protocol';
 
@@ -44,6 +45,13 @@ test('builds a monotonically increasing local clock', () => {
     sequence: 4,
     clock: { 'node-a': 4, 'node-b': 7 },
   });
+});
+
+test('empty inbound pages cannot advance a durable peer cursor', () => {
+  assert.equal(validateP2pCursorAdvance(0, 0, 0), true);
+  assert.equal(validateP2pCursorAdvance(0, 1, 0), false);
+  assert.equal(validateP2pCursorAdvance(4, 5, 1), true);
+  assert.equal(validateP2pCursorAdvance(4, 4, 1), false);
 });
 
 test('rotating the installation identity prevents event sequence ID reuse after purge', () => {
