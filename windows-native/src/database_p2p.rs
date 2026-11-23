@@ -340,6 +340,48 @@ mod tests {
     }
 
     #[test]
+    fn event_log_and_vector_clock_survive_sqlite_reopen() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("appointment.sqlite3");
+        {
+            let db = PmsDatabase::open(&path).unwrap();
+            db.ensure_workspace("workspace-a", "owner-a", "Workspace A")
+                .unwrap();
+            let event = db
+                .create_local_p2p_event(
+                    "workspace-a",
+                    "node-a",
+                    "booking",
+                    "booking-1",
+                    P2pOperation::Upsert,
+                    Some(json!({"guest": "Persisted"})),
+                    "2026-11-23T08:00:00Z",
+                )
+                .unwrap();
+            assert_eq!(event.sequence, 1);
+        }
+
+        let reopened = PmsDatabase::open(&path).unwrap();
+        let events = reopened.list_p2p_events_after("workspace-a", 0, 10).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event.payload.as_ref().unwrap()["guest"], "Persisted");
+
+        let next = reopened
+            .create_local_p2p_event(
+                "workspace-a",
+                "node-a",
+                "booking",
+                "booking-2",
+                P2pOperation::Upsert,
+                Some(json!({"guest": "After restart"})),
+                "2026-11-23T08:01:00Z",
+            )
+            .unwrap();
+        assert_eq!(next.sequence, 2);
+        assert_eq!(next.clock.get("node-a"), Some(&2));
+    }
+
+    #[test]
     fn received_events_are_idempotent_and_equivocation_is_rejected() {
         let db = database();
         let event = db
