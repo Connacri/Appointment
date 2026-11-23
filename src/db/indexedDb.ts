@@ -649,36 +649,14 @@ class IndexedDbStore {
     }
   }
 
-  // Remove — guarantees complete deletion from both IDB and fallback store
+  /** Physical business-record deletion is disabled; use deleteWithOutbox for a tombstone. */
   public async remove(
-    storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups',
-    id: string
+    _storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups',
+    _id: string,
   ): Promise<void> {
-    this.beginSyncOp();
-    try {
-      await this.openStore();
-
-      if (this.idb) {
-        const tx = this.idb.transaction(storeName, 'readwrite');
-        tx.objectStore(storeName).delete(id);
-        await waitForTransactionCompletion(tx, `remove ${storeName}/${id}`);
-
-        // IndexedDB is authoritative; no duplicate localStorage snapshot is maintained.
-        return;
-      }
-
-      // In fallback mode localStorage is the primary store; propagate failures.
-      const raw = localStorage.getItem(`ob_${storeName}`);
-      if (raw) {
-        const list = JSON.parse(raw) as Array<{ id: string }>;
-        localStorage.setItem(
-          `ob_${storeName}`,
-          JSON.stringify(list.filter((entry) => entry.id !== id))
-        );
-      }
-    } finally {
-      this.endSyncOp();
-    }
+    throw new Error(
+      'Physical deletion is disabled. Use deleteWithOutbox to persist a tombstone, Outbox mutation and P2P event.',
+    );
   }
 
   // Clear all stores completely (for legal GDPR / Account Deletion purge).
