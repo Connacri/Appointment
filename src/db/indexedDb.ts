@@ -363,7 +363,7 @@ class IndexedDbStore {
   }
 
   /** Atomically replace a dedicated operational store; IndexedDB remains authoritative. */
-  public async replaceStoreForMigration<T extends { id: string }>(storeName: 'issuedCards' | 'resourceGroups', items: T[]): Promise<void> {
+  public async replaceStoreForMigration<T extends { id: string }>(storeName: 'resourceGroups', items: T[]): Promise<void> {
     await this.openStore();
     if (!this.idb) {
       localStorage.setItem(`ob_${storeName}`, JSON.stringify(items));
@@ -566,6 +566,20 @@ class IndexedDbStore {
         reject(err);
       }
     });
+  }
+
+  /** Replace non-business issued-card metadata; it is not part of P2P business replication. */
+  public async replaceStore<T extends { id: string }>(storeName: 'issuedCards', items: T[]): Promise<void> {
+    await this.openStore();
+    if (!this.idb) {
+      localStorage.setItem(`ob_${storeName}`, JSON.stringify(items));
+      return;
+    }
+    const tx = this.createStrictTransaction([storeName]);
+    const store = tx.objectStore(storeName);
+    store.clear();
+    for (const item of items) store.put(item);
+    await waitForTransactionCompletion(tx, `replaceStore ${storeName}`);
   }
 
   // Atomically replace a collection snapshot. This removes rows deleted from app state.
