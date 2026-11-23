@@ -6,6 +6,7 @@ on:
     paths:
       - "android/**"
       - "src/App.tsx"
+      - "src/db/**"
       - "src/components/LanDiscoveryStatus.tsx"
       - "src/services/p2p/**"
       - "capacitor.config.json"
@@ -16,6 +17,7 @@ on:
     paths:
       - "android/**"
       - "src/App.tsx"
+      - "src/db/**"
       - "src/components/LanDiscoveryStatus.tsx"
       - "src/services/p2p/**"
       - "capacitor.config.json"
