@@ -446,19 +446,26 @@ events and cursor. Pending local Outbox mutations block remote projection overwr
 after a verified server ACK, the blocked frontier is re-evaluated in the same ACK
 transaction. Conflict frontiers remain stored rather than using last-write-wins.
 
-Android/Web IndexedDB schema v8 now creates durable P2P event, vector-clock, node identity,
-peer-cursor and record-frontier stores. The Outbox-backed local mutation paths append
-their P2P event and update the vector clock inside the same IndexedDB transaction as
-the operational record and Outbox entry. Full inbound projection/cursor atomicity and
-conflict reconciliation on IndexedDB are still outstanding.
+Android/Web IndexedDB schema v8 now creates durable P2P event, vector-clock, shared
+node identity, peer-cursor and record-frontier stores. Outbox-backed local upserts,
+deletes and outbox-only entity mutations append their event and update the vector clock
+and local frontier in the same IndexedDB transaction as the business projection and
+Outbox entry. The Android discovery plugin adopts that same persisted node identity.
+
+IndexedDB inbound batches now append immutable events, merge vector clocks, calculate
+causal frontiers, apply resolved projections, retain conflicts, block overwrites while
+local Outbox mutations remain pending, and advance the peer cursor in one transaction.
+A verified Outbox ACK re-evaluates blocked frontiers in the same transaction. Server ACK
+does not purge tombstones; peer-wide checkpoint-based retention is still required.
 
 This remains a foundation, not production activation. Native Win32 application
-workflows are not yet wired to the canonical atomic APIs, and no authenticated P2P
-transport currently exchanges events. Android inbound apply, encrypted and authenticated
-peer pairing, workspace-level authorization, replay-safe transport framing,
-anti-entropy/checkpointing, tombstone retention, user-facing conflict resolution,
-cross-platform crash/power-loss tests and migration/restore drills remain release gates.
-P2P business replication remains disabled until every gate is implemented and tested.
+workflows are not yet wired to the canonical atomic APIs, and the LAN discovery plugin
+still announces presence only: no authenticated event transport currently exchanges
+these batches. Encrypted and authenticated peer pairing, workspace-level authorization,
+replay-safe transport framing, anti-entropy/checkpointing, bounded tombstone retention,
+user-facing conflict resolution, cross-platform crash/power-loss tests and migration/
+restore drills remain release gates. P2P business replication remains disabled until
+every gate is implemented and tested.
 
 **Partition invariant:** with no coordinator or quorum, independent peers may accept
 conflicting operations while disconnected. Appointment cannot guarantee globally
