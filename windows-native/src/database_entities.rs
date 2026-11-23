@@ -614,12 +614,15 @@ mod tests {
             .get_entity_record("ws-a", "resources", "resource-delete")
             .unwrap()
             .is_none());
-        let tombstone_version: i64 = db.connection.query_row(
-            "SELECT version FROM tombstones
-             WHERE workspace_id='ws-a' AND entity='resources' AND entity_id='resource-delete'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let tombstone_version: i64 = db
+            .connection
+            .query_row(
+                "SELECT version FROM tombstones
+                 WHERE workspace_id='ws-a' AND entity='resources' AND entity_id='resource-delete'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(tombstone_version, 2);
         let outbox = db.pending_outbox("ws-a", 10).unwrap();
         assert_eq!(outbox.len(), 1);
