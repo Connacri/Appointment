@@ -3,6 +3,19 @@ use serde_json::Value;
 
 use super::PmsDatabase;
 
+#[derive(Debug, Clone, Copy)]
+pub struct LocalEntityMutation<'a> {
+    pub workspace_id: &'a str,
+    pub entity: &'a str,
+    pub entity_id: &'a str,
+    pub payload: &'a str,
+    pub version: i64,
+    pub updated_at: &'a str,
+    pub idempotency_key: &'a str,
+    pub node_id: &'a str,
+    pub created_at: &'a str,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityRecord {
     pub workspace_id: String,
@@ -150,18 +163,18 @@ impl PmsDatabase {
 
     /// Local entity mutation: entity row, Supabase Outbox and P2P event share one transaction.
     /// Remote replication must use a separate merge path and must never call this method.
-    pub fn upsert_entity_record(
-        &self,
-        workspace_id: &str,
-        entity: &str,
-        entity_id: &str,
-        payload: &str,
-        version: i64,
-        updated_at: &str,
-        idempotency_key: &str,
-        node_id: &str,
-        created_at: &str,
-    ) -> Result<(), String> {
+    pub fn upsert_entity_record(&self, mutation: LocalEntityMutation<'_>) -> Result<(), String> {
+        let LocalEntityMutation {
+            workspace_id,
+            entity,
+            entity_id,
+            payload,
+            version,
+            updated_at,
+            idempotency_key,
+            node_id,
+            created_at,
+        } = mutation;
         if entity.trim().is_empty()
             || entity_id.trim().is_empty()
             || version <= 0
@@ -398,17 +411,17 @@ mod tests {
     fn local_entity_outbox_and_p2p_event_commit_together() {
         let db = db();
         let payload = r#"{"id":"resource-1","status":"active","futureField":{"v":2}}"#;
-        db.upsert_entity_record(
-            "ws-a",
-            "resources",
-            "resource-1",
+        db.upsert_entity_record(LocalEntityMutation {
+            workspace_id: "ws-a",
+            entity: "resources",
+            entity_id: "resource-1",
             payload,
-            1,
-            "2026-11-23T08:40:00Z",
-            "idem-resource-1",
-            "node-a",
-            "2026-11-23T08:40:00Z",
-        )
+            version: 1,
+            updated_at: "2026-11-23T08:40:00Z",
+            idempotency_key: "idem-resource-1",
+            node_id: "node-a",
+            created_at: "2026-11-23T08:40:00Z",
+        })
         .unwrap();
 
         assert_eq!(
@@ -433,17 +446,17 @@ mod tests {
             )
             .unwrap();
 
-        let result = db.upsert_entity_record(
-            "ws-a",
-            "resources",
-            "resource-rollback",
-            r#"{"id":"resource-rollback"}"#,
-            1,
-            "2026-11-23T08:41:00Z",
-            "idem-resource-rollback",
-            "node-a",
-            "2026-11-23T08:41:00Z",
-        );
+        let result = db.upsert_entity_record(LocalEntityMutation {
+            workspace_id: "ws-a",
+            entity: "resources",
+            entity_id: "resource-rollback",
+            payload: r#"{"id":"resource-rollback"}"#,
+            version: 1,
+            updated_at: "2026-11-23T08:41:00Z",
+            idempotency_key: "idem-resource-rollback",
+            node_id: "node-a",
+            created_at: "2026-11-23T08:41:00Z",
+        });
         assert!(result.is_err());
         assert!(db
             .get_entity_record("ws-a", "resources", "resource-rollback")
