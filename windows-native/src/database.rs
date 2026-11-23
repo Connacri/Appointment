@@ -905,6 +905,64 @@ fn ensure_workspace_exists(tx: &Transaction<'_>, workspace_id: &str) -> Result<(
 }
 
 #[cfg(test)]
+mod migration_safety_tests {
+    use super::*;
+
+    #[test]
+    fn pre_migration_backup_contains_committed_wal_data_and_passes_integrity_check() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("legacy.sqlite3");
+        let connection = Connection::open(&path).unwrap();
+        connection.pragma_update(None, "journal_mode", "WAL").unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE legacy_records(id TEXT PRIMARY KEY, payload TEXT NOT NULL);
+                 INSERT INTO legacy_records(id,payload) VALUES ('r-1','preserve-me');",
+            )
+            .unwrap();
+
+        let backup_path = backup_before_migration_if_needed(&connection, &path)
+            .unwrap()
+            .expect("legacy database must be backed up before migration");
+        let backup = Connection::open(backup_path).unwrap();
+        let payload: String = backup
+            .query_row(
+                "SELECT payload FROM legacy_records WHERE id='r-1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let integrity: String = backup
+            .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(payload, "preserve-me");
+        assert_eq!(integrity, "ok");
+    }
+
+    #[test]
+    fn newer_database_schema_is_never_downgraded_or_modified() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("future.sqlite3");
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY);
+                 INSERT INTO schema_migrations(version) VALUES (999);
+                 CREATE TABLE protected_records(id TEXT PRIMARY KEY);
+                 INSERT INTO protected_records(id) VALUES ('keep');",
+            )
+            .unwrap();
+
+        assert!(backup_before_migration_if_needed(&connection, &path).is_err());
+        let row_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM protected_records", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(row_count, 1);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::{Booking, BookingStatus};
