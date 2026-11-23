@@ -9,6 +9,21 @@
 
 export type P2pOperation = 'upsert' | 'delete';
 
+/** Empty pages may not advance a durable cursor and skip unseen events. */
+export function validateP2pCursorAdvance(
+  expectedCursor: number,
+  nextCursor: number,
+  eventCount: number,
+): boolean {
+  return Number.isSafeInteger(expectedCursor)
+    && Number.isSafeInteger(nextCursor)
+    && Number.isSafeInteger(eventCount)
+    && expectedCursor >= 0
+    && nextCursor >= expectedCursor
+    && eventCount >= 0
+    && (eventCount === 0 ? nextCursor === expectedCursor : nextCursor > expectedCursor);
+}
+
 export interface NewP2pEvent<TPayload = Record<string, unknown>> {
   nodeId: string;
   workspaceId: string;
