@@ -1354,23 +1354,31 @@ fn apply_p2p_event_projection(
                 Ok(true)
             }
             P2pOperation::Delete => {
-                let exists: bool = tx
+                let current: Option<(i64, i64)> = tx
                     .query_row(
-                        "SELECT EXISTS(SELECT 1 FROM bookings WHERE workspace_id=?1 AND id=?2)",
-                        params![workspace_id, entity_id],
-                        |row| row.get(0),
-                    )
-                    .map_err(|e| e.to_string())?;
-                if !exists {
-                    return Ok(false);
-                }
-                let (version, server_version): (i64, i64) = tx
-                    .query_row(
-                        "SELECT version+1, server_version FROM bookings WHERE workspace_id=?1 AND id=?2",
+                        "SELECT version, server_version FROM bookings WHERE workspace_id=?1 AND id=?2",
                         params![workspace_id, entity_id],
                         |row| Ok((row.get(0)?, row.get(1)?)),
                     )
+                    .optional()
                     .map_err(|e| e.to_string())?;
+                let tombstone: Option<(i64, i64)> = tx
+                    .query_row(
+                        "SELECT version, server_version FROM tombstones
+                         WHERE workspace_id=?1 AND entity='booking' AND entity_id=?2",
+                        params![workspace_id, entity_id],
+                        |row| Ok((row.get(0)?, row.get(1)?)),
+                    )
+                    .optional()
+                    .map_err(|e| e.to_string())?;
+                if current.is_none() && tombstone.is_some() {
+                    return Ok(false);
+                }
+                let version = current.map(|row| row.0).unwrap_or(0)
+                    .max(tombstone.map(|row| row.0).unwrap_or(0)) + 1;
+                let server_version = current.map(|row| row.1)
+                    .or_else(|| tombstone.map(|row| row.1))
+                    .unwrap_or(0);
                 tx.execute(
                     "DELETE FROM bookings WHERE workspace_id=?1 AND id=?2",
                     params![workspace_id, entity_id],
@@ -1451,9 +1459,6 @@ fn apply_p2p_event_projection(
                     .optional()
                     .map_err(|e| e.to_string())?;
                 if existing_version.is_none() && tombstone_version.is_some() {
-                    return Ok(false);
-                }
-                if existing_version.is_none() && tombstone_version.is_none() {
                     return Ok(false);
                 }
                 let version = existing_version.unwrap_or(0).max(tombstone_version.unwrap_or(0)) + 1;
