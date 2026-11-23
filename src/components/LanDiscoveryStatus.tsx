@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { indexedDb } from '../db/indexedDb';
 import {
   LanDiscovery,
   startNativeLanDiscovery,
@@ -18,7 +19,8 @@ export const LanDiscoveryStatus: React.FC = () => {
     compatibilityRecoveryAttempted.current = false;
     setError(null);
     try {
-      await startNativeLanDiscovery();
+      const nodeId = await indexedDb.getP2pNodeId();
+      await startNativeLanDiscovery(nodeId);
       setActive(true);
     } catch (cause) {
       setActive(false);
