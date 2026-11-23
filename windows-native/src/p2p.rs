@@ -187,7 +187,12 @@ mod tests {
     #[test]
     fn merges_idempotently_and_rejects_equivocation() {
         let a = event("a", 1, &[("a", 1)], Some(json!({"x": 1})));
-        assert_eq!(merge_events(std::slice::from_ref(&a), std::slice::from_ref(&a)).unwrap().len(), 1);
+        assert_eq!(
+            merge_events(std::slice::from_ref(&a), std::slice::from_ref(&a))
+                .unwrap()
+                .len(),
+            1
+        );
         let forged = event("a", 1, &[("a", 1)], Some(json!({"x": 2})));
         assert!(merge_events(&[a], &[forged]).is_err());
     }
