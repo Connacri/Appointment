@@ -1168,6 +1168,10 @@ class IndexedDbStore {
         const version = Math.max(entry.current?.version ?? 0, entry.tombstone?.version ?? 0) + 1;
         const now = new Date().toISOString();
         const persisted = { ...candidate, syncVersion: version };
+        const effectiveContext = {
+          workspaceId: entry.context.workspaceId,
+          establishmentId,
+        };
         workspaceEntities.put({
           workspaceId: entry.context.workspaceId,
           establishmentId,
@@ -1181,7 +1185,7 @@ class IndexedDbStore {
         tombstones.delete(`${entry.context.workspaceId}:${entity}:${entry.item.id}`);
         tx.objectStore('outbox').add(
           this.createOutboxRecord(
-            entry.context,
+            effectiveContext,
             entity,
             entry.item.id,
             'upsert',
@@ -1371,14 +1375,15 @@ class IndexedDbStore {
       const version = Math.max(current?.version ?? 0, previousTombstone?.version ?? 0) + 1;
       const now = new Date().toISOString();
       const persisted = { ...candidate, syncVersion: version };
+      const effectiveContext = { workspaceId: context.workspaceId, establishmentId };
       const entityRecord = {
-        workspaceId: context.workspaceId, establishmentId: context.establishmentId,
+        workspaceId: context.workspaceId, establishmentId,
         entity, entityId: item.id, version, updatedAt: now, payload: persisted,
       };
       workspaceEntities.put(entityRecord);
       store.put(persisted);
       // Keep prior tombstones until the matching delete event receives a server ACK.
-      tx.objectStore('outbox').add(this.createOutboxRecord(context, entity, item.id, 'upsert', version, persisted as Record<string, unknown>, now));
+      tx.objectStore('outbox').add(this.createOutboxRecord(effectiveContext, entity, item.id, 'upsert', version, persisted as Record<string, unknown>, now));
       this.appendLocalP2pEvent(tx, context.workspaceId, entity, item.id, 'upsert', persisted as Record<string, unknown>, now);
     };
     request.onsuccess = () => {
