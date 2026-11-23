@@ -1841,6 +1841,53 @@ mod tests {
     }
 
     #[test]
+    fn verified_outbox_ack_reconciles_previously_blocked_inbound_frontier() {
+        let mut db = database();
+        let mut local = booking("b-reconcile");
+        local.guest_name = "Local pending".into();
+        db.upsert_booking(
+            "w-1",
+            &local,
+            "idem-reconcile-local",
+            "node-a",
+            "2026-11-23T08:59:00Z",
+        ).unwrap();
+        let mut remote = booking("b-reconcile");
+        remote.guest_name = "Remote successor".into();
+        let event = remote_event(
+            "node-b",
+            1,
+            &[("node-a", 1), ("node-b", 1)],
+            "booking",
+            "b-reconcile",
+            P2pOperation::Upsert,
+            Some(serde_json::to_value(remote).unwrap()),
+        );
+        let report = db.apply_received_p2p_batch(P2pInboundBatch {
+            workspace_id: "w-1",
+            peer_id: "peer-b",
+            expected_cursor: 0,
+            next_cursor: 1,
+            events: std::slice::from_ref(&event),
+        }).unwrap();
+        assert_eq!(report.blocked_by_pending_local, 1);
+        let local_outbox = db.pending_outbox("w-1", 10).unwrap().remove(0);
+        assert!(db.acknowledge_outbox("w-1", &local_outbox.id, 17).unwrap());
+
+        assert_eq!(
+            db.get_booking("w-1", "b-reconcile").unwrap().unwrap().guest_name,
+            "Remote successor"
+        );
+        let status: String = db.connection.query_row(
+            "SELECT status FROM p2p_record_frontiers
+             WHERE workspace_id='w-1' AND entity='booking' AND entity_id='b-reconcile'",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(status, "resolved");
+    }
+
+    #[test]
     fn inbound_projection_failure_rolls_back_event_and_peer_cursor() {
         let mut db = database();
         db.connection.execute_batch(
