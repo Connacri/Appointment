@@ -92,6 +92,11 @@ exchange, not database-file sharing.
 
 - The transport-neutral event contract is implemented in
   `src/services/p2p/protocol.ts` and `windows-native/src/p2p.rs`.
+- Native Windows SQLite now has a workspace-scoped append-only `p2p_events`
+  log and a persisted merged `p2p_clock` (schema migration v6). Local event
+  creation advances the workspace vector clock transactionally; exact replay is
+  idempotent and event-ID equivocation is rejected. The log is not yet atomically
+  coupled to booking/entity mutations, and Android IndexedDB persistence is pending.
 - Each event has a stable node/sequence identity, workspace scope, entity identity,
   operation, payload and causal vector clock.
 - Replicas merge by set union. Replayed events are idempotent; reuse of an event ID
