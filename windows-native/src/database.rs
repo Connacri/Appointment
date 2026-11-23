@@ -1280,7 +1280,7 @@ mod tests {
                 .upsert_booking_outbox_only("w-disk", &booking("b-disk"), "idem-disk")
                 .unwrap();
             local
-                .upsert_entity_record(
+                .upsert_entity_record_unreplicated(
                     "w-disk",
                     "resources",
                     "r-disk",
