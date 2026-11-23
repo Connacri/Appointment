@@ -9,6 +9,42 @@
 
 export type P2pOperation = 'upsert' | 'delete';
 
+export interface NewP2pEvent<TPayload = Record<string, unknown>> {
+  nodeId: string;
+  workspaceId: string;
+  entity: string;
+  entityId: string;
+  operation: P2pOperation;
+  payload: TPayload | null;
+  createdAt: string;
+  observedClock: Readonly<Record<string, number>>;
+}
+
+/** Create a validated immutable event from the persisted causal frontier. */
+export function createP2pEvent<TPayload = Record<string, unknown>>(
+  draft: NewP2pEvent<TPayload>,
+): P2pEvent<TPayload> {
+  const { sequence, clock } = nextP2pClock(draft.observedClock, draft.nodeId);
+  const event: P2pEvent<TPayload> = {
+    protocolVersion: 1,
+    eventId: `${draft.nodeId}:${sequence}`,
+    nodeId: draft.nodeId,
+    sequence,
+    workspaceId: draft.workspaceId,
+    entity: draft.entity,
+    entityId: draft.entityId,
+    operation: draft.operation,
+    payload: draft.payload,
+    clock,
+    createdAt: draft.createdAt,
+  };
+  validateP2pEvent(event);
+  if (new TextEncoder().encode(JSON.stringify(event)).byteLength > 1024 * 1024) {
+    throw new Error('P2P event exceeds the 1 MiB persistence limit.');
+  }
+  return event;
+}
+
 export interface P2pEvent<TPayload = Record<string, unknown>> {
   protocolVersion: 1;
   eventId: string;
