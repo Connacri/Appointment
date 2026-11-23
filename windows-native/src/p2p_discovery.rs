@@ -138,8 +138,7 @@ fn discovery_loop(
             Ok((length, source)) if length <= MAX_DATAGRAM_BYTES => {
                 if let Ok(message) = serde_json::from_slice::<Announcement>(&buffer[..length]) {
                     if let Some(peer) = validate_announcement(message, &own_peer_id, source) {
-                        if !peers.contains_key(&peer.peer_id)
-                            && peers.len() >= MAX_DISCOVERED_PEERS
+                        if !peers.contains_key(&peer.peer_id) && peers.len() >= MAX_DISCOVERED_PEERS
                         {
                             continue;
                         }
@@ -208,7 +207,10 @@ fn validate_announcement(
     {
         return None;
     }
-    let peer_id = Uuid::parse_str(&message.peer_id).ok()?.hyphenated().to_string();
+    let peer_id = Uuid::parse_str(&message.peer_id)
+        .ok()?
+        .hyphenated()
+        .to_string();
     if peer_id == own_peer_id {
         return None;
     }
@@ -286,10 +288,8 @@ mod tests {
 
     #[test]
     fn announcement_packet_is_bounded_and_contains_no_tenant_or_credentials() {
-        let packet = serde_json::to_vec(&announcement(
-            "b1b2c3d4-e5f6-47a8-9012-1234567890ab",
-        ))
-        .unwrap();
+        let packet =
+            serde_json::to_vec(&announcement("b1b2c3d4-e5f6-47a8-9012-1234567890ab")).unwrap();
         assert!(packet.len() <= MAX_DATAGRAM_BYTES);
         assert_eq!(
             String::from_utf8(packet).unwrap(),
