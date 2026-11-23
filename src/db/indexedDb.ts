@@ -440,7 +440,7 @@ class IndexedDbStore {
   public async clearEventLogs(): Promise<void> {
     await this.openStore();
     if (this.idb) {
-      const tx = this.idb.transaction('eventLogs', 'readwrite');
+      const tx = this.createStrictTransaction(['eventLogs']);
       tx.objectStore('eventLogs').clear();
       await waitForTransactionCompletion(tx, 'clearEventLogs');
     }
@@ -620,16 +620,16 @@ class IndexedDbStore {
     storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups',
     item: T
   ): Promise<void> {
-    const normalizedItem =
-      storeName === 'bookings'
-        ? (migrateBookingRecordV7(item as Partial<TimelineBooking>) as T)
-        : item;
+    if (['bookings', 'invoices', 'resources', 'resourceGroups'].includes(storeName)) {
+      throw new Error('Direct business writes are disabled. Use putWithOutbox or reconcileSnapshotWithOutbox.');
+    }
+    const normalizedItem = item;
     this.beginSyncOp();
     try {
       await this.openStore();
 
       if (this.idb) {
-        const tx = this.idb.transaction(storeName, 'readwrite');
+        const tx = this.createStrictTransaction([storeName]);
         tx.objectStore(storeName).put(normalizedItem);
         await waitForTransactionCompletion(tx, `put ${storeName}/${item.id}`);
 
