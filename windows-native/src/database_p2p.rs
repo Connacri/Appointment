@@ -154,7 +154,10 @@ impl PmsDatabase {
     pub fn append_p2p_event(&self, event: &P2pEvent) -> Result<bool, String> {
         validate_event_size(event)?;
         event.validate().map_err(str::to_string)?;
-        let tx = self.connection.unchecked_transaction().map_err(|e| e.to_string())?;
+        let tx = self
+            .connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
         ensure_workspace(&tx, &event.workspace_id)?;
 
         let existing: Option<String> = tx
@@ -362,9 +365,14 @@ mod tests {
         }
 
         let reopened = PmsDatabase::open(&path).unwrap();
-        let events = reopened.list_p2p_events_after("workspace-a", 0, 10).unwrap();
+        let events = reopened
+            .list_p2p_events_after("workspace-a", 0, 10)
+            .unwrap();
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].event.payload.as_ref().unwrap()["guest"], "Persisted");
+        assert_eq!(
+            events[0].event.payload.as_ref().unwrap()["guest"],
+            "Persisted"
+        );
 
         let next = reopened
             .create_local_p2p_event(
