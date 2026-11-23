@@ -135,6 +135,27 @@ test('merges replicas by set union and is idempotent', () => {
   assert.deepEqual(mergeP2pEvents(merged, [a, b]), merged);
 });
 
+test('a local event can advance from a persisted remote causal frontier', () => {
+  const remote = event('node-remote', 7, {
+    'node-remote': 7,
+    'node-third': 3,
+  }, { id: 'booking-4', guest: 'Remote' });
+  const local = createP2pEvent({
+    nodeId: 'node-local',
+    workspaceId: 'workspace-1',
+    entity: 'booking',
+    entityId: 'booking-4',
+    operation: 'upsert',
+    payload: { id: 'booking-4', guest: 'Local edit' },
+    createdAt: '2026-11-23T09:03:00.000Z',
+    observedClock: remote.clock,
+  });
+
+  assert.equal(local.clock['node-remote'], 7);
+  assert.equal(local.clock['node-third'], 3);
+  assert.equal(local.clock['node-local'], 1);
+});
+
 test('concurrent P2P branches remain an explicit conflict, never last-writer-wins', () => {
   const left = event('node-left', 1, { 'node-left': 1 }, { id: 'booking-3', guest: 'Left' });
   const right = event('node-right', 1, { 'node-right': 1 }, { id: 'booking-3', guest: 'Right' });
