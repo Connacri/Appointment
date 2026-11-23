@@ -8,6 +8,7 @@ use crate::domain::Booking;
 mod database_entities;
 #[path = "database_p2p.rs"]
 mod database_p2p;
+pub use database_entities::LocalEntityMutation;
 pub use database_p2p::{NewP2pEvent, P2pEventLogEntry};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,7 +170,7 @@ fn backup_before_migration_if_needed(
     Ok(Some(backup_path))
 }
 
-const CURRENT_SCHEMA_VERSION: i64 = 6;
+const CURRENT_SCHEMA_VERSION: i64 = 7;
 
 impl PmsDatabase {
     pub fn open(path: impl AsRef<std::path::Path>) -> rusqlite::Result<Self> {
@@ -326,6 +327,7 @@ impl PmsDatabase {
         }
         database_entities::migrate(&self.connection)?;
         database_p2p::migrate(&self.connection)?;
+        database_p2p::migrate_v7(&self.connection)?;
         Ok(())
     }
 
