@@ -148,7 +148,6 @@ impl PmsDatabase {
         tx.commit()
     }
 
-
     /// Local entity mutation: entity row, Supabase Outbox and P2P event share one transaction.
     /// Remote replication must use a separate merge path and must never call this method.
     pub fn upsert_entity_record(
@@ -171,19 +170,26 @@ impl PmsDatabase {
             || updated_at.trim().is_empty()
             || created_at.trim().is_empty()
         {
-            return Err("entity identity, positive version, idempotency key, node ID and timestamps are required".into());
+            return Err(
+                "entity identity, positive version, idempotency key, node ID and timestamps are required"
+                    .into(),
+            );
         }
         let parsed: Value = serde_json::from_str(payload).map_err(|error| error.to_string())?;
         if !parsed.is_object() {
             return Err("entity payload must be a JSON object".into());
         }
 
-        let tx = self.connection.unchecked_transaction().map_err(|e| e.to_string())?;
+        let tx = self
+            .connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
         let exists: bool = tx.query_row(
             "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=?1)",
             params![workspace_id],
             |row| row.get(0),
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
         if !exists {
             return Err("workspace does not exist".into());
         }
@@ -208,7 +214,10 @@ impl PmsDatabase {
         ).optional().map_err(|e| e.to_string())?;
         match current {
             Some((_, current_version)) if version < current_version => {
-                return Err("stale local entity version rejected; use the remote merge API for replicated data".into());
+                return Err(
+                "stale local entity version rejected; use the remote merge API for replicated data"
+                    .into(),
+            );
             }
             Some((current_payload, current_version)) if version == current_version => {
                 if current_payload != payload {
@@ -231,7 +240,15 @@ impl PmsDatabase {
         tx.execute(
             "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,base_server_version,payload)
              VALUES (?1,?2,?3,?4,?5,'upsert',?6,0,?7)",
-            params![uuid::Uuid::new_v4().to_string(), idempotency_key, workspace_id, entity, entity_id, version, payload],
+            params![
+                uuid::Uuid::new_v4().to_string(),
+                idempotency_key,
+                workspace_id,
+                entity,
+                entity_id,
+                version,
+                payload
+            ],
         ).map_err(|e| e.to_string())?;
         super::database_p2p::create_local_event_in_transaction(
             &tx,
