@@ -732,7 +732,6 @@ unsafe fn create_status_label(parent: Hwnd, x: i32, y: i32, width: i32, height: 
     );
 }
 
-
 unsafe fn create_discovery_label(parent: Hwnd, x: i32, y: i32, width: i32, height: i32) {
     let class = wide("STATIC");
     let text = wide("Réseau local : démarrage de la découverte P2P…");
