@@ -6,6 +6,9 @@ use crate::domain::Booking;
 
 #[path = "database_entities.rs"]
 mod database_entities;
+#[path = "database_p2p.rs"]
+mod database_p2p;
+pub use database_p2p::P2pEventLogEntry;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutboxEntry {
@@ -201,6 +204,7 @@ impl PmsDatabase {
             )?;
         }
         database_entities::migrate(&self.connection)?;
+        database_p2p::migrate(&self.connection)?;
         Ok(())
     }
 
@@ -868,7 +872,7 @@ mod tests {
             .connection
             .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(schema_version, 5);
+        assert_eq!(schema_version, 6);
     }
 
     #[test]
@@ -1181,7 +1185,7 @@ mod tests {
     }
 
     #[test]
-    fn local_schema_v5_tracks_pms_entities_server_versions_cursors_and_conflicts() {
+    fn local_schema_v6_tracks_pms_entities_server_versions_cursors_and_p2p_events() {
         let db = database();
         let outbox_sql: String = db
             .connection
