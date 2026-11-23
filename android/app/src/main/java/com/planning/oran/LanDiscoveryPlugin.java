@@ -76,10 +76,24 @@ public final class LanDiscoveryPlugin extends Plugin {
     private WifiManager.MulticastLock multicastLock;
 
     @PluginMethod
+    public void getNodeIdentity(PluginCall call) {
+        try {
+            JSObject result = new JSObject();
+            result.put("nodeId", getOrCreateNodeId());
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Impossible de lire l'identité P2P locale : " + error.getMessage());
+        }
+    }
+
+    @PluginMethod
     public void startDiscovery(PluginCall call) {
         discoveryRequested = true;
         try {
-            nodeId = getOrCreateNodeId();
+            String requestedNodeId = call.getString("nodeId");
+            nodeId = requestedNodeId == null || requestedNodeId.trim().isEmpty()
+                ? getOrCreateNodeId()
+                : persistNodeId(requestedNodeId);
             String missingAlias = requiredPermissionAlias();
             if (missingAlias != null && !hasLanPermission(missingAlias)) {
                 if (!isPermissionDeclared(missingAlias)) {
@@ -229,6 +243,31 @@ public final class LanDiscoveryPlugin extends Plugin {
             throw new IllegalStateException("Impossible d'enregistrer l'identité P2P locale.");
         }
         return created;
+    }
+
+    private synchronized String persistNodeId(String requested) throws Exception {
+        final String normalized;
+        try {
+            normalized = UUID.fromString(requested.trim()).toString();
+        } catch (IllegalArgumentException error) {
+            throw new IllegalArgumentException("L'identité P2P fournie par IndexedDB n'est pas un UUID valide.");
+        }
+        File identityFile = new File(getContext().getNoBackupFilesDir(), "p2p-node-id");
+        File temporaryFile = new File(identityFile.getParentFile(), "p2p-node-id.tmp");
+        try (FileOutputStream output = new FileOutputStream(temporaryFile, false)) {
+            output.write(normalized.getBytes(StandardCharsets.UTF_8));
+            output.flush();
+            output.getFD().sync();
+        }
+        if (identityFile.exists() && !identityFile.delete()) {
+            temporaryFile.delete();
+            throw new IllegalStateException("Impossible de remplacer l'identité P2P locale.");
+        }
+        if (!temporaryFile.renameTo(identityFile)) {
+            temporaryFile.delete();
+            throw new IllegalStateException("Impossible d'enregistrer l'identité P2P locale.");
+        }
+        return normalized;
     }
 
     private String requiredPermissionAlias() {
