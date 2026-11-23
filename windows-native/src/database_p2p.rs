@@ -533,14 +533,16 @@ mod tests {
     fn event_payload_and_vector_clock_are_bounded() {
         let db = database();
         let oversized = "x".repeat(MAX_P2P_EVENT_BYTES + 1);
-        assert!(db.create_local_p2p_event(NewP2pEvent {
-            workspace_id: "workspace-a",
-            node_id: "node-a",
-            entity: "booking",
-            entity_id: "booking-1",
-            operation: P2pOperation::Upsert,
-            payload: Some(json!({"blob": oversized})),
-            created_at: "2026-11-23T08:00:00Z",
-        }).is_err());
+        assert!(db
+            .create_local_p2p_event(NewP2pEvent {
+                workspace_id: "workspace-a",
+                node_id: "node-a",
+                entity: "booking",
+                entity_id: "booking-1",
+                operation: P2pOperation::Upsert,
+                payload: Some(json!({"blob": oversized})),
+                created_at: "2026-11-23T08:00:00Z",
+            })
+            .is_err());
     }
 }
