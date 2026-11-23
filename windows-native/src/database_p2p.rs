@@ -203,7 +203,7 @@ impl PmsDatabase {
     }
 }
 
-fn create_local_event_in_transaction(
+pub(super) fn create_local_event_in_transaction(
     tx: &Transaction<'_>,
     draft: NewP2pEvent<'_>,
 ) -> Result<P2pEvent, String> {
