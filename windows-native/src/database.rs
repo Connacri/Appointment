@@ -843,8 +843,12 @@ mod tests {
         let path = directory.path().join("appointment.sqlite3");
         {
             let mut local = PmsDatabase::open(&path).unwrap();
-            local.ensure_workspace("w-disk", "u-disk", "Disk workspace").unwrap();
-            local.upsert_booking("w-disk", &booking("b-disk"), "idem-disk").unwrap();
+            local
+                .ensure_workspace("w-disk", "u-disk", "Disk workspace")
+                .unwrap();
+            local
+                .upsert_booking("w-disk", &booking("b-disk"), "idem-disk")
+                .unwrap();
             local
                 .upsert_entity_record(
                     "w-disk",
@@ -870,7 +874,9 @@ mod tests {
         );
         let schema_version: i64 = reopened
             .connection
-            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| row.get(0))
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(schema_version, 6);
     }
@@ -1219,8 +1225,14 @@ mod tests {
             .unwrap();
         assert_eq!(version, 5);
         assert!(outbox_sql.contains("'conflict'"));
-        assert!(entity_records_exists, "v5 must create the generic PMS entity store");
-        assert!(entity_page_index_exists, "v5 must create the workspace-scoped keyset index");
+        assert!(
+            entity_records_exists,
+            "v5 must create the generic PMS entity store"
+        );
+        assert!(
+            entity_page_index_exists,
+            "v5 must create the workspace-scoped keyset index"
+        );
     }
 
     #[test]
