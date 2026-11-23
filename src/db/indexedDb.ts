@@ -1148,7 +1148,9 @@ class IndexedDbStore {
       const processNext = (index: number): void => {
         if (index >= prepared.length) return;
         const entry = prepared[index];
-        if (!entry.context.workspaceId.trim()) {
+        const itemWorkspaceId = (entry.item as T & { workspaceId?: string }).workspaceId;
+        if (!entry.context.workspaceId.trim() || itemWorkspaceId !== entry.context.workspaceId) {
+          // Never copy an unscoped or another workspace's row into the active workspace.
           report.blocked += 1;
           processNext(index + 1);
           return;
