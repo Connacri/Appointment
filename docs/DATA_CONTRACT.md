@@ -474,7 +474,10 @@ does not purge tombstones; peer-wide checkpoint-based retention is still require
 Inbound P2P projection currently does not create a second Supabase Outbox mutation:
 the originating node's durable Outbox remains responsible for cloud delivery. A
 recoverable cloud-relay path for a peer that receives an event while its origin is lost
-is still outstanding.
+is still outstanding. The native Windows Supabase adapter currently pushes booking
+Outbox records only; resource, resource-group, invoice and other generic entity cloud
+adapters remain incomplete. Their local/P2P durability must not be reported as Supabase
+synchronization.
 
 This remains a foundation, not production activation. Native Win32 application
 workflows are not yet wired to the canonical atomic APIs, and the LAN discovery plugin
