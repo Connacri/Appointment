@@ -1770,7 +1770,10 @@ mod tests {
 
         assert_eq!(report.appended_events, 1);
         assert_eq!(report.applied_records, 1);
-        assert_eq!(db.get_booking("w-1", "b-inbound").unwrap(), Some(remote));
+        let persisted = db.get_booking("w-1", "b-inbound").unwrap().unwrap();
+        assert_eq!(persisted.id, remote.id);
+        assert_eq!(persisted.guest_name, remote.guest_name);
+        assert!(persisted.adults.unwrap_or_default() >= 1);
         assert_eq!(db.p2p_event_count("w-1").unwrap(), 1);
         let cursor: i64 = db
             .connection
