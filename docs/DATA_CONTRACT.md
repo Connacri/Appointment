@@ -435,17 +435,20 @@ ACCESS_LOCAL_NETWORK is required only when the app targets SDK 37 or higher.
 Native Windows SQLite persists a workspace-scoped append-only event log and
 merged vector clock (schema v6). Local event creation and clock advancement share one
 SQLite transaction; exact replays are idempotent and event-ID equivocation is rejected.
-New native local-mutation APIs for bookings and generic entities now write the business
-row, Supabase Outbox record, P2P event and vector-clock advancement in the same SQLite
-transaction. Injected P2P append failures are covered by rollback tests proving that
-the business row and Outbox entry are not committed.
+The canonical native local-mutation APIs, `upsert_booking`, `delete_booking` and
+`upsert_entity_record`, now write the business row, Supabase Outbox record, P2P event
+and vector-clock advancement in the same SQLite transaction. Injected P2P append
+failures are covered by rollback tests proving that neither the business row nor Outbox
+entry is committed. Legacy paths are deliberately renamed
+`upsert_booking_outbox_only`, `delete_booking_outbox_only` and
+`upsert_entity_record_unreplicated` so they cannot be mistaken for replication-safe
+local mutation APIs.
 
-This is an API-level safety boundary, not yet production activation: existing Outbox-only
-booking/entity APIs still exist for non-P2P paths, and native UI/application call sites
-have not yet been migrated to the atomic APIs. Remote event receipt is currently only
-durable event append; applying a remote event to business state, its cursor and conflict
-frontier in one transaction is not yet implemented. Android's IndexedDB event log and
-equivalent atomic local-mutation APIs are not yet implemented.
+This is an API-level safety boundary, not yet production activation: native UI/application
+call sites have not yet been migrated to the canonical atomic APIs. Remote event receipt
+is currently only durable event append; applying a remote event to business state, its
+cursor and conflict frontier in one transaction is not yet implemented. Android's
+IndexedDB event log and equivalent atomic local-mutation APIs are not yet implemented.
 
 Before enabling P2P data synchronization in production, the implementation still
 requires migration of every local business write path to the atomic APIs (or removal of
