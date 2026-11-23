@@ -16,6 +16,16 @@ pub struct LocalEntityMutation<'a> {
     pub created_at: &'a str,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct LocalEntityDelete<'a> {
+    pub workspace_id: &'a str,
+    pub entity: &'a str,
+    pub entity_id: &'a str,
+    pub idempotency_key: &'a str,
+    pub node_id: &'a str,
+    pub created_at: &'a str,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityRecord {
     pub workspace_id: String,
@@ -359,16 +369,108 @@ impl PmsDatabase {
         rows.collect()
     }
 
+    /// Local entity deletion: tombstone, Outbox and P2P event commit together.
     pub fn delete_entity_record(
         &self,
-        workspace_id: &str,
-        entity: &str,
-        entity_id: &str,
-    ) -> rusqlite::Result<bool> {
-        let _ = (workspace_id, entity, entity_id);
-        Err(rusqlite::Error::InvalidParameterName(
-            "physical entity deletion is disabled: use a versioned tombstone and durable Outbox mutation".into(),
-        ))
+        mutation: LocalEntityDelete<'_>,
+    ) -> Result<bool, String> {
+        let LocalEntityDelete {
+            workspace_id,
+            entity,
+            entity_id,
+            idempotency_key,
+            node_id,
+            created_at,
+        } = mutation;
+        if workspace_id.trim().is_empty()
+            || entity.trim().is_empty()
+            || entity_id.trim().is_empty()
+            || idempotency_key.trim().is_empty()
+            || node_id.trim().is_empty()
+            || created_at.trim().is_empty()
+        {
+            return Err("workspace, entity identity, idempotency key, node ID and timestamp are required".into());
+        }
+        let tx = self.connection.unchecked_transaction().map_err(|e| e.to_string())?;
+        let workspace_exists: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=?1)",
+            params![workspace_id],
+            |row| row.get(0),
+        ).map_err(|e| e.to_string())?;
+        if !workspace_exists {
+            return Err("workspace does not exist".into());
+        }
+        if super::check_idempotency(
+            &tx,
+            idempotency_key,
+            workspace_id,
+            entity,
+            entity_id,
+            "delete",
+            None,
+        )? {
+            tx.commit().map_err(|e| e.to_string())?;
+            return Ok(true);
+        }
+
+        let current_version: Option<i64> = tx.query_row(
+            "SELECT version FROM entity_records
+             WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+            params![workspace_id, entity, entity_id],
+            |row| row.get(0),
+        ).optional().map_err(|e| e.to_string())?;
+        let tombstone: Option<(i64, i64)> = tx.query_row(
+            "SELECT version, server_version FROM tombstones
+             WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+            params![workspace_id, entity, entity_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).optional().map_err(|e| e.to_string())?;
+        let Some(current_version) = current_version else {
+            tx.commit().map_err(|e| e.to_string())?;
+            return Ok(false);
+        };
+        let version = current_version.max(tombstone.map(|value| value.0).unwrap_or(0)) + 1;
+        let base_server_version = tombstone.map(|value| value.1).unwrap_or(0);
+
+        tx.execute(
+            "DELETE FROM entity_records WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+            params![workspace_id, entity, entity_id],
+        ).map_err(|e| e.to_string())?;
+        tx.execute(
+            "INSERT INTO tombstones(workspace_id,entity,entity_id,version,server_version)
+             VALUES (?1,?2,?3,?4,?5)
+             ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
+               version=excluded.version, server_version=excluded.server_version,
+               deleted_at=CURRENT_TIMESTAMP",
+            params![workspace_id, entity, entity_id, version, base_server_version],
+        ).map_err(|e| e.to_string())?;
+        tx.execute(
+            "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,base_server_version,payload)
+             VALUES (?1,?2,?3,?4,?5,'delete',?6,?7,NULL)",
+            params![
+                uuid::Uuid::new_v4().to_string(),
+                idempotency_key,
+                workspace_id,
+                entity,
+                entity_id,
+                version,
+                base_server_version
+            ],
+        ).map_err(|e| e.to_string())?;
+        super::database_p2p::create_local_event_in_transaction(
+            &tx,
+            super::NewP2pEvent {
+                workspace_id,
+                node_id,
+                entity,
+                entity_id,
+                operation: crate::p2p::P2pOperation::Delete,
+                payload: None,
+                created_at,
+            },
+        )?;
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(true)
     }
 }
 
