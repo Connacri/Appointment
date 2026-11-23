@@ -1223,7 +1223,23 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(version, 5);
+        let p2p_events_exists: bool = db
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='p2p_events')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let p2p_clock_exists: bool = db
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='p2p_clock')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, 6);
         assert!(outbox_sql.contains("'conflict'"));
         assert!(
             entity_records_exists,
@@ -1233,6 +1249,8 @@ mod tests {
             entity_page_index_exists,
             "v5 must create the workspace-scoped keyset index"
         );
+        assert!(p2p_events_exists, "v6 must create the durable P2P event log");
+        assert!(p2p_clock_exists, "v6 must create the persisted vector clock");
     }
 
     #[test]
