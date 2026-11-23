@@ -369,7 +369,7 @@ impl PmsDatabase {
         Ok(owner.as_deref() == Some(owner_user_id))
     }
 
-    pub fn upsert_booking(
+    pub fn upsert_booking_outbox_only(
         &mut self,
         workspace_id: &str,
         booking: &Booking,
@@ -440,7 +440,7 @@ impl PmsDatabase {
         tx.commit().map_err(|e| e.to_string())
     }
 
-    pub fn delete_booking(
+    pub fn delete_booking_outbox_only(
         &mut self,
         workspace_id: &str,
         booking_id: &str,
@@ -496,7 +496,7 @@ impl PmsDatabase {
 
     /// Persist a local booking mutation, Supabase Outbox row and P2P event atomically.
     /// Production P2P callers must use this method instead of the Outbox-only API.
-    pub fn upsert_booking_with_p2p(
+    pub fn upsert_booking(
         &mut self,
         workspace_id: &str,
         booking: &Booking,
@@ -575,7 +575,7 @@ impl PmsDatabase {
     }
 
     /// Persist a booking tombstone, Supabase Outbox row and P2P delete event atomically.
-    pub fn delete_booking_with_p2p(
+    pub fn delete_booking(
         &mut self,
         workspace_id: &str,
         booking_id: &str,
@@ -1200,7 +1200,7 @@ mod tests {
     #[test]
     fn booking_and_outbox_commit_atomically() {
         let mut db = database();
-        db.upsert_booking("w-1", &booking("b-1"), "idem-1").unwrap();
+        db.upsert_booking_outbox_only("w-1", &booking("b-1"), "idem-1").unwrap();
         assert!(db.get_booking("w-1", "b-1").unwrap().is_some());
         assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 1);
     }
@@ -1208,7 +1208,7 @@ mod tests {
     #[test]
     fn local_booking_mutation_outbox_and_p2p_event_commit_together() {
         let mut db = database();
-        db.upsert_booking_with_p2p(
+        db.upsert_booking(
             "w-1",
             &booking("b-p2p"),
             "idem-p2p-create",
@@ -1227,7 +1227,7 @@ mod tests {
         assert_eq!(events[0].event.operation, crate::p2p::P2pOperation::Upsert);
 
         assert!(db
-            .delete_booking_with_p2p(
+            .delete_booking(
                 "w-1",
                 "b-p2p",
                 "idem-p2p-delete",
@@ -1254,7 +1254,7 @@ mod tests {
             )
             .unwrap();
 
-        let result = db.upsert_booking_with_p2p(
+        let result = db.upsert_booking(
             "w-1",
             &booking("b-rollback"),
             "idem-rollback",
@@ -1277,7 +1277,7 @@ mod tests {
                 .ensure_workspace("w-disk", "u-disk", "Disk workspace")
                 .unwrap();
             local
-                .upsert_booking("w-disk", &booking("b-disk"), "idem-disk")
+                .upsert_booking_outbox_only("w-disk", &booking("b-disk"), "idem-disk")
                 .unwrap();
             local
                 .upsert_entity_record(
@@ -1333,7 +1333,7 @@ mod tests {
             },
         ]);
 
-        db.upsert_booking("w-1", &item, "idem-family").unwrap();
+        db.upsert_booking_outbox_only("w-1", &item, "idem-family").unwrap();
         let restored = db.get_booking("w-1", "b-family").unwrap().unwrap();
         assert_eq!(restored.adults, Some(2));
         assert_eq!(restored.occupants_list.as_ref().unwrap().len(), 2);
@@ -1351,7 +1351,7 @@ mod tests {
     #[test]
     fn workspace_queries_never_leak_rows() {
         let mut db = database();
-        db.upsert_booking("w-1", &booking("b-1"), "idem-1").unwrap();
+        db.upsert_booking_outbox_only("w-1", &booking("b-1"), "idem-1").unwrap();
         assert!(db.get_booking("w-2", "b-1").unwrap().is_none());
         assert!(db.list_bookings("w-2", 0, 20).unwrap().is_empty());
         assert!(db.pending_outbox("w-2", 20).unwrap().is_empty());
@@ -1360,8 +1360,8 @@ mod tests {
     #[test]
     fn delete_writes_tombstone_and_outbox_atomically() {
         let mut db = database();
-        db.upsert_booking("w-1", &booking("b-1"), "idem-1").unwrap();
-        assert!(db.delete_booking("w-1", "b-1", "idem-2").unwrap());
+        db.upsert_booking_outbox_only("w-1", &booking("b-1"), "idem-1").unwrap();
+        assert!(db.delete_booking_outbox_only("w-1", "b-1", "idem-2").unwrap());
         assert!(db.get_booking("w-1", "b-1").unwrap().is_none());
         assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 2);
         let count: i64 = db
@@ -1379,18 +1379,18 @@ mod tests {
     fn idempotent_retry_does_not_duplicate_outbox() {
         let mut db = database();
         let item = booking("b-1");
-        db.upsert_booking("w-1", &item, "same-key").unwrap();
-        db.upsert_booking("w-1", &item, "same-key").unwrap();
+        db.upsert_booking_outbox_only("w-1", &item, "same-key").unwrap();
+        db.upsert_booking_outbox_only("w-1", &item, "same-key").unwrap();
         assert_eq!(db.pending_outbox("w-1", 10).unwrap().len(), 1);
         assert!(db
-            .upsert_booking("w-1", &booking("b-2"), "same-key")
+            .upsert_booking_outbox_only("w-1", &booking("b-2"), "same-key")
             .is_err());
     }
 
     #[test]
     fn outbox_retry_state_is_workspace_scoped_and_late_ack_is_accepted() {
         let mut db = database();
-        db.upsert_booking("w-1", &booking("b-1"), "idem-1").unwrap();
+        db.upsert_booking_outbox_only("w-1", &booking("b-1"), "idem-1").unwrap();
         let entry = db.pending_outbox("w-1", 1).unwrap().remove(0);
         assert!(!db.mark_outbox_synced("w-2", &entry.id).unwrap());
         assert!(db
@@ -1403,7 +1403,7 @@ mod tests {
     #[test]
     fn failed_outbox_entries_become_due_again_after_backoff() {
         let mut db = database();
-        db.upsert_booking("w-1", &booking("b-retry"), "idem-retry")
+        db.upsert_booking_outbox_only("w-1", &booking("b-retry"), "idem-retry")
             .unwrap();
         let entry = db.pending_outbox("w-1", 1).unwrap().remove(0);
         assert!(db
@@ -1431,9 +1431,9 @@ mod tests {
     #[test]
     fn outbox_order_preserves_mutation_order_even_with_same_second_timestamps() {
         let mut db = database();
-        db.upsert_booking("w-1", &booking("b-ordered"), "idem-upsert")
+        db.upsert_booking_outbox_only("w-1", &booking("b-ordered"), "idem-upsert")
             .unwrap();
-        db.delete_booking("w-1", "b-ordered", "idem-delete")
+        db.delete_booking_outbox_only("w-1", "b-ordered", "idem-delete")
             .unwrap();
 
         let entries = db.pending_outbox("w-1", 10).unwrap();
@@ -1445,9 +1445,9 @@ mod tests {
     #[test]
     fn outbox_stats_are_isolated_by_workspace_and_status() {
         let mut db = database();
-        db.upsert_booking("w-1", &booking("b-pending"), "idem-pending")
+        db.upsert_booking_outbox_only("w-1", &booking("b-pending"), "idem-pending")
             .unwrap();
-        db.upsert_booking("w-2", &booking("b-synced"), "idem-synced")
+        db.upsert_booking_outbox_only("w-2", &booking("b-synced"), "idem-synced")
             .unwrap();
 
         let pending_w2 = db.pending_outbox("w-2", 1).unwrap().remove(0);
@@ -1477,9 +1477,9 @@ mod tests {
     fn server_ack_rebases_later_offline_mutations() {
         let mut db = database();
         let mut first = booking("b-ack");
-        db.upsert_booking("w-1", &first, "idem-first").unwrap();
+        db.upsert_booking_outbox_only("w-1", &first, "idem-first").unwrap();
         first.guest_name = "Updated Guest".into();
-        db.upsert_booking("w-1", &first, "idem-second").unwrap();
+        db.upsert_booking_outbox_only("w-1", &first, "idem-second").unwrap();
 
         let entries = db.pending_outbox("w-1", 10).unwrap();
         assert_eq!(entries.len(), 2);
@@ -1506,7 +1506,7 @@ mod tests {
     #[test]
     fn conflicts_are_terminal_until_explicit_resolution() {
         let mut db = database();
-        db.upsert_booking("w-1", &booking("b-conflict"), "idem-conflict")
+        db.upsert_booking_outbox_only("w-1", &booking("b-conflict"), "idem-conflict")
             .unwrap();
         let entry = db.pending_outbox("w-1", 1).unwrap().remove(0);
         assert!(db
@@ -1692,14 +1692,14 @@ mod tests {
     #[test]
     fn delete_outbox_carries_the_last_acknowledged_server_version() {
         let mut db = database();
-        db.upsert_booking("w-1", &booking("b-server-version"), "idem-create")
+        db.upsert_booking_outbox_only("w-1", &booking("b-server-version"), "idem-create")
             .unwrap();
         let created = db.pending_outbox("w-1", 1).unwrap().remove(0);
         assert_eq!(created.base_server_version, 0);
         assert!(db.acknowledge_outbox("w-1", &created.id, 12).unwrap());
 
         assert!(db
-            .delete_booking("w-1", "b-server-version", "idem-delete")
+            .delete_booking_outbox_only("w-1", "b-server-version", "idem-delete")
             .unwrap());
         let deleted = db.pending_outbox("w-1", 1).unwrap().remove(0);
         assert_eq!(deleted.operation, "delete");
@@ -1768,7 +1768,7 @@ mod tests {
         let mut db = database();
         let mut local = booking("b-pending-remote");
         local.guest_name = "Local Pending".into();
-        db.upsert_booking("w-1", &local, "idem-local-pending")
+        db.upsert_booking_outbox_only("w-1", &local, "idem-local-pending")
             .unwrap();
 
         let mut remote = booking("b-pending-remote");
@@ -1842,7 +1842,7 @@ mod tests {
     fn remote_delete_is_not_allowed_to_override_pending_local_update() {
         let mut db = database();
         let local = booking("b-delete-pending");
-        db.upsert_booking("w-1", &local, "idem-pending-delete")
+        db.upsert_booking_outbox_only("w-1", &local, "idem-pending-delete")
             .unwrap();
         assert_eq!(
             db.apply_remote_booking("w-1", &local, 99, Some("2026-11-22T13:00:00+00:00"))
@@ -1856,9 +1856,9 @@ mod tests {
     fn recreation_keeps_version_monotonic_after_tombstone() {
         let mut db = database();
         let item = booking("b-1");
-        db.upsert_booking("w-1", &item, "idem-1").unwrap();
-        db.delete_booking("w-1", "b-1", "idem-2").unwrap();
-        db.upsert_booking("w-1", &item, "idem-3").unwrap();
+        db.upsert_booking_outbox_only("w-1", &item, "idem-1").unwrap();
+        db.delete_booking_outbox_only("w-1", "b-1", "idem-2").unwrap();
+        db.upsert_booking_outbox_only("w-1", &item, "idem-3").unwrap();
         let version: i64 = db
             .connection
             .query_row(
