@@ -1201,28 +1201,85 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => { cancelled = true; };
   }, []);
 
-  // IndexedDB is the authoritative store. No full booking/resource snapshots are
-  // written to localStorage, avoiding quota exhaustion and stale dual-write state.
+  // Reconcile UI snapshots through strict, versioned Outbox + P2P mutations.
+  // Absence from a React snapshot never implies deletion, and rows from another
+  // workspace are never copied into the currently selected workspace.
   useEffect(() => {
-    if (!isCoreDataHydrated) return;
-    void indexedDb.replaceAll('bookings', bookings).catch((error) => {
-      console.error('[AppContext] Failed to persist bookings to IndexedDB:', error);
+    if (!isCoreDataHydrated || !workspace.activeWorkspaceId) return;
+    const realBookings = bookings.filter((booking) =>
+      !DEMO_BOOKING_IDS.has(booking.id) && !DEMO_RESOURCE_IDS.has(booking.resourceId)
+    );
+    void indexedDb.reconcileSnapshotWithOutbox(
+      'bookings',
+      realBookings,
+      'booking',
+      (booking) => {
+        const resource = latestGroupsRef.current
+          .flatMap((group) => group.resources)
+          .find((item) => item.id === booking.resourceId);
+        return {
+          workspaceId: workspace.activeWorkspaceId,
+          establishmentId: booking.establishmentId
+            ?? resource?.establishmentId
+            ?? (selectedEstablishmentId !== 'all'
+              ? selectedEstablishmentId
+              : stableEstablishmentId(establishmentProfile)),
+        };
+      },
+      DEMO_BOOKING_IDS,
+    ).catch((error) => {
+      console.error('[AppContext] Booking snapshot reconciliation failed; existing rows were preserved:', error);
     });
-  }, [bookings, isCoreDataHydrated]);
+  }, [
+    bookings,
+    isCoreDataHydrated,
+    workspace.activeWorkspaceId,
+    selectedEstablishmentId,
+    establishmentProfile,
+  ]);
 
   useEffect(() => {
-    if (!isCoreDataHydrated) return;
-    const groupMetadata = resourceGroups.map((group) => ({ ...group, resources: [] as ResourceItem[] }));
+    if (!isCoreDataHydrated || !workspace.activeWorkspaceId) return;
+    const groupMetadata = resourceGroups
+      .filter((group) => !DEMO_GROUP_IDS.has(group.id))
+      .map((group) => ({ ...group, resources: [] as ResourceItem[] }));
     const resources = resourceGroups.flatMap((group) =>
-      group.resources.map((resource) => ({ ...resource, groupId: group.id }))
+      group.resources
+        .filter((resource) => !DEMO_RESOURCE_IDS.has(resource.id))
+        .map((resource) => ({ ...resource, groupId: group.id }))
     );
-    void Promise.all([
-      indexedDb.replaceStore('resourceGroups', groupMetadata),
-      indexedDb.replaceAll('resources', resources),
-    ]).catch((error) => {
-      console.error('[AppContext] Failed to persist resource groups/resources to IndexedDB:', error);
+    const contextForEstablishment = (establishmentId?: string) => ({
+      workspaceId: workspace.activeWorkspaceId,
+      establishmentId: establishmentId
+        ?? (selectedEstablishmentId !== 'all'
+          ? selectedEstablishmentId
+          : stableEstablishmentId(establishmentProfile)),
     });
-  }, [resourceGroups, isCoreDataHydrated]);
+    void Promise.all([
+      indexedDb.reconcileSnapshotWithOutbox(
+        'resourceGroups',
+        groupMetadata,
+        'resource_group',
+        (group) => contextForEstablishment(group.establishmentId),
+        DEMO_GROUP_IDS,
+      ),
+      indexedDb.reconcileSnapshotWithOutbox(
+        'resources',
+        resources,
+        'resource',
+        (resource) => contextForEstablishment(resource.establishmentId),
+        DEMO_RESOURCE_IDS,
+      ),
+    ]).catch((error) => {
+      console.error('[AppContext] Resource/group snapshot reconciliation failed; existing rows were preserved:', error);
+    });
+  }, [
+    resourceGroups,
+    isCoreDataHydrated,
+    workspace.activeWorkspaceId,
+    selectedEstablishmentId,
+    establishmentProfile,
+  ]);
 
   const latestBookingsRef = useRef(bookings);
   const latestGroupsRef = useRef(resourceGroups);
