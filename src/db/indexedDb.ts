@@ -676,7 +676,7 @@ class IndexedDbStore {
         const nextNodeId = supportsNativeLanDiscovery()
           ? await resetNativeLanNodeIdentity()
           : this.createId();
-        const tx = this.idb.transaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'issuedCards', 'resourceGroups', 'eventLogs', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pPeerCursors', 'p2pRecordFrontiers'], 'readwrite');
+        const tx = this.createStrictTransaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'issuedCards', 'resourceGroups', 'eventLogs', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pPeerCursors', 'p2pRecordFrontiers']);
         tx.objectStore('bookings').clear();
         tx.objectStore('invoices').clear();
         tx.objectStore('resources').clear();
@@ -752,10 +752,9 @@ class IndexedDbStore {
 
     await this.openStore();
     if (!this.idb) throw new Error('P2P replication requires IndexedDB; localStorage fallback is unsafe.');
-    const tx = this.idb.transaction(
+    const tx = this.createStrictTransaction(
       ['p2pEvents', 'p2pClock', 'p2pPeerCursors', 'p2pRecordFrontiers', 'outbox',
         'tombstones', 'workspaceEntities', 'bookings', 'resources', 'invoices', 'resourceGroups'],
-      'readwrite',
     );
     const report: P2pApplyReport = {
       appendedEvents: 0,
@@ -1015,6 +1014,21 @@ class IndexedDbStore {
     }
   }
 
+  /**
+   * Use strict durability for every business/Outbox/P2P write transaction.
+   * Fail closed instead of silently falling back to relaxed durability.
+   */
+  private createStrictTransaction(storeNames: string[]): IDBTransaction {
+    if (!this.idb) throw new Error('Strict durable transaction requires IndexedDB.');
+    try {
+      return this.idb.transaction(storeNames, 'readwrite', { durability: 'strict' });
+    } catch (error) {
+      throw new Error(
+        `Strict IndexedDB durability is unavailable; refusing a replication write: ${String(error)}`,
+      );
+    }
+  }
+
   /** Stable per-installation node identity shared with Android multicast discovery. */
   public async getP2pNodeId(): Promise<string> {
     await this.openStore();
@@ -1022,7 +1036,7 @@ class IndexedDbStore {
     const candidate = supportsNativeLanDiscovery()
       ? await getNativeLanNodeIdentity()
       : this.createId();
-    const tx = this.idb.transaction('p2pMeta', 'readwrite');
+    const tx = this.createStrictTransaction(['p2pMeta']);
     let resolvedNodeId: string | undefined;
     const request = tx.objectStore('p2pMeta').get('nodeId');
     request.onsuccess = () => {
@@ -1159,7 +1173,7 @@ class IndexedDbStore {
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
     await this.getP2pNodeId();
-    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'], 'readwrite');
+    const tx = this.createStrictTransaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers']);
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const tombstones = tx.objectStore('tombstones');
@@ -1364,9 +1378,8 @@ class IndexedDbStore {
         throw new Error('Idempotency key collision: existing Outbox intent does not match this mutation.');
       }
       await this.getP2pNodeId();
-      const existingTx = this.idb.transaction(
+      const existingTx = this.createStrictTransaction(
         ['workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'],
-        'readwrite',
       );
       const currentRequest = existingTx.objectStore('workspaceEntities')
         .get([context.workspaceId, entity, entityId]);
@@ -1384,7 +1397,7 @@ class IndexedDbStore {
 
     const now = new Date().toISOString();
     await this.getP2pNodeId();
-    const tx = this.idb.transaction(['outbox', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'], 'readwrite');
+    const tx = this.createStrictTransaction(['outbox', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers']);
     const outbox = tx.objectStore('outbox');
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const entityRecord = {
@@ -1508,10 +1521,9 @@ class IndexedDbStore {
   public async markOutboxSynced(id: string): Promise<void> {
     await this.openStore();
     if (!this.idb) throw new Error('Outbox is unavailable without IndexedDB.');
-    const tx = this.idb.transaction(
+    const tx = this.createStrictTransaction(
       ['outbox', 'tombstones', 'p2pEvents', 'p2pRecordFrontiers', 'workspaceEntities',
         'bookings', 'resources', 'invoices', 'resourceGroups'],
-      'readwrite',
     );
     const outbox = tx.objectStore('outbox');
     const request = outbox.get(id);
