@@ -81,7 +81,7 @@ public final class LanDiscoveryPlugin extends Plugin {
         try {
             nodeId = getOrCreateNodeId();
             String missingAlias = requiredPermissionAlias();
-            if (missingAlias != null && !hasPermission(missingAlias)) {
+            if (missingAlias != null && !hasLanPermission(missingAlias)) {
                 if (!isPermissionDeclared(missingAlias)) {
                     throw new IllegalStateException(
                         "Le manifeste Android doit déclarer l'autorisation LAN requise pour le target SDK actuel."
@@ -107,7 +107,7 @@ public final class LanDiscoveryPlugin extends Plugin {
             return;
         }
         String alias = requiredPermissionAlias();
-        if (alias != null && !hasPermission(alias)) {
+        if (alias != null && !hasLanPermission(alias)) {
             discoveryRequested = false;
             permissionGranted = false;
             call.reject("L'autorisation Android d'accès au réseau local est nécessaire à la découverte des appareils Appointment.");
@@ -127,7 +127,7 @@ public final class LanDiscoveryPlugin extends Plugin {
             call.resolve(result);
         } catch (Exception error) {
             if (Build.VERSION.SDK_INT == 36
-                && !hasPermission("nearbyDevices")
+                && !hasLanPermission("nearbyDevices")
                 && isLocalNetworkPermissionError(error)) {
                 permissionGranted = false;
                 requestPermissionForAlias("nearbyDevices", call, "nearbyDevicesCompatCallback");
@@ -145,7 +145,7 @@ public final class LanDiscoveryPlugin extends Plugin {
             call.reject("La découverte LAN a été annulée.");
             return;
         }
-        if (!hasPermission("nearbyDevices")) {
+        if (!hasLanPermission("nearbyDevices")) {
             discoveryRequested = false;
             permissionGranted = false;
             call.reject("Autorisez Appareils à proximité pour rétablir l'accès LAN sur Android 16 en mode de compatibilité.");
@@ -178,7 +178,7 @@ public final class LanDiscoveryPlugin extends Plugin {
             return;
         }
         discoveryRequested = true;
-        if (hasPermission("nearbyDevices")) {
+        if (hasLanPermission("nearbyDevices")) {
             permissionGranted = true;
             startForCall(call);
             return;
@@ -195,7 +195,7 @@ public final class LanDiscoveryPlugin extends Plugin {
         call.resolve();
     }
 
-    private String getOrCreateNodeId() throws Exception {
+    private synchronized String getOrCreateNodeId() throws Exception {
         // noBackupFilesDir prevents Android Auto Backup from cloning one node ID
         // onto multiple installations during device migration or restore.
         File identityFile = new File(getContext().getNoBackupFilesDir(), "p2p-node-id");
@@ -241,7 +241,7 @@ public final class LanDiscoveryPlugin extends Plugin {
         return null;
     }
 
-    private boolean hasPermission(String alias) {
+    private boolean hasLanPermission(String alias) {
         final String permission = "localNetwork".equals(alias)
             ? "android.permission.ACCESS_LOCAL_NETWORK"
             : Manifest.permission.NEARBY_WIFI_DEVICES;
