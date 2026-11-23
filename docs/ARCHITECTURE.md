@@ -86,68 +86,58 @@ Production artifacts are built **only** in GitHub Actions. Local release builds 
 ## 6. Distributed LAN mode (P2P, protocol v1 foundation)
 
 Appointment's distributed mode is peer-to-peer: each installation owns its local
-IndexedDB (Web) or SQLite (native Windows) database. No peer is authoritative and
-there is no permanent or elected coordinator. Replication is an immutable event-set
-exchange, not database-file sharing.
+IndexedDB (Web/Android) or SQLite (native Windows) database. No peer is authoritative
+and there is no permanent or elected coordinator. Replication exchanges immutable
+events; it never shares database files.
 
 - The transport-neutral event contract is implemented in
-  `src/services/p2p/protocol.ts` and `windows-native/src/p2p.rs`.
-- Native Windows SQLite now has a workspace-scoped append-only `p2p_events`
-  log and a persisted merged `p2p_clock` (schema migration v6). Local event
-  creation advances the workspace vector clock transactionally; exact replay is
-  idempotent and event-ID equivocation is rejected. The log is not yet atomically
-  coupled to booking/entity mutations, and Android IndexedDB persistence is pending.
-- Each event has a stable node/sequence identity, workspace scope, entity identity,
-  operation, payload and causal vector clock.
-- Replicas merge by set union. Replayed events are idempotent; reuse of an event ID
-  with different content is treated as node equivocation.
-- Causally superseded events leave the materialized frontier. Concurrent events
-  remain explicit conflicts. There is deliberately no generic last-write-wins rule:
-  booking, inventory and financial conflicts require domain-specific handling.
-- Local IndexedDB/SQLite remain authoritative for immediate local reads and writes.
-  The event log and materialized projections must be committed atomically by each
-  storage adapter before a mutation is advertised to peers.
-- The shared wire contract is specified in `docs/P2P_DISCOVERY_PROTOCOL.md`.
-  LAN peer discovery is implemented on both supported native endpoints:
-  Windows Rust (windows-native/src/p2p_discovery.rs) and the Android APK
-  Capacitor plugin (android/app/src/main/java/com/planning/oran/LanDiscoveryPlugin.java).
-  Both use IPv4 multicast 239.255.42.99:45871, protocol version 1 and the same
-  bounded JSON announcement {protocolVersion, peerId}. Announcements repeat
-  every 3 seconds; peers expire after 12 seconds without a heartbeat. Installation
-  UUIDs are persisted locally (Windows under the user's Appointment AppData folder,
-  Android in app-private noBackupFilesDir storage, excluded from Android Auto Backup).
-- Discovery is link-local by design: TTL 1 prevents router traversal. Both
-  devices must be on the same IPv4 multicast-capable LAN segment; guest Wi-Fi
-  client isolation, VLAN separation, multicast filtering or host firewalls can
-  block discovery and must be addressed by the network administrator.
-- Discovery publishes no workspace ID, account, credential, business data or
-  listening port. A found address is an untrusted candidate only: it does not
-  establish pairing, membership, authorization, encryption or a data connection.
-  Windows displays the discovered-peer count. Android emits native Capacitor
-  peerFound, peerExpired and discoveryError events; discovery pauses while
-  the Android Activity is backgrounded to avoid a persistent battery/network worker.
-- Android discovery requires local-network permission on OS versions that enforce it:
-  Android 16 compatibility mode requests Nearby devices only after the OS denies
-  multicast. ACCESS_LOCAL_NETWORK is requested only when the app targets SDK 37+.
-  The plugin also acquires
-  and releases the Wi-Fi multicast lock only while discovery is active.
-- Browser-only web deployments cannot open arbitrary UDP sockets and are not
-  discoverable directly. They need a native companion or a separate browser-compatible
-  peer signaling path. A native companion is a transport bridge, never a database
-  server or coordinator.
-- LAN discovery is now implemented, but authenticated peer transport, encrypted
-  pairing, durable event-log persistence atomic with local business writes,
-  anti-entropy/replay protection, workspace authorization, domain conflict workflows
-  and browser companion integration are not yet complete. Do not label P2P data
-  synchronization operational until those gates are verified.
-- Offline multi-writer operation cannot guarantee globally exclusive room
-  reservations during a network partition. Concurrent overlapping reservations
-  must be surfaced as conflicts for explicit business resolution; the product
-  must not report them as globally conflict-free.
+  `src/services/p2p/protocol.ts` and `windows-native/src/p2p.rs`. Events have a
+  stable node/sequence identity, workspace and entity scope, operation, payload and
+  causal vector clock. Exact replays are idempotent; event-ID equivocation is rejected.
+- Native SQLite schema v7 persists the append-only workspace event log, merged vector
+  clock, peer cursors and per-record causal frontiers. The canonical local booking
+  upsert/delete and entity-upsert APIs commit the business projection, tombstone where
+  applicable, Supabase Outbox, P2P event, vector-clock advancement and local frontier
+  in one SQLite transaction. Fault-injection tests verify rollback when event append
+  fails. The explicitly named Outbox-only compatibility APIs are not safe entry points
+  for new replicated business mutations.
+- IndexedDB schema v8 persists the shared node identity, P2P event log, vector clocks,
+  peer cursors and record frontiers. Local Outbox-backed mutations commit the business
+  projection, Outbox intent, event and causal frontier in one IndexedDB transaction.
+  Inbound pages append events, merge clocks, apply resolved projections, retain
+  concurrent conflicts and advance the peer cursor in one transaction. A verified
+  Outbox ACK re-evaluates blocked frontiers transactionally.
+- Native inbound batches use one SQLite transaction for event append, causal-frontier
+  calculation, projection application, conflict persistence and peer-cursor advancement.
+  Pending local Outbox writes block remote overwrite. A projection failure rolls back
+  the received events and cursor. Remote application uses a separate path and must not
+  generate a new local event.
+- Causally superseded events leave the materialized frontier. Concurrent events remain
+  explicit conflicts; no generic last-write-wins rule is allowed for bookings,
+  inventory or financial records. Tombstones are retained; safe compaction requires
+  peer-wide checkpoints and is not yet enabled.
+- LAN discovery is implemented on Windows Rust
+  (`windows-native/src/p2p_discovery.rs`) and Android
+  (`android/app/src/main/java/com/planning/oran/LanDiscoveryPlugin.java`). Both use
+  IPv4 multicast 239.255.42.99:45871, protocol version 1 and the bounded JSON
+  announcement {protocolVersion, peerId}. Discovery shares only a persisted
+  installation UUID, not workspace IDs, user identities, credentials or business data.
+  It provides presence only: a discovered address is untrusted and is not a connection.
+- Browser-only deployments cannot open arbitrary UDP sockets. They require a native
+  companion or a separate browser-compatible signaling/transport path; a companion
+  must never become a database server or coordinator.
+- **Production gate remains closed.** Native business workflows are not yet fully wired
+  to the canonical atomic APIs, and discovery does not implement authenticated event
+  transport. Encrypted peer pairing, workspace/user authorization, replay-safe transport,
+  anti-entropy/checkpointing, bounded tombstone retention, user-facing domain conflict
+  resolution, cross-platform crash/power-loss testing and restore drills remain release
+  gates. No UI may report P2P synchronization as operational until these gates pass.
+- With no coordinator or quorum, independent peers can accept conflicting operations
+  while partitioned. Appointment cannot guarantee globally exclusive room allocation
+  or globally serializable financial postings during a LAN partition; such conflicts
+  must be detected after reconnection and resolved explicitly.
 
-The event protocol is covered by `tests/p2pProtocol.test.ts` and Rust unit tests;
-the cross-platform discovery envelope is covered by Rust unit tests and the Android
-native build gate. Authenticated peer transport, encrypted pairing, durable event
-persistence, anti-entropy, domain-specific conflict workflows and browser companion
-integration remain implementation gates. Do not label P2P data synchronization
-operational until those gates are implemented and verified.
+The event protocol, native persistence and Android discovery are covered by automated
+unit/build gates. These gates do not prove authenticated transport or production
+convergence. Do not enable business replication until every release gate above is
+implemented and verified.
