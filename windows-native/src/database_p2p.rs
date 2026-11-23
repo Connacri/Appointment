@@ -286,7 +286,10 @@ pub(super) fn create_local_event_in_transaction(
         )
         .optional()
         .map_err(|e| e.to_string())?;
-    if matches!(existing_frontier.as_deref(), Some("conflict" | "blocked_pending_local")) {
+    if matches!(
+        existing_frontier.as_deref(),
+        Some("conflict" | "blocked_pending_local")
+    ) {
         return Err(
             "P2P record has an unresolved conflict or pending-local frontier; explicit reconciliation is required before another local mutation"
                 .into(),
@@ -339,8 +342,8 @@ pub(super) fn create_local_event_in_transaction(
     validate_event_size(&event)?;
     event.validate().map_err(str::to_string)?;
     insert_event(tx, &event)?;
-    let frontier_json = serde_json::to_string(std::slice::from_ref(&event))
-        .map_err(|e| e.to_string())?;
+    let frontier_json =
+        serde_json::to_string(std::slice::from_ref(&event)).map_err(|e| e.to_string())?;
     tx.execute(
         "INSERT INTO p2p_record_frontiers(
            workspace_id,entity,entity_id,status,frontier_json,applied_event_id
@@ -348,7 +351,13 @@ pub(super) fn create_local_event_in_transaction(
          ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
            status='resolved', frontier_json=excluded.frontier_json,
            applied_event_id=excluded.applied_event_id, updated_at=CURRENT_TIMESTAMP",
-        params![workspace_id, entity, entity_id, frontier_json, event.event_id],
+        params![
+            workspace_id,
+            entity,
+            entity_id,
+            frontier_json,
+            event.event_id
+        ],
     )
     .map_err(|e| format!("Could not persist local P2P record frontier: {e}"))?;
     Ok(event)
