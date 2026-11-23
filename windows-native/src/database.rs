@@ -1249,8 +1249,14 @@ mod tests {
             entity_page_index_exists,
             "v5 must create the workspace-scoped keyset index"
         );
-        assert!(p2p_events_exists, "v6 must create the durable P2P event log");
-        assert!(p2p_clock_exists, "v6 must create the persisted vector clock");
+        assert!(
+            p2p_events_exists,
+            "v6 must create the durable P2P event log"
+        );
+        assert!(
+            p2p_clock_exists,
+            "v6 must create the persisted vector clock"
+        );
     }
 
     #[test]
