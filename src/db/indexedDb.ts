@@ -766,7 +766,7 @@ class IndexedDbStore {
     if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox writes.');
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
-    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities'], 'readwrite');
+    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta'], 'readwrite');
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const tombstones = tx.objectStore('tombstones');
@@ -794,6 +794,7 @@ class IndexedDbStore {
       store.put(persisted);
       // Keep prior tombstones until the matching delete event receives a server ACK.
       tx.objectStore('outbox').add(this.createOutboxRecord(context, entity, item.id, 'upsert', version, persisted as Record<string, unknown>, now));
+      this.appendLocalP2pEvent(tx, context.workspaceId, entity, item.id, 'upsert', persisted as Record<string, unknown>, now);
     };
     request.onsuccess = () => { current = request.result as { version?: number } | undefined; entityReady = true; commitMutation(); };
     tombstoneRequest.onsuccess = () => { previousTombstone = tombstoneRequest.result as TombstoneRecord | undefined; tombstoneReady = true; commitMutation(); };
@@ -864,7 +865,7 @@ class IndexedDbStore {
       return;
     }
 
-    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities'], 'readwrite');
+    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta'], 'readwrite');
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const tombstones = tx.objectStore('tombstones');
@@ -894,6 +895,7 @@ class IndexedDbStore {
       workspaceEntities.put(entityRecord);
       store.put(persisted);
       tx.objectStore('outbox').add(this.createOutboxRecord(context, entity, item.id, 'upsert', resolvedVersion, persisted as Record<string, unknown>, now, idempotencyKey));
+      this.appendLocalP2pEvent(tx, context.workspaceId, entity, item.id, 'upsert', persisted as Record<string, unknown>, now);
     };
     request.onsuccess = () => { current = request.result as { version?: number } | undefined; entityReady = true; commitMutation(); };
     tombstoneRequest.onsuccess = () => { previousTombstone = tombstoneRequest.result as TombstoneRecord | undefined; tombstoneReady = true; commitMutation(); };
@@ -930,7 +932,7 @@ class IndexedDbStore {
     }
 
     const now = new Date().toISOString();
-    const tx = this.idb.transaction(['outbox', 'workspaceEntities'], 'readwrite');
+    const tx = this.idb.transaction(['outbox', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta'], 'readwrite');
     const outbox = tx.objectStore('outbox');
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const entityRecord = {
@@ -939,6 +941,7 @@ class IndexedDbStore {
     };
     workspaceEntities.put(entityRecord);
     outbox.add(this.createOutboxRecord(context, entity, entityId, operation, version, payload, now, idempotencyKey));
+    this.appendLocalP2pEvent(tx, context.workspaceId, entity, entityId, operation, payload, now);
     await waitForTransactionCompletion(tx, `enqueueOutboxOnly ${entity}/${entityId}`);
     this.emitOutboxChange();
   }
@@ -951,7 +954,7 @@ class IndexedDbStore {
     if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox deletes.');
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
-    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities'], 'readwrite');
+    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta'], 'readwrite');
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const tombstones = tx.objectStore('tombstones');
@@ -973,6 +976,7 @@ class IndexedDbStore {
         entity, entityId, version, deletedAt,
       } satisfies TombstoneRecord);
       tx.objectStore('outbox').add(this.createOutboxRecord(context, entity, entityId, 'delete', version, null, deletedAt));
+      this.appendLocalP2pEvent(tx, context.workspaceId, entity, entityId, 'delete', null, deletedAt);
     };
     request.onsuccess = () => { current = request.result as { version?: number } | undefined; entityReady = true; commitDelete(); };
     tombstoneRequest.onsuccess = () => { previousTombstone = tombstoneRequest.result as TombstoneRecord | undefined; tombstoneReady = true; commitDelete(); };
