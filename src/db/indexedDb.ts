@@ -23,7 +23,11 @@ import {
   type P2pEvent,
   type P2pOperation,
 } from '../services/p2p/protocol';
-import { getNativeLanNodeIdentity, supportsNativeLanDiscovery } from '../services/p2p/LanDiscoveryBridge';
+import {
+  getNativeLanNodeIdentity,
+  resetNativeLanNodeIdentity,
+  supportsNativeLanDiscovery,
+} from '../services/p2p/LanDiscoveryBridge';
 
 export interface IndexedDbQueryOptions<T> {
   where?: (item: T) => boolean;
@@ -666,6 +670,11 @@ class IndexedDbStore {
       await this.openStore();
 
       if (this.idb) {
+        // Rotate the node ID before clearing its event sequence. If the IDB purge
+        // aborts, the old persisted ID remains authoritative and discovery re-adopts it.
+        const nextNodeId = supportsNativeLanDiscovery()
+          ? await resetNativeLanNodeIdentity()
+          : this.createId();
         const tx = this.idb.transaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'issuedCards', 'resourceGroups', 'eventLogs', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pPeerCursors', 'p2pRecordFrontiers'], 'readwrite');
         tx.objectStore('bookings').clear();
         tx.objectStore('invoices').clear();
@@ -679,6 +688,7 @@ class IndexedDbStore {
         tx.objectStore('p2pEvents').clear();
         tx.objectStore('p2pClock').clear();
         tx.objectStore('p2pMeta').clear();
+        tx.objectStore('p2pMeta').put({ key: 'nodeId', value: nextNodeId });
         tx.objectStore('p2pPeerCursors').clear();
         tx.objectStore('p2pRecordFrontiers').clear();
         await waitForTransactionCompletion(tx, 'clear all stores');
