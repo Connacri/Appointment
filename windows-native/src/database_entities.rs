@@ -111,23 +111,40 @@ impl PmsDatabase {
                 "workspace does not exist".into(),
             ));
         }
-        tx.execute(
-            "INSERT INTO entity_records(workspace_id,entity,entity_id,payload,version,updated_at)
-             VALUES (?1,?2,?3,?4,?5,?6)
-             ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
-               payload=excluded.payload,
-               version=excluded.version,
-               updated_at=excluded.updated_at
-             WHERE excluded.version >= entity_records.version",
-            params![
-                workspace_id,
-                entity,
-                entity_id,
-                payload,
-                version,
-                updated_at
-            ],
-        )?;
+        let current: Option<(String, i64)> = tx
+            .query_row(
+                "SELECT payload, version FROM entity_records
+                 WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+                params![workspace_id, entity, entity_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+
+        match current {
+            Some((current_payload, current_version)) if version < current_version => {
+                // Stale replication is ignored; it must never replace newer local data.
+            }
+            Some((current_payload, current_version)) if version == current_version => {
+                if current_payload != payload {
+                    return Err(rusqlite::Error::InvalidParameterName(
+                        "entity version collision: equal version carries different payload; preserve both and resolve conflict".into(),
+                    ));
+                }
+                // Exact replay: idempotent, no write required.
+            }
+            _ => {
+                tx.execute(
+                    "INSERT INTO entity_records(workspace_id,entity,entity_id,payload,version,updated_at)
+                     VALUES (?1,?2,?3,?4,?5,?6)
+                     ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
+                       payload=excluded.payload,
+                       version=excluded.version,
+                       updated_at=excluded.updated_at
+                     WHERE excluded.version > entity_records.version",
+                    params![workspace_id, entity, entity_id, payload, version, updated_at],
+                )?;
+            }
+        }
         tx.commit()
     }
 
@@ -204,11 +221,10 @@ impl PmsDatabase {
         entity: &str,
         entity_id: &str,
     ) -> rusqlite::Result<bool> {
-        let changed = self.connection.execute(
-            "DELETE FROM entity_records WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
-            params![workspace_id, entity, entity_id],
-        )?;
-        Ok(changed == 1)
+        let _ = (workspace_id, entity, entity_id);
+        Err(rusqlite::Error::InvalidParameterName(
+            "physical entity deletion is disabled: use a versioned tombstone and durable Outbox mutation".into(),
+        ))
     }
 }
 
