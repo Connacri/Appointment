@@ -63,7 +63,20 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
   onClose,
   isFirstLaunch = false,
 }) => {
-  const { establishmentProfile, setEstablishmentProfile, language, currency, setCurrency, resourceGroups, setResourceGroups, setBookings, setSelectedEstablishmentId, setHasOnboarded } = useApp();
+  const {
+    establishmentProfile,
+    setEstablishmentProfile,
+    language,
+    currency,
+    setCurrency,
+    resourceGroups,
+    setResourceGroups,
+    setBookings,
+    setSelectedEstablishmentId,
+    setHasOnboarded,
+    workspace,
+    selectedEstablishmentId,
+  } = useApp();
   const isRtl = language === 'ar';
 
   const [activeTab, setActiveTab] = useState<'identity' | 'logo' | 'contact' | 'fiscal' | 'structure' | 'clouds'>('identity');
@@ -185,6 +198,10 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
         building: String(bNo),
         floor: String(fNo),
         wing: roomWing.trim() || undefined,
+        workspaceId: workspace.activeWorkspaceId,
+        establishmentId: selectedEstablishmentId !== 'all'
+          ? selectedEstablishmentId
+          : establishmentProfile?.id,
       };
     }).filter((room) => !existingNumbers.has(room.name));
     if (additions.length === 0) {
@@ -192,7 +209,12 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
       return;
     }
     const nextGroup = {
+      ...existing,
       id: groupId,
+      workspaceId: workspace.activeWorkspaceId,
+      establishmentId: selectedEstablishmentId !== 'all'
+        ? selectedEstablishmentId
+        : existing?.establishmentId ?? establishmentProfile?.id,
       name: { fr: buildingName.trim(), en: buildingName.trim(), ar: buildingName.trim() },
       sector: 'hotel' as const,
       icon: 'Building',
@@ -212,14 +234,32 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
       const snapshot = await lockManager.importMdb(file);
       if (snapshot.buildings.length === 0 && snapshot.counts.rooms === 0) throw new Error('Aucun bâtiment déclaré dans BuildingInfo ni aucune chambre dans RoomInfo. L’inventaire existant a été conservé.');
       const planning = mdbSnapshotToPlanning(snapshot);
+      const importedEstablishmentId = planning.establishmentId ?? (
+        selectedEstablishmentId !== 'all' ? selectedEstablishmentId : establishmentProfile?.id
+      );
+      const importedGroups = planning.resourceGroups.map((group) => ({
+        ...group,
+        workspaceId: workspace.activeWorkspaceId,
+        establishmentId: importedEstablishmentId,
+        resources: group.resources.map((resource) => ({
+          ...resource,
+          workspaceId: workspace.activeWorkspaceId,
+          establishmentId: importedEstablishmentId,
+        })),
+      }));
+      const importedBookings = planning.bookings.map((booking) => ({
+        ...booking,
+        workspaceId: workspace.activeWorkspaceId,
+        establishmentId: importedEstablishmentId,
+      }));
       setResourceGroups((current) => [
         ...current.filter((group) => !group.id.startsWith('mdb-') && !DEMO_RESOURCE_GROUP_IDS.has(group.id)),
-        ...planning.resourceGroups,
+        ...importedGroups,
       ]);
-      setSelectedEstablishmentId(planning.establishmentId ?? 'all');
+      setSelectedEstablishmentId(importedEstablishmentId ?? 'all');
       setBookings((prev) => [
         ...prev.filter((booking) => booking.customMetadata?.source !== 'cardlock_mdb'),
-        ...planning.bookings,
+        ...importedBookings,
       ]);
       const buildingSummary = planning.buildingStats.map((building) => `Bâtiment ${building.no} : ${building.rooms} chambre(s)`).join(' · ');
       const tableSummary = (snapshot.tables ?? []).map((table) => `${table.name}: ${table.rowCount} ligne(s)${table.readable ? '' : ' (illisible)'}`).join(', ');
