@@ -184,12 +184,13 @@ impl PmsDatabase {
             .connection
             .unchecked_transaction()
             .map_err(|e| e.to_string())?;
-        let exists: bool = tx.query_row(
-            "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=?1)",
-            params![workspace_id],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
+        let exists: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=?1)",
+                params![workspace_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
         if !exists {
             return Err("workspace does not exist".into());
         }
@@ -206,12 +207,15 @@ impl PmsDatabase {
             return Ok(());
         }
 
-        let current: Option<(String, i64)> = tx.query_row(
-            "SELECT payload, version FROM entity_records
-             WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
-            params![workspace_id, entity, entity_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ).optional().map_err(|e| e.to_string())?;
+        let current: Option<(String, i64)> = tx
+            .query_row(
+                "SELECT payload, version FROM entity_records
+                 WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+                params![workspace_id, entity, entity_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
         match current {
             Some((_, current_version)) if version < current_version => {
                 return Err(
@@ -221,7 +225,9 @@ impl PmsDatabase {
             }
             Some((current_payload, current_version)) if version == current_version => {
                 if current_payload != payload {
-                    return Err("entity version collision: equal version carries different payload".into());
+                    return Err(
+                        "entity version collision: equal version carries different payload".into(),
+                    );
                 }
                 tx.commit().map_err(|e| e.to_string())?;
                 return Ok(());
@@ -236,7 +242,8 @@ impl PmsDatabase {
                payload=excluded.payload, version=excluded.version, updated_at=excluded.updated_at
              WHERE excluded.version > entity_records.version",
             params![workspace_id, entity, entity_id, payload, version, updated_at],
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
         tx.execute(
             "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,base_server_version,payload)
              VALUES (?1,?2,?3,?4,?5,'upsert',?6,0,?7)",
