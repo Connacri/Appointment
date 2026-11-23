@@ -1117,6 +1117,16 @@ class IndexedDbStore {
         Boolean(item.id?.trim()) && !excludedIds.has(item.id)
       );
       if (chunk.length === 0) continue;
+      const prepared: Array<{
+        item: T;
+        context: OutboxMutationContext;
+        current?: { version?: number; establishmentId?: string; payload?: Record<string, unknown> };
+        tombstone?: TombstoneRecord;
+        frontier?: { status?: string };
+      }> = chunk.map((item) => ({
+        item,
+        context: contextForItem(item),
+      }));
       await this.getP2pNodeId();
       const tx = this.createStrictTransaction([
         storeName,
@@ -1132,18 +1142,6 @@ class IndexedDbStore {
       const workspaceEntities = tx.objectStore('workspaceEntities');
       const tombstones = tx.objectStore('tombstones');
       const frontiers = tx.objectStore('p2pRecordFrontiers');
-      const prepared: Array<{
-        item: T;
-        context: OutboxMutationContext;
-        current?: { version?: number; establishmentId?: string; payload?: Record<string, unknown> };
-        tombstone?: TombstoneRecord;
-        frontier?: { status?: string };
-        ready: number;
-      }> = chunk.map((item) => ({
-        item,
-        context: contextForItem(item),
-        ready: 0,
-      }));
       let readyCount = 0;
       const abort = () => { try { tx.abort(); } catch { /* already inactive */ } };
 
@@ -1233,7 +1231,6 @@ class IndexedDbStore {
         ];
         requests[0].onsuccess = () => {
           entry.current = requests[0].result as typeof entry.current;
-          entry.ready += 1;
           readyCount += 1;
           if (readyCount === prepared.length * 3) processNext(0);
         };
@@ -1460,9 +1457,8 @@ class IndexedDbStore {
       // missing operational row. Never overwrite newer local state with the
       // snapshot the plan was built from.
       await this.getP2pNodeId();
-      const storeTx = this.idb.transaction(
+      const storeTx = this.createStrictTransaction(
         [storeName, 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'],
-        'readwrite',
       );
       const store = storeTx.objectStore(storeName);
       const current = await new Promise<T | undefined>((resolve) => {
@@ -1490,7 +1486,7 @@ class IndexedDbStore {
     }
 
     await this.getP2pNodeId();
-    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'], 'readwrite');
+    const tx = this.createStrictTransaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers']);
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const tombstones = tx.objectStore('tombstones');
@@ -1799,7 +1795,7 @@ class IndexedDbStore {
   private async updateOutboxRecord(id: string, update: (record: OutboxRecord) => OutboxRecord): Promise<void> {
     await this.openStore();
     if (!this.idb) throw new Error('Outbox is unavailable without IndexedDB.');
-    const tx = this.idb.transaction('outbox', 'readwrite');
+    const tx = this.createStrictTransaction(['outbox']);
     const store = tx.objectStore('outbox');
     const request = store.get(id);
     request.onsuccess = () => { if (request.result) store.put(update(request.result as OutboxRecord)); };
