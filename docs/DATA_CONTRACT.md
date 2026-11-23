@@ -43,14 +43,15 @@ Appointment MUST fail closed rather than discard or silently replace user data.
     writes; without quorum/coordinator, convergence is possible but global linearizability
     is not. Conflicts must remain visible and recoverable, never silently resolved.
 
-Current implementation status: native SQLite has a durable workspace-scoped P2P event log
-and merged vector clock; equal-version entity conflicts are rejected, stale writes are
-ignored, workspace identity mismatch is rejected, and generic physical entity deletion
-is disabled pending tombstone/Outbox integration. **Pre-migration online backups and
-atomic coupling of every business mutation to the P2P event log are still release
-blockers.** Do not enable production P2P synchronization until these gates are implemented
+Current implementation status: native SQLite now creates a verified SQLite
+`VACUUM INTO` snapshot before upgrading an existing older schema, checks backup
+integrity and table count, and refuses to open a database created by a newer schema.
+Equal-version entity conflicts are rejected, stale writes are ignored, workspace
+identity mismatch is rejected, and generic physical entity deletion is disabled pending
+tombstone/Outbox integration. Backup restore drills, row-level backup verification,
+and atomic coupling of every business mutation to the P2P event log remain release
+blockers. Do not enable production P2P synchronization until these gates are implemented
 and tested.
-
 
 A feature that reads, writes, imports, exports, caches, synchronizes, deletes or displays
 business data is incomplete until all affected layers agree: business rules; domain models
