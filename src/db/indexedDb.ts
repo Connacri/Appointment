@@ -34,7 +34,7 @@ function stableSerialize(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
   if (value && typeof value === 'object') {
     const record = value as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`).join(',')}}`;
+    return `{${Object.keys(record).filter((key) => record[key] !== undefined).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`).join(',')}}`;
   }
   return JSON.stringify(value) ?? 'null';
 }
@@ -1145,9 +1145,10 @@ class IndexedDbStore {
         const candidate = {
           ...baseItem,
           workspaceId: entry.context.workspaceId,
-          establishmentId,
           deletedAt: null,
         } as T & Record<string, unknown>;
+        if (establishmentId) candidate.establishmentId = establishmentId;
+        else delete candidate.establishmentId;
         const currentPayload = entry.current?.payload;
         if (
           entry.current
@@ -1216,13 +1217,11 @@ class IndexedDbStore {
         };
         requests[1].onsuccess = () => {
           entry.tombstone = requests[1].result as TombstoneRecord | undefined;
-          entry.ready += 1;
           readyCount += 1;
           if (readyCount === prepared.length * 3) processNext(0);
         };
         requests[2].onsuccess = () => {
           entry.frontier = requests[2].result as typeof entry.frontier;
-          entry.ready += 1;
           readyCount += 1;
           if (readyCount === prepared.length * 3) processNext(0);
         };
