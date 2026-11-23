@@ -1046,9 +1046,15 @@ class IndexedDbStore {
     let clockRows: Array<{ workspaceId: string; nodeId: string; sequence: number }> = [];
     let metaReady = false;
     let clockReady = false;
+    let frontierReady = false;
+    let currentFrontier: { status?: string } | undefined;
 
     const finish = () => {
-      if (!metaReady || !clockReady) return;
+      if (!metaReady || !clockReady || !frontierReady) return;
+      if (currentFrontier?.status === 'conflict' || currentFrontier?.status === 'blocked_pending_local') {
+        tx.abort();
+        return;
+      }
       try {
         if (!nodeId) {
           tx.abort();
@@ -1066,6 +1072,15 @@ class IndexedDbStore {
           observedClock: observed,
         });
         tx.objectStore('p2pEvents').add(event);
+        tx.objectStore('p2pRecordFrontiers').put({
+          workspaceId,
+          entity,
+          entityId,
+          status: 'resolved',
+          frontier: [event],
+          appliedEventId: event.eventId,
+          updatedAt: createdAt,
+        });
         for (const [clockNodeId, sequence] of Object.entries(event.clock)) {
           clockStore.put({ workspaceId, nodeId: clockNodeId, sequence });
         }
@@ -1082,6 +1097,14 @@ class IndexedDbStore {
       finish();
     };
     metaRequest.onerror = () => tx.abort();
+
+    const frontierRequest = tx.objectStore('p2pRecordFrontiers').get([workspaceId, entity, entityId]);
+    frontierRequest.onsuccess = () => {
+      currentFrontier = frontierRequest.result as { status?: string } | undefined;
+      frontierReady = true;
+      finish();
+    };
+    frontierRequest.onerror = () => tx.abort();
 
     const clockRequest = clockStore.index('workspaceId').getAll(workspaceId);
     clockRequest.onsuccess = () => {
@@ -1101,7 +1124,7 @@ class IndexedDbStore {
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
     await this.getP2pNodeId();
-    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta'], 'readwrite');
+    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'], 'readwrite');
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const tombstones = tx.objectStore('tombstones');
@@ -1201,7 +1224,7 @@ class IndexedDbStore {
     }
 
     await this.getP2pNodeId();
-    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta'], 'readwrite');
+    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'], 'readwrite');
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const tombstones = tx.objectStore('tombstones');
@@ -1269,7 +1292,7 @@ class IndexedDbStore {
 
     const now = new Date().toISOString();
     await this.getP2pNodeId();
-    const tx = this.idb.transaction(['outbox', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta'], 'readwrite');
+    const tx = this.idb.transaction(['outbox', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'], 'readwrite');
     const outbox = tx.objectStore('outbox');
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const entityRecord = {
@@ -1292,7 +1315,7 @@ class IndexedDbStore {
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
     await this.getP2pNodeId();
-    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta'], 'readwrite');
+    const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'], 'readwrite');
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const tombstones = tx.objectStore('tombstones');
