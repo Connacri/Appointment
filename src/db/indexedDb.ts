@@ -1393,28 +1393,89 @@ class IndexedDbStore {
   public async markOutboxSynced(id: string): Promise<void> {
     await this.openStore();
     if (!this.idb) throw new Error('Outbox is unavailable without IndexedDB.');
-    const tx = this.idb.transaction(['outbox', 'tombstones'], 'readwrite');
+    const tx = this.idb.transaction(
+      ['outbox', 'tombstones', 'p2pEvents', 'p2pRecordFrontiers', 'workspaceEntities',
+        'bookings', 'resources', 'invoices', 'resourceGroups'],
+      'readwrite',
+    );
     const outbox = tx.objectStore('outbox');
     const request = outbox.get(id);
     request.onsuccess = () => {
       const record = request.result as OutboxRecord | undefined;
       if (!record) return;
       outbox.put({ ...record, status: 'synced', lastError: undefined });
-      if (record.operation === 'delete') {
-        const tombstoneId = `${record.workspaceId}:${record.entity}:${record.entityId}`;
-        const tombstoneRequest = tx.objectStore('tombstones').get(tombstoneId);
-        tombstoneRequest.onsuccess = () => {
-          const tombstone = tombstoneRequest.result as TombstoneRecord | undefined;
-          if (tombstone && tombstone.version === record.version) {
-            tx.objectStore('tombstones').delete(tombstoneId);
-          }
-        };
-        tombstoneRequest.onerror = () => tx.abort();
-      }
+      // A server ACK is not an all-replica tombstone-retention ACK. Never purge
+      // tombstones here; peer checkpoint/retention policy owns their collection.
+      this.reconcileP2pFrontierAfterAck(tx, record, () => undefined, () => tx.abort());
     };
     request.onerror = () => tx.abort();
     await waitForTransactionCompletion(tx, `markOutboxSynced ${id}`);
     this.emitOutboxChange();
+  }
+
+  private reconcileP2pFrontierAfterAck(
+    tx: IDBTransaction,
+    record: OutboxRecord,
+    done: () => void,
+    abort: () => void,
+  ): void {
+    const eventsRequest = tx.objectStore('p2pEvents').index('workspaceEntity')
+      .getAll(IDBKeyRange.only([record.workspaceId, record.entity, record.entityId]));
+    eventsRequest.onsuccess = () => {
+      const state = getP2pRecordState(eventsRequest.result as P2pEvent[]);
+      const frontierStore = tx.objectStore('p2pRecordFrontiers');
+      if (state.kind === 'missing') {
+        done();
+        return;
+      }
+      if (state.kind === 'conflict') {
+        frontierStore.put({
+          workspaceId: record.workspaceId,
+          entity: record.entity,
+          entityId: record.entityId,
+          status: 'conflict',
+          frontier: state.events,
+          appliedEventId: null,
+          updatedAt: new Date().toISOString(),
+        });
+        done();
+        return;
+      }
+      const pendingRequest = tx.objectStore('outbox').index('workspaceEntity')
+        .getAll(IDBKeyRange.only([record.workspaceId, record.entity, record.entityId]));
+      pendingRequest.onsuccess = () => {
+        const pending = (pendingRequest.result as OutboxRecord[])
+          .some((entry) => entry.status === 'pending' || entry.status === 'failed');
+        if (pending) {
+          done();
+          return;
+        }
+        const previousRequest = frontierStore.get([record.workspaceId, record.entity, record.entityId]);
+        previousRequest.onsuccess = () => {
+          const previous = previousRequest.result as { status?: string; appliedEventId?: string } | undefined;
+          const finish = () => {
+            frontierStore.put({
+              workspaceId: record.workspaceId,
+              entity: record.entity,
+              entityId: record.entityId,
+              status: 'resolved',
+              frontier: [state.event],
+              appliedEventId: state.event.eventId,
+              updatedAt: new Date().toISOString(),
+            });
+            done();
+          };
+          if (previous?.status === 'resolved' && previous.appliedEventId === state.event.eventId) {
+            done();
+            return;
+          }
+          this.applyIndexedDbP2pProjection(tx, state.event, finish, abort);
+        };
+        previousRequest.onerror = abort;
+      };
+      pendingRequest.onerror = abort;
+    };
+    eventsRequest.onerror = abort;
   }
 
   public async markOutboxFailed(id: string, error: string, nextAttemptAt: string): Promise<void> {
