@@ -8,7 +8,7 @@ use crate::domain::Booking;
 mod database_entities;
 #[path = "database_p2p.rs"]
 mod database_p2p;
-pub use database_p2p::P2pEventLogEntry;
+pub use database_p2p::{NewP2pEvent, P2pEventLogEntry};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutboxEntry {

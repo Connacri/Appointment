@@ -756,12 +756,8 @@ fn update_discovery_status(hwnd: Hwnd) {
         let mut state = app_state().lock().unwrap_or_else(|e| e.into_inner());
         let mut events = Vec::new();
         if let Some(discovery) = state.discovery.as_ref() {
-            loop {
-                match discovery.try_recv() {
-                    Ok(event) => events.push(event),
-                    Err(std::sync::mpsc::TryRecvError::Empty)
-                    | Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
-                }
+            while let Ok(event) = discovery.try_recv() {
+                events.push(event);
             }
         }
         for event in events {

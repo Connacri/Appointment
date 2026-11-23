@@ -15,6 +15,16 @@ pub struct P2pEventLogEntry {
     pub event: P2pEvent,
 }
 
+pub struct NewP2pEvent<'a> {
+    pub workspace_id: &'a str,
+    pub node_id: &'a str,
+    pub entity: &'a str,
+    pub entity_id: &'a str,
+    pub operation: P2pOperation,
+    pub payload: Option<Value>,
+    pub created_at: &'a str,
+}
+
 pub(super) fn migrate(connection: &Connection) -> rusqlite::Result<()> {
     let applied: bool = connection.query_row(
         "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=6)",
@@ -64,16 +74,16 @@ pub(super) fn migrate(connection: &Connection) -> rusqlite::Result<()> {
 impl PmsDatabase {
     /// Create and durably append one local event in a single SQLite transaction.
     /// The event's vector clock is derived from the workspace's persisted event log.
-    pub fn create_local_p2p_event(
-        &self,
-        workspace_id: &str,
-        node_id: &str,
-        entity: &str,
-        entity_id: &str,
-        operation: P2pOperation,
-        payload: Option<Value>,
-        created_at: &str,
-    ) -> Result<P2pEvent, String> {
+    pub fn create_local_p2p_event(&self, draft: NewP2pEvent<'_>) -> Result<P2pEvent, String> {
+        let NewP2pEvent {
+            workspace_id,
+            node_id,
+            entity,
+            entity_id,
+            operation,
+            payload,
+            created_at,
+        } = draft;
         if workspace_id.trim().is_empty()
             || node_id.trim().is_empty()
             || entity.trim().is_empty()
@@ -98,53 +108,16 @@ impl PmsDatabase {
             .unchecked_transaction()
             .map_err(|e| e.to_string())?;
         ensure_workspace(&tx, workspace_id)?;
-
-        let mut clock = BTreeMap::<String, u64>::new();
-        {
-            let mut statement = tx
-                .prepare(
-                    "SELECT node_id, sequence FROM p2p_clock
-                     WHERE workspace_id=?1 ORDER BY node_id",
-                )
-                .map_err(|e| e.to_string())?;
-            let rows = statement
-                .query_map(params![workspace_id], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?))
-                })
-                .map_err(|e| e.to_string())?;
-            for row in rows {
-                let (known_node, sequence) = row.map_err(|e| e.to_string())?;
-                clock.insert(known_node, sequence);
-            }
-        }
-
-        if clock.len() > MAX_P2P_CLOCK_NODES {
-            return Err("P2P workspace has reached the supported vector-clock node limit.".into());
-        }
-        let sequence = clock
-            .get(node_id)
-            .copied()
-            .unwrap_or(0)
-            .checked_add(1)
-            .ok_or_else(|| "P2P node sequence overflow.".to_string())?;
-        clock.insert(node_id.to_string(), sequence);
-
-        let event = P2pEvent {
-            protocol_version: 1,
-            event_id: format!("{node_id}:{sequence}"),
-            node_id: node_id.to_string(),
-            sequence,
-            workspace_id: workspace_id.to_string(),
-            entity: entity.to_string(),
-            entity_id: entity_id.to_string(),
+        let event = create_local_event_in_transaction(
+            &tx,
+            workspace_id,
+            node_id,
+            entity,
+            entity_id,
             operation,
             payload,
-            clock,
-            created_at: created_at.to_string(),
-        };
-        validate_event_size(&event)?;
-        event.validate().map_err(str::to_string)?;
-        insert_event(&tx, &event)?;
+            created_at,
+        )?;
         tx.commit().map_err(|e| e.to_string())?;
         Ok(event)
     }
@@ -226,6 +199,65 @@ impl PmsDatabase {
             |row| row.get(0),
         )
     }
+}
+
+fn create_local_event_in_transaction(
+    tx: &Transaction<'_>,
+    workspace_id: &str,
+    node_id: &str,
+    entity: &str,
+    entity_id: &str,
+    operation: P2pOperation,
+    payload: Option<Value>,
+    created_at: &str,
+) -> Result<P2pEvent, String> {
+    let mut clock = BTreeMap::<String, u64>::new();
+    {
+        let mut statement = tx
+            .prepare(
+                "SELECT node_id, sequence FROM p2p_clock
+                 WHERE workspace_id=?1 ORDER BY node_id",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = statement
+            .query_map(params![workspace_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?))
+            })
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            let (known_node, sequence) = row.map_err(|e| e.to_string())?;
+            clock.insert(known_node, sequence);
+        }
+    }
+
+    if clock.len() > MAX_P2P_CLOCK_NODES {
+        return Err("P2P workspace has reached the supported vector-clock node limit.".into());
+    }
+    let sequence = clock
+        .get(node_id)
+        .copied()
+        .unwrap_or(0)
+        .checked_add(1)
+        .ok_or_else(|| "P2P node sequence overflow.".to_string())?;
+    clock.insert(node_id.to_string(), sequence);
+
+    let event = P2pEvent {
+        protocol_version: 1,
+        event_id: format!("{node_id}:{sequence}"),
+        node_id: node_id.to_string(),
+        sequence,
+        workspace_id: workspace_id.to_string(),
+        entity: entity.to_string(),
+        entity_id: entity_id.to_string(),
+        operation,
+        payload,
+        clock,
+        created_at: created_at.to_string(),
+    };
+    validate_event_size(&event)?;
+    event.validate().map_err(str::to_string)?;
+    insert_event(tx, &event)?;
+    Ok(event)
 }
 
 fn ensure_workspace(tx: &Transaction<'_>, workspace_id: &str) -> Result<(), String> {
@@ -310,31 +342,48 @@ mod tests {
         db
     }
 
+    fn local_booking_event(
+        db: &PmsDatabase,
+        workspace_id: &str,
+        node_id: &str,
+        booking_id: &str,
+        operation: P2pOperation,
+        payload: Option<serde_json::Value>,
+        created_at: &str,
+    ) -> P2pEvent {
+        db.create_local_p2p_event(NewP2pEvent {
+            workspace_id,
+            node_id,
+            entity: "booking",
+            entity_id: booking_id,
+            operation,
+            payload,
+            created_at,
+        })
+        .unwrap()
+    }
+
     #[test]
     fn local_events_are_durable_and_advance_workspace_vector_clock() {
         let db = database();
-        let first = db
-            .create_local_p2p_event(
-                "workspace-a",
-                "node-a",
-                "booking",
-                "booking-1",
-                P2pOperation::Upsert,
-                Some(json!({"guest": "Alice"})),
-                "2026-11-23T08:00:00Z",
-            )
-            .unwrap();
-        let second = db
-            .create_local_p2p_event(
-                "workspace-a",
-                "node-a",
-                "booking",
-                "booking-1",
-                P2pOperation::Upsert,
-                Some(json!({"guest": "Bob"})),
-                "2026-11-23T08:01:00Z",
-            )
-            .unwrap();
+        let first = local_booking_event(
+            &db,
+            "workspace-a",
+            "node-a",
+            "booking-1",
+            P2pOperation::Upsert,
+            Some(json!({"guest": "Alice"})),
+            "2026-11-23T08:00:00Z",
+        );
+        let second = local_booking_event(
+            &db,
+            "workspace-a",
+            "node-a",
+            "booking-1",
+            P2pOperation::Upsert,
+            Some(json!({"guest": "Bob"})),
+            "2026-11-23T08:01:00Z",
+        );
 
         assert_eq!(first.sequence, 1);
         assert_eq!(second.sequence, 2);
@@ -350,17 +399,15 @@ mod tests {
             let db = PmsDatabase::open(&path).unwrap();
             db.ensure_workspace("workspace-a", "owner-a", "Workspace A")
                 .unwrap();
-            let event = db
-                .create_local_p2p_event(
-                    "workspace-a",
-                    "node-a",
-                    "booking",
-                    "booking-1",
-                    P2pOperation::Upsert,
-                    Some(json!({"guest": "Persisted"})),
-                    "2026-11-23T08:00:00Z",
-                )
-                .unwrap();
+            let event = local_booking_event(
+                &db,
+                "workspace-a",
+                "node-a",
+                "booking-1",
+                P2pOperation::Upsert,
+                Some(json!({"guest": "Persisted"})),
+                "2026-11-23T08:00:00Z",
+            );
             assert_eq!(event.sequence, 1);
         }
 
@@ -374,17 +421,15 @@ mod tests {
             "Persisted"
         );
 
-        let next = reopened
-            .create_local_p2p_event(
-                "workspace-a",
-                "node-a",
-                "booking",
-                "booking-2",
-                P2pOperation::Upsert,
-                Some(json!({"guest": "After restart"})),
-                "2026-11-23T08:01:00Z",
-            )
-            .unwrap();
+        let next = local_booking_event(
+            &reopened,
+            "workspace-a",
+            "node-a",
+            "booking-2",
+            P2pOperation::Upsert,
+            Some(json!({"guest": "After restart"})),
+            "2026-11-23T08:01:00Z",
+        );
         assert_eq!(next.sequence, 2);
         assert_eq!(next.clock.get("node-a"), Some(&2));
     }
@@ -392,17 +437,15 @@ mod tests {
     #[test]
     fn received_events_are_idempotent_and_equivocation_is_rejected() {
         let db = database();
-        let event = db
-            .create_local_p2p_event(
-                "workspace-a",
-                "node-a",
-                "booking",
-                "booking-1",
-                P2pOperation::Upsert,
-                Some(json!({"guest": "Alice"})),
-                "2026-11-23T08:00:00Z",
-            )
-            .unwrap();
+        let event = local_booking_event(
+            &db,
+            "workspace-a",
+            "node-a",
+            "booking-1",
+            P2pOperation::Upsert,
+            Some(json!({"guest": "Alice"})),
+            "2026-11-23T08:00:00Z",
+        );
 
         // A second local database represents another replica receiving this event.
         let replica = database();
@@ -433,17 +476,15 @@ mod tests {
         };
         assert!(replica.append_p2p_event(&remote).unwrap());
 
-        let local = replica
-            .create_local_p2p_event(
-                "workspace-a",
-                "node-a",
-                "booking",
-                "booking-2",
-                P2pOperation::Upsert,
-                Some(json!({"guest": "Local"})),
-                "2026-11-23T08:01:00Z",
-            )
-            .unwrap();
+        let local = local_booking_event(
+            &replica,
+            "workspace-a",
+            "node-a",
+            "booking-2",
+            P2pOperation::Upsert,
+            Some(json!({"guest": "Local"})),
+            "2026-11-23T08:01:00Z",
+        );
 
         assert_eq!(local.sequence, 5);
         assert_eq!(local.clock.get("node-a"), Some(&5));
@@ -453,26 +494,24 @@ mod tests {
     #[test]
     fn event_pages_are_stable_and_workspace_isolated() {
         let db = database();
-        db.create_local_p2p_event(
+        local_booking_event(
+            &db,
             "workspace-a",
             "node-a",
-            "booking",
             "booking-1",
             P2pOperation::Upsert,
             Some(json!({"guest": "Alice"})),
             "2026-11-23T08:00:00Z",
-        )
-        .unwrap();
-        db.create_local_p2p_event(
+        );
+        local_booking_event(
+            &db,
             "workspace-b",
             "node-b",
-            "booking",
             "booking-2",
             P2pOperation::Delete,
             None,
             "2026-11-23T08:01:00Z",
-        )
-        .unwrap();
+        );
 
         let first_page = db.list_p2p_events_after("workspace-a", 0, 1).unwrap();
         assert_eq!(first_page.len(), 1);
@@ -489,16 +528,14 @@ mod tests {
     fn event_payload_and_vector_clock_are_bounded() {
         let db = database();
         let oversized = "x".repeat(MAX_P2P_EVENT_BYTES + 1);
-        assert!(db
-            .create_local_p2p_event(
-                "workspace-a",
-                "node-a",
-                "booking",
-                "booking-1",
-                P2pOperation::Upsert,
-                Some(json!({"blob": oversized})),
-                "2026-11-23T08:00:00Z",
-            )
-            .is_err());
+        assert!(db.create_local_p2p_event(NewP2pEvent {
+            workspace_id: "workspace-a",
+            node_id: "node-a",
+            entity: "booking",
+            entity_id: "booking-1",
+            operation: P2pOperation::Upsert,
+            payload: Some(json!({"blob": oversized})),
+            created_at: "2026-11-23T08:00:00Z",
+        }).is_err());
     }
 }

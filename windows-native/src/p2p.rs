@@ -187,7 +187,7 @@ mod tests {
     #[test]
     fn merges_idempotently_and_rejects_equivocation() {
         let a = event("a", 1, &[("a", 1)], Some(json!({"x": 1})));
-        assert_eq!(merge_events(&[a.clone()], &[a.clone()]).unwrap().len(), 1);
+        assert_eq!(merge_events(std::slice::from_ref(&a), std::slice::from_ref(&a)).unwrap().len(), 1);
         let forged = event("a", 1, &[("a", 1)], Some(json!({"x": 2})));
         assert!(merge_events(&[a], &[forged]).is_err());
     }
@@ -211,8 +211,8 @@ mod tests {
             Some(json!({"guest": "Alice"})),
         );
         let b = event("b", 2, &[("a", 1), ("b", 2)], Some(json!({"guest": "Bob"})));
-        let ab = merge_events(&[a.clone()], &[b.clone()]).unwrap();
-        let ba = merge_events(&[b], &[a]).unwrap();
+        let ab = merge_events(std::slice::from_ref(&a), std::slice::from_ref(&b)).unwrap();
+        let ba = merge_events(std::slice::from_ref(&b), std::slice::from_ref(&a)).unwrap();
         assert_eq!(ab, ba);
         assert!(matches!(record_state(&ab), P2pRecordState::Conflict(events) if events.len() == 2));
     }
