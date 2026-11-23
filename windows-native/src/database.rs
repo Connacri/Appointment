@@ -9,7 +9,7 @@ use crate::p2p::{record_state, P2pEvent, P2pOperation, P2pRecordState};
 mod database_entities;
 #[path = "database_p2p.rs"]
 mod database_p2p;
-pub use database_entities::LocalEntityMutation;
+pub use database_entities::{LocalEntityDelete, LocalEntityMutation};
 pub use database_p2p::{NewP2pEvent, P2pEventLogEntry};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
