@@ -73,7 +73,7 @@ impl PmsDatabase {
     /// Store a complete JSON document for a non-booking PMS entity.
     /// Unknown JSON fields are retained verbatim; the indexed columns are generated
     /// from the document and are never used to reconstruct or rewrite its payload.
-    pub fn upsert_entity_record(
+    pub fn upsert_entity_record_unreplicated(
         &self,
         workspace_id: &str,
         entity: &str,
@@ -151,7 +151,7 @@ impl PmsDatabase {
 
     /// Local entity mutation: entity row, Supabase Outbox and P2P event share one transaction.
     /// Remote replication must use a separate merge path and must never call this method.
-    pub fn upsert_entity_record_with_p2p(
+    pub fn upsert_entity_record(
         &self,
         workspace_id: &str,
         entity: &str,
@@ -343,7 +343,7 @@ mod tests {
     fn entity_payload_preserves_unknown_fields_and_workspace_scope() {
         let db = db();
         let payload = r#"{"id":"r-1","sector":"hotel","customFutureField":{"enabled":true}}"#;
-        db.upsert_entity_record(
+        db.upsert_entity_record_unreplicated(
             "ws-a",
             "resources",
             "r-1",
@@ -367,7 +367,7 @@ mod tests {
     fn local_entity_outbox_and_p2p_event_commit_together() {
         let db = db();
         let payload = r#"{"id":"resource-1","status":"active","futureField":{"v":2}}"#;
-        db.upsert_entity_record_with_p2p(
+        db.upsert_entity_record(
             "ws-a",
             "resources",
             "resource-1",
@@ -402,7 +402,7 @@ mod tests {
             )
             .unwrap();
 
-        let result = db.upsert_entity_record_with_p2p(
+        let result = db.upsert_entity_record(
             "ws-a",
             "resources",
             "resource-rollback",
@@ -427,7 +427,7 @@ mod tests {
         let db = db();
         for id in ["a", "b", "c"] {
             let payload = format!(r#"{{"id":"{id}","status":"active"}}"#);
-            db.upsert_entity_record(
+            db.upsert_entity_record_unreplicated(
                 "ws-a",
                 "issuedCards",
                 id,
@@ -466,7 +466,7 @@ mod tests {
     #[test]
     fn equal_version_with_different_payload_is_rejected_without_overwrite() {
         let db = db();
-        db.upsert_entity_record(
+        db.upsert_entity_record_unreplicated(
             "ws-a",
             "invoices",
             "i-2",
@@ -476,7 +476,7 @@ mod tests {
         )
         .unwrap();
 
-        let conflict = db.upsert_entity_record(
+        let conflict = db.upsert_entity_record_unreplicated(
             "ws-a",
             "invoices",
             "i-2",
@@ -496,7 +496,7 @@ mod tests {
     #[test]
     fn entity_upsert_does_not_replace_a_newer_version() {
         let db = db();
-        db.upsert_entity_record(
+        db.upsert_entity_record_unreplicated(
             "ws-a",
             "invoices",
             "i-1",
@@ -505,7 +505,7 @@ mod tests {
             "2026-11-22T10:00:00Z",
         )
         .unwrap();
-        db.upsert_entity_record(
+        db.upsert_entity_record_unreplicated(
             "ws-a",
             "invoices",
             "i-1",
