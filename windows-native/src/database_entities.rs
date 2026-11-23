@@ -242,16 +242,18 @@ impl PmsDatabase {
         match current {
             Some((_, current_version)) if version < current_version => {
                 return Err(
-                "stale local entity version rejected; use the remote merge API for replicated data"
-                    .into(),
-            );
+                    "stale local entity version rejected; use the remote merge API for replicated data"
+                        .into(),
+                );
             }
-            Some((current_payload, current_version)) if version == current_version => {
-                if current_payload != payload {
-                    return Err(
-                        "entity version collision: equal version carries different payload".into(),
-                    );
-                }
+            Some((current_payload, current_version))
+                if version == current_version && current_payload != payload =>
+            {
+                return Err(
+                    "entity version collision: equal version carries different payload".into(),
+                );
+            }
+            Some((_, current_version)) if version == current_version => {
                 // Keep going: a same-version legacy row still needs its durable
                 // Outbox intent and P2P event before it is considered replicated.
             }
