@@ -1240,11 +1240,22 @@ class IndexedDbStore {
 
     const existing = await this.getOutboxRecordByIdempotencyKey(context.workspaceId, idempotencyKey);
     if (existing) {
+      const expectedBaseItem =
+        storeName === 'bookings'
+          ? (migrateBookingRecordV7(item as Partial<TimelineBooking>) as T)
+          : item;
+      const expectedPayload = {
+        ...expectedBaseItem,
+        workspaceId: context.workspaceId,
+        establishmentId: context.establishmentId,
+        syncVersion: existing.version,
+        deletedAt: null,
+      };
       if (
         existing.entity !== entity
         || existing.entityId !== item.id
         || existing.operation !== 'upsert'
-        || JSON.stringify(existing.payload) !== JSON.stringify(item)
+        || JSON.stringify(existing.payload) !== JSON.stringify(expectedPayload)
       ) {
         throw new Error('Idempotency key collision: existing Outbox intent does not match this mutation.');
       }
