@@ -148,6 +148,106 @@ impl PmsDatabase {
         tx.commit()
     }
 
+
+    /// Local entity mutation: entity row, Supabase Outbox and P2P event share one transaction.
+    /// Remote replication must use a separate merge path and must never call this method.
+    pub fn upsert_entity_record_with_p2p(
+        &self,
+        workspace_id: &str,
+        entity: &str,
+        entity_id: &str,
+        payload: &str,
+        version: i64,
+        updated_at: &str,
+        idempotency_key: &str,
+        node_id: &str,
+        created_at: &str,
+    ) -> Result<(), String> {
+        if entity.trim().is_empty()
+            || entity_id.trim().is_empty()
+            || version <= 0
+            || idempotency_key.trim().is_empty()
+            || node_id.trim().is_empty()
+            || updated_at.trim().is_empty()
+            || created_at.trim().is_empty()
+        {
+            return Err("entity identity, positive version, idempotency key, node ID and timestamps are required".into());
+        }
+        let parsed: Value = serde_json::from_str(payload).map_err(|error| error.to_string())?;
+        if !parsed.is_object() {
+            return Err("entity payload must be a JSON object".into());
+        }
+
+        let tx = self.connection.unchecked_transaction().map_err(|e| e.to_string())?;
+        let exists: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=?1)",
+            params![workspace_id],
+            |row| row.get(0),
+        ).map_err(|e| e.to_string())?;
+        if !exists {
+            return Err("workspace does not exist".into());
+        }
+        if super::check_idempotency(
+            &tx,
+            idempotency_key,
+            workspace_id,
+            entity,
+            entity_id,
+            "upsert",
+            Some(payload),
+        )? {
+            tx.commit().map_err(|e| e.to_string())?;
+            return Ok(());
+        }
+
+        let current: Option<(String, i64)> = tx.query_row(
+            "SELECT payload, version FROM entity_records
+             WHERE workspace_id=?1 AND entity=?2 AND entity_id=?3",
+            params![workspace_id, entity, entity_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).optional().map_err(|e| e.to_string())?;
+        match current {
+            Some((_, current_version)) if version < current_version => {
+                return Err("stale local entity version rejected; use the remote merge API for replicated data".into());
+            }
+            Some((current_payload, current_version)) if version == current_version => {
+                if current_payload != payload {
+                    return Err("entity version collision: equal version carries different payload".into());
+                }
+                tx.commit().map_err(|e| e.to_string())?;
+                return Ok(());
+            }
+            _ => {}
+        }
+
+        tx.execute(
+            "INSERT INTO entity_records(workspace_id,entity,entity_id,payload,version,updated_at)
+             VALUES (?1,?2,?3,?4,?5,?6)
+             ON CONFLICT(workspace_id,entity,entity_id) DO UPDATE SET
+               payload=excluded.payload, version=excluded.version, updated_at=excluded.updated_at
+             WHERE excluded.version > entity_records.version",
+            params![workspace_id, entity, entity_id, payload, version, updated_at],
+        ).map_err(|e| e.to_string())?;
+        tx.execute(
+            "INSERT INTO outbox(id,idempotency_key,workspace_id,entity,entity_id,operation,version,base_server_version,payload)
+             VALUES (?1,?2,?3,?4,?5,'upsert',?6,0,?7)",
+            params![uuid::Uuid::new_v4().to_string(), idempotency_key, workspace_id, entity, entity_id, version, payload],
+        ).map_err(|e| e.to_string())?;
+        super::database_p2p::create_local_event_in_transaction(
+            &tx,
+            super::NewP2pEvent {
+                workspace_id,
+                node_id,
+                entity,
+                entity_id,
+                operation: crate::p2p::P2pOperation::Upsert,
+                payload: Some(parsed),
+                created_at,
+            },
+        )?;
+        tx.commit().map_err(|e| e.to_string())
+    }
+
     pub fn get_entity_record(
         &self,
         workspace_id: &str,
