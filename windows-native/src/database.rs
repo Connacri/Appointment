@@ -1612,6 +1612,222 @@ mod tests {
         db
     }
 
+    fn remote_event(
+        node_id: &str,
+        sequence: u64,
+        clock: &[(&str, u64)],
+        entity: &str,
+        entity_id: &str,
+        operation: crate::p2p::P2pOperation,
+        payload: Option<serde_json::Value>,
+    ) -> P2pEvent {
+        P2pEvent {
+            protocol_version: 1,
+            event_id: format!("{node_id}:{sequence}"),
+            node_id: node_id.into(),
+            sequence,
+            workspace_id: "w-1".into(),
+            entity: entity.into(),
+            entity_id: entity_id.into(),
+            operation,
+            payload,
+            clock: clock.iter().map(|(node, seq)| ((*node).into(), *seq)).collect(),
+            created_at: "2026-11-23T09:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn inbound_booking_event_and_peer_cursor_commit_atomically() {
+        let mut db = database();
+        let remote = booking("b-inbound");
+        let event = remote_event(
+            "node-b",
+            1,
+            &[("node-b", 1)],
+            "booking",
+            "b-inbound",
+            P2pOperation::Upsert,
+            Some(serde_json::to_value(remote.clone()).unwrap()),
+        );
+        let report = db.apply_received_p2p_batch(P2pInboundBatch {
+            workspace_id: "w-1",
+            peer_id: "peer-b",
+            expected_cursor: 0,
+            next_cursor: 1,
+            events: std::slice::from_ref(&event),
+        }).unwrap();
+
+        assert_eq!(report.appended_events, 1);
+        assert_eq!(report.applied_records, 1);
+        assert_eq!(db.get_booking("w-1", "b-inbound").unwrap(), Some(remote));
+        assert_eq!(db.p2p_event_count("w-1").unwrap(), 1);
+        let cursor: i64 = db.connection.query_row(
+            "SELECT cursor FROM p2p_peer_cursors WHERE workspace_id='w-1' AND peer_id='peer-b'",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(cursor, 1);
+
+        // The same page cannot be committed twice with a stale expected cursor.
+        assert!(db.apply_received_p2p_batch(P2pInboundBatch {
+            workspace_id: "w-1",
+            peer_id: "peer-b",
+            expected_cursor: 0,
+            next_cursor: 1,
+            events: std::slice::from_ref(&event),
+        }).is_err());
+        assert_eq!(db.p2p_event_count("w-1").unwrap(), 1);
+    }
+
+    #[test]
+    fn concurrent_p2p_updates_are_preserved_as_conflict_without_projection_overwrite() {
+        let mut db = database();
+        let mut local = booking("b-conflict");
+        local.guest_name = "Local version".into();
+        db.upsert_booking(
+            "w-1",
+            &local,
+            "idem-conflict-local",
+            "node-a",
+            "2026-11-23T08:59:00Z",
+        ).unwrap();
+
+        let mut remote = booking("b-conflict");
+        remote.guest_name = "Remote version".into();
+        let event = remote_event(
+            "node-b",
+            1,
+            &[("node-b", 1)],
+            "booking",
+            "b-conflict",
+            P2pOperation::Upsert,
+            Some(serde_json::to_value(remote).unwrap()),
+        );
+        let report = db.apply_received_p2p_batch(P2pInboundBatch {
+            workspace_id: "w-1",
+            peer_id: "peer-b",
+            expected_cursor: 0,
+            next_cursor: 1,
+            events: std::slice::from_ref(&event),
+        }).unwrap();
+
+        assert_eq!(report.conflicts, 1);
+        assert_eq!(report.applied_records, 0);
+        assert_eq!(db.get_booking("w-1", "b-conflict").unwrap().unwrap().guest_name, "Local version");
+        let status: String = db.connection.query_row(
+            "SELECT status FROM p2p_record_frontiers WHERE workspace_id='w-1' AND entity='booking' AND entity_id='b-conflict'",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(status, "conflict");
+    }
+
+    #[test]
+    fn inbound_causal_successor_does_not_overwrite_pending_local_outbox() {
+        let mut db = database();
+        let mut local = booking("b-pending-inbound");
+        local.guest_name = "Local pending".into();
+        db.upsert_booking(
+            "w-1",
+            &local,
+            "idem-pending-inbound",
+            "node-a",
+            "2026-11-23T08:59:00Z",
+        ).unwrap();
+
+        let mut remote = booking("b-pending-inbound");
+        remote.guest_name = "Remote successor".into();
+        let event = remote_event(
+            "node-b",
+            1,
+            &[("node-a", 1), ("node-b", 1)],
+            "booking",
+            "b-pending-inbound",
+            P2pOperation::Upsert,
+            Some(serde_json::to_value(remote).unwrap()),
+        );
+        let report = db.apply_received_p2p_batch(P2pInboundBatch {
+            workspace_id: "w-1",
+            peer_id: "peer-b",
+            expected_cursor: 0,
+            next_cursor: 1,
+            events: std::slice::from_ref(&event),
+        }).unwrap();
+
+        assert_eq!(report.blocked_by_pending_local, 1);
+        assert_eq!(db.get_booking("w-1", "b-pending-inbound").unwrap().unwrap().guest_name, "Local pending");
+        let status: String = db.connection.query_row(
+            "SELECT status FROM p2p_record_frontiers WHERE workspace_id='w-1' AND entity='booking' AND entity_id='b-pending-inbound'",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(status, "blocked_pending_local");
+    }
+
+    #[test]
+    fn inbound_projection_failure_rolls_back_event_and_peer_cursor() {
+        let mut db = database();
+        db.connection.execute_batch(
+            "CREATE TRIGGER fail_inbound_booking
+             BEFORE INSERT ON bookings
+             BEGIN SELECT RAISE(ABORT, 'injected projection failure'); END;",
+        ).unwrap();
+        let event = remote_event(
+            "node-b",
+            1,
+            &[("node-b", 1)],
+            "booking",
+            "b-rollback-inbound",
+            P2pOperation::Upsert,
+            Some(serde_json::to_value(booking("b-rollback-inbound")).unwrap()),
+        );
+        assert!(db.apply_received_p2p_batch(P2pInboundBatch {
+            workspace_id: "w-1",
+            peer_id: "peer-b",
+            expected_cursor: 0,
+            next_cursor: 1,
+            events: std::slice::from_ref(&event),
+        }).is_err());
+        assert_eq!(db.p2p_event_count("w-1").unwrap(), 0);
+        let cursor_exists: bool = db.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM p2p_peer_cursors WHERE workspace_id='w-1' AND peer_id='peer-b')",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(!cursor_exists);
+        assert!(db.get_booking("w-1", "b-rollback-inbound").unwrap().is_none());
+    }
+
+    #[test]
+    fn inbound_generic_entity_upsert_preserves_unknown_json_fields() {
+        let mut db = database();
+        let payload = serde_json::json!({
+            "id": "resource-inbound",
+            "sector": "hotel",
+            "futureField": {"must": "survive"}
+        });
+        let event = remote_event(
+            "node-b",
+            1,
+            &[("node-b", 1)],
+            "resources",
+            "resource-inbound",
+            P2pOperation::Upsert,
+            Some(payload),
+        );
+        let report = db.apply_received_p2p_batch(P2pInboundBatch {
+            workspace_id: "w-1",
+            peer_id: "peer-b",
+            expected_cursor: 0,
+            next_cursor: 1,
+            events: std::slice::from_ref(&event),
+        }).unwrap();
+        assert_eq!(report.applied_records, 1);
+        let stored = db.get_entity_record("w-1", "resources", "resource-inbound").unwrap().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&stored.payload).unwrap();
+        assert_eq!(parsed["futureField"]["must"], "survive");
+    }
+
     #[test]
     fn booking_and_outbox_commit_atomically() {
         let mut db = database();
@@ -2110,7 +2326,7 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(version, 6);
+        assert_eq!(version, 7);
         assert!(outbox_sql.contains("'conflict'"));
         assert!(
             entity_records_exists,
