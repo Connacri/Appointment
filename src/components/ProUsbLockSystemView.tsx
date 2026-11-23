@@ -935,20 +935,23 @@ export const ProUsbLockSystemView: React.FC = () => {
         if (wantPlanning) {
           const { resourceGroups: rawMdbGroups, bookings: rawMdbBookings, buildingStats, skippedGuests, warnings: planningWarnings } =
             mdbSnapshotToPlanning(snapshot);
+          const importEstablishmentId = selectedEstablishmentId && selectedEstablishmentId !== 'all'
+            ? selectedEstablishmentId
+            : undefined;
           const mdbGroups = rawMdbGroups.map((group) => ({
             ...group,
             workspaceId: activeWorkspaceId,
-            establishmentId: selectedEstablishmentId,
+            establishmentId: importEstablishmentId,
             resources: group.resources.map((resource) => ({
               ...resource,
               workspaceId: activeWorkspaceId,
-              establishmentId: selectedEstablishmentId,
+              establishmentId: importEstablishmentId,
             })),
           }));
           const mdbBookings = rawMdbBookings.map((booking) => ({
             ...booking,
             workspaceId: activeWorkspaceId,
-            establishmentId: selectedEstablishmentId,
+            establishmentId: importEstablishmentId,
           }));
           setResourceGroups((current) => [
             ...current.filter((group) => !group.id.startsWith('mdb-') && !DEMO_RESOURCE_GROUP_IDS.has(group.id)),
