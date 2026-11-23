@@ -1340,19 +1340,35 @@ class IndexedDbStore {
     const tombstoneId = `${context.workspaceId}:${entity}:${item.id}`;
     const request = workspaceEntities.get([context.workspaceId, entity, item.id]);
     const tombstoneRequest = tombstones.get(tombstoneId);
-    let current: { version?: number } | undefined;
+    let current: { version?: number; establishmentId?: string; payload?: Record<string, unknown> } | undefined;
     let previousTombstone: TombstoneRecord | undefined;
     let entityReady = false;
     let tombstoneReady = false;
     const commitMutation = () => {
       if (!entityReady || !tombstoneReady) return;
-      const version = Math.max(current?.version ?? 0, previousTombstone?.version ?? 0) + 1;
-      const now = new Date().toISOString();
       const baseItem =
         storeName === 'bookings'
           ? (migrateBookingRecordV7(item as Partial<TimelineBooking>) as T)
           : item;
-      const persisted = { ...baseItem, workspaceId: context.workspaceId, establishmentId: context.establishmentId, syncVersion: version, deletedAt: null };
+      const establishmentId = context.establishmentId ?? current?.establishmentId;
+      const candidate = {
+        ...baseItem,
+        workspaceId: context.workspaceId,
+        ...(establishmentId ? { establishmentId } : {}),
+        deletedAt: null,
+      } as T & Record<string, unknown>;
+      if (
+        current?.payload
+        && !previousTombstone
+        && stableSerialize(businessPayloadForComparison(current.payload))
+          === stableSerialize(businessPayloadForComparison(candidate))
+      ) {
+        store.put(current.payload as T);
+        return;
+      }
+      const version = Math.max(current?.version ?? 0, previousTombstone?.version ?? 0) + 1;
+      const now = new Date().toISOString();
+      const persisted = { ...candidate, syncVersion: version };
       const entityRecord = {
         workspaceId: context.workspaceId, establishmentId: context.establishmentId,
         entity, entityId: item.id, version, updatedAt: now, payload: persisted,
@@ -1363,7 +1379,11 @@ class IndexedDbStore {
       tx.objectStore('outbox').add(this.createOutboxRecord(context, entity, item.id, 'upsert', version, persisted as Record<string, unknown>, now));
       this.appendLocalP2pEvent(tx, context.workspaceId, entity, item.id, 'upsert', persisted as Record<string, unknown>, now);
     };
-    request.onsuccess = () => { current = request.result as { version?: number } | undefined; entityReady = true; commitMutation(); };
+    request.onsuccess = () => {
+      current = request.result as typeof current;
+      entityReady = true;
+      commitMutation();
+    };
     tombstoneRequest.onsuccess = () => { previousTombstone = tombstoneRequest.result as TombstoneRecord | undefined; tombstoneReady = true; commitMutation(); };
     request.onerror = () => tx.abort();
     tombstoneRequest.onerror = () => tx.abort();
