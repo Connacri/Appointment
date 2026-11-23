@@ -55,19 +55,37 @@ pub struct PmsDatabase {
     connection: Connection,
 }
 
+fn user_table_row_counts(connection: &Connection) -> rusqlite::Result<std::collections::BTreeMap<String, i64>> {
+    let mut statement = connection.prepare(
+        "SELECT name FROM sqlite_master
+         WHERE type='table' AND name NOT LIKE 'sqlite_%'
+         ORDER BY name",
+    )?;
+    let names = statement
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    drop(statement);
+
+    let mut counts = std::collections::BTreeMap::new();
+    for name in names {
+        // Table names originate from sqlite_master, but still quote identifiers safely.
+        let quoted = format!("\"{}\"", name.replace('"', "\"\""));
+        let sql = format!("SELECT COUNT(*) FROM {quoted}");
+        let count = connection.query_row(&sql, [], |row| row.get::<_, i64>(0))?;
+        counts.insert(name, count);
+    }
+    Ok(counts)
+}
+
 fn backup_before_migration_if_needed(
     connection: &Connection,
     database_path: &std::path::Path,
 ) -> rusqlite::Result<Option<std::path::PathBuf>> {
-    let table_count: i64 = connection.query_row(
-        "SELECT COUNT(*) FROM sqlite_master
-         WHERE type='table' AND name NOT LIKE 'sqlite_%'",
-        [],
-        |row| row.get(0),
-    )?;
-    if table_count == 0 {
+    let source_row_counts = user_table_row_counts(connection)?;
+    if source_row_counts.is_empty() {
         return Ok(None);
     }
+    let table_count = source_row_counts.len() as i64;
 
     let has_migrations: bool = connection.query_row(
         "SELECT EXISTS(
@@ -135,6 +153,15 @@ fn backup_before_migration_if_needed(
     if backup_tables != table_count {
         return Err(rusqlite::Error::InvalidParameterName(
             "pre-migration backup table count mismatch; source database was not migrated".into(),
+        ));
+    }
+
+    let backup_row_counts = user_table_row_counts(&backup)?;
+    if backup_row_counts != source_row_counts {
+        return Err(rusqlite::Error::InvalidParameterName(
+            format!(
+                "pre-migration backup row-count mismatch; source database was not migrated (source: {source_row_counts:?}, backup: {backup_row_counts:?})"
+            ),
         ));
     }
     Ok(Some(backup_path))
@@ -919,23 +946,52 @@ mod migration_safety_tests {
             )
             .unwrap();
 
+        connection
+            .execute(
+                "INSERT INTO legacy_records(id,payload) VALUES ('r-2','also-preserve-me')",
+                [],
+            )
+            .unwrap();
+
         let backup_path = backup_before_migration_if_needed(&connection, &path)
             .unwrap()
             .expect("legacy database must be backed up before migration");
-        let backup = Connection::open(backup_path).unwrap();
-        let payload: String = backup
-            .query_row(
-                "SELECT payload FROM legacy_records WHERE id='r-1'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
+        let backup = Connection::open(&backup_path).unwrap();
+        let payloads: Vec<String> = {
+            let mut statement = backup
+                .prepare("SELECT payload FROM legacy_records ORDER BY id")
+                .unwrap();
+            statement
+                .query_map([], |row| row.get(0))
+                .unwrap()
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .unwrap()
+        };
         let integrity: String = backup
             .query_row("PRAGMA integrity_check", [], |row| row.get(0))
             .unwrap();
 
-        assert_eq!(payload, "preserve-me");
+        assert_eq!(payloads, vec!["preserve-me", "also-preserve-me"]);
+        assert_eq!(user_table_row_counts(&connection).unwrap(), user_table_row_counts(&backup).unwrap());
         assert_eq!(integrity, "ok");
+
+        // Restore drill: copy the verified snapshot to a fresh database path,
+        // reopen it, and prove that all rows remain readable.
+        let restored_path = directory.path().join("restored.sqlite3");
+        std::fs::copy(&backup_path, &restored_path).unwrap();
+        let restored = Connection::open(restored_path).unwrap();
+        let restored_payloads: Vec<String> = {
+            let mut statement = restored
+                .prepare("SELECT payload FROM legacy_records ORDER BY id")
+                .unwrap();
+            statement
+                .query_map([], |row| row.get(0))
+                .unwrap()
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .unwrap()
+        };
+        assert_eq!(restored_payloads, vec!["preserve-me", "also-preserve-me"]);
+        assert_eq!(restored.query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0)).unwrap(), "ok");
     }
 
     #[test]
