@@ -933,8 +933,23 @@ export const ProUsbLockSystemView: React.FC = () => {
           `Les bâtiments créés localement seront conservés ; les données précédemment importées de CardLock seront actualisées.`,
         );
         if (wantPlanning) {
-          const { resourceGroups: mdbGroups, bookings: mdbBookings, buildingStats, skippedGuests, warnings: planningWarnings } =
+          const { resourceGroups: rawMdbGroups, bookings: rawMdbBookings, buildingStats, skippedGuests, warnings: planningWarnings } =
             mdbSnapshotToPlanning(snapshot);
+          const mdbGroups = rawMdbGroups.map((group) => ({
+            ...group,
+            workspaceId: activeWorkspaceId,
+            establishmentId: selectedEstablishmentId,
+            resources: group.resources.map((resource) => ({
+              ...resource,
+              workspaceId: activeWorkspaceId,
+              establishmentId: selectedEstablishmentId,
+            })),
+          }));
+          const mdbBookings = rawMdbBookings.map((booking) => ({
+            ...booking,
+            workspaceId: activeWorkspaceId,
+            establishmentId: selectedEstablishmentId,
+          }));
           setResourceGroups((current) => [
             ...current.filter((group) => !group.id.startsWith('mdb-') && !DEMO_RESOURCE_GROUP_IDS.has(group.id)),
             ...mdbGroups,
