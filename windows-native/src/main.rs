@@ -18,7 +18,9 @@ fn main() {
     let data_dir = match application_data_dir() {
         Ok(path) => path,
         Err(error) => {
-            win32::show_error(&format!("Local data directory initialization failed:\n{error}"));
+            win32::show_error(&format!(
+                "Local data directory initialization failed:\n{error}"
+            ));
             std::process::exit(1);
         }
     };
@@ -32,7 +34,9 @@ fn main() {
     let node_id = match initialize_node_identity(&data_dir) {
         Ok(node_id) => node_id,
         Err(error) => {
-            win32::show_error(&format!("LAN node identity initialization failed:\n{error}"));
+            win32::show_error(&format!(
+                "LAN node identity initialization failed:\n{error}"
+            ));
             std::process::exit(1);
         }
     };
@@ -53,9 +57,7 @@ fn application_data_dir() -> Result<std::path::PathBuf, String> {
     Ok(data_dir)
 }
 
-fn initialize_local_database(
-    data_dir: &std::path::Path,
-) -> Result<database::PmsDatabase, String> {
+fn initialize_local_database(data_dir: &std::path::Path) -> Result<database::PmsDatabase, String> {
     let database_path = data_dir.join("appointment.sqlite3");
     database::PmsDatabase::open(&database_path)
         .map_err(|error| format!("Cannot initialize SQLite database: {error}"))
@@ -90,10 +92,9 @@ fn initialize_node_identity(data_dir: &std::path::Path) -> Result<String, String
             Ok(identity)
         }
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            let value = std::fs::read_to_string(&identity_path)
-                .map_err(|read_error| {
-                    format!("Cannot read concurrently created P2P identity: {read_error}")
-                })?;
+            let value = std::fs::read_to_string(&identity_path).map_err(|read_error| {
+                format!("Cannot read concurrently created P2P identity: {read_error}")
+            })?;
             let normalized = uuid::Uuid::parse_str(value.trim())
                 .map_err(|_| "Concurrently created P2P node identity is invalid.".to_string())?;
             Ok(normalized.hyphenated().to_string())
@@ -114,7 +115,10 @@ mod tests {
 
         assert_eq!(first, second);
         assert_eq!(
-            uuid::Uuid::parse_str(&first).unwrap().hyphenated().to_string(),
+            uuid::Uuid::parse_str(&first)
+                .unwrap()
+                .hyphenated()
+                .to_string(),
             first
         );
     }
