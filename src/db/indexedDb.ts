@@ -16,6 +16,7 @@ import { EVENT_LOG_MAX_ENTRIES, sortEventLogsDesc } from '../utils/eventLog';
 import { waitForTransactionCompletion } from './indexedDbTransaction';
 import { migrateBookingRecordV7 } from './bookingMigration';
 import { createP2pEvent, type P2pOperation } from '../services/p2p/protocol';
+import { getNativeLanNodeIdentity, supportsNativeLanDiscovery } from '../services/p2p/LanDiscoveryBridge';
 
 export interface IndexedDbQueryOptions<T> {
   where?: (item: T) => boolean;
@@ -692,6 +693,27 @@ class IndexedDbStore {
     };
   }
 
+  /** Stable per-installation node identity shared with Android multicast discovery. */
+  public async getP2pNodeId(): Promise<string> {
+    await this.openStore();
+    if (!this.idb) throw new Error('P2P persistence requires IndexedDB.');
+    const candidate = supportsNativeLanDiscovery()
+      ? await getNativeLanNodeIdentity()
+      : this.createId();
+    const tx = this.idb.transaction('p2pMeta', 'readwrite');
+    let resolvedNodeId: string | undefined;
+    const request = tx.objectStore('p2pMeta').get('nodeId');
+    request.onsuccess = () => {
+      const existing = (request.result as { value?: string } | undefined)?.value;
+      resolvedNodeId = existing || candidate;
+      if (!existing) tx.objectStore('p2pMeta').add({ key: 'nodeId', value: candidate });
+    };
+    request.onerror = () => tx.abort();
+    await waitForTransactionCompletion(tx, 'getP2pNodeId');
+    if (!resolvedNodeId) throw new Error('Could not persist the local P2P node identity.');
+    return resolvedNodeId;
+  }
+
   /**
    * Append a local immutable P2P event and advance every observed vector-clock component
    * inside the caller's existing business+Outbox IndexedDB transaction.
@@ -715,8 +737,10 @@ class IndexedDbStore {
     const finish = () => {
       if (!metaReady || !clockReady) return;
       try {
-        nodeId ??= this.createId();
-        metaStore.put({ key: 'nodeId', value: nodeId });
+        if (!nodeId) {
+          tx.abort();
+          return;
+        }
         const observed = Object.fromEntries(clockRows.map((row) => [row.nodeId, row.sequence]));
         const event = createP2pEvent({
           nodeId,
@@ -763,6 +787,8 @@ class IndexedDbStore {
     if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox writes.');
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
+    await this.getP2pNodeId();
+    await this.getP2pNodeId();
     const tx = this.idb.transaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta'], 'readwrite');
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
@@ -929,6 +955,7 @@ class IndexedDbStore {
     }
 
     const now = new Date().toISOString();
+    await this.getP2pNodeId();
     const tx = this.idb.transaction(['outbox', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta'], 'readwrite');
     const outbox = tx.objectStore('outbox');
     const workspaceEntities = tx.objectStore('workspaceEntities');
