@@ -432,32 +432,33 @@ backgrounded. Android 16 normally permits target-SDK-36 LAN access; if its opt-i
 compatibility restriction blocks multicast, the plugin requests Nearby devices.
 ACCESS_LOCAL_NETWORK is required only when the app targets SDK 37 or higher.
 
-Native Windows SQLite persists a workspace-scoped append-only event log and
-merged vector clock (schema v6). Local event creation and clock advancement share one
-SQLite transaction; exact replays are idempotent and event-ID equivocation is rejected.
-The canonical native local-mutation APIs, `upsert_booking`, `delete_booking` and
-`upsert_entity_record`, now write the business row, Supabase Outbox record, P2P event
-and vector-clock advancement in the same SQLite transaction. Injected P2P append
-failures are covered by rollback tests proving that neither the business row nor Outbox
-entry is committed. Legacy paths are deliberately renamed
-`upsert_booking_outbox_only`, `delete_booking_outbox_only` and
-`upsert_entity_record_unreplicated` so they cannot be mistaken for replication-safe
-local mutation APIs.
+Native Windows SQLite schema v7 persists the workspace-scoped append-only event log,
+merged vector clock, peer transport cursors and per-record causal frontiers. Canonical
+local mutation APIs `upsert_booking`, `delete_booking`, `upsert_entity_record` and
+`delete_entity_record` atomically persist business state, version/tombstone, Supabase
+Outbox intent, P2P event and vector-clock advancement. Fault-injection tests prove that
+failed P2P appends roll back both business and Outbox writes.
 
-This is an API-level safety boundary, not yet production activation: native UI/application
-call sites have not yet been migrated to the canonical atomic APIs. Remote event receipt
-is currently only durable event append; applying a remote event to business state, its
-cursor and conflict frontier in one transaction is not yet implemented. Android's
-IndexedDB event log and equivalent atomic local-mutation APIs are not yet implemented.
+Native inbound batches now append events, merge clocks, compute causal frontiers, apply
+resolved booking/entity projections, retain concurrent conflicts, and advance the
+peer cursor in one SQLite transaction. A projection failure rolls back the received
+events and cursor. Pending local Outbox mutations block remote projection overwrite;
+after a verified server ACK, the blocked frontier is re-evaluated in the same ACK
+transaction. Conflict frontiers remain stored rather than using last-write-wins.
 
-Before enabling P2P data synchronization in production, the implementation still
-requires migration of every local business write path to the atomic APIs (or removal of
-the Outbox-only local mutation paths), an atomic inbound apply + cursor + conflict
-transaction, Android IndexedDB parity, encrypted and authenticated peer pairing,
-workspace-level authorization, replay protection, bounded anti-entropy/checkpointing,
-tombstone retention, and domain-specific conflict resolution with UI workflows.
-Every gate must be implemented and tested. P2P business replication remains disabled
-until all gates pass.
+Android/Web IndexedDB schema v8 now creates durable P2P event, vector-clock, node identity,
+peer-cursor and record-frontier stores. The Outbox-backed local mutation paths append
+their P2P event and update the vector clock inside the same IndexedDB transaction as
+the operational record and Outbox entry. Full inbound projection/cursor atomicity and
+conflict reconciliation on IndexedDB are still outstanding.
+
+This remains a foundation, not production activation. Native Win32 application
+workflows are not yet wired to the canonical atomic APIs, and no authenticated P2P
+transport currently exchanges events. Android inbound apply, encrypted and authenticated
+peer pairing, workspace-level authorization, replay-safe transport framing,
+anti-entropy/checkpointing, tombstone retention, user-facing conflict resolution,
+cross-platform crash/power-loss tests and migration/restore drills remain release gates.
+P2P business replication remains disabled until every gate is implemented and tested.
 
 **Partition invariant:** with no coordinator or quorum, independent peers may accept
 conflicting operations while disconnected. Appointment cannot guarantee globally
