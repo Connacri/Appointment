@@ -441,7 +441,9 @@ failed P2P appends roll back both business and Outbox writes.
 
 Native inbound batches now append events, merge clocks, compute causal frontiers, apply
 resolved booking/entity projections, retain concurrent conflicts, and advance the
-peer cursor in one SQLite transaction. A projection failure rolls back the received
+peer cursor in one SQLite transaction. An empty inbound page is forbidden from
+advancing the durable cursor: an incomplete/empty response must never skip events.
+ A projection failure rolls back the received
 events and cursor. Pending local Outbox mutations block remote projection overwrite;
 after a verified server ACK, the blocked frontier is re-evaluated in the same ACK
 transaction. Conflict frontiers remain stored rather than using last-write-wins.
