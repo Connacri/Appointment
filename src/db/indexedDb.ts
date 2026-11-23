@@ -15,7 +15,14 @@ import type { EventLogEntry } from '../types/eventLog';
 import { EVENT_LOG_MAX_ENTRIES, sortEventLogsDesc } from '../utils/eventLog';
 import { waitForTransactionCompletion } from './indexedDbTransaction';
 import { migrateBookingRecordV7 } from './bookingMigration';
-import { createP2pEvent, type P2pOperation } from '../services/p2p/protocol';
+import {
+  createP2pEvent,
+  getP2pRecordState,
+  mergeP2pEvents,
+  validateP2pEvent,
+  type P2pEvent,
+  type P2pOperation,
+} from '../services/p2p/protocol';
 import { getNativeLanNodeIdentity, supportsNativeLanDiscovery } from '../services/p2p/LanDiscoveryBridge';
 
 export interface IndexedDbQueryOptions<T> {
@@ -62,6 +69,19 @@ export interface TombstoneRecord {
   entityId: string; version: number; deletedAt: string;
 }
 export interface OutboxMutationContext { workspaceId: string; establishmentId?: string; }
+export interface P2pInboundBatch {
+  workspaceId: string;
+  peerId: string;
+  expectedCursor: number;
+  nextCursor: number;
+  events: P2pEvent[];
+}
+export interface P2pApplyReport {
+  appendedEvents: number;
+  appliedRecords: number;
+  conflicts: number;
+  blockedByPendingLocal: number;
+}
 export interface OutboxSummary {
   pendingCount: number;
   failedCount: number;
@@ -691,6 +711,299 @@ class IndexedDbStore {
       entity, entityId, operation, version, payload,
       status: 'pending', attempts: 0, createdAt: now, nextAttemptAt: now,
     };
+  }
+
+  /**
+   * Apply one authenticated transport page. Event log, vector clock, materialized
+   * records, conflict frontier and peer cursor commit in one IndexedDB transaction.
+   */
+  public async applyReceivedP2pBatch(batch: P2pInboundBatch): Promise<P2pApplyReport> {
+    if (
+      !batch.workspaceId.trim()
+      || !batch.peerId.trim()
+      || !Number.isSafeInteger(batch.expectedCursor)
+      || !Number.isSafeInteger(batch.nextCursor)
+      || batch.expectedCursor < 0
+      || batch.nextCursor < batch.expectedCursor
+      || batch.events.length > 500
+      || (batch.events.length > 0 && batch.nextCursor === batch.expectedCursor)
+    ) throw new Error('Invalid P2P inbound batch identity, cursor or page size.');
+    for (const event of batch.events) {
+      validateP2pEvent(event);
+      if (event.workspaceId !== batch.workspaceId) {
+        throw new Error('P2P inbound batch contains an event from another workspace.');
+      }
+      if (new TextEncoder().encode(JSON.stringify(event)).byteLength > 1024 * 1024) {
+        throw new Error('P2P event exceeds the 1 MiB persistence limit.');
+      }
+      if (!(['booking', 'resource', 'resource_group', 'establishment', 'task', 'stock_item', 'invoice'] as string[]).includes(event.entity)) {
+        throw new Error(`Unsupported P2P entity type: ${event.entity}`);
+      }
+    }
+
+    await this.openStore();
+    if (!this.idb) throw new Error('P2P replication requires IndexedDB; localStorage fallback is unsafe.');
+    const tx = this.idb.transaction(
+      ['p2pEvents', 'p2pClock', 'p2pPeerCursors', 'p2pRecordFrontiers', 'outbox',
+        'tombstones', 'workspaceEntities', 'bookings', 'resources', 'invoices', 'resourceGroups'],
+      'readwrite',
+    );
+    const report: P2pApplyReport = {
+      appendedEvents: 0,
+      appliedRecords: 0,
+      conflicts: 0,
+      blockedByPendingLocal: 0,
+    };
+    const affected = new Map<string, { entity: string; entityId: string }>();
+    const abort = () => { try { tx.abort(); } catch { /* already inactive */ } };
+
+    const cursorRequest = tx.objectStore('p2pPeerCursors').get([batch.workspaceId, batch.peerId]);
+    cursorRequest.onsuccess = () => {
+      const persisted = (cursorRequest.result as { cursor?: number } | undefined)?.cursor ?? 0;
+      if (persisted !== batch.expectedCursor) {
+        abort();
+        return;
+      }
+      const appendNext = (index: number): void => {
+        if (index >= batch.events.length) {
+          mergeClockAndApply();
+          return;
+        }
+        const event = batch.events[index];
+        const eventStore = tx.objectStore('p2pEvents');
+        const existingRequest = eventStore.get([batch.workspaceId, event.eventId]);
+        existingRequest.onsuccess = () => {
+          const existing = existingRequest.result as P2pEvent | undefined;
+          try {
+            if (existing) {
+              mergeP2pEvents([existing], [event]);
+            } else {
+              eventStore.add(event);
+              report.appendedEvents += 1;
+            }
+            affected.set(`${event.entity}\u0000${event.entityId}`, {
+              entity: event.entity,
+              entityId: event.entityId,
+            });
+            appendNext(index + 1);
+          } catch {
+            abort();
+          }
+        };
+        existingRequest.onerror = abort;
+      };
+
+      const mergeClockAndApply = (): void => {
+        const clockStore = tx.objectStore('p2pClock');
+        const clockRequest = clockStore.index('workspaceId').getAll(batch.workspaceId);
+        clockRequest.onsuccess = () => {
+          const merged = new Map<string, number>();
+          for (const row of clockRequest.result as Array<{ nodeId: string; sequence: number }>) {
+            merged.set(row.nodeId, row.sequence);
+          }
+          for (const event of batch.events) {
+            for (const [nodeId, sequence] of Object.entries(event.clock)) {
+              merged.set(nodeId, Math.max(merged.get(nodeId) ?? 0, sequence));
+            }
+          }
+          if (merged.size > 256) {
+            abort();
+            return;
+          }
+          for (const [nodeId, sequence] of merged) {
+            clockStore.put({ workspaceId: batch.workspaceId, nodeId, sequence });
+          }
+          applyNext([...affected.values()], 0);
+        };
+        clockRequest.onerror = abort;
+      };
+
+      const applyNext = (records: Array<{ entity: string; entityId: string }>, index: number): void => {
+        if (index >= records.length) {
+          tx.objectStore('p2pPeerCursors').put({
+            workspaceId: batch.workspaceId,
+            peerId: batch.peerId,
+            cursor: batch.nextCursor,
+            updatedAt: new Date().toISOString(),
+          });
+          return;
+        }
+        const record = records[index];
+        const eventsRequest = tx.objectStore('p2pEvents').index('workspaceEntity')
+          .getAll(IDBKeyRange.only([batch.workspaceId, record.entity, record.entityId]));
+        eventsRequest.onsuccess = () => {
+          const state = getP2pRecordState(eventsRequest.result as P2pEvent[]);
+          if (state.kind === 'missing') {
+            applyNext(records, index + 1);
+            return;
+          }
+          const frontier = state.kind === 'resolved' ? [state.event] : state.events;
+          const frontierStore = tx.objectStore('p2pRecordFrontiers');
+          if (state.kind === 'conflict') {
+            frontierStore.put({
+              workspaceId: batch.workspaceId,
+              entity: record.entity,
+              entityId: record.entityId,
+              status: 'conflict',
+              frontier,
+              appliedEventId: null,
+              updatedAt: new Date().toISOString(),
+            });
+            report.conflicts += 1;
+            applyNext(records, index + 1);
+            return;
+          }
+
+          const outboxRequest = tx.objectStore('outbox').index('workspaceEntity')
+            .getAll(IDBKeyRange.only([batch.workspaceId, record.entity, record.entityId]));
+          outboxRequest.onsuccess = () => {
+            const hasPending = (outboxRequest.result as OutboxRecord[])
+              .some((item) => item.status === 'pending' || item.status === 'failed');
+            if (hasPending) {
+              frontierStore.put({
+                workspaceId: batch.workspaceId,
+                entity: record.entity,
+                entityId: record.entityId,
+                status: 'blocked_pending_local',
+                frontier,
+                appliedEventId: null,
+                updatedAt: new Date().toISOString(),
+              });
+              report.blockedByPendingLocal += 1;
+              applyNext(records, index + 1);
+              return;
+            }
+            const previousRequest = frontierStore.get([batch.workspaceId, record.entity, record.entityId]);
+            previousRequest.onsuccess = () => {
+              const previous = previousRequest.result as { appliedEventId?: string; status?: string } | undefined;
+              const apply = () => this.applyIndexedDbP2pProjection(tx, state.event, () => {
+                frontierStore.put({
+                  workspaceId: batch.workspaceId,
+                  entity: record.entity,
+                  entityId: record.entityId,
+                  status: 'resolved',
+                  frontier,
+                  appliedEventId: state.event.eventId,
+                  updatedAt: new Date().toISOString(),
+                });
+                report.appliedRecords += 1;
+                applyNext(records, index + 1);
+              }, abort);
+              if (previous?.status === 'resolved' && previous.appliedEventId === state.event.eventId) {
+                applyNext(records, index + 1);
+              } else {
+                apply();
+              }
+            };
+            previousRequest.onerror = abort;
+          };
+          outboxRequest.onerror = abort;
+        };
+        eventsRequest.onerror = abort;
+      };
+
+      appendNext(0);
+    };
+    cursorRequest.onerror = abort;
+
+    await waitForTransactionCompletion(tx, 'applyReceivedP2pBatch');
+    return report;
+  }
+
+  private applyIndexedDbP2pProjection(
+    tx: IDBTransaction,
+    event: P2pEvent,
+    done: () => void,
+    abort: () => void,
+  ): void {
+    const workspaceEntities = tx.objectStore('workspaceEntities');
+    const tombstones = tx.objectStore('tombstones');
+    const entity = event.entity as OutboxEntity;
+    const tombstoneId = `${event.workspaceId}:${entity}:${event.entityId}`;
+    const entityRequest = workspaceEntities.get([event.workspaceId, entity, event.entityId]);
+    const tombstoneRequest = tombstones.get(tombstoneId);
+    const storeName = entity === 'booking' ? 'bookings'
+      : entity === 'resource' ? 'resources'
+        : entity === 'invoice' ? 'invoices'
+          : entity === 'resource_group' ? 'resourceGroups'
+            : undefined;
+    let currentEntity: { version?: number; establishmentId?: string } | undefined;
+    let currentTombstone: TombstoneRecord | undefined;
+    let currentOperational: Record<string, unknown> | undefined;
+    let entityReady = false;
+    let tombstoneReady = false;
+    let operationalReady = !storeName;
+
+    const commit = () => {
+      if (!entityReady || !tombstoneReady || !operationalReady) return;
+      if (currentOperational && currentOperational.workspaceId !== event.workspaceId) {
+        abort();
+        return;
+      }
+      const version = Math.max(currentEntity?.version ?? 0, currentTombstone?.version ?? 0) + 1;
+      const establishmentId = currentEntity?.establishmentId
+        ?? (typeof event.payload?.establishmentId === 'string' ? event.payload.establishmentId : undefined);
+      if (event.operation === 'upsert') {
+        if (!event.payload || typeof event.payload !== 'object' || Array.isArray(event.payload)
+          || event.payload.id !== event.entityId) {
+          abort();
+          return;
+        }
+        const persisted = {
+          ...event.payload,
+          workspaceId: event.workspaceId,
+          establishmentId,
+          syncVersion: version,
+          deletedAt: null,
+        };
+        workspaceEntities.put({
+          workspaceId: event.workspaceId,
+          establishmentId,
+          entity,
+          entityId: event.entityId,
+          version,
+          updatedAt: event.createdAt,
+          payload: persisted,
+        });
+        if (storeName) tx.objectStore(storeName).put(persisted);
+        tombstones.delete(tombstoneId);
+      } else {
+        if (storeName) tx.objectStore(storeName).delete(event.entityId);
+        workspaceEntities.delete([event.workspaceId, entity, event.entityId]);
+        tombstones.put({
+          id: tombstoneId,
+          workspaceId: event.workspaceId,
+          establishmentId,
+          entity,
+          entityId: event.entityId,
+          version,
+          deletedAt: event.createdAt,
+        } satisfies TombstoneRecord);
+      }
+      done();
+    };
+
+    entityRequest.onsuccess = () => {
+      currentEntity = entityRequest.result as typeof currentEntity;
+      entityReady = true;
+      commit();
+    };
+    tombstoneRequest.onsuccess = () => {
+      currentTombstone = tombstoneRequest.result as TombstoneRecord | undefined;
+      tombstoneReady = true;
+      commit();
+    };
+    entityRequest.onerror = abort;
+    tombstoneRequest.onerror = abort;
+    if (storeName) {
+      const operationalRequest = tx.objectStore(storeName).get(event.entityId);
+      operationalRequest.onsuccess = () => {
+        currentOperational = operationalRequest.result as Record<string, unknown> | undefined;
+        operationalReady = true;
+        commit();
+      };
+      operationalRequest.onerror = abort;
+    }
   }
 
   /** Stable per-installation node identity shared with Android multicast discovery. */
