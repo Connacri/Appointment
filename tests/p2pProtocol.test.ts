@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  createP2pEvent,
   getP2pRecordState,
   happensBefore,
   maximalP2pEvents,
@@ -43,6 +44,29 @@ test('builds a monotonically increasing local clock', () => {
     sequence: 4,
     clock: { 'node-a': 4, 'node-b': 7 },
   });
+});
+
+test('creates a validated durable-mutation event without losing unknown payload fields', () => {
+  const payload = {
+    id: 'resource-1',
+    futureField: { nested: ['preserve', 42] },
+  };
+  const created = createP2pEvent({
+    nodeId: 'node-a',
+    workspaceId: 'workspace-1',
+    entity: 'resource',
+    entityId: 'resource-1',
+    operation: 'upsert',
+    payload,
+    createdAt: '2026-11-23T09:00:00.000Z',
+    observedClock: { 'node-b': 8 },
+  });
+
+  assert.equal(created.eventId, 'node-a:1');
+  assert.equal(created.clock['node-a'], 1);
+  assert.equal(created.clock['node-b'], 8);
+  assert.deepEqual(created.payload, payload);
+  validateP2pEvent(created);
 });
 
 test('merges replicas by set union and is idempotent', () => {
