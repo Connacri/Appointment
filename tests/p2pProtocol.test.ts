@@ -47,6 +47,25 @@ test('builds a monotonically increasing local clock', () => {
   });
 });
 
+test('new local events causally include every observed remote clock component', () => {
+  const receivedClock = { 'node-b': 9, 'node-c': 4 };
+  const local = createP2pEvent({
+    nodeId: 'node-a',
+    workspaceId: 'workspace-1',
+    entity: 'booking',
+    entityId: 'booking-2',
+    operation: 'upsert',
+    payload: { id: 'booking-2' },
+    createdAt: '2026-11-23T09:02:00.000Z',
+    observedClock: receivedClock,
+  });
+
+  assert.equal(local.sequence, 1);
+  assert.equal(local.clock['node-a'], 1);
+  assert.equal(local.clock['node-b'], 9);
+  assert.equal(local.clock['node-c'], 4);
+});
+
 test('empty inbound pages cannot advance a durable peer cursor', () => {
   assert.equal(validateP2pCursorAdvance(0, 0, 0), true);
   assert.equal(validateP2pCursorAdvance(0, 1, 0), false);
