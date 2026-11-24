@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, ChevronDown, Laptop, Radio, RefreshCw, Smartphone, WifiOff } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Laptop, Radio, RefreshCw, WifiOff } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { indexedDb } from '../db/indexedDb';
 import {
