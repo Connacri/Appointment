@@ -447,7 +447,7 @@ test('backfill idempotency keys change with payload revisions and establishment 
     profile: makeProfile(),
     workspaceId,
     groups: [makeGroup()],
-    bookings: [makeBooking('bkg-1', 'room-101')],
+    bookings: [{ ...makeBooking('bkg-1', 'room-101'), totalPrice: 19000 }],
   });
   const otherEstablishment = planBackfill({
     profile: makeProfile({ name: 'Hotel Atlas' }),
