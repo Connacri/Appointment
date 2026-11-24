@@ -1,6 +1,14 @@
 # CRUD / Data Model / Supabase Audit
 
-Baseline: main at e69b5075506add8049d404ec42ab612fc865e04b. Static code-path audit; not a claim of successful runtime replication.
+Baseline: `main` at `5d0bb4f3c605f56e350c8bdd0acd8820da7ac1f9` (2026-11-24). Revalidated against the current AppContext, IndexedDB adapter, Supabase repository/sync runner, generated database types, and current P2P protocol. Static code-path audit; not a claim of successful runtime replication.
+
+## Revalidation notes (2026-11-24)
+
+- The recent booking fix classifies demo bookings by booking ID rather than by the resource they occupy. It prevents a real booking on a demo/bootstrap resource from being filtered as demo data; it does not close the other entity CRUD gaps below.
+- Direct localStorage persistence remains present in `src/context/AppContext.tsx`: task create/status/subtask/delete; stock item create/update/delete and stock movement ledger; supplier and purchase-order mutations; dynamic-rate mutations; staff mutations; establishment profile; invoice creation. These paths are not equivalent to the transactional IndexedDB Outbox/P2P write path.
+- The current `src/services/supabase/supabaseSync.ts` dispatches task and stock-item **upserts only**. It has booking/resource delete dispatch, but no invoice dispatch and no task/stock-item delete dispatch. The `invoice` Outbox union member and IndexedDB invoice store therefore must not be mistaken for a working invoice sync pipeline.
+- The current P2P protocol validates event identity, causal clocks, payload size and cursor monotonicity. LAN discovery advertises peer UUID/name only; it is not authenticated transport, workspace authorization, or replication. There is no verified end-to-end P2P business transport in the release gate.
+- Current GitHub Actions evidence: Quality Checks and Web Deploy succeeded on `5d0bb4f3`; the Windows Rust workflow and full unsigned-Windows release workflow succeeded on `594e6f6b`. These are build/test signals only and do not demonstrate CRUD or multi-device convergence.
 
 ## Required invariant
 Every business Create/Read/Update/Delete must use a typed domain repository scoped to workspace and establishment. A local mutation must atomically update the local projection, version, Outbox, tombstone (delete), and P2P event. Supabase push requires an entity/version acknowledgement; pull must preserve newer local pending mutations. UI state/localStorage are not business persistence layers.
