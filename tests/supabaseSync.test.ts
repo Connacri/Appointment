@@ -71,6 +71,7 @@ function createMemoryAdapter(seed?: {
   failPull?: boolean;
   failTombstoneRead?: boolean;
   failSummaryRead?: boolean;
+  failRemoteTombstoneApply?: boolean;
 }) {
   const outbox = [...(seed?.outbox ?? [])];
   const tombstones = [...(seed?.tombstones ?? [])];
@@ -94,6 +95,7 @@ function createMemoryAdapter(seed?: {
     ],
     groups: seed?.remote?.groups ?? [makeGroup('grp-1', [makeResource('room-101', 'est-1')])],
     bookings: seed?.remote?.bookings ?? [],
+    bookingTombstones: seed?.remote?.bookingTombstones ?? [],
     tasks: seed?.remote?.tasks ?? [],
     stockItems: seed?.remote?.stockItems ?? [],
     dynamicRates: seed?.remote?.dynamicRates ?? {},
@@ -133,6 +135,10 @@ function createMemoryAdapter(seed?: {
     getTombstones: async (workspaceId) => {
       if (seed?.failTombstoneRead) throw new Error('Tombstone read failed');
       return tombstones.filter((t) => t.workspaceId === workspaceId);
+    },
+    applyRemoteBookingTombstones: async (_workspaceId, remoteTombstones) => {
+      pushLog.push(`apply_remote_booking_tombstones:${remoteTombstones.length}`);
+      if (seed?.failRemoteTombstoneApply) throw new Error('Local tombstone transaction failed');
     },
     markOutboxSynced: async (id) => {
       pushLog.push(`ack:${id}`);
@@ -900,4 +906,66 @@ test('runSupabaseSync never reports synced when Outbox summary cannot be read', 
 
   assert.notEqual(result.status.phase, 'synced');
   assert.match(result.status.lastError ?? '', /Outbox summary read failed/);
+});
+
+test('runSupabaseSync durably applies remote booking tombstones before merge', async () => {
+  const staleLocal = makeBooking('b-remote-deleted');
+  const { adapter, pushLog, fixedNow } = createMemoryAdapter({
+    remote: {
+      bookings: [makeBooking('b-remote-deleted')],
+      bookingTombstones: [{
+        entityId: 'b-remote-deleted',
+        establishmentId: 'est-1',
+        version: 2,
+        deletedAt: '2026-11-18T11:59:00.000Z',
+      }],
+    },
+  });
+
+  const result = await runSupabaseSync({
+    force: true,
+    isOffline: false,
+    isConfigured: true,
+    workspaceId: 'ws-1',
+    selectedEstablishmentId: 'est-1',
+    localGroups: [],
+    localBookings: [staleLocal],
+    adapter,
+    now: () => fixedNow,
+  });
+
+  assert.ok(pushLog.includes('apply_remote_booking_tombstones:1'));
+  assert.deepEqual(result.mergedBookings, []);
+  assert.equal(result.status.phase, 'synced');
+});
+
+test('runSupabaseSync aborts merge and refuses synced status if local tombstone commit fails', async () => {
+  const staleLocal = makeBooking('b-remote-delete-failed');
+  const { adapter, fixedNow } = createMemoryAdapter({
+    failRemoteTombstoneApply: true,
+    remote: {
+      bookingTombstones: [{
+        entityId: 'b-remote-delete-failed',
+        establishmentId: 'est-1',
+        version: 2,
+        deletedAt: '2026-11-18T11:59:00.000Z',
+      }],
+    },
+  });
+
+  const result = await runSupabaseSync({
+    force: true,
+    isOffline: false,
+    isConfigured: true,
+    workspaceId: 'ws-1',
+    selectedEstablishmentId: 'est-1',
+    localGroups: [],
+    localBookings: [staleLocal],
+    adapter,
+    now: () => fixedNow,
+  });
+
+  assert.equal(result.mergedBookings, null);
+  assert.equal(result.status.phase, 'error');
+  assert.match(result.status.lastError ?? '', /Local tombstone transaction failed/);
 });
