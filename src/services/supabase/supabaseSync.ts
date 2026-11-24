@@ -9,7 +9,7 @@ import type {
   TimelineBooking,
 } from '../../types/booking';
 import type { EstablishmentProfile } from '../../types/establishment';
-import { mergeCloudStateWithLocal } from './cloudRecovery';
+import { mergeCloudStateWithLocal, type RemoteBookingTombstone } from './cloudRecovery';
 import type { SyncProgressEvent } from './syncLog';
 
 export type CloudSyncPhase =
@@ -40,6 +40,8 @@ export interface PulledSupabaseSnapshot {
   establishments: HotelEstablishment[];
   groups: ResourceGroup[];
   bookings: TimelineBooking[];
+  /** Explicit cloud deletes; absent rows in a normal snapshot are not deletes. */
+  bookingTombstones: RemoteBookingTombstone[];
   tasks: PmsTask[];
   stockItems: StockItem[];
   dynamicRates: Record<string, Record<string, number>>;
@@ -54,6 +56,11 @@ export interface SupabaseSyncAdapter {
   ) => Promise<OutboxRecord[]>;
   getOutboxSummary: (workspaceId: string) => Promise<OutboxSummary>;
   getTombstones: (workspaceId: string) => Promise<TombstoneRecord[]>;
+  /** Atomically persist remote deletes locally before applying the merged snapshot. */
+  applyRemoteBookingTombstones: (
+    workspaceId: string,
+    tombstones: RemoteBookingTombstone[],
+  ) => Promise<void>;
   markOutboxSynced: (id: string) => Promise<void>;
   markOutboxFailed: (id: string, error: string, nextAttemptAt: string) => Promise<void>;
   pushEstablishmentUpsert?: (
@@ -709,6 +716,13 @@ export async function runSupabaseSync({
 
   if (pulledSnapshot) {
     try {
+      // Explicit cloud deletes must be committed to the local database before
+      // the UI projection is replaced. This also appends a local P2P delete
+      // envelope so a future authenticated LAN transport can relay the tombstone.
+      if (pulledSnapshot.bookingTombstones.length > 0) {
+        await adapter.applyRemoteBookingTombstones(workspaceId, pulledSnapshot.bookingTombstones);
+      }
+
       // These reads are part of the merge safety boundary. If either fails,
       // abort the pull/merge: treating unknown local mutations as empty can
       // overwrite unsynced local state with an older remote snapshot.
@@ -724,6 +738,7 @@ export async function runSupabaseSync({
         remoteBookings: pulledSnapshot.bookings,
         pendingOutbox: remainingPending,
         tombstones,
+        remoteBookingTombstones: pulledSnapshot.bookingTombstones,
         demoGroupIds,
         demoResourceIds,
         demoBookingIds,
@@ -774,6 +789,7 @@ export async function runSupabaseSync({
   const pullCount = pulledSnapshot
     ? recoveredGroupsCount +
       recoveredBookingsCount +
+      pulledSnapshot.bookingTombstones.length +
       pulledSnapshot.tasks.length +
       pulledSnapshot.stockItems.length
     : 0;
