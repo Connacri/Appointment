@@ -924,7 +924,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Only explicit user-created/edited records enter the outbox. Bootstrap mock records are excluded.
   const persistBookingMutation = (booking: TimelineBooking) => {
-    if (!workspace.activeWorkspaceId || DEMO_BOOKING_IDS.has(booking.id) || DEMO_RESOURCE_IDS.has(booking.resourceId)) return;
+    if (!workspace.activeWorkspaceId || DEMO_BOOKING_IDS.has(booking.id)) return;
     const bookedResource = latestGroupsRef.current
       .flatMap((group) => group.resources)
       .find((resource) => resource.id === booking.resourceId);
@@ -1207,9 +1207,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // workspace are never copied into the currently selected workspace.
   useEffect(() => {
     if (!isCoreDataHydrated || !workspace.activeWorkspaceId) return;
-    const realBookings = bookings.filter((booking) =>
-      !DEMO_BOOKING_IDS.has(booking.id) && !DEMO_RESOURCE_IDS.has(booking.resourceId)
-    );
+    const realBookings = bookings.filter((booking) => !DEMO_BOOKING_IDS.has(booking.id));
     void indexedDb.reconcileSnapshotWithOutbox(
       'bookings',
       realBookings,
@@ -2458,7 +2456,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const existing = bookings.find((booking) => booking.id === id);
     if (!existing) return;
 
-    const isDemo = DEMO_BOOKING_IDS.has(id) || DEMO_RESOURCE_IDS.has(existing.resourceId);
+    const isDemo = DEMO_BOOKING_IDS.has(id);
     if (!isDemo) {
       const workspaceId = workspace.activeWorkspaceId?.trim();
       if (!workspaceId) {
