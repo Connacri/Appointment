@@ -189,6 +189,59 @@ function mapBookingRow(r: any): TimelineBooking {
   return fromSupabaseBookingRow(r);
 }
 
+export interface RemoteBookingTombstone {
+  entityId: string;
+  establishmentId: string;
+  version: number;
+  deletedAt: string;
+}
+
+/**
+ * Deleted rows are synchronization data, not visible bookings. Keep this query
+ * separate from listBookings so every client can durably apply remote deletes
+ * without treating an absent row in a normal snapshot as a deletion.
+ */
+export async function listBookingTombstones(workspaceId: WorkspaceId): Promise<RemoteBookingTombstone[]> {
+  if (!workspaceId.trim()) throw new Error('Workspace requis pour lire les suppressions distantes.');
+  const db = requireSupabase();
+  const pageSize = 500;
+  const tombstones: RemoteBookingTombstone[] = [];
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await db
+      .from('bookings')
+      .select('id,establishment_id,version,deleted_at')
+      .eq('workspace_id', workspaceId)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(`Lecture des suppressions de réservations impossible : ${error.message}`);
+
+    const page = (data ?? []).flatMap((row: any) => {
+      if (
+        typeof row.id !== 'string'
+        || typeof row.establishment_id !== 'string'
+        || !Number.isSafeInteger(Number(row.version))
+        || Number(row.version) < 1
+        || typeof row.deleted_at !== 'string'
+      ) return [];
+      return [{
+        entityId: row.id,
+        establishmentId: row.establishment_id,
+        version: Number(row.version),
+        deletedAt: row.deleted_at,
+      }];
+    });
+    tombstones.push(...page);
+    if ((data ?? []).length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return tombstones;
+}
+
 export async function listBookings(workspaceId: WorkspaceId, establishmentId?: string): Promise<TimelineBooking[]> {
   // PostgREST caps a single response (Supabase default max rows). Pull the whole
   // workspace page by page through the calendar index instead of silently
@@ -310,12 +363,36 @@ export async function deleteResource(id: string, workspaceId?: WorkspaceId) {
   if (error) throw new Error(error.message);
 }
 
-export async function deleteBooking(id: string, workspaceId?: WorkspaceId) {
+export async function deleteBooking(id: string, workspaceId: WorkspaceId): Promise<void> {
+  if (!id.trim() || !workspaceId.trim()) {
+    throw new Error('Identifiant de réservation et workspace obligatoires pour supprimer.');
+  }
   const db = requireSupabase();
-  let q = db.from('bookings').update({ deleted_at: new Date().toISOString() }).eq('id', id);
-  if (workspaceId?.trim()) q = q.eq('workspace_id', workspaceId);
-  const { error } = await q;
+  const { data, error } = await db
+    .from('bookings')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('workspace_id', workspaceId)
+    .is('deleted_at', null)
+    .select('id')
+    .maybeSingle();
   if (error) throw new Error(error.message);
+  if (data) return;
+
+  // Idempotent retry: a previous request may have committed before its ACK was
+  // lost. Accept only a real tombstone in this exact workspace, never a zero-row
+  // update caused by a missing row or an RLS/tenant mismatch.
+  const { data: existingTombstone, error: verifyError } = await db
+    .from('bookings')
+    .select('id')
+    .eq('id', id)
+    .eq('workspace_id', workspaceId)
+    .not('deleted_at', 'is', null)
+    .maybeSingle();
+  if (verifyError) throw new Error(verifyError.message);
+  if (!existingTombstone) {
+    throw new Error('Suppression non appliquée : réservation absente ou inaccessible dans ce workspace.');
+  }
 }
 
 export async function listTasks(workspaceId: WorkspaceId, establishmentId: string): Promise<PmsTask[]> {
