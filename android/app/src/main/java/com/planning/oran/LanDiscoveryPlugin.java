@@ -58,10 +58,12 @@ public final class LanDiscoveryPlugin extends Plugin {
 
     private static final class PeerSeen {
         final String address;
+        final String peerName;
         final long lastSeenAt;
 
-        PeerSeen(String address, long lastSeenAt) {
+        PeerSeen(String address, String peerName, long lastSeenAt) {
             this.address = address;
+            this.peerName = peerName;
             this.lastSeenAt = lastSeenAt;
         }
     }
@@ -430,12 +432,18 @@ public final class LanDiscoveryPlugin extends Plugin {
                     }
 
                     String remoteIp = remoteAddress.getHostAddress();
+                    String remoteName = sanitizePeerName(message.optString("peerName", ""));
                     if (!lastSeen.containsKey(remoteId) && lastSeen.size() >= MAX_DISCOVERED_PEERS) continue;
                     long seenAt = System.currentTimeMillis();
-                    PeerSeen previous = lastSeen.put(remoteId, new PeerSeen(remoteIp, seenAt));
-                    if (previous == null || !previous.address.equals(remoteIp)) {
+                    PeerSeen previous = lastSeen.put(remoteId, new PeerSeen(remoteIp, remoteName, seenAt));
+                    if (
+                        previous == null
+                        || !previous.address.equals(remoteIp)
+                        || !previous.peerName.equals(remoteName)
+                    ) {
                         JSObject peer = new JSObject();
                         peer.put("peerId", remoteId);
+                        peer.put("peerName", remoteName);
                         peer.put("address", remoteIp);
                         peer.put("protocolVersion", PROTOCOL_VERSION);
                         notifyListeners("peerFound", peer);
@@ -484,10 +492,25 @@ public final class LanDiscoveryPlugin extends Plugin {
         }
     }
 
+    private String currentPeerName() {
+        String manufacturer = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.trim();
+        String model = Build.MODEL == null ? "" : Build.MODEL.trim();
+        String combined = manufacturer.isEmpty() ? model : manufacturer + " " + model;
+        return sanitizePeerName(combined);
+    }
+
+    private String sanitizePeerName(String value) {
+        if (value == null) return "Appointment Android";
+        String sanitized = value.replaceAll("\\p{Cntrl}", "").trim();
+        if (sanitized.isEmpty()) return "Appointment Android";
+        return sanitized.length() > 48 ? sanitized.substring(0, 48) : sanitized;
+    }
+
     private byte[] announcementBytes() throws Exception {
         JSONObject json = new JSONObject();
         json.put("protocolVersion", PROTOCOL_VERSION);
         json.put("peerId", nodeId);
+        json.put("peerName", currentPeerName());
         byte[] packet = json.toString().getBytes(StandardCharsets.UTF_8);
         if (packet.length > MAX_PACKET_BYTES) throw new IllegalStateException("Annonce LAN trop volumineuse.");
         return packet;
