@@ -64,6 +64,7 @@ import {
 } from '../services/supabase/syncLog';
 import { isValidCalendarDate, shouldMarkPaymentAsPaid, validateBookingOccupants } from '../utils/bookingValidation';
 import { normalizeBookingForPersistence } from '../utils/bookingOccupants';
+import { isDemoBookingId } from '../utils/bookingPersistence';
 import { isRoomReadyForBooking } from '../utils/roomReadiness';
 import { lockManager } from '../locks/lockManager';
 import type { EventLogEntry, NewEventLogInput } from '../types/eventLog';
@@ -924,7 +925,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Only explicit user-created/edited records enter the outbox. Bootstrap mock records are excluded.
   const persistBookingMutation = (booking: TimelineBooking) => {
-    if (!workspace.activeWorkspaceId || DEMO_BOOKING_IDS.has(booking.id)) return;
+    if (!workspace.activeWorkspaceId || isDemoBookingId(booking.id, DEMO_BOOKING_IDS)) return;
     const bookedResource = latestGroupsRef.current
       .flatMap((group) => group.resources)
       .find((resource) => resource.id === booking.resourceId);
@@ -1207,7 +1208,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // workspace are never copied into the currently selected workspace.
   useEffect(() => {
     if (!isCoreDataHydrated || !workspace.activeWorkspaceId) return;
-    const realBookings = bookings.filter((booking) => !DEMO_BOOKING_IDS.has(booking.id));
+    const realBookings = bookings.filter((booking) => !isDemoBookingId(booking.id, DEMO_BOOKING_IDS));
     void indexedDb.reconcileSnapshotWithOutbox(
       'bookings',
       realBookings,
@@ -2456,7 +2457,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const existing = bookings.find((booking) => booking.id === id);
     if (!existing) return;
 
-    const isDemo = DEMO_BOOKING_IDS.has(id);
+    const isDemo = isDemoBookingId(id, DEMO_BOOKING_IDS);
     if (!isDemo) {
       const workspaceId = workspace.activeWorkspaceId?.trim();
       if (!workspaceId) {
