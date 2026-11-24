@@ -69,6 +69,8 @@ function createMemoryAdapter(seed?: {
   remote?: Partial<PulledSupabaseSnapshot>;
   failBookingUpsertIds?: Set<string>;
   failPull?: boolean;
+  failTombstoneRead?: boolean;
+  failSummaryRead?: boolean;
 }) {
   const outbox = [...(seed?.outbox ?? [])];
   const tombstones = [...(seed?.tombstones ?? [])];
@@ -124,8 +126,14 @@ function createMemoryAdapter(seed?: {
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .slice(0, limit);
     },
-    getOutboxSummary: async () => computeSummary(),
-    getTombstones: async (workspaceId) => tombstones.filter((t) => t.workspaceId === workspaceId),
+    getOutboxSummary: async () => {
+      if (seed?.failSummaryRead) throw new Error('Outbox summary read failed');
+      return computeSummary();
+    },
+    getTombstones: async (workspaceId) => {
+      if (seed?.failTombstoneRead) throw new Error('Tombstone read failed');
+      return tombstones.filter((t) => t.workspaceId === workspaceId);
+    },
     markOutboxSynced: async (id) => {
       pushLog.push(`ack:${id}`);
       const idx = outbox.findIndex((r) => r.id === id);
@@ -847,4 +855,49 @@ test('shouldSkipRedundantSync skips recent clean syncs but never skips a stale s
     }),
     false,
   );
+});
+
+test('runSupabaseSync aborts remote merge when local tombstone safety read fails', async () => {
+  const localBooking = makeBooking('bkg-local');
+  const { adapter, fixedNow } = createMemoryAdapter({
+    failTombstoneRead: true,
+    remote: { bookings: [makeBooking('bkg-remote')] },
+  });
+
+  const result = await runSupabaseSync({
+    force: true,
+    isOffline: false,
+    isConfigured: true,
+    workspaceId: 'ws-1',
+    selectedEstablishmentId: 'est-1',
+    localGroups: [makeGroup('grp-1', [makeResource('room-101')])],
+    localBookings: [localBooking],
+    adapter,
+    now: () => fixedNow,
+  });
+
+  assert.equal(result.mergedGroups, null);
+  assert.equal(result.mergedBookings, null);
+  assert.equal(result.status.phase, 'error');
+  assert.match(result.status.lastError ?? '', /Tombstone read failed/);
+  assert.equal(result.status.lastSyncedAt, null);
+});
+
+test('runSupabaseSync never reports synced when Outbox summary cannot be read', async () => {
+  const { adapter, fixedNow } = createMemoryAdapter({ failSummaryRead: true });
+
+  const result = await runSupabaseSync({
+    force: true,
+    isOffline: false,
+    isConfigured: true,
+    workspaceId: 'ws-1',
+    selectedEstablishmentId: 'est-1',
+    localGroups: [makeGroup('grp-1', [makeResource('room-101')])],
+    localBookings: [],
+    adapter,
+    now: () => fixedNow,
+  });
+
+  assert.notEqual(result.status.phase, 'synced');
+  assert.match(result.status.lastError ?? '', /Outbox summary read failed/);
 });
