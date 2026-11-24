@@ -260,6 +260,7 @@ export const BookingModal: React.FC = () => {
   const [usbConnected, setUsbConnected] = useState<boolean>(lockManager.getStatus() === 'connected');
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false);
   const [confirmDeleteBooking, setConfirmDeleteBooking] = useState(false);
+  const [isDeletingBooking, setIsDeletingBooking] = useState(false);
 
   // A confirmed booking must never leak into the next sheet: reopening the dialog
   // used to show the previous confirmation (and its step indicator) instead of a
@@ -1857,13 +1858,30 @@ export const BookingModal: React.FC = () => {
                       </span>
                       <button
                         type="button"
-                        onClick={() => {
-                          deleteBooking(selectedBooking.id);
-                          setConfirmDeleteBooking(false);
+                        disabled={isDeletingBooking}
+                        onClick={async () => {
+                          setIsDeletingBooking(true);
+                          try {
+                            await deleteBooking(selectedBooking.id);
+                            setConfirmDeleteBooking(false);
+                          } catch (error) {
+                            const message = error instanceof Error ? error.message : String(error);
+                            setConflictError(
+                              language === 'fr'
+                                ? `Suppression non confirmée : ${message}`
+                                : language === 'ar'
+                                  ? `لم يتم تأكيد الحذف: ${message}`
+                                  : `Deletion was not confirmed: ${message}`,
+                            );
+                          } finally {
+                            setIsDeletingBooking(false);
+                          }
                         }}
-                        className="min-h-10 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+                        className="min-h-10 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {language === 'fr' ? 'Oui, supprimer' : language === 'ar' ? 'نعم، حذف' : 'Confirm'}
+                        {isDeletingBooking
+                          ? (language === 'fr' ? 'Suppression…' : language === 'ar' ? 'جارٍ الحذف…' : 'Deleting…')
+                          : (language === 'fr' ? 'Oui, supprimer' : language === 'ar' ? 'نعم، حذف' : 'Confirm')}
                       </button>
                       <button
                         type="button"
