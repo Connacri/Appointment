@@ -752,7 +752,7 @@ unsafe fn create_discovery_label(parent: Hwnd, x: i32, y: i32, width: i32, heigh
 }
 
 fn update_discovery_status(hwnd: Hwnd) {
-    let (peer_count, error) = {
+    let (peers, error) = {
         let mut state = app_state().lock().unwrap_or_else(|e| e.into_inner());
         let mut events = Vec::new();
         if let Some(discovery) = state.discovery.as_ref() {
@@ -774,7 +774,10 @@ fn update_discovery_status(hwnd: Hwnd) {
                 }
             }
         }
-        (state.discovered_peers.len(), state.discovery_error.clone())
+        (
+            state.discovered_peers.values().cloned().collect::<Vec<_>>(),
+            state.discovery_error.clone(),
+        )
     };
 
     unsafe {
@@ -782,9 +785,23 @@ fn update_discovery_status(hwnd: Hwnd) {
         if !control.is_null() {
             let text = match error {
                 Some(error) => format!("Réseau local : découverte indisponible — {error}"),
-                None => format!(
-                    "Réseau local : {peer_count} appareil(s) Appointment découvert(s). Découverte seule — aucun échange de données n’est encore activé."
-                ),
+                None if peers.is_empty() => {
+                    "Réseau local : aucun pair Appointment détecté.".to_string()
+                }
+                None => {
+                    let mut names = peers
+                        .iter()
+                        .take(5)
+                        .map(|peer| format!("{} ({})", peer.peer_name, peer.address.ip()))
+                        .collect::<Vec<_>>();
+                    if peers.len() > 5 {
+                        names.push(format!("+{} autre(s)", peers.len() - 5));
+                    }
+                    format!(
+                        "Pairs LAN détectés : {}. Présence uniquement — transport métier P2P non activé, aucune synchronisation confirmée.",
+                        names.join(" · ")
+                    )
+                }
             };
             let text = wide(&text);
             SetWindowTextW(control, text.as_ptr());
