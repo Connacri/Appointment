@@ -1842,35 +1842,53 @@ class IndexedDbStore {
 
     outboxRequest.onsuccess = () => {
       const allOutbox = outboxRequest.result as OutboxRecord[];
-      for (const remote of latestById.values()) {
-        const localIntents = allOutbox.filter((record) =>
+      const remotes = [...latestById.values()];
+      let index = 0;
+
+      // P2P events share one per-node sequence and a unique
+      // (workspace,node,sequence) index. Queue each tombstone only after the
+      // previous event has queued its clock writes; parallel callbacks would
+      // otherwise read the same clock and generate duplicate sequence numbers.
+      const processNext = (): void => {
+        if (index >= remotes.length) return;
+        const remote = remotes[index++];
+        const localIntentExists = allOutbox.some((record) =>
           record.workspaceId === workspaceId
           && record.entity === 'booking'
           && record.entityId === remote.entityId
           && (record.status === 'pending' || record.status === 'failed'),
         );
 
-        // Never discard an unsent local edit or local delete. The merge layer
-        // keeps a pending upsert visible; conflicting commands remain queued.
-        if (localIntents.length > 0) continue;
+        // Never discard an unsent local edit or local delete.
+        if (localIntentExists) {
+          processNext();
+          return;
+        }
 
-        const tombstoneId = `${workspaceId}:booking:${remote.entityId}`;
+        const tombstoneId = workspaceId + ':booking:' + remote.entityId;
         const entityRequest = workspaceEntities.get([workspaceId, 'booking', remote.entityId]);
         const tombstoneRequest = tombstones.get(tombstoneId);
         let entityRecord: { version?: number } | undefined;
         let previousTombstone: TombstoneRecord | undefined;
         let entityReady = false;
         let tombstoneReady = false;
+        let processed = false;
 
         const apply = () => {
-          if (!entityReady || !tombstoneReady) return;
-          // Local or peer deletion has precedence over a cloud snapshot. Existing
-          // Supabase tombstones are idempotent and may advance only by server version.
-          if (previousTombstone && previousTombstone.origin !== 'supabase') return;
+          if (!entityReady || !tombstoneReady || processed) return;
+          processed = true;
+          // Local or peer deletion has precedence over a cloud snapshot.
+          if (previousTombstone && previousTombstone.origin !== 'supabase') {
+            processNext();
+            return;
+          }
           if (
             previousTombstone?.origin === 'supabase'
             && (previousTombstone.remoteVersion ?? 0) >= remote.version
-          ) return;
+          ) {
+            processNext();
+            return;
+          }
 
           const localVersion = Math.max(
             entityRecord?.version ?? 0,
@@ -1897,8 +1915,11 @@ class IndexedDbStore {
             'delete',
             null,
             remote.deletedAt,
+            () => {
+              appliedCount += 1;
+              processNext();
+            },
           );
-          appliedCount += 1;
         };
 
         entityRequest.onsuccess = () => {
@@ -1913,7 +1934,9 @@ class IndexedDbStore {
         };
         entityRequest.onerror = () => tx.abort();
         tombstoneRequest.onerror = () => tx.abort();
-      }
+      };
+
+      processNext();
     };
     outboxRequest.onerror = () => tx.abort();
 
