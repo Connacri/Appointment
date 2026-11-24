@@ -334,12 +334,14 @@ export async function runSupabaseSync({
     recoveredProfile: null,
   };
 
+  let summaryReadError: string | null = null;
   const readSafeSummary = async (): Promise<OutboxSummary> => {
     if (!workspaceId.trim()) return { pendingCount: 0, failedCount: 0, dueCount: 0 };
     try {
       return await adapter.getOutboxSummary(workspaceId);
-    } catch {
-      return { pendingCount: 0, failedCount: 0, dueCount: 0 };
+    } catch (error) {
+      summaryReadError = error instanceof Error ? error.message : 'Lecture du résumé Outbox impossible.';
+      return { pendingCount: 0, failedCount: 0, dueCount: 0, lastError: summaryReadError };
     }
   };
 
@@ -706,12 +708,16 @@ export async function runSupabaseSync({
   let recoveredProfile: Partial<EstablishmentProfile> | null = null;
 
   if (pulledSnapshot) {
-    const [remainingPending, tombstones] = await Promise.all([
-      adapter.getPendingOutbox(workspaceId, 500, true).catch(() => []),
-      adapter.getTombstones(workspaceId).catch(() => []),
-    ]);
+    try {
+      // These reads are part of the merge safety boundary. If either fails,
+      // abort the pull/merge: treating unknown local mutations as empty can
+      // overwrite unsynced local state with an older remote snapshot.
+      const [remainingPending, tombstones] = await Promise.all([
+        adapter.getPendingOutbox(workspaceId, 500, true),
+        adapter.getTombstones(workspaceId),
+      ]);
 
-    const merged = mergeCloudStateWithLocal({
+      const merged = mergeCloudStateWithLocal({
       localGroups,
       localBookings,
       remoteGroups: pulledSnapshot.groups,
@@ -733,17 +739,28 @@ export async function runSupabaseSync({
       params: { groups: recoveredGroupsCount, bookings: recoveredBookingsCount },
     });
 
-    if (pulledSnapshot.establishments.length > 0) {
-      const firstEst = pulledSnapshot.establishments[0];
-      if (firstEst.name) {
-        recoveredProfile = {
-          name: firstEst.name,
-          city: firstEst.city || undefined,
-          stars: firstEst.stars,
-          checkInTime: firstEst.checkInTime,
-          checkOutTime: firstEst.checkOutTime,
-        };
+      if (pulledSnapshot.establishments.length > 0) {
+        const firstEst = pulledSnapshot.establishments[0];
+        if (firstEst.name) {
+          recoveredProfile = {
+            name: firstEst.name,
+            city: firstEst.city || undefined,
+            stars: firstEst.stars,
+            checkInTime: firstEst.checkInTime,
+            checkOutTime: firstEst.checkOutTime,
+          };
+        }
       }
+    } catch (err) {
+      pullError = err instanceof Error ? err.message : 'Lecture de sécurité locale impossible avant fusion.';
+      pulledSnapshot = null;
+      mergedGroups = null;
+      mergedBookings = null;
+      recoveredProfile = null;
+      recoveredGroupsCount = 0;
+      recoveredBookingsCount = 0;
+      emit({ key: 'syncLogPullFailed', level: 'error', detail: pullError });
+      warnings.push(`Fusion Supabase annulée : ${pullError}`);
     }
   }
 
@@ -761,7 +778,7 @@ export async function runSupabaseSync({
       pulledSnapshot.stockItems.length
     : 0;
 
-  const combinedError = firstPushError || pullError || finalSummary.lastError || null;
+  const combinedError = firstPushError || pullError || summaryReadError || finalSummary.lastError || null;
   const fullyVerifiedSynced =
     !combinedError &&
     Boolean(pulledSnapshot) &&
