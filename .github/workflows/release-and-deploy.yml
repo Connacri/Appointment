@@ -249,6 +249,27 @@ jobs:
           if ($size -lt 100KB) { throw "Native executable is unexpectedly small ($size bytes)." }
           Write-Host "Native executable: $nativeExe ($size bytes)"
 
+      - name: Verify browser and runtime independence
+        shell: pwsh
+        run: |
+          $exe = "windows-native\\target\\release\\appointment-pms-native.exe"
+          $programFilesX86 = [Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFilesX86)
+          $vswhere = Join-Path $programFilesX86 "Microsoft Visual Studio\\Installer\\vswhere.exe"
+          if (!(Test-Path $vswhere)) { throw "vswhere.exe not found; cannot inspect native imports" }
+          $vsPath = & $vswhere -latest -products "*" -property installationPath
+          if (!$vsPath) { throw "Visual Studio installation not found; cannot inspect native imports" }
+          $devcmd = Join-Path $vsPath "Common7\\Tools\\VsDevCmd.bat"
+          $command = 'call "' + $devcmd + '" -arch=amd64 && dumpbin /dependents "' + $exe + '"'
+          $imports = cmd.exe /d /c $command 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) { throw "dumpbin import inspection failed: $imports" }
+          if ($imports -match "WebView2|msedge|chrome|node") {
+            throw "Browser/WebView/Node dependency detected in native executable"
+          }
+          if ($imports -match "VCRUNTIME|MSVCP|ucrtbase|api-ms-win-crt") {
+            throw "Dynamic Microsoft C/C++ runtime detected; installer must be self-contained"
+          }
+          Write-Host $imports
+
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -308,7 +329,7 @@ jobs:
   # JOB 4: Publish All Signed Artifacts to GitHub Release
   # ============================================================
   publish-github-release:
-    name: Publish GitHub Release (APK, AAB & Windows EXE)
+    name: Publish GitHub Release (APK, AAB & Native Windows EXE)
     needs: [quality-gate, build-and-publish-android-release, build-and-publish-windows-release]
     runs-on: ubuntu-latest
     timeout-minutes: 15
