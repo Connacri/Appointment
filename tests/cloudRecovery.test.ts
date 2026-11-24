@@ -119,3 +119,63 @@ test('mergeCloudStateWithLocal never resurrects tombstoned records and protects 
   assert.equal(merged.groups.length, 1);
   assert.deepEqual(merged.groups[0].resources.map((r) => r.id), ['r-live']);
 });
+
+
+test('remote Supabase booking tombstones remove stale local copies', () => {
+  const staleLocal = makeBooking('b-cloud-deleted');
+  const staleRemote = makeBooking('b-cloud-deleted', { guestName: 'Old cloud copy' });
+
+  const merged = mergeCloudStateWithLocal({
+    localGroups: [],
+    localBookings: [staleLocal],
+    remoteGroups: [],
+    remoteBookings: [staleRemote],
+    pendingOutbox: [],
+    tombstones: [],
+    remoteBookingTombstones: [{
+      entityId: 'b-cloud-deleted',
+      establishmentId: 'est-1',
+      version: 3,
+      deletedAt: '2026-11-18T12:00:00.000Z',
+    }],
+  });
+
+  assert.deepEqual(merged.bookings, []);
+  assert.equal(merged.recoveredBookingsCount, 0);
+});
+
+test('remote booking tombstones do not discard an unsent local upsert', () => {
+  const localEdit = makeBooking('b-concurrent', { guestName: 'Local pending edit' });
+  const pending: OutboxRecord = {
+    id: 'ob-concurrent',
+    idempotencyKey: 'ws-1:booking:b-concurrent:2',
+    workspaceId: 'ws-1',
+    entity: 'booking',
+    entityId: 'b-concurrent',
+    operation: 'upsert',
+    version: 2,
+    payload: localEdit as unknown as Record<string, unknown>,
+    status: 'pending',
+    attempts: 0,
+    createdAt: '2026-11-18T12:01:00.000Z',
+    nextAttemptAt: '2026-11-18T12:01:00.000Z',
+  };
+
+  const merged = mergeCloudStateWithLocal({
+    localGroups: [],
+    localBookings: [localEdit],
+    remoteGroups: [],
+    remoteBookings: [],
+    pendingOutbox: [pending],
+    tombstones: [],
+    remoteBookingTombstones: [{
+      entityId: 'b-concurrent',
+      establishmentId: 'est-1',
+      version: 4,
+      deletedAt: '2026-11-18T12:00:00.000Z',
+    }],
+  });
+
+  assert.equal(merged.bookings.length, 1);
+  assert.equal(merged.bookings[0].guestName, 'Local pending edit');
+});
