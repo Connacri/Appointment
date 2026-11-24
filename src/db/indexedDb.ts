@@ -1603,6 +1603,9 @@ class IndexedDbStore {
     idempotencyKey: string,
   ): Promise<void> {
     if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox writes.');
+    if (operation !== 'upsert') {
+      throw new Error('Outbox-only compatibility writes currently accept upserts only; use a tombstone-aware delete API.');
+    }
     if (!entityId.trim() || !idempotencyKey.trim() || !Number.isSafeInteger(version) || version < 1) {
       throw new Error('Outbox-only mutation identity, idempotency key and version are required.');
     }
@@ -1684,6 +1687,8 @@ class IndexedDbStore {
         updatedAt: now,
         payload: payload ?? {},
       });
+      // A new upsert supersedes the old tombstone at this higher entity version.
+      tombstones.delete(tombstoneId);
       outbox.add(this.createOutboxRecord(
         context,
         entity,
