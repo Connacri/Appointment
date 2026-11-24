@@ -1926,6 +1926,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Allow a later data/profile change to retry a failed local backfill.
         backfillRunRef.current = false;
         const message = error instanceof Error ? error.message : 'Échec du backfill';
+        setCloudSyncStatus((previous) => ({
+          ...previous,
+          phase: 'error',
+          isSyncing: false,
+          lastAttemptAt: new Date().toISOString(),
+          lastError: `Backfill local : ${message}`,
+          workspaceId: workspace.activeWorkspaceId,
+        }));
         appendSyncLog({ key: 'syncLogBackfillFailed', level: 'error', detail: message });
         console.warn('[Backfill]', message);
       }
