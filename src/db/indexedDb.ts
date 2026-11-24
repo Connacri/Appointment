@@ -1603,51 +1603,125 @@ class IndexedDbStore {
     idempotencyKey: string,
   ): Promise<void> {
     if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox writes.');
+    if (!entityId.trim() || !idempotencyKey.trim() || !Number.isSafeInteger(version) || version < 1) {
+      throw new Error('Outbox-only mutation identity, idempotency key and version are required.');
+    }
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
 
-    const existing = await this.getOutboxRecordByIdempotencyKey(context.workspaceId, idempotencyKey);
-    if (existing) {
-      if (
-        existing.entity !== entity
-        || existing.entityId !== entityId
-        || existing.operation !== operation
-        || existing.version !== version
-        || stableSerialize(existing.payload) !== stableSerialize(payload)
-      ) {
-        throw new Error('Idempotency key collision: existing Outbox intent does not match this mutation.');
-      }
-      await this.getP2pNodeId();
-      const existingTx = this.createStrictTransaction(
-        ['workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'],
-      );
-      const currentRequest = existingTx.objectStore('workspaceEntities')
-        .get([context.workspaceId, entity, entityId]);
-      currentRequest.onsuccess = () => {
-        const current = currentRequest.result as { version?: number } | undefined;
-        if (!current || (current.version ?? 0) <= existing.version) {
-          this.ensureP2pEventForOutbox(existingTx, existing);
-        }
-      };
-      currentRequest.onerror = () => existingTx.abort();
-      await waitForTransactionCompletion(existingTx, `enqueueOutboxOnly-backfill ${entity}/${entityId}`);
-      this.emitOutboxChange();
-      return;
-    }
-
-    const now = new Date().toISOString();
+    // Read the idempotency key, current entity version and tombstone in the SAME
+    // strict read/write transaction as the Outbox + P2P append. This closes the
+    // read-then-write race between tabs and makes revisions monotonic.
     await this.getP2pNodeId();
-    const tx = this.createStrictTransaction(['outbox', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers']);
+    const tx = this.createStrictTransaction([
+      'outbox',
+      'workspaceEntities',
+      'tombstones',
+      'p2pEvents',
+      'p2pClock',
+      'p2pMeta',
+      'p2pRecordFrontiers',
+    ]);
     const outbox = tx.objectStore('outbox');
     const workspaceEntities = tx.objectStore('workspaceEntities');
-    const entityRecord = {
-      workspaceId: context.workspaceId, establishmentId: context.establishmentId,
-      entity, entityId, version, updatedAt: now, payload: payload ?? {},
+    const tombstones = tx.objectStore('tombstones');
+    const tombstoneId = `${context.workspaceId}:${entity}:${entityId}`;
+    const existingRequest = outbox.index('idempotencyKey').get(idempotencyKey);
+    const currentRequest = workspaceEntities.get([context.workspaceId, entity, entityId]);
+    const tombstoneRequest = tombstones.get(tombstoneId);
+
+    let existing: OutboxRecord | undefined;
+    let current: { version?: number; establishmentId?: string } | undefined;
+    let previousTombstone: TombstoneRecord | undefined;
+    let existingReady = false;
+    let currentReady = false;
+    let tombstoneReady = false;
+    let validationError: Error | null = null;
+
+    const abortWith = (message: string) => {
+      validationError = new Error(message);
+      try { tx.abort(); } catch { /* transaction may already be inactive */ }
     };
-    workspaceEntities.put(entityRecord);
-    outbox.add(this.createOutboxRecord(context, entity, entityId, operation, version, payload, now, idempotencyKey));
-    this.appendLocalP2pEvent(tx, context.workspaceId, entity, entityId, operation, payload, now);
-    await waitForTransactionCompletion(tx, `enqueueOutboxOnly ${entity}/${entityId}`);
+
+    const commit = () => {
+      if (!existingReady || !currentReady || !tombstoneReady) return;
+
+      if (existing) {
+        if (
+          existing.workspaceId !== context.workspaceId
+          || existing.entity !== entity
+          || existing.entityId !== entityId
+          || existing.operation !== operation
+          || (context.establishmentId !== undefined && existing.establishmentId !== context.establishmentId)
+          || stableSerialize(existing.payload) !== stableSerialize(payload)
+        ) {
+          abortWith(
+            `Idempotency key collision for ${entity}/${entityId}: the key already identifies a different immutable mutation.`,
+          );
+          return;
+        }
+
+        // An exact retry keeps the original ACK state/version. Only repair a
+        // missing P2P envelope; never overwrite a newer materialized entity.
+        if (!current || (current.version ?? 0) <= existing.version) {
+          this.ensureP2pEventForOutbox(tx, existing);
+        }
+        return;
+      }
+
+      const resolvedVersion = Math.max(
+        version,
+        (current?.version ?? 0) + 1,
+        (previousTombstone?.version ?? 0) + 1,
+      );
+      const now = new Date().toISOString();
+      workspaceEntities.put({
+        workspaceId: context.workspaceId,
+        establishmentId: context.establishmentId ?? current?.establishmentId,
+        entity,
+        entityId,
+        version: resolvedVersion,
+        updatedAt: now,
+        payload: payload ?? {},
+      });
+      outbox.add(this.createOutboxRecord(
+        context,
+        entity,
+        entityId,
+        operation,
+        resolvedVersion,
+        payload,
+        now,
+        idempotencyKey,
+      ));
+      this.appendLocalP2pEvent(tx, context.workspaceId, entity, entityId, operation, payload, now);
+    };
+
+    existingRequest.onsuccess = () => {
+      existing = existingRequest.result as OutboxRecord | undefined;
+      existingReady = true;
+      commit();
+    };
+    currentRequest.onsuccess = () => {
+      current = currentRequest.result as typeof current;
+      currentReady = true;
+      commit();
+    };
+    tombstoneRequest.onsuccess = () => {
+      previousTombstone = tombstoneRequest.result as TombstoneRecord | undefined;
+      tombstoneReady = true;
+      commit();
+    };
+    existingRequest.onerror = () => tx.abort();
+    currentRequest.onerror = () => tx.abort();
+    tombstoneRequest.onerror = () => tx.abort();
+
+    try {
+      await waitForTransactionCompletion(tx, `enqueueOutboxOnly ${entity}/${entityId}`);
+    } catch (error) {
+      if (validationError) throw validationError;
+      throw error;
+    }
     this.emitOutboxChange();
   }
 
