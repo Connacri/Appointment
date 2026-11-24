@@ -75,7 +75,8 @@ page.
 | Concern | Where |
 |---|---|
 | Quality gates (typecheck, unit tests, i18n parity, build) | `.github/workflows/quality-checks.yml` |
-| Signed Android APK/AAB, Windows installers, GitHub Release, GitHub Pages | `.github/workflows/release-and-deploy.yml` |
+| Signed Android APK/AAB, Rust/Win32 native Windows EXE + Inno installer, GitHub Release | `.github/workflows/release-and-deploy.yml` |
+| Static web build and GitHub Pages deployment | `.github/workflows/deploy-web.yml` |
 | Branding source assets and generation | `assets/icon.png`, `assets/branding/icon-source.png`, `npm run assets:generate` |
 | Details, secrets names and troubleshooting | `docs/RELEASE.md` |
 
