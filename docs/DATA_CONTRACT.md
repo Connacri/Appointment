@@ -32,6 +32,11 @@ Appointment MUST fail closed rather than discard or silently replace user data.
    as success.
 7. **Pull is replay-safe.** Apply a remote page and advance its cursor in one transaction.
    Never advance the cursor past an unapplied row. Replays are expected and must be safe.
+   When one inbound Supabase pull contains multiple remote booking tombstones, apply them
+   sequentially inside the same IndexedDB transaction. Each local P2P event advances the
+   persisted per-node vector clock before the next tombstone is processed; never generate
+   concurrent events from the same observed clock or weaken the unique node-sequence index.
+   Regression coverage: `tests/serialQueue.test.ts`.
 8. **Preserve unknown fields and source provenance.** Do not reconstruct complete
    records from a partial projection. Unknown JSON fields and import provenance survive
    read/write cycles.
