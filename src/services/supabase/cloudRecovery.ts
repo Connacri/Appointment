@@ -2,6 +2,13 @@ import type { OutboxRecord, TombstoneRecord } from '../../db/indexedDb';
 import type { ResourceGroup, ResourceItem, TimelineBooking } from '../../types/booking';
 import { normalizeBookingForPersistence } from '../../utils/bookingOccupants';
 
+export interface RemoteBookingTombstone {
+  entityId: string;
+  establishmentId: string;
+  version: number;
+  deletedAt: string;
+}
+
 export interface MergeCloudStateParams {
   localGroups: ResourceGroup[];
   localBookings: TimelineBooking[];
@@ -9,6 +16,7 @@ export interface MergeCloudStateParams {
   remoteBookings: TimelineBooking[];
   pendingOutbox: OutboxRecord[];
   tombstones: TombstoneRecord[];
+  remoteBookingTombstones?: RemoteBookingTombstone[];
   demoGroupIds?: Set<string>;
   demoResourceIds?: Set<string>;
   demoBookingIds?: Set<string>;
@@ -36,25 +44,33 @@ export function mergeCloudStateWithLocal({
   remoteBookings,
   pendingOutbox,
   tombstones,
+  remoteBookingTombstones = [],
   demoGroupIds = new Set(),
   demoResourceIds = new Set(),
   demoBookingIds = new Set(),
 }: MergeCloudStateParams): MergeCloudStateResult {
+  const pendingBookingUpserts = new Set(
+    pendingOutbox
+      .filter((record) => record.entity === 'booking' && record.operation === 'upsert')
+      .map((record) => record.entityId),
+  );
+
   const deletedBookingIds = new Set(
     tombstones
       .filter((t) => t.entity === 'booking')
       .map((t) => t.entityId),
   );
+  // A local unsent edit is not silently discarded by a remote delete. Keep it
+  // visible and pending so the caller can surface/resolve the concurrency case.
+  for (const remoteTombstone of remoteBookingTombstones) {
+    if (!pendingBookingUpserts.has(remoteTombstone.entityId)) {
+      deletedBookingIds.add(remoteTombstone.entityId);
+    }
+  }
   const deletedResourceIds = new Set(
     tombstones
       .filter((t) => t.entity === 'resource')
       .map((t) => t.entityId),
-  );
-
-  const pendingBookingUpserts = new Set(
-    pendingOutbox
-      .filter((record) => record.entity === 'booking' && record.operation === 'upsert')
-      .map((record) => record.entityId),
   );
   const pendingResourceUpserts = new Set(
     pendingOutbox
