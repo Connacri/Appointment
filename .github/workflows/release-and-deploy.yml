@@ -1,4 +1,4 @@
-name: Production Release (Signed APK, AAB & Native Windows Rust EXE)
+name: Production Release (Signed Android, Unsigned Native Windows)
 
 on:
   push:
@@ -188,7 +188,7 @@ jobs:
   # JOB 3: Build the independent Rust/Win32 Windows application
   # ============================================================
   build-and-publish-windows-release:
-    name: Build & Sign Native Windows Rust EXE
+    name: Build Unsigned Native Windows Rust EXE
     needs: quality-gate
     runs-on: windows-latest
     timeout-minutes: 35
@@ -282,15 +282,21 @@ jobs:
           & $iscc "/DAppVersion=$env:APP_VERSION" "windows-native\installer\Appointment.iss"
           if ($LASTEXITCODE -ne 0) { throw "Native Inno Setup build failed: $LASTEXITCODE" }
 
-      - name: Sign and verify native Windows release binaries
+      - name: Verify unsigned native Windows release binaries
         shell: pwsh
-        env:
-          WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
           $nativeExe = "windows-native\target\release\appointment-pms-native.exe"
           $nativeInstaller = "windows-native\dist\Appointment-PMS-Setup-v$env:APP_VERSION.exe"
-          pwsh -File "scripts\sign-windows-artifacts.ps1" -Paths @($nativeExe, $nativeInstaller)
+          foreach ($artifact in @($nativeExe, $nativeInstaller)) {
+            if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) {
+              throw "Required unsigned Windows release artifact not found: $artifact"
+            }
+            $signature = Get-AuthenticodeSignature -FilePath $artifact
+            if ($signature.Status -eq [System.Management.Automation.SignatureStatus]::Valid) {
+              throw "Expected an unsigned Windows artifact, but a valid Authenticode signature was found: $artifact"
+            }
+            Write-Host "Verified unsigned Windows artifact: $artifact (signature status: $($signature.Status))"
+          }
 
       - name: Package native Windows distribution ZIP
         shell: pwsh
