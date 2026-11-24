@@ -1,9 +1,22 @@
-name: Production Release (Signed APK, AAB & Windows EXE)
+name: Production Release (Signed APK, AAB & Native Windows Rust EXE)
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*.*.*'
+    paths:
+      - "src/**"
+      - "android/**"
+      - "windows-native/**"
+      - "supabase/**"
+      - "public/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - "capacitor.config.json"
+      - "CHANGELOG.md"
+      - ".github/workflows/release-and-deploy.yml"
   workflow_dispatch:
     inputs:
       release_track:
@@ -172,74 +185,123 @@ jobs:
         run: echo "PLAY_STORE_JSON_KEY not configured; skipping Play upload (set vars.PLAY_STORE_JSON_KEY_PRESENT=true after adding the secret)."
 
   # ============================================================
-  # JOB 3: Build & Sign Windows Executable (.exe)
+  # JOB 3: Build the independent Rust/Win32 Windows application
   # ============================================================
   build-and-publish-windows-release:
-    name: Build & Sign Windows EXE (.exe)
+    name: Build & Sign Native Windows Rust EXE
     needs: quality-gate
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          node-version: '22'
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt, clippy
 
-      - name: Install dependencies
-        uses: ./.github/actions/npm-install
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: windows-native -> target
 
-      - name: Build Web Application (relative base for desktop WebView)
-        run: npm run build
-        env:
-          VITE_BASE: ./
-
-      - name: Package Windows Executable Desktop Application
+      - name: Verify application and native crate versions
         shell: pwsh
         run: |
-          $version = node -p "require('./package.json').version"
-          Write-Host "Application version: $version"
-          pwsh -File scripts/package-windows.ps1 -Version $version
+          $appVersion = node -p "require('./package.json').version"
+          $cargoText = Get-Content -Raw "windows-native\Cargo.toml"
+          if ($cargoText -notmatch '(?m)^version\s*=\s*"([^"]+)"') {
+            throw "Cargo package version is missing."
+          }
+          $nativeVersion = $Matches[1]
+          if ($nativeVersion -ne $appVersion) {
+            throw "Version mismatch: package.json=$appVersion, windows-native/Cargo.toml=$nativeVersion"
+          }
+          "APP_VERSION=$appVersion" >> $env:GITHUB_ENV
+          Write-Host "Release version: $appVersion"
 
-      - name: Build Inno Setup Installer (EXE)
+      - name: Verify Rust formatting
+        working-directory: windows-native
+        run: cargo fmt --all -- --check
+
+      - name: Run native Rust tests
+        working-directory: windows-native
+        run: cargo test --locked
+
+      - name: Run Clippy
+        working-directory: windows-native
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Build independent native Windows x64 executable
+        working-directory: windows-native
+        run: cargo build --release --locked
+
+      - name: Verify native binary
         shell: pwsh
         run: |
-          $version = node -p "require('./package.json').version"
-          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y }
-          & $iscc "/DAppVersion=$version" scripts\installer.iss
+          $nativeExe = "windows-native\target\release\appointment-pms-native.exe"
+          if (-not (Test-Path -LiteralPath $nativeExe -PathType Leaf)) {
+            throw "Rust native Windows executable was not produced: $nativeExe"
+          }
+          $size = (Get-Item -LiteralPath $nativeExe).Length
+          if ($size -lt 100KB) { throw "Native executable is unexpectedly small ($size bytes)." }
+          Write-Host "Native executable: $nativeExe ($size bytes)"
 
-      - name: Sign and verify all Windows executables
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $programFilesX86 = [Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFilesX86)
+          $iscc = Join-Path $programFilesX86 "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            choco install innosetup --no-progress -y
+          }
+          if (-not (Test-Path -LiteralPath $iscc)) { throw "Inno Setup compiler not found." }
+          & $iscc "/DAppVersion=$env:APP_VERSION" "windows-native\installer\Appointment.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Native Inno Setup build failed: $LASTEXITCODE" }
+
+      - name: Sign and verify native Windows release binaries
         shell: pwsh
         env:
           WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          $version = node -p "require('./package.json').version"
-          $paths = @(
-            "dist-windows\Appointment-PMS-Setup.exe",
-            "dist-windows\Appointment-PMS-Setup-v$version.exe",
-            "dist-windows\Appointment-PMS-Setup-Inno.exe"
-          )
-          pwsh -File scripts/sign-windows-artifacts.ps1 -Paths $paths
+          $nativeExe = "windows-native\target\release\appointment-pms-native.exe"
+          $nativeInstaller = "windows-native\dist\Appointment-PMS-Setup-v$env:APP_VERSION.exe"
+          pwsh -File "scripts\sign-windows-artifacts.ps1" -Paths @($nativeExe, $nativeInstaller)
 
-      - name: Package signed Windows distribution archive
+      - name: Package native Windows distribution ZIP
         shell: pwsh
         run: |
-          $version = node -p "require('./package.json').version"
-          pwsh -File scripts/package-windows-archive.ps1 -Version $version
+          $version = $env:APP_VERSION
+          $stage = Join-Path $env:RUNNER_TEMP "appointment-native-release"
+          if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item "windows-native\target\release\appointment-pms-native.exe" $stage
+          Copy-Item "windows-native\dist\Appointment-PMS-Setup-v$version.exe" $stage
+          @(
+            "Appointment PMS — Native Windows x64",
+            "Independent Rust/Win32 executable. No WebView2, Edge, Chrome, Electron or Node runtime.",
+            "Install with Appointment-PMS-Setup-v$version.exe or run appointment-pms-native.exe.",
+            "Release version: $version",
+            "Source commit: ${{ github.sha }}"
+          ) | Set-Content -Encoding utf8 (Join-Path $stage "README.txt")
+          $archive = "windows-native\dist\Appointment-PMS-Windows-Native-v$version.zip"
+          Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $archive -Force
+          if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) {
+            throw "Native Windows distribution ZIP was not produced."
+          }
 
-      - name: Upload Windows Artifacts
+      - name: Upload native Windows release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-release
           path: |
-            dist-windows\Appointment-PMS-Setup.exe
-            dist-windows\Appointment-PMS-Setup-v*.exe
-            dist-windows\Appointment-PMS-Windows-v*.zip
-            dist-windows\Appointment-PMS-Setup-Inno.exe
+            windows-native/target/release/appointment-pms-native.exe
+            windows-native/dist/Appointment-PMS-Setup-v*.exe
+            windows-native/dist/Appointment-PMS-Windows-Native-v*.zip
+          if-no-files-found: error
           retention-days: 30
 
   # ============================================================
@@ -296,18 +358,17 @@ jobs:
             cp "$MAP_FILE" "release-final/mapping-v$VERSION.txt"
           fi
 
-          WIN_SETUP=$(find release-assets/windows -type f \( -name "Appointment-PMS-Setup.exe" -o -name "Appointment-PMS-Setup-v*.exe" \) 2>/dev/null | head -n 1)
-          WIN_INNO=$(find release-assets/windows -type f \( -name "Appointment-PMS-Setup-Inno.exe" -o -name "Appointment-PMS-Setup-Inno-v*.exe" \) 2>/dev/null | head -n 1)
+          NATIVE_EXE=$(find release-assets/windows -type f -name "appointment-pms-native.exe" 2>/dev/null | head -n 1)
+          NATIVE_INSTALLER=$(find release-assets/windows -type f -name "Appointment-PMS-Setup-v*.exe" 2>/dev/null | head -n 1)
+          NATIVE_ZIP=$(find release-assets/windows -type f -name "Appointment-PMS-Windows-Native-v*.zip" 2>/dev/null | head -n 1)
 
-          test -n "$WIN_SETUP" || { echo "::error::Required signed Windows launcher is missing"; exit 1; }
-          test -n "$WIN_INNO" || { echo "::error::Required signed Inno Setup installer is missing"; exit 1; }
+          test -n "$NATIVE_EXE" || { echo "::error::Rust/Win32 native Windows executable is missing"; exit 1; }
+          test -n "$NATIVE_INSTALLER" || { echo "::error::Native Inno Setup installer is missing"; exit 1; }
+          test -n "$NATIVE_ZIP" || { echo "::error::Native Windows distribution ZIP is missing"; exit 1; }
 
-          cp "$WIN_SETUP" "release-final/Appointment-PMS-Setup-v$VERSION.exe"
-          cp "$WIN_INNO" "release-final/Appointment-PMS-Setup-Inno-v$VERSION.exe"
-
-          WIN_ZIP=$(find release-assets/windows -type f -name "Appointment-PMS-Windows-v*.zip" 2>/dev/null | head -n 1)
-          test -n "$WIN_ZIP" || { echo "::error::Required Windows distribution ZIP is missing"; exit 1; }
-          cp "$WIN_ZIP" release-final/
+          cp "$NATIVE_EXE" "release-final/Appointment-PMS-Native-v$VERSION.exe"
+          cp "$NATIVE_INSTALLER" "release-final/Appointment-PMS-Setup-Native-v$VERSION.exe"
+          cp "$NATIVE_ZIP" "release-final/Appointment-PMS-Windows-Native-v$VERSION.zip"
 
           cd release-final
           sha256sum * > SHA256SUMS.txt
@@ -334,11 +395,13 @@ jobs:
             echo "- Commit: \`${{ github.sha }}\`" >> release-notes.md
             echo "- Signed Android APK: \`Appointment-PMS-v$VERSION.apk\`" >> release-notes.md
             echo "- Signed Android AAB: \`Appointment-PMS-v$VERSION.aab\`" >> release-notes.md
-            echo "- Windows EXE Installer: \`Appointment-PMS-Setup-v$VERSION.exe\`" >> release-notes.md
+            echo "- Native Windows Rust EXE: \`Appointment-PMS-Native-v$VERSION.exe\`" >> release-notes.md
+            echo "- Native Windows Installer: \`Appointment-PMS-Setup-Native-v$VERSION.exe\`" >> release-notes.md
+            echo "- Native Windows Distribution: \`Appointment-PMS-Windows-Native-v$VERSION.zip\`" >> release-notes.md
           fi
           cat release-notes.md
 
-      - name: Publish Versioned GitHub Release (APK, AAB & Windows EXE)
+      - name: Publish Versioned GitHub Release (APK, AAB & Native Windows EXE)
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
