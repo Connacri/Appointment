@@ -2,6 +2,7 @@ import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor
 
 export interface DiscoveredLanPeer {
   peerId: string;
+  peerName: string;
   address: string;
   protocolVersion: 1;
 }
