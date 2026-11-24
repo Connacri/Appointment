@@ -1805,9 +1805,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     const profile = { ...DEFAULT_ESTABLISHMENT_PROFILE, ...establishmentProfile };
-    // Les champs non renseignés sont comblés par défaut en attendant que
-    // l'utilisateur modifie le profil dans le modal d'établissement.
-    const profileName = (profile.name ?? '').trim() || 'Établissement';
+    // A blank profile is a draft, not a real business entity. Let the planner
+    // abort backfill instead of inventing an "Établissement" row in Supabase.
+    const profileName = (profile.name ?? '').trim();
 
     (async () => {
       try {
