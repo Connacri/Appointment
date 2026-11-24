@@ -9,7 +9,6 @@ import {
   nextP2pClock,
   validateP2pEvent,
   validateP2pCursorAdvance,
-  getP2pRecordState,
   type P2pEvent,
 } from '../src/services/p2p/protocol';
 
@@ -39,6 +38,20 @@ test('validates immutable event identity and causal clock', () => {
   validateP2pEvent(event('node-a', 1, { 'node-a': 1 }));
   assert.throws(() => validateP2pEvent(event('node-a', 1, { 'node-a': 0 })), /own node sequence/);
   assert.throws(() => validateP2pEvent({ ...event('node-a', 1, { 'node-a': 1 }), eventId: 'forged' }), /event ID/);
+});
+
+test('rejects unknown operations and array payloads before projection', () => {
+  const invalidOperation = {
+    ...event('node-a', 1, { 'node-a': 1 }),
+    operation: 'truncate',
+  } as unknown as P2pEvent;
+  const arrayPayload = {
+    ...event('node-a', 1, { 'node-a': 1 }),
+    payload: ['not', 'a', 'record'],
+  } as unknown as P2pEvent;
+
+  assert.throws(() => validateP2pEvent(invalidOperation), /Unsupported P2P event operation/);
+  assert.throws(() => validateP2pEvent(arrayPayload), /plain object payload/);
 });
 
 test('builds a monotonically increasing local clock', () => {
