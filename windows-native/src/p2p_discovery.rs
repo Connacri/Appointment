@@ -27,11 +27,15 @@ const MAX_DISCOVERED_PEERS: usize = 128;
 struct Announcement {
     protocol_version: u16,
     peer_id: String,
+    /// Optional for wire compatibility with older discovery peers.
+    #[serde(default)]
+    peer_name: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DiscoveredPeer {
     pub peer_id: String,
+    pub peer_name: String,
     pub address: SocketAddr,
 }
 
@@ -74,6 +78,7 @@ impl LanDiscovery {
         let announcement = Announcement {
             protocol_version: DISCOVERY_PROTOCOL_VERSION,
             peer_id: peer_id.clone(),
+            peer_name: local_peer_name(),
         };
         let packet = serde_json::to_vec(&announcement)
             .map_err(|error| format!("Cannot serialize LAN announcement: {error}"))?;
@@ -188,6 +193,28 @@ fn discovery_loop(
     }
 }
 
+fn local_peer_name() -> String {
+    let candidate = std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .unwrap_or_else(|_| "Appointment PC".to_string());
+    sanitize_peer_name(&candidate)
+}
+
+fn sanitize_peer_name(value: &str) -> String {
+    let sanitized = value
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(48)
+        .collect::<String>()
+        .trim()
+        .to_string();
+    if sanitized.is_empty() {
+        "Appointment PC".to_string()
+    } else {
+        sanitized
+    }
+}
+
 fn validate_announcement(
     message: Announcement,
     own_peer_id: &str,
@@ -216,6 +243,7 @@ fn validate_announcement(
     }
     Some(DiscoveredPeer {
         peer_id,
+        peer_name: sanitize_peer_name(&message.peer_name),
         address: source,
     })
 }
@@ -228,6 +256,7 @@ mod tests {
         Announcement {
             protocol_version: DISCOVERY_PROTOCOL_VERSION,
             peer_id: peer_id.into(),
+            peer_name: "Reception-PC".into(),
         }
     }
 
@@ -251,6 +280,7 @@ mod tests {
         assert!(validate_announcement(announcement(own), own, source).is_none());
         let peer = validate_announcement(announcement(remote), own, source).unwrap();
         assert_eq!(peer.peer_id, remote);
+        assert_eq!(peer.peer_name, "Reception-PC");
         assert_eq!(peer.address.ip(), source.ip());
     }
 
@@ -293,7 +323,7 @@ mod tests {
         assert!(packet.len() <= MAX_DATAGRAM_BYTES);
         assert_eq!(
             String::from_utf8(packet).unwrap(),
-            r#"{"protocolVersion":1,"peerId":"b1b2c3d4-e5f6-47a8-9012-1234567890ab"}"#
+            r#"{"protocolVersion":1,"peerId":"b1b2c3d4-e5f6-47a8-9012-1234567890ab","peerName":"Reception-PC"}"#
         );
     }
 }
