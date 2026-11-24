@@ -1,8 +1,9 @@
 //! Coordinator-free IPv4 multicast discovery shared by Windows native and Android APK.
 //!
-//! Discovery advertises only a stable installation UUID. It does not advertise a
-//! listening port until an authenticated peer transport exists. A discovered peer
-//! is not trusted, paired, authorized, or synchronized by discovery alone.
+//! Discovery advertises a stable installation UUID and a sanitized device display
+//! name. It does not advertise a listening port until an authenticated peer transport
+//! exists. A discovered peer is not trusted, paired, authorized, or synchronized by
+//! discovery alone.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
