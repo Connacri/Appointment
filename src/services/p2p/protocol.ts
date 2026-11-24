@@ -94,11 +94,23 @@ export function validateP2pEvent<TPayload>(event: P2pEvent<TPayload>): void {
   if (!Number.isFinite(Date.parse(event.createdAt))) {
     throw new Error('P2P event timestamp must be a valid ISO-compatible date.');
   }
-  if (event.operation === 'upsert' && (event.payload === null || typeof event.payload !== 'object')) {
-    throw new Error('P2P upsert events require an object payload.');
-  }
-  if (event.operation === 'delete' && event.payload !== null) {
-    throw new Error('P2P delete events must not contain a payload.');
+  switch (event.operation) {
+    case 'upsert':
+      if (
+        event.payload === null
+        || typeof event.payload !== 'object'
+        || Array.isArray(event.payload)
+      ) {
+        throw new Error('P2P upsert events require a plain object payload.');
+      }
+      break;
+    case 'delete':
+      if (event.payload !== null) {
+        throw new Error('P2P delete events must not contain a payload.');
+      }
+      break;
+    default:
+      throw new Error('Unsupported P2P event operation.');
   }
   const ownSequence = event.clock[event.nodeId];
   if (ownSequence !== event.sequence) {
