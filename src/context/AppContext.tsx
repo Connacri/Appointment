@@ -31,8 +31,7 @@ import {
 import { EstablishmentProfile, DEFAULT_ESTABLISHMENT_PROFILE } from '../types/establishment';
 import { indexedDb } from '../db/indexedDb';
 import { useWorkspace } from '../services/supabase/WorkspaceContext';
-import { isSupabaseConfigured, supabase } from '../services/supabase/supabaseClient';
-import { onSupabaseConfigChange } from '../services/supabase/supabaseClient';
+import { isSupabaseConfigured, onSupabaseConfigChange, supabase } from '../services/supabase/supabaseClient';
 import { subscribeWorkspaceRealtime } from '../services/supabase/supabaseRealtime';
 import {
   deleteBooking as remoteDeleteBooking,
