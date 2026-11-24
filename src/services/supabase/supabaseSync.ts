@@ -718,26 +718,26 @@ export async function runSupabaseSync({
       ]);
 
       const merged = mergeCloudStateWithLocal({
-      localGroups,
-      localBookings,
-      remoteGroups: pulledSnapshot.groups,
-      remoteBookings: pulledSnapshot.bookings,
-      pendingOutbox: remainingPending,
-      tombstones,
-      demoGroupIds,
-      demoResourceIds,
-      demoBookingIds,
-    });
+        localGroups,
+        localBookings,
+        remoteGroups: pulledSnapshot.groups,
+        remoteBookings: pulledSnapshot.bookings,
+        pendingOutbox: remainingPending,
+        tombstones,
+        demoGroupIds,
+        demoResourceIds,
+        demoBookingIds,
+      });
 
-    recoveredGroupsCount = merged.recoveredGroupsCount;
-    recoveredBookingsCount = merged.recoveredBookingsCount;
-    mergedGroups = merged.groups;
-    mergedBookings = merged.bookings;
-    emit({
-      key: 'syncLogMerged',
-      level: 'info',
-      params: { groups: recoveredGroupsCount, bookings: recoveredBookingsCount },
-    });
+      recoveredGroupsCount = merged.recoveredGroupsCount;
+      recoveredBookingsCount = merged.recoveredBookingsCount;
+      mergedGroups = merged.groups;
+      mergedBookings = merged.bookings;
+      emit({
+        key: 'syncLogMerged',
+        level: 'info',
+        params: { groups: recoveredGroupsCount, bookings: recoveredBookingsCount },
+      });
 
       if (pulledSnapshot.establishments.length > 0) {
         const firstEst = pulledSnapshot.establishments[0];
