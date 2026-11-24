@@ -32,6 +32,7 @@ import { EstablishmentProfile, DEFAULT_ESTABLISHMENT_PROFILE } from '../types/es
 import { indexedDb } from '../db/indexedDb';
 import { useWorkspace } from '../services/supabase/WorkspaceContext';
 import { isSupabaseConfigured, supabase } from '../services/supabase/supabaseClient';
+import { subscribeWorkspaceRealtime } from '../services/supabase/supabaseRealtime';
 import {
   deleteBooking as remoteDeleteBooking,
   deleteResource as remoteDeleteResource,
@@ -1291,6 +1292,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const syncInFlightRef = useRef<Promise<CloudRecoveryReport> | null>(null);
   const pendingResyncRef = useRef(false);
   const pendingForceRef = useRef(false);
+  const pendingRealtimeRef = useRef(false);
   const cloudSyncStatusRef = useRef(cloudSyncStatus);
   cloudSyncStatusRef.current = cloudSyncStatus;
   const selectedEstablishmentIdRef = useRef(selectedEstablishmentId);
@@ -1517,7 +1519,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Bidirectional automatic Supabase synchronization:
   // pushes Outbox mutations sequentially (ACK before dequeue), pulls latest remote state,
   // and merges safely without overwriting pending local edits or tombstones.
-  const executeSyncOnce = useCallback(async (force = false): Promise<CloudRecoveryReport> => {
+  const executeSyncOnce = useCallback(async (force = false, realtime = false): Promise<CloudRecoveryReport> => {
     const emptyReport: CloudRecoveryReport = {
       sources: [],
       recoveredGroupsCount: 0,
@@ -1541,6 +1543,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const summary = await indexedDb.getOutboxSummary(wsId);
         if (
+          !realtime &&
           shouldSkipRedundantSync({
             force,
             summary,
@@ -1757,21 +1760,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [appendSyncLog]);
 
-  const syncWithSupabase = useCallback(async (options?: { force?: boolean }): Promise<CloudRecoveryReport> => {
+  const syncWithSupabase = useCallback(async (options?: { force?: boolean; realtime?: boolean }): Promise<CloudRecoveryReport> => {
     const force = options?.force === true;
+    const realtime = options?.realtime === true;
     if (syncInFlightRef.current) {
       pendingResyncRef.current = true;
       if (force) pendingForceRef.current = true;
+      if (realtime) pendingRealtimeRef.current = true;
       return syncInFlightRef.current;
     }
 
     const runner = (async () => {
-      let report = await executeSyncOnce(force);
+      let report = await executeSyncOnce(force, realtime);
       while (pendingResyncRef.current) {
         const nextForce = pendingForceRef.current;
+        const nextRealtime = pendingRealtimeRef.current;
         pendingResyncRef.current = false;
         pendingForceRef.current = false;
-        report = await executeSyncOnce(nextForce);
+        pendingRealtimeRef.current = false;
+        report = await executeSyncOnce(nextForce, nextRealtime);
       }
       return report;
     })();
