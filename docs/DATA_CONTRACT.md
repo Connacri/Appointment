@@ -514,3 +514,17 @@ exclusive room allocation or globally serializable financial postings during a L
 partition. Such concurrent operations must be detected after reconnection and
 presented as explicit conflicts. The application must not display a globally
 consistent/synced status merely because local writes succeeded.
+
+## 13. Supabase Realtime invalidation and cross-client UI refresh (2026-11-24)
+
+The React Web and Android Capacitor runtimes subscribe to workspace-filtered Supabase Postgres Changes for `bookings`, `establishments`, `resource_groups`, `resources`, `pms_tasks`, `stock_items` and `dynamic_rates` through `src/services/supabase/supabaseRealtime.ts`.
+
+- Realtime payloads are invalidation signals only. They are never applied directly to business state. The client debounces bursts, then invokes the existing Supabase Outbox push/pull/merge pipeline, preserving workspace checks, server versions, pending local intent and tombstone precedence.
+- A successful channel subscription triggers one pull to close the initial snapshot/subscription race. The old 45-second polling loop is replaced by a five-minute watchdog for dropped notifications and channel outages; focus/visibility and reconnect still trigger a pull.
+- A Realtime-triggered pull bypasses the ordinary redundant-pull freshness guard. If a sync is already running, the invalidation is queued and a subsequent pass runs after the current pass; notifications are not discarded while the UI is busy.
+- `supabase/migrations/20261124143000_enable_workspace_realtime.sql` idempotently adds the seven workspace tables to `supabase_realtime`. This migration must be applied to the target Supabase project before expecting Postgres Changes delivery. A channel reporting `SUBSCRIBED` alone does not prove that every table is in the publication.
+- Realtime does not replace the durable Outbox, server ACK, local IndexedDB transaction, periodic recovery or RLS. A notification can be duplicated or missed; replay-safe pull/merge remains authoritative.
+- The independent Rust/Win32 client currently has authenticated WinHTTP REST push/pull for bookings but no persistent Supabase Realtime WebSocket listener or native UI invalidation loop. It is not yet at Realtime parity with Web/Android. Do not claim all-platform real-time convergence until native WebSocket lifecycle, incremental pull wake-up, reconnect/backoff, cancellation and UI refresh are implemented and tested.
+- Existing business model gaps remain: localStorage-only and UI-state-only panels documented in `docs/CRUD_SYNC_AUDIT.md` do not become synchronized merely because their neighboring tables emit Realtime events.
+
+Realtime acceptance requires a remote mutation on one client to appear on a second Web/Android client without waiting for the watchdog, while an offline local mutation remains durable and wins over stale remote state until its server ACK is verified. Native Windows requires the same acceptance test before parity can be claimed.
