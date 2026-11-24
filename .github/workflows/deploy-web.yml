@@ -33,7 +33,7 @@ jobs:
       deployments: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment-retry.outputs.page_url }}
     steps:
       - name: Checkout exact triggering commit
         uses: actions/checkout@v4
@@ -56,7 +56,7 @@ jobs:
       - name: Verify GitHub Pages base-path assets
         run: |
           set -euo pipefail
-          for asset in favicon.svg apple-touch-icon.png; do
+          for asset in favicon.ico favicon-32.png favicon.svg apple-touch-icon.png; do
             test -s "dist/$asset" || { echo "::error::Missing dist/$asset"; exit 1; }
             grep -Fq "href=\"./$asset\"" dist/index.html || {
               echo "::error::dist/index.html must reference ./$asset for the repository Pages base path"; exit 1;
@@ -158,13 +158,34 @@ jobs:
 
       - name: Deploy to GitHub Pages
         id: deployment
+        continue-on-error: true
         uses: actions/deploy-pages@v4
         with:
           timeout: 600000
 
+      # GitHub Pages artifact discovery has intermittent API-level false negatives
+      # even after upload-pages-artifact is finalized and visible. Retry only the
+      # deployment action; never re-upload the same artifact in the same run.
+      - name: Wait before retrying Pages deployment
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 15
+
+      - name: Retry GitHub Pages deployment
+        id: deployment-retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 600000
+
+      - name: Fail if GitHub Pages deployment did not succeed
+        if: steps.deployment.outcome == 'failure' && steps.deployment-retry.outcome != 'success'
+        run: |
+          echo "::error::GitHub Pages deployment failed after one bounded retry."
+          exit 1
+
       - name: Verify deployed website matches this build
         env:
-          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          PAGE_URL: ${{ steps.deployment.outputs.page_url || steps.deployment-retry.outputs.page_url }}
         run: |
           set -euo pipefail
           EXPECTED="$(grep -o 'assets/index-[^"]*\.js' dist/index.html | head -n 1)"
@@ -188,7 +209,7 @@ jobs:
             sleep 30
           done
 
-          for asset in favicon.svg apple-touch-icon.png; do
+          for asset in favicon.ico favicon-32.png favicon.svg apple-touch-icon.png; do
             code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/$asset")
             echo "$BASE/$asset -> $code"
             [[ "$code" == "200" ]] || { echo "::error::$asset did not return HTTP 200"; exit 1; }
