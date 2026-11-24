@@ -175,6 +175,44 @@ function isDemoBooking(booking: TimelineBooking): boolean {
 }
 
 /**
+ * Canonical JSON for a deterministic content fingerprint. This is an idempotency
+ * namespace component, not a security hash or an authorization primitive.
+ */
+function stableBackfillJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableBackfillJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).filter((key) => record[key] !== undefined).sort()
+      .map((key) => `${JSON.stringify(key)}:${stableBackfillJson(record[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+/**
+ * A stable backfill key identifies one exact payload revision. A stable key based
+ * only on entity ID incorrectly treats a later rename/re-parent/edit as the same
+ * immutable operation and turns a legitimate update into an idempotency collision.
+ */
+function backfillIdempotencyKey(
+  workspaceId: string,
+  kind: string,
+  entityId: string,
+  establishmentId: string,
+  payload: unknown,
+): string {
+  const canonical = stableBackfillJson(payload);
+  let hashA = 0x811c9dc5;
+  let hashB = 0x9e3779b9;
+  for (let index = 0; index < canonical.length; index += 1) {
+    const code = canonical.charCodeAt(index);
+    hashA = Math.imul(hashA ^ code, 0x01000193);
+    hashB = Math.imul(hashB ^ code, 0x85ebca6b);
+  }
+  const fingerprint = `${(hashA >>> 0).toString(16).padStart(8, '0')}${(hashB >>> 0).toString(16).padStart(8, '0')}`;
+  return `backfill:${workspaceId}:${kind}:${entityId}:${establishmentId}:${fingerprint}`;
+}
+
+/**
  * Build the backfill plan. Returns `ok: false` when the profile has no real name,
  * so no establishment or Outbox records are invented.
  *
@@ -316,7 +354,9 @@ export function planBackfill({
       entityId: establishmentId,
       establishmentId,
       payload: establishment,
-      idempotencyKey: `backfill:${workspaceId}:establishment:${establishmentId}:1`,
+      idempotencyKey: backfillIdempotencyKey(
+        workspaceId, 'establishment', establishmentId, establishmentId, establishment,
+      ),
       label: `Établissement ${establishment.name}`,
     });
   }
@@ -336,18 +376,21 @@ export function planBackfill({
 
     // 2. Resource group (building). Resources reference it through `group_id`,
     //    so it must exist remotely before any resource upsert.
+    const groupPayload: BackfillResourceGroup = {
+      id: group.id,
+      name: groupName,
+      sector: group.sector,
+      icon: group.icon,
+      establishmentId: groupEstablishmentId,
+    };
     operations.push({
       kind: 'resourceGroup',
       entityId: group.id,
       establishmentId: groupEstablishmentId,
-      payload: {
-        id: group.id,
-        name: groupName,
-        sector: group.sector,
-        icon: group.icon,
-        establishmentId: groupEstablishmentId,
-      },
-      idempotencyKey: `backfill:${workspaceId}:resource_group:${group.id}:1`,
+      payload: groupPayload,
+      idempotencyKey: backfillIdempotencyKey(
+        workspaceId, 'resource_group', group.id, groupEstablishmentId, groupPayload,
+      ),
       label: `Bâtiment ${groupName.fr || groupName.en || group.id}`,
     });
 
@@ -370,16 +413,19 @@ export function planBackfill({
 
       // 3. Resource (after its group). Always scoped to the single backfilled
       //    establishment so the causal chain stays valid.
+      const resourcePayload: BackfillResource = {
+        ...resource,
+        groupId: resource.groupId ?? group.id,
+        establishmentId: groupEstablishmentId,
+      };
       operations.push({
         kind: 'resource',
         entityId: resource.id,
         establishmentId: groupEstablishmentId,
-        payload: {
-          ...resource,
-          groupId: resource.groupId ?? group.id,
-          establishmentId: groupEstablishmentId,
-        },
-        idempotencyKey: `backfill:${workspaceId}:resource:${resource.id}:1`,
+        payload: resourcePayload,
+        idempotencyKey: backfillIdempotencyKey(
+          workspaceId, 'resource', resource.id, groupEstablishmentId, resourcePayload,
+        ),
         label: `Ressource ${resource.name}`,
       });
     }
@@ -409,12 +455,15 @@ export function planBackfill({
       );
       continue;
     }
+    const bookingPayload: TimelineBooking = { ...booking };
     operations.push({
       kind: 'booking',
       entityId: booking.id,
       establishmentId,
-      payload: { ...booking },
-      idempotencyKey: `backfill:${workspaceId}:booking:${booking.id}:1`,
+      payload: bookingPayload,
+      idempotencyKey: backfillIdempotencyKey(
+        workspaceId, 'booking', booking.id, establishmentId, bookingPayload,
+      ),
       label: `Réservation ${booking.id}`,
     });
   }
