@@ -109,6 +109,8 @@ Never invent a hotel, establishment, building, floor, room, workspace, guest or 
 satisfy a UI default, import fallback or migration. Never silently merge several buildings
 into one establishment.
 
+**Demo-data classification:** A booking is demo data only when its own booking ID belongs to the explicit demo-booking ID set. A resource/room being part of the demo inventory must never cause a real booking to be excluded from IndexedDB persistence, the Outbox, deletion tombstones, Supabase sync or snapshot reconciliation. Real bookings may reference any valid resource ID; only the booking identity controls demo exclusion. Regression coverage: `tests/bookingPersistence.test.ts`.
+
 ## 3. Integrity and business rules
 
 - Every persisted business entity has stable identity and explicit ownership scope.
