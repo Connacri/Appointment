@@ -430,10 +430,13 @@ operation from falling through to the delete projection.
 
 LAN discovery is implemented for the native Windows EXE and Android APK. Both
 endpoints advertise the same IPv4 multicast protocol (239.255.42.99:45871,
-protocol version 1, JSON fields protocolVersion and peerId). The announcement
-contains only a persisted installation UUID. It must never carry a workspace ID,
-user identity, credentials, access token or business payload. Browser-only web builds
-cannot open raw UDP sockets and are not directly discoverable.
+protocol version 1, JSON fields protocolVersion, peerId and peerName). The stable
+installation UUID identifies the device installation; peerName is an optional,
+sanitized display label (Windows computer name or Android manufacturer/model) used
+only by the header. It is untrusted display metadata, not an identity proof. Announcements
+must never carry a workspace ID, user identity, credentials, access token, port, or
+business payload. Browser-only web builds cannot open raw UDP sockets and are not
+directly discoverable.
 
 Discovery is not a trusted connection. It does not authenticate the peer, prove
 workspace membership, authorize a user, create a secure channel, exchange events or
