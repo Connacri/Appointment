@@ -144,28 +144,30 @@ skipped attempt keeps `phase: 'synced'` only because both sides were already ver
 for an unverified operation. Verified by `tests/cloudRecovery.test.ts` and
 `tests/supabaseSync.test.ts`.
 - Personal-workspace backfill (`src/services/supabase/backfillPlanner.ts`) seeds the remote
-  workspace from the real local `EstablishmentProfile` and inventory only. It emits
-  establishment → resource group (building) → resource → booking operations with stable,
-  workspace-scoped idempotency keys, so re-running it never creates duplicates. A blank
-  profile name aborts the plan without inventing an establishment. When the workspace
-  already owns exactly one establishment, the plan attaches inventory to it and never
-  creates a second root; with several remote roots and no matching local profile id or
-  explicit selection, it aborts as ambiguous. The derived (or existing remote) establishment
-  id is persisted in the local profile so a later rename updates the same root.
-  Demo/bootstrap records are
-  excluded and counted as skipped; bookings without a local resource are skipped and reported;
-  a resource tagged with another establishment is reported and attached to the real
-  backfilled establishment, never silently merged. Payloads stay in the domain camelCase
-  shape; the snake_case mapping remains in `pmsRepository`. Values are kept inside the
-  remote check constraints: `spa_clinic` (no remote equivalent) is stored as `other`, and
-  free-text check-in/out times are normalized to `HH:MM` with a safe default instead of
-  failing every retry. Same-day stays are valid when check-out time follows check-in time,
-  so migration `20261120122449` replaces the remote `bookings_check` constraint with
-  `end_date >= start_date`; an end date before the start date is rejected by
-  `isValidBookingDateRange` in the booking form and skipped with a warning by the backfill
-  planner. The generated types were regenerated and are unchanged because a CHECK
-  constraint does not alter table or column types. Verified by
-  `tests/bookingValidation.test.ts` and `tests/backfillPlanner.test.ts`.
+  workspace from the real local `EstablishmentProfile` and inventory only. A blank profile
+  name aborts the plan; the caller must not replace it with a synthetic label such as
+  "Établissement". It emits establishment → resource group (building) → resource → booking
+  operations with workspace-, establishment- and payload-revision-scoped idempotency keys.
+  An identical rerun reuses the exact immutable intent; a rename, re-parent or business-data
+  edit produces a distinct idempotency key and a new monotonic local entity version rather
+  than colliding with the earlier Outbox operation. The same key can never be repurposed for
+  different content. `enqueueOutboxOnly` reads the idempotency row, materialized entity
+  version and tombstone in the same strict read/write transaction used to append Outbox and
+  P2P state; exact retries preserve the original intent and never overwrite newer projections.
+  When the workspace already owns exactly one establishment, the plan attaches inventory to
+  it and never creates a second root; with several remote roots and no matching local profile
+  id or explicit selection, it aborts as ambiguous. The derived (or existing remote)
+  establishment id is persisted in the local profile so a later rename updates the same root.
+  Demo/bootstrap records are excluded and counted as skipped; bookings without a local
+  resource are skipped and reported; a resource tagged with another establishment is reported
+  and attached to the real backfilled establishment, never silently merged. Payloads stay in
+  the domain camelCase shape; the snake_case mapping remains in `pmsRepository`. Values are
+  kept inside the remote check constraints: `spa_clinic` (no remote equivalent) is stored as
+  `other`, and free-text check-in/out times are normalized to `HH:MM` with a safe default.
+  Same-day stays are valid when check-out time follows check-in time; an end date before the
+  start date is rejected and skipped with a warning. A CHECK constraint does not alter
+  generated column types. Verified by `tests/bookingValidation.test.ts` and
+  `tests/backfillPlanner.test.ts`.
 - Remote booking reads are paginated: `listBookings` pages through
   `listBookingsWindow` (`idx_bookings_calendar`, overlap-safe `start_date`/`end_date`
   bounds, narrow projection, deterministic `start_date,id` ordering, `.range()`) so a
@@ -417,6 +419,12 @@ events are not part of the current materialized frontier; concurrent maximal eve
 remain a conflict. No last-write-wins rule may silently discard concurrent booking,
 stock or financial mutations. Concurrent delete/update operations are also conflicts,
 not automatic resurrection or deletion.
+
+The TypeScript runtime validator is part of the untrusted-transport boundary: only the
+explicit `upsert` and `delete` operations are accepted; an upsert payload must be a
+non-array object, and a delete payload must be null. Unknown operation values must be
+rejected before projection. This mirrors Rust's tagged enum and prevents an unknown
+operation from falling through to the delete projection.
 
 LAN discovery is implemented for the native Windows EXE and Android APK. Both
 endpoints advertise the same IPv4 multicast protocol (239.255.42.99:45871,
