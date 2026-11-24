@@ -32,6 +32,7 @@ import { EstablishmentProfile, DEFAULT_ESTABLISHMENT_PROFILE } from '../types/es
 import { indexedDb } from '../db/indexedDb';
 import { useWorkspace } from '../services/supabase/WorkspaceContext';
 import { isSupabaseConfigured, supabase } from '../services/supabase/supabaseClient';
+import { onSupabaseConfigChange } from '../services/supabase/supabaseClient';
 import { subscribeWorkspaceRealtime } from '../services/supabase/supabaseRealtime';
 import {
   deleteBooking as remoteDeleteBooking,
@@ -1289,6 +1290,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   latestGroupsRef.current = resourceGroups;
   latestProfileRef.current = establishmentProfile;
 
+  const [supabaseConfigVersion, setSupabaseConfigVersion] = useState(0);
   const syncInFlightRef = useRef<Promise<CloudRecoveryReport> | null>(null);
   const pendingResyncRef = useRef(false);
   const pendingForceRef = useRef(false);
@@ -1972,6 +1974,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     void syncWithSupabase({ force: false });
   }, [isCoreDataHydrated, workspace.activeWorkspaceId, isOffline, syncWithSupabase]);
 
+  useEffect(() => onSupabaseConfigChange(() => setSupabaseConfigVersion((value) => value + 1)), []);
+
   // Supabase Realtime is the primary remote-change signal. The five-minute
   // watchdog only recovers from dropped notifications or temporary outages.
   useEffect(() => {
@@ -2019,7 +2023,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       if (autoSyncTimerRef.current) clearTimeout(autoSyncTimerRef.current);
     };
-  }, [forceSupabaseSync, syncWithSupabase, isCoreDataHydrated, workspace.activeWorkspaceId, isOffline]);
+  }, [forceSupabaseSync, syncWithSupabase, isCoreDataHydrated, workspace.activeWorkspaceId, isOffline, supabaseConfigVersion]);
   // Housekeeping status updater
   const updateHousekeepingStatus = (
     resourceId: string,
