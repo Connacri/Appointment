@@ -36,6 +36,7 @@ import {
   deleteBooking as remoteDeleteBooking,
   deleteResource as remoteDeleteResource,
   listBookings,
+  listBookingTombstones,
   listDynamicRates,
   listEstablishments,
   listResourceGroups,
@@ -239,7 +240,7 @@ interface AppContextType {
   addBooking: (booking: Omit<TimelineBooking, 'id'>) => { success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'; booking?: TimelineBooking };
   updateBooking: (id: string, updates: Partial<TimelineBooking>) => { success: boolean; error?: string };
   updateBookingStatus: (id: string, status: BookingStatus) => void;
-  deleteBooking: (id: string) => void;
+  deleteBooking: (id: string) => Promise<void>;
   confirmCheckInAndCashPayment: (
     bookingId: string,
     cashReceived?: boolean
@@ -1593,6 +1594,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             indexedDb.getPendingOutbox(targetWsId, limit, { includeFutureRetries }),
           getOutboxSummary: (targetWsId) => indexedDb.getOutboxSummary(targetWsId),
           getTombstones: (targetWsId) => indexedDb.getTombstones(targetWsId),
+          applyRemoteBookingTombstones: (targetWsId, tombstones) =>
+            indexedDb.applyRemoteBookingTombstones(targetWsId, tombstones),
           markOutboxSynced: (id) => indexedDb.markOutboxSynced(id),
           markOutboxFailed: (id, error, nextAttemptAt) =>
             indexedDb.markOutboxFailed(id, error, nextAttemptAt),
@@ -1621,9 +1624,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             await remoteSaveStockItem(targetWsId, estId, item);
           },
           pullRemoteState: async (targetWsId) => {
-            const [remoteGroups, remoteBookings, remoteEstablishments, remoteRates] = await Promise.all([
+            const [
+              remoteGroups,
+              remoteBookings,
+              remoteBookingTombstones,
+              remoteEstablishments,
+              remoteRates,
+            ] = await Promise.all([
               listResourceGroups(targetWsId),
               listBookings(targetWsId),
+              listBookingTombstones(targetWsId),
               listEstablishments(targetWsId).catch(() => [] as HotelEstablishment[]),
               listDynamicRates(targetWsId).catch(() => ({} as Record<string, Record<string, number>>)),
             ]);
@@ -1641,6 +1651,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               establishments: remoteEstablishments,
               groups: remoteGroups,
               bookings: remoteBookings,
+              bookingTombstones: remoteBookingTombstones,
               tasks: remoteTasks,
               stockItems: remoteStockItems,
               dynamicRates: remoteRates,
@@ -2443,50 +2454,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const deleteBooking = (id: string) => {
+  const deleteBooking = async (id: string): Promise<void> => {
     const existing = bookings.find((booking) => booking.id === id);
-    if (existing) {
-      logEvent({
-        category: 'booking',
-        action: 'booking.deleted',
-        severity: 'warn',
-        title: `Réservation supprimée · ${existing.guestName}`,
-        description: `${existing.resourceName} (${existing.startDate} → ${existing.endDate}) · ${existing.totalPrice} ${existing.paymentCurrency || currency}`,
-        target: {
-          type: 'booking',
-          id,
-          label: existing.guestName,
-          secondaryLabel: existing.resourceName,
-        },
-        metadata: {
-          startDate: existing.startDate,
-          endDate: existing.endDate,
-          totalPrice: existing.totalPrice,
-          status: existing.status,
-        },
-        bookingId: id,
-        resourceId: existing.resourceId,
-      });
-    }
-    if (existing && workspace.activeWorkspaceId && !DEMO_BOOKING_IDS.has(id) && !DEMO_RESOURCE_IDS.has(existing.resourceId)) {
+    if (!existing) return;
+
+    const isDemo = DEMO_BOOKING_IDS.has(id) || DEMO_RESOURCE_IDS.has(existing.resourceId);
+    if (!isDemo) {
+      const workspaceId = workspace.activeWorkspaceId?.trim();
+      if (!workspaceId) {
+        throw new Error('Aucun workspace actif : la suppression ne peut pas être mise en file de synchronisation.');
+      }
+
       const bookedResource = latestGroupsRef.current
         .flatMap((group) => group.resources)
         .find((resource) => resource.id === existing.resourceId);
       const resolvedEstablishmentId =
         selectedEstablishmentId !== 'all'
           ? selectedEstablishmentId
-          : bookedResource?.establishmentId;
-      void indexedDb.deleteWithOutbox('bookings', id, {
-        workspaceId: workspace.activeWorkspaceId,
-        establishmentId: resolvedEstablishmentId,
-      }, 'booking')
-        .then(() => scheduleAutoSync())
-        .catch((error) => console.error('[Outbox] Booking deletion was not queued:', error));
+          : bookedResource?.establishmentId || undefined;
+
+      // Do not update React state before the local row, tombstone, Outbox and
+      // P2P event have committed together. A failed IDB transaction leaves the
+      // booking visible and lets the caller display the actual failure.
+      await indexedDb.deleteWithOutbox(
+        'bookings',
+        id,
+        { workspaceId, establishmentId: resolvedEstablishmentId },
+        'booking',
+      );
+      scheduleAutoSync();
     }
-    setBookings((prev) => prev.filter((b) => b.id !== id));
-    if (selectedBooking && selectedBooking.id === id) {
-      setSelectedBooking(null);
-    }
+
+    logEvent({
+      category: 'booking',
+      action: 'booking.deleted',
+      severity: 'warn',
+      title: `Réservation supprimée · ${existing.guestName}`,
+      description: `${existing.resourceName} (${existing.startDate} → ${existing.endDate}) · ${existing.totalPrice} ${existing.paymentCurrency || currency}`,
+      target: {
+        type: 'booking',
+        id,
+        label: existing.guestName,
+        secondaryLabel: existing.resourceName,
+      },
+      metadata: {
+        startDate: existing.startDate,
+        endDate: existing.endDate,
+        totalPrice: existing.totalPrice,
+        status: existing.status,
+      },
+      bookingId: id,
+      resourceId: existing.resourceId,
+    });
+
+    setBookings((prev) => prev.filter((booking) => booking.id !== id));
+    if (selectedBooking?.id === id) setSelectedBooking(null);
   };
 
   const markBookingAsPaid = (
