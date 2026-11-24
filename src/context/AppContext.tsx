@@ -1972,46 +1972,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     void syncWithSupabase({ force: false });
   }, [isCoreDataHydrated, workspace.activeWorkspaceId, isOffline, syncWithSupabase]);
 
-  // Automatic periodic, focus, visibility, and explicit refresh sync triggers
+  // Supabase Realtime is the primary remote-change signal. The five-minute
+  // watchdog only recovers from dropped notifications or temporary outages.
   useEffect(() => {
-    const handleForcedEvent = () => {
-      void forceSupabaseSync();
+    const wsId = activeWorkspaceIdRef.current;
+    let realtimeTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRealtimeSync = () => {
+      if (realtimeTimer) clearTimeout(realtimeTimer);
+      realtimeTimer = setTimeout(() => {
+        realtimeTimer = null;
+        if (isOfflineRef.current || !activeWorkspaceIdRef.current) return;
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+        void syncWithSupabase({ realtime: true });
+      }, 180);
     };
+    const handleForcedEvent = () => { void forceSupabaseSync(); };
     const handleVisibilityOrFocus = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
       if (isOfflineRef.current || !activeWorkspaceIdRef.current) return;
-      const lastAttemptMs = cloudSyncStatusRef.current.lastAttemptAt
-        ? Date.parse(cloudSyncStatusRef.current.lastAttemptAt)
-        : 0;
-      if (Number.isFinite(lastAttemptMs) && Date.now() - lastAttemptMs < 15_000) return;
       void syncWithSupabase({ force: false });
     };
-    const intervalId = setInterval(() => {
+    const watchdogId = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
       if (isOfflineRef.current || !activeWorkspaceIdRef.current) return;
       void syncWithSupabase({ force: false });
-    }, 45_000);
-
+    }, 5 * 60_000);
+    let channel: ReturnType<NonNullable<typeof supabase>['channel']> | null = null;
+    if (isCoreDataHydrated && wsId && !isOfflineRef.current && supabase) {
+      channel = subscribeWorkspaceRealtime(supabase, wsId, scheduleRealtimeSync, (status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[Appointment] Supabase Realtime unavailable:', status);
+        }
+      });
+    }
     window.addEventListener('appointment-refresh', handleForcedEvent);
     window.addEventListener('appointment-cloud-config-updated', handleForcedEvent);
     window.addEventListener('focus', handleVisibilityOrFocus);
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', handleVisibilityOrFocus);
-    }
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', handleVisibilityOrFocus);
     return () => {
-      clearInterval(intervalId);
+      clearInterval(watchdogId);
+      if (realtimeTimer) clearTimeout(realtimeTimer);
+      if (channel && supabase) void supabase.removeChannel(channel);
       window.removeEventListener('appointment-refresh', handleForcedEvent);
       window.removeEventListener('appointment-cloud-config-updated', handleForcedEvent);
       window.removeEventListener('focus', handleVisibilityOrFocus);
-      if (typeof document !== 'undefined') {
-        document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
-      }
-      if (autoSyncTimerRef.current) {
-        clearTimeout(autoSyncTimerRef.current);
-      }
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      if (autoSyncTimerRef.current) clearTimeout(autoSyncTimerRef.current);
     };
-  }, [forceSupabaseSync, syncWithSupabase]);
-
+  }, [forceSupabaseSync, syncWithSupabase, isCoreDataHydrated, workspace.activeWorkspaceId, isOffline]);
   // Housekeeping status updater
   const updateHousekeepingStatus = (
     resourceId: string,
