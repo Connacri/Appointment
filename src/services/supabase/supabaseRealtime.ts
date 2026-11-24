@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 
-const WORKSPACE_TABLES = [
+export const WORKSPACE_REALTIME_TABLES = [
   'bookings',
   'establishments',
   'resource_groups',
@@ -23,7 +23,7 @@ export function subscribeWorkspaceRealtime(
 ) {
   if (!workspaceId.trim()) throw new Error('A workspace ID is required for Realtime.');
   const channel = client.channel('appointment-workspace-' + workspaceId);
-  for (const table of WORKSPACE_TABLES) {
+  for (const table of WORKSPACE_REALTIME_TABLES) {
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table, filter: 'workspace_id=eq.' + workspaceId },
