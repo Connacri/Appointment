@@ -69,7 +69,8 @@ export function useBrandIconSync(logoUrl?: string | null, hotelName?: string | n
     if (resolvedHref !== DEFAULT_FAVICON_PATH) {
       void rasterizeLogoToPng(resolvedHref).then((pngDataUrl) => {
         if (!cancelled && pngDataUrl) {
-          syncFaviconLinks(document, resolvedHref, pngDataUrl);
+          // Use the rasterized PNG for both favicon and touch icon. PNG has broader browser support than SVG/data-URL combinations.
+          syncFaviconLinks(document, pngDataUrl, pngDataUrl);
         }
       });
     }
