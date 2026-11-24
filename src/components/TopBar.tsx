@@ -48,6 +48,7 @@ import {
 } from '../utils/staffNotifications';
 import { RoleIcon } from './RoleIcon';
 import { BookingFinderModal } from './BookingFinderModal';
+import { LanDiscoveryStatus } from './LanDiscoveryStatus';
 
 export const TopBar: React.FC = () => {
   const {
@@ -1347,6 +1348,8 @@ export const TopBar: React.FC = () => {
           );
         })()}
       </div>
+
+      <LanDiscoveryStatus />
 
       {uiCaps.canViewPlanningOrBookings && (
         <BookingFinderModal
