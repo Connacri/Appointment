@@ -90,6 +90,9 @@ export interface OutboxRecord {
 export interface TombstoneRecord {
   id: string; workspaceId: string; establishmentId?: string; entity: OutboxEntity;
   entityId: string; version: number; deletedAt: string;
+  /** Origin is used to preserve a local/peer delete against stale cloud snapshots. */
+  origin?: 'local' | 'supabase' | 'p2p';
+  remoteVersion?: number;
 }
 export interface OutboxMutationContext { workspaceId: string; establishmentId?: string; }
 export interface P2pInboundBatch {
@@ -1575,6 +1578,9 @@ class IndexedDbStore {
       };
       workspaceEntities.put(entityRecord);
       store.put(persisted);
+      // An explicit local upsert is a new incarnation and supersedes the older
+      // tombstone atomically; otherwise every later pull would keep hiding it.
+      tombstones.delete(tombstoneId);
       tx.objectStore('outbox').add(this.createOutboxRecord(context, entity, item.id, 'upsert', resolvedVersion, persisted as Record<string, unknown>, now, idempotencyKey));
       this.appendLocalP2pEvent(tx, context.workspaceId, entity, item.id, 'upsert', persisted as Record<string, unknown>, now);
     };
@@ -1758,7 +1764,7 @@ class IndexedDbStore {
       workspaceEntities.delete([context.workspaceId, entity, entityId]);
       tombstones.put({
         id: tombstoneId, workspaceId: context.workspaceId, establishmentId: context.establishmentId,
-        entity, entityId, version, deletedAt,
+        entity, entityId, version, deletedAt, origin: 'local',
       } satisfies TombstoneRecord);
       tx.objectStore('outbox').add(this.createOutboxRecord(context, entity, entityId, 'delete', version, null, deletedAt));
       this.appendLocalP2pEvent(tx, context.workspaceId, entity, entityId, 'delete', null, deletedAt);
@@ -1769,6 +1775,150 @@ class IndexedDbStore {
     tombstoneRequest.onerror = () => tx.abort();
     await waitForTransactionCompletion(tx, `deleteWithOutbox ${entity}/${entityId}`);
     this.emitOutboxChange();
+  }
+
+  /**
+   * Apply authoritative remote booking tombstones to this device. This path
+   * deliberately creates no Supabase Outbox row: it is a replicated remote
+   * mutation, not a new local command. The business row, local tombstone and
+   * local P2P delete envelope are committed atomically.
+   */
+  public async applyRemoteBookingTombstones(
+    workspaceId: string,
+    remoteTombstones: Array<{
+      entityId: string;
+      establishmentId: string;
+      version: number;
+      deletedAt: string;
+    }>,
+  ): Promise<void> {
+    if (!workspaceId.trim()) throw new Error('Workspace isolation required for remote tombstones.');
+    if (remoteTombstones.length === 0) return;
+
+    const latestById = new Map<string, {
+      entityId: string;
+      establishmentId: string;
+      version: number;
+      deletedAt: string;
+    }>();
+    for (const tombstone of remoteTombstones) {
+      if (
+        !tombstone.entityId.trim()
+        || !tombstone.establishmentId.trim()
+        || !Number.isSafeInteger(tombstone.version)
+        || tombstone.version < 1
+        || !Number.isFinite(Date.parse(tombstone.deletedAt))
+      ) {
+        throw new Error('Remote booking tombstone has an invalid identity, version or timestamp.');
+      }
+      const previous = latestById.get(tombstone.entityId);
+      if (!previous || tombstone.version > previous.version) {
+        latestById.set(tombstone.entityId, tombstone);
+      }
+    }
+
+    await this.openStore();
+    if (!this.idb) {
+      throw new Error('Remote tombstones require transactional IndexedDB; localStorage fallback is not safe.');
+    }
+    await this.getP2pNodeId();
+
+    const tx = this.createStrictTransaction([
+      'bookings',
+      'outbox',
+      'tombstones',
+      'workspaceEntities',
+      'p2pEvents',
+      'p2pClock',
+      'p2pMeta',
+      'p2pRecordFrontiers',
+    ]);
+    const bookings = tx.objectStore('bookings');
+    const outbox = tx.objectStore('outbox');
+    const tombstones = tx.objectStore('tombstones');
+    const workspaceEntities = tx.objectStore('workspaceEntities');
+    const outboxRequest = outbox.getAll();
+    let appliedCount = 0;
+
+    outboxRequest.onsuccess = () => {
+      const allOutbox = outboxRequest.result as OutboxRecord[];
+      for (const remote of latestById.values()) {
+        const localIntents = allOutbox.filter((record) =>
+          record.workspaceId === workspaceId
+          && record.entity === 'booking'
+          && record.entityId === remote.entityId
+          && (record.status === 'pending' || record.status === 'failed'),
+        );
+
+        // Never discard an unsent local edit or local delete. The merge layer
+        // keeps a pending upsert visible; conflicting commands remain queued.
+        if (localIntents.length > 0) continue;
+
+        const tombstoneId = `${workspaceId}:booking:${remote.entityId}`;
+        const entityRequest = workspaceEntities.get([workspaceId, 'booking', remote.entityId]);
+        const tombstoneRequest = tombstones.get(tombstoneId);
+        let entityRecord: { version?: number } | undefined;
+        let previousTombstone: TombstoneRecord | undefined;
+        let entityReady = false;
+        let tombstoneReady = false;
+
+        const apply = () => {
+          if (!entityReady || !tombstoneReady) return;
+          // Local or peer deletion has precedence over a cloud snapshot. Existing
+          // Supabase tombstones are idempotent and may advance only by server version.
+          if (previousTombstone && previousTombstone.origin !== 'supabase') return;
+          if (
+            previousTombstone?.origin === 'supabase'
+            && (previousTombstone.remoteVersion ?? 0) >= remote.version
+          ) return;
+
+          const localVersion = Math.max(
+            entityRecord?.version ?? 0,
+            previousTombstone?.version ?? 0,
+          ) + 1;
+          bookings.delete(remote.entityId);
+          workspaceEntities.delete([workspaceId, 'booking', remote.entityId]);
+          tombstones.put({
+            id: tombstoneId,
+            workspaceId,
+            establishmentId: remote.establishmentId,
+            entity: 'booking',
+            entityId: remote.entityId,
+            version: localVersion,
+            deletedAt: remote.deletedAt,
+            origin: 'supabase',
+            remoteVersion: remote.version,
+          } satisfies TombstoneRecord);
+          this.appendLocalP2pEvent(
+            tx,
+            workspaceId,
+            'booking',
+            remote.entityId,
+            'delete',
+            null,
+            remote.deletedAt,
+          );
+          appliedCount += 1;
+        };
+
+        entityRequest.onsuccess = () => {
+          entityRecord = entityRequest.result as { version?: number } | undefined;
+          entityReady = true;
+          apply();
+        };
+        tombstoneRequest.onsuccess = () => {
+          previousTombstone = tombstoneRequest.result as TombstoneRecord | undefined;
+          tombstoneReady = true;
+          apply();
+        };
+        entityRequest.onerror = () => tx.abort();
+        tombstoneRequest.onerror = () => tx.abort();
+      }
+    };
+    outboxRequest.onerror = () => tx.abort();
+
+    await waitForTransactionCompletion(tx, 'applyRemoteBookingTombstones');
+    if (appliedCount > 0) this.emitOutboxChange();
   }
 
   public async getPendingOutbox(
