@@ -8,9 +8,10 @@ Il ne contient aucun secret : uniquement des **noms** de secrets et de variables
 - Aucune release ni signature de production n'est produite en local.
   Les APK/AAB/EXE signés et le site de production sont construits **uniquement** par GitHub Actions.
 - La version applicative a une source unique : `package.json` → `version`.
-- Un push sur `main` (ou `master`) déclenche : qualité → build Web/Android/Windows → déploiement GitHub Pages → release de snapshot.
+- Un push sur `main` touchant le code applicatif, Android, Windows natif, les assets, les scripts de build ou la configuration de release déclenche : qualité → Android signé → Rust/Win32 natif Windows signé → GitHub Release de snapshot.
 - Un tag `vX.Y.Z` déclenche une release officielle ; le tag doit être **égal** à `package.json` (vérifié par le workflow).
-- `workflow_dispatch` permet de relancer manuellement le pipeline (`release_track`, `update_website`).
+- `workflow_dispatch` permet de relancer manuellement le pipeline (`release_track`).
+- Le site statique est déployé séparément par `.github/workflows/deploy-web.yml`. Il ne fait pas partie du pipeline de release binaire.
 
 ## 2. Jobs
 
@@ -18,8 +19,8 @@ Il ne contient aucun secret : uniquement des **noms** de secrets et de variables
 |---|---|---|
 | Build & Update Production Website | `npm ci`, build Vite, zip Web, upload de l'artefact Pages, `actions/deploy-pages` | Site GitHub Pages |
 | Build & Sign Android (APK + AAB) | build Web base relative, `cap sync`, signature release, vérification `apksigner`, upload | `app-release.apk`, `app-release.aab`, `mapping.txt` |
-| Build & Sign Windows EXE | build Web base relative, lanceur WebView, installateur Inno Setup, signature Authenticode | `Appointment-PMS-Setup*.exe`, zip Windows |
-| Publish GitHub Release | récupère les artefacts, les renomme avec la version, calcule `SHA256SUMS.txt`, publie la release | Release GitHub |
+| Build & Sign Native Windows | `cargo fmt`, `cargo test`, Clippy, `cargo build --release`, installateur Inno Setup, signature Authenticode | EXE Rust/Win32, installateur natif, ZIP natif |
+| Publish GitHub Release | récupère les artefacts Android et Windows natifs, les renomme avec la version, calcule `SHA256SUMS.txt`, publie la release | Release GitHub |
 
 `versionCode` Android = `github.run_number` ; il ne doit jamais régresser ni être réutilisé.
 
@@ -30,9 +31,9 @@ Toujours versionnés avec la version de `package.json` :
 ```text
 Appointment-PMS-vX.Y.Z.apk
 Appointment-PMS-vX.Y.Z.aab
-Appointment-PMS-Setup-vX.Y.Z.exe
-Appointment-PMS-Setup-Inno-vX.Y.Z.exe
-Appointment-PMS-Windows-vX.Y.Z.zip
+Appointment-PMS-Native-vX.Y.Z.exe
+Appointment-PMS-Setup-Native-vX.Y.Z.exe
+Appointment-PMS-Windows-Native-vX.Y.Z.zip
 web-build-vX.Y.Z.zip
 mapping-vX.Y.Z.txt
 SHA256SUMS.txt
@@ -53,7 +54,8 @@ ANDROID_KEYSTORE_PASSWORD
 ANDROID_KEY_ALIAS
 ANDROID_KEY_PASSWORD
 PLAY_STORE_JSON_KEY          (optionnel : active l'upload Play)
-WINDOWS_CERT_BASE64          (optionnel : sinon signature CI auto-signée)
+WINDOWS_CERT_BASE64          (obligatoire : signature Authenticode de production)
+WINDOWS_CERT_PASSWORD        (mot de passe du certificat PFX)
 ```
 
 Variables GitHub :
@@ -72,7 +74,7 @@ Ne jamais committer de keystore, `.env`, JSON de service account ou mot de passe
 ## 5. Vérification après un push
 
 1. `gh run watch <run_id> --exit-status`
-2. Vérifier que les quatre jobs sont verts et que la release contient les artefacts versionnés.
+2. Vérifier que les jobs qualité, Android signé, Windows Rust natif et publication sont verts et que la release contient les artefacts versionnés.
 3. Le job Pages compare automatiquement l'asset `assets/index-*.js` servi par
    `https://connacri.github.io/Appointment/` avec celui du build (10 minutes de réessais pour la
    propagation CDN) : un site resté sur l'ancien build fait échouer le run.
