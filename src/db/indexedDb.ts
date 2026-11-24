@@ -14,6 +14,7 @@ import { TimelineBooking, InvoiceRecord, ResourceItem, DomainType } from '../typ
 import type { EventLogEntry } from '../types/eventLog';
 import { EVENT_LOG_MAX_ENTRIES, sortEventLogsDesc } from '../utils/eventLog';
 import { waitForTransactionCompletion } from './indexedDbTransaction';
+import { runSerialQueue } from './serialQueue';
 import { migrateBookingRecordV7 } from './bookingMigration';
 import {
   createP2pEvent,
@@ -1849,9 +1850,7 @@ class IndexedDbStore {
       // (workspace,node,sequence) index. Queue each tombstone only after the
       // previous event has queued its clock writes; parallel callbacks would
       // otherwise read the same clock and generate duplicate sequence numbers.
-      const processNext = (): void => {
-        if (index >= remotes.length) return;
-        const remote = remotes[index++];
+      runSerialQueue(remotes, (remote, processNext) => {
         const localIntentExists = allOutbox.some((record) =>
           record.workspaceId === workspaceId
           && record.entity === 'booking'
@@ -1934,9 +1933,7 @@ class IndexedDbStore {
         };
         entityRequest.onerror = () => tx.abort();
         tombstoneRequest.onerror = () => tx.abort();
-      };
-
-      processNext();
+      }, () => undefined);
     };
     outboxRequest.onerror = () => tx.abort();
 
