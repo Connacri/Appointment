@@ -427,3 +427,40 @@ test('backfill handles legacy/partial profiles with missing city, country, or ad
   assert.equal(plan.establishment?.address, '');
   assert.equal(plan.establishment?.currency, 'DA');
 });
+
+test('backfill idempotency keys change with payload revisions and establishment scope', () => {
+  const base = planBackfill({
+    profile: makeProfile(),
+    workspaceId,
+    groups: [makeGroup()],
+    bookings: [makeBooking()],
+  });
+  const editedInventory = planBackfill({
+    profile: makeProfile(),
+    workspaceId,
+    groups: [makeGroup('grp-1', {
+      name: { fr: 'bâtiment b', en: 'building b', ar: 'المبنى ب' },
+    })],
+    bookings: [makeBooking('bkg-1', 'room-101')],
+  });
+  const editedBooking = planBackfill({
+    profile: makeProfile(),
+    workspaceId,
+    groups: [makeGroup()],
+    bookings: [makeBooking('bkg-1', 'room-101')],
+  });
+  const otherEstablishment = planBackfill({
+    profile: makeProfile({ name: 'Hotel Atlas' }),
+    workspaceId,
+    groups: [makeGroup()],
+    bookings: [makeBooking()],
+  });
+
+  const getKey = (plan: ReturnType<typeof planBackfill>, kind: string) =>
+    plan.operations.find((operation) => operation.kind === kind)?.idempotencyKey;
+
+  assert.notEqual(getKey(base, 'resourceGroup'), getKey(editedInventory, 'resourceGroup'));
+  assert.notEqual(getKey(base, 'establishment'), getKey(otherEstablishment, 'establishment'));
+  assert.notEqual(getKey(base, 'booking'), getKey(editedBooking, 'booking'));
+  assert.equal(getKey(base, 'resource'), getKey(editedInventory, 'resource'));
+});
