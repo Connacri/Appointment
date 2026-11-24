@@ -46,8 +46,8 @@ export function supportsNativeLanDiscovery(): boolean {
 
 /**
  * The Android bridge owns a stable installation UUID in app-private noBackupFilesDir storage.
- * It shares only protocolVersion + peerId over IPv4 multicast; workspace data,
- * credentials and business records are never included in discovery packets.
+ * Discovery shares protocolVersion, peerId and a sanitized device display name over IPv4
+ * multicast; workspace data, user identity, credentials and business records are never sent.
  */
 export async function getNativeLanNodeIdentity(): Promise<string> {
   if (!supportsNativeLanDiscovery()) {
