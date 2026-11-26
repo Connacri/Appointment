@@ -720,14 +720,24 @@ export async function listWorkspaceEntityTombstones(workspaceId: WorkspaceId): P
     ['purchase_order', 'purchase_orders'],
     ['staff_member', 'staff_members'],
   ] as const;
+  const pageSize = 500;
   const results = await Promise.all(sources.map(async ([entity, table]) => {
-    const { data, error } = await db.from(table).select('id,establishment_id,deleted_at,version')
-      .eq('workspace_id', workspaceId).not('deleted_at', 'is', null);
-    if (error) throw new Error(error.message);
-    return (data ?? []).map((row) => ({
-      entity, entityId: row.id, establishmentId: row.establishment_id,
-      deletedAt: row.deleted_at as string, remoteVersion: Number(row.version),
-    } satisfies SupabaseEntityTombstone));
+    const rows: SupabaseEntityTombstone[] = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await db.from(table).select('id,establishment_id,deleted_at,version')
+        .eq('workspace_id', workspaceId).not('deleted_at', 'is', null)
+        .order('deleted_at', { ascending: true }).order('id', { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw new Error(error.message);
+      rows.push(...(data ?? []).map((row) => ({
+        entity, entityId: row.id, establishmentId: row.establishment_id,
+        deletedAt: row.deleted_at as string, remoteVersion: Number(row.version),
+      } satisfies SupabaseEntityTombstone)));
+      if ((data ?? []).length < pageSize) break;
+      offset += pageSize;
+    }
+    return rows;
   }));
   return results.flat().sort((a, b) => a.deletedAt.localeCompare(b.deletedAt) || a.entityId.localeCompare(b.entityId));
 }
