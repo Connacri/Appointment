@@ -620,7 +620,7 @@ mod tests {
             .connection
             .query_row(
                 "SELECT version FROM tombstones
-                 WHERE workspace_id='ws-a' AND entity='resources' AND entity_id='resource-delete'",
+                 WHERE workspace_id='ws-a' AND entity='resource' AND entity_id='resource-delete'",
                 [],
                 |row| row.get(0),
             )
