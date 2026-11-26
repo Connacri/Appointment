@@ -42,8 +42,8 @@ function asBooking(event: P2pEvent): BookingPayload | null {
 
 /** Convert a local hotel wall-clock date/time to a timezone-independent minute key. */
 function wallClockMinute(date: string, time: string): number | null {
-  const dateMatch = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(date);
-  const timeMatch = /^(?:([01]\\d|2[0-3])):([0-5]\\d)$/.exec(time);
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const timeMatch = /^(?:([01]\d|2[0-3])):([0-5]\d)$/.exec(time);
   if (!dateMatch || !timeMatch) return null;
   const [, y, m, d] = dateMatch;
   const year = Number(y), month = Number(m), day = Number(d);
