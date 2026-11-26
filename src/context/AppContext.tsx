@@ -3661,23 +3661,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-    const assignTaskToStaff: AppContextType['assignTaskToStaff'] = (staffId, input) => {
-    const target = staffMembers.find((s) => s.id === staffId);
-    if (!target) return;
-    const roleDef = resolveRoleDefinition(rolesRef.current, target.roleId);
-    addTask({
-      room: input.room.trim() || target.assignment || '101',
-      typeId: 'custom',
-      typeName: input.taskTitle.trim(),
-      category: mapRoleToTaskCategory(roleDef),
-      assignee: target.fullName,
-      date: new Date().toISOString().slice(0, 10),
-      status: 'pending',
-      priority: input.priority || 'normal',
-      note: input.note?.trim() || `${roleDef.label.fr} · ${target.assignment} (${target.shift})`,
-    });
-  };
-
   const purgeAllUserData = async (): Promise<void> => {
     // Reset all user-owned in-memory collections.
     setBookings([]);
