@@ -1,6 +1,6 @@
 # Appointment P2P implementation plan
 
-Status: active engineering plan. Baseline: `main` at `9f35e4af2d7761ea691bb4921dad2775bfbeb155`.
+Status: active engineering plan. Baseline: `main` at `39358a80e23cceef181b3b0b24e51e4fe66d6abf`.
 
 ## Objective
 
@@ -73,6 +73,14 @@ local success indicator may imply global confirmation.
 - Establish a versioned entity registry and a cross-platform protocol conformance suite.
 
 ### Phase 1 — complete local mutation boundaries
+
+Progress (2026-11-26): the P2P peer registry (13 entity types) is now separate from
+Supabase Outbox (six entity types with implemented push dispatchers). TypeScript and Rust
+validation tests cover the same peer registry. This is only a protocol prerequisite; no
+AppContext localStorage CRUD path is considered migrated by this change. Invoice is not
+cloud-Outbox eligible until its dispatcher and repository contract exist.
+
+Remaining work:
 - Migrate tasks, stock items, stock movements, suppliers, purchase orders, invoices,
   dynamic rates, staff and establishment profile away from direct localStorage business
   persistence.
