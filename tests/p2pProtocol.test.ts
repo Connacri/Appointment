@@ -54,6 +54,40 @@ test('rejects unknown operations and array payloads before projection', () => {
   assert.throws(() => validateP2pEvent(arrayPayload), /plain object payload/);
 });
 
+test('enforces the same vector-clock and identity limits as the native protocol', () => {
+  const tooManyNodes = Object.fromEntries(
+    Array.from({ length: 257 }, (_, index) => [`node-${index}`, 1]),
+  );
+  tooManyNodes['node-a'] = 1;
+  assert.throws(
+    () => validateP2pEvent(event('node-a', 1, tooManyNodes)),
+    /256-node limit/,
+  );
+
+  assert.throws(
+    () => validateP2pEvent(event('n'.repeat(129), 1, { ['n'.repeat(129)]: 1 })),
+    /identity fields exceed/,
+  );
+  assert.throws(
+    () => validateP2pEvent(event('node-a', 1, { 'node-a': 1, ['n'.repeat(129)]: 1 })),
+    /invalid node or sequence/,
+  );
+  assert.throws(
+    () => validateP2pEvent({
+      ...event('node-a', 1, { 'node-a': 1 }),
+      entity: 'e'.repeat(129),
+    }),
+    /identity fields exceed/,
+  );
+  assert.throws(
+    () => validateP2pEvent({
+      ...event('node-a', 1, { 'node-a': 1 }),
+      entityId: 'i'.repeat(257),
+    }),
+    /identity fields exceed/,
+  );
+});
+
 test('builds a monotonically increasing local clock', () => {
   assert.deepEqual(nextP2pClock({ 'node-a': 3, 'node-b': 7 }, 'node-a'), {
     sequence: 4,

@@ -9,6 +9,11 @@
 
 export type P2pOperation = 'upsert' | 'delete';
 
+export const MAX_P2P_CLOCK_NODES = 256;
+export const MAX_P2P_NODE_ID_LENGTH = 128;
+export const MAX_P2P_ENTITY_LENGTH = 128;
+export const MAX_P2P_ENTITY_ID_LENGTH = 256;
+
 /** Empty pages may not advance a durable cursor and skip unseen events. */
 export function validateP2pCursorAdvance(
   expectedCursor: number,
@@ -85,6 +90,13 @@ export function validateP2pEvent<TPayload>(event: P2pEvent<TPayload>): void {
   if (!event.nodeId.trim() || !event.workspaceId.trim() || !event.entity.trim() || !event.entityId.trim()) {
     throw new Error('P2P event identity and scope fields are required.');
   }
+  if (
+    event.nodeId.length > MAX_P2P_NODE_ID_LENGTH
+    || event.entity.length > MAX_P2P_ENTITY_LENGTH
+    || event.entityId.length > MAX_P2P_ENTITY_ID_LENGTH
+  ) {
+    throw new Error('P2P event identity fields exceed their size limits.');
+  }
   if (!Number.isSafeInteger(event.sequence) || event.sequence < 1) {
     throw new Error('P2P event sequence must be a positive safe integer.');
   }
@@ -112,12 +124,21 @@ export function validateP2pEvent<TPayload>(event: P2pEvent<TPayload>): void {
     default:
       throw new Error('Unsupported P2P event operation.');
   }
+  const clockEntries = Object.entries(event.clock);
+  if (clockEntries.length > MAX_P2P_CLOCK_NODES) {
+    throw new Error('P2P event clock exceeds the supported 256-node limit.');
+  }
   const ownSequence = event.clock[event.nodeId];
   if (ownSequence !== event.sequence) {
     throw new Error('P2P event clock must contain its own node sequence.');
   }
-  for (const [nodeId, sequence] of Object.entries(event.clock)) {
-    if (!nodeId.trim() || !Number.isSafeInteger(sequence) || sequence < 1) {
+  for (const [nodeId, sequence] of clockEntries) {
+    if (
+      !nodeId.trim()
+      || nodeId.length > MAX_P2P_NODE_ID_LENGTH
+      || !Number.isSafeInteger(sequence)
+      || sequence < 1
+    ) {
       throw new Error('P2P event clock contains an invalid node or sequence.');
     }
   }
