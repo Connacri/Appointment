@@ -627,6 +627,35 @@ export async function saveStockMovement(workspaceId: WorkspaceId, establishmentI
   }
 }
 
+export async function listStockMovements(workspaceId: WorkspaceId, establishmentId: string): Promise<StockMovement[]> {
+  if (!workspaceId.trim() || !establishmentId.trim()) throw new Error('Workspace et établissement requis.');
+  const db = requireSupabase();
+  const pageSize = 500;
+  const rows: Array<{
+    id: string; item_id: string; timestamp: string; delta: number; reason: string;
+    room: string | null; actor_name: string | null;
+  }> = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await db.from('stock_movements')
+      .select('id,item_id,timestamp,delta,reason,room,actor_name')
+      .eq('workspace_id', workspaceId).eq('establishment_id', establishmentId)
+      .order('timestamp', { ascending: false }).order('id', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []));
+    if ((data ?? []).length < pageSize) break;
+    offset += pageSize;
+  }
+  const items = await listStockItems(workspaceId, establishmentId);
+  const names = new Map(items.map((item) => [item.id, item.name]));
+  return rows.map((row) => ({
+    id: row.id, itemId: row.item_id, itemName: names.get(row.item_id) ?? row.item_id,
+    timestamp: row.timestamp, delta: Number(row.delta), reason: row.reason,
+    room: row.room ?? undefined, user: row.actor_name ?? '',
+  }));
+}
+
 /** Profile fields live in establishments.settings so there is one canonical establishment row. */
 export async function saveEstablishmentProfile(
   workspaceId: WorkspaceId,
