@@ -297,10 +297,16 @@ impl PmsDatabase {
         peer_id: &str,
         limit: u32,
     ) -> Result<P2pOutboundPage, String> {
-        if workspace_id.trim().is_empty() || peer_id.trim().is_empty() || !(1..=500).contains(&limit) {
+        if workspace_id.trim().is_empty()
+            || peer_id.trim().is_empty()
+            || !(1..=500).contains(&limit)
+        {
             return Err("Invalid P2P outbound page scope or limit.".into());
         }
-        let tx = self.connection.unchecked_transaction().map_err(|e| e.to_string())?;
+        let tx = self
+            .connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
         let ack: Option<(i64, Option<i64>)> = tx
             .query_row(
                 "SELECT cursor, offered_cursor FROM p2p_peer_acks
@@ -319,21 +325,26 @@ impl PmsDatabase {
             )
             .map_err(|e| e.to_string())?;
         let rows = statement
-            .query_map(params![workspace_id, expected_cursor, i64::from(limit) + 1], |row| {
-                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
-            })
+            .query_map(
+                params![workspace_id, expected_cursor, i64::from(limit) + 1],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
             .map_err(|e| e.to_string())?;
         let mut entries = Vec::new();
         for row in rows {
             let (local_order, json) = row.map_err(|e| e.to_string())?;
-            let event = serde_json::from_str(&json)
-                .map_err(|error| format!("Corrupt P2P event at local order {local_order}: {error}"))?;
+            let event = serde_json::from_str(&json).map_err(|error| {
+                format!("Corrupt P2P event at local order {local_order}: {error}")
+            })?;
             entries.push(P2pEventLogEntry { local_order, event });
         }
         drop(statement);
         let has_more = entries.len() > limit as usize;
         entries.truncate(limit as usize);
-        let next_cursor = entries.last().map(|entry| entry.local_order).unwrap_or(expected_cursor);
+        let next_cursor = entries
+            .last()
+            .map(|entry| entry.local_order)
+            .unwrap_or(expected_cursor);
         tx.execute(
             "INSERT INTO p2p_peer_acks(workspace_id,peer_id,cursor,offered_cursor,updated_at)
              VALUES (?1,?2,?3,?4,CURRENT_TIMESTAMP)
@@ -359,11 +370,17 @@ impl PmsDatabase {
         expected_cursor: i64,
         next_cursor: i64,
     ) -> Result<(), String> {
-        if workspace_id.trim().is_empty() || peer_id.trim().is_empty()
-            || expected_cursor < 0 || next_cursor < expected_cursor {
+        if workspace_id.trim().is_empty()
+            || peer_id.trim().is_empty()
+            || expected_cursor < 0
+            || next_cursor < expected_cursor
+        {
             return Err("Invalid P2P outbound acknowledgement.".into());
         }
-        let tx = self.connection.unchecked_transaction().map_err(|e| e.to_string())?;
+        let tx = self
+            .connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
         let ack: Option<(i64, Option<i64>)> = tx
             .query_row(
                 "SELECT cursor, offered_cursor FROM p2p_peer_acks
@@ -380,7 +397,9 @@ impl PmsDatabase {
         if next_cursor > expected_cursor {
             let exists: bool = tx
                 .query_row(
-                    "SELECT EXISTS(SELECT 1 FROM p2p_events WHERE workspace_id=?1 AND local_order=?2)",
+                    "SELECT EXISTS(
+                SELECT 1 FROM p2p_events WHERE workspace_id=?1 AND local_order=?2
+            )",
                     params![workspace_id, next_cursor],
                     |row| row.get(0),
                 )
@@ -775,41 +794,74 @@ mod tests {
     fn outbound_peer_pages_require_exact_durable_ack_and_are_workspace_scoped() {
         let db = database();
         local_booking_event(
-            &db, "workspace-a", "node-a", "booking-1",
-            P2pOperation::Upsert, Some(json!({"guest": "Alice"})),
+            &db,
+            "workspace-a",
+            "node-a",
+            "booking-1",
+            P2pOperation::Upsert,
+            Some(json!({"guest": "Alice"})),
             "2026-11-23T08:00:00Z",
         );
         local_booking_event(
-            &db, "workspace-a", "node-a", "booking-2",
-            P2pOperation::Upsert, Some(json!({"guest": "Bob"})),
+            &db,
+            "workspace-a",
+            "node-a",
+            "booking-2",
+            P2pOperation::Upsert,
+            Some(json!({"guest": "Bob"})),
             "2026-11-23T08:01:00Z",
         );
         local_booking_event(
-            &db, "workspace-b", "node-b", "booking-3",
-            P2pOperation::Upsert, Some(json!({"guest": "Other workspace"})),
+            &db,
+            "workspace-b",
+            "node-b",
+            "booking-3",
+            P2pOperation::Upsert,
+            Some(json!({"guest": "Other workspace"})),
             "2026-11-23T08:02:00Z",
         );
 
-        let page = db.get_p2p_outbound_page("workspace-a", "peer-b", 1).unwrap();
+        let page = db
+            .get_p2p_outbound_page("workspace-a", "peer-b", 1)
+            .unwrap();
         assert_eq!(page.expected_cursor, 0);
         assert_eq!(page.events.len(), 1);
         assert!(page.has_more);
-        assert!(db.acknowledge_p2p_outbound_page("workspace-a", "peer-b", 0, 999).is_err());
-        db.acknowledge_p2p_outbound_page("workspace-a", "peer-b", 0, page.next_cursor).unwrap();
+        assert!(db
+            .acknowledge_p2p_outbound_page("workspace-a", "peer-b", 0, 999)
+            .is_err());
+        db.acknowledge_p2p_outbound_page("workspace-a", "peer-b", 0, page.next_cursor)
+            .unwrap();
 
-        let second = db.get_p2p_outbound_page("workspace-a", "peer-b", 1).unwrap();
+        let second = db
+            .get_p2p_outbound_page("workspace-a", "peer-b", 1)
+            .unwrap();
         assert_eq!(second.expected_cursor, page.next_cursor);
         assert_eq!(second.events.len(), 1);
         assert!(!second.has_more);
-        assert!(db.acknowledge_p2p_outbound_page("workspace-a", "peer-b", 0, page.next_cursor).is_err());
+        assert!(db
+            .acknowledge_p2p_outbound_page("workspace-a", "peer-b", 0, page.next_cursor)
+            .is_err());
         db.acknowledge_p2p_outbound_page(
-            "workspace-a", "peer-b", second.expected_cursor, second.next_cursor,
-        ).unwrap();
+            "workspace-a",
+            "peer-b",
+            second.expected_cursor,
+            second.next_cursor,
+        )
+        .unwrap();
 
-        let empty = db.get_p2p_outbound_page("workspace-a", "peer-b", 10).unwrap();
+        let empty = db
+            .get_p2p_outbound_page("workspace-a", "peer-b", 10)
+            .unwrap();
         assert!(empty.events.is_empty());
         assert_eq!(empty.expected_cursor, empty.next_cursor);
-        assert_eq!(db.get_p2p_outbound_page("workspace-b", "peer-b", 10).unwrap().events.len(), 1);
+        assert_eq!(
+            db.get_p2p_outbound_page("workspace-b", "peer-b", 10)
+                .unwrap()
+                .events
+                .len(),
+            1
+        );
     }
 
     #[test]
