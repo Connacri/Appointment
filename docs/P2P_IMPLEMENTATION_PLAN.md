@@ -151,3 +151,14 @@ P2P production remains disabled until all are true:
 
 Never claim P2P operational based only on discovery, unit tests, a successful build or a
 successful event append.
+
+
+### Phase 3 progress — durable outbound pages (2026-11-26)
+
+IndexedDB schema v11 now maintains a durable relay queue for locally authored and
+newly received P2P events. It exposes bounded outbound page reads and per-peer durable
+ACK cursors. The ACK must match the exact page offered to that peer; arbitrary cursor
+jumps and cross-workspace acknowledgements are rejected. Incoming events are re-enqueued
+for relay to other peers in the same transaction as event/projection/cursor commit.
+Queue compaction remains disabled until trusted peer membership and revocation are
+implemented. This is a persistence/protocol layer, not a live network transport.

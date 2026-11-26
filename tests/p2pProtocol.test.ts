@@ -9,6 +9,7 @@ import {
   nextP2pClock,
   validateP2pEvent,
   validateP2pCursorAdvance,
+  validateP2pAckAdvance,
   P2P_SUPPORTED_ENTITIES,
   SUPABASE_OUTBOX_ENTITIES,
   type P2pEvent,
@@ -348,4 +349,13 @@ test('a concurrent delete and update remains a conflict, not silent resurrection
   const update = event('node-b', 2, { 'node-a': 1, 'node-b': 2 }, { guest: 'Updated' });
   const state = getP2pRecordState(mergeP2pEvents([deletion], [update]));
   assert.equal(state.kind, 'conflict');
+});
+
+test('outbound peer acknowledgements must match the exact offered cursor', () => {
+  assert.equal(validateP2pAckAdvance(0, 100, 100), true);
+  assert.equal(validateP2pAckAdvance(100, 100, 100), true);
+  assert.equal(validateP2pAckAdvance(0, 100, 99), false);
+  assert.equal(validateP2pAckAdvance(100, 150, 151), false);
+  assert.equal(validateP2pAckAdvance(-1, 100, 100), false);
+  assert.equal(validateP2pAckAdvance(0, Number.MAX_SAFE_INTEGER + 1, Number.MAX_SAFE_INTEGER + 1), false);
 });

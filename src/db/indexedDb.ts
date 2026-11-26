@@ -129,6 +129,14 @@ export interface P2pApplyReport {
   conflicts: number;
   blockedByPendingLocal: number;
 }
+export interface P2pOutboundPage {
+  workspaceId: string;
+  peerId: string;
+  expectedCursor: number;
+  nextCursor: number;
+  events: P2pEvent[];
+  hasMore: boolean;
+}
 export interface OutboxSummary {
   pendingCount: number;
   failedCount: number;
@@ -139,7 +147,7 @@ export interface OutboxSummary {
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 10;
+  private dbVersion = 11;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -312,6 +320,29 @@ class IndexedDbStore {
         }
         if (!db.objectStoreNames.contains('p2pRecordFrontiers')) {
           db.createObjectStore('p2pRecordFrontiers', { keyPath: ['workspaceId', 'entity', 'entityId'] });
+        }
+        // v11: durable per-workspace relay queue and per-peer outbound ACK cursors.
+        if (!db.objectStoreNames.contains('p2pTransportQueue')) {
+          const queue = db.createObjectStore('p2pTransportQueue', { keyPath: 'localOrder', autoIncrement: true });
+          queue.createIndex('workspaceOrder', ['workspaceId', 'localOrder'], { unique: true });
+        }
+        if (!db.objectStoreNames.contains('p2pPeerAcks')) {
+          db.createObjectStore('p2pPeerAcks', { keyPath: ['workspaceId', 'peerId'] });
+        }
+        if (e.oldVersion > 0 && e.oldVersion < 11 && db.objectStoreNames.contains('p2pEvents')) {
+          const upgradeTx = (e.target as IDBOpenDBRequest).transaction;
+          const legacyEvents = upgradeTx?.objectStore('p2pEvents');
+          const relayQueue = upgradeTx?.objectStore('p2pTransportQueue');
+          if (legacyEvents && relayQueue) {
+            const cursorRequest = legacyEvents.openCursor();
+            cursorRequest.onsuccess = () => {
+              const cursor = cursorRequest.result;
+              if (!cursor) return;
+              const event = cursor.value as P2pEvent;
+              relayQueue.add({ workspaceId: event.workspaceId, event });
+              cursor.continue();
+            };
+          }
         }
 
         // v7 upgrade: index sector+startDate and normalize existing local booking records without data loss.
@@ -722,7 +753,7 @@ class IndexedDbStore {
         const nextNodeId = supportsNativeLanDiscovery()
           ? await resetNativeLanNodeIdentity()
           : this.createId();
-        const tx = this.createStrictTransaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'localBusinessEntities', 'issuedCards', 'resourceGroups', 'eventLogs', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pPeerCursors', 'p2pRecordFrontiers']);
+        const tx = this.createStrictTransaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'localBusinessEntities', 'issuedCards', 'resourceGroups', 'eventLogs', 'p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pMeta', 'p2pPeerCursors', 'p2pRecordFrontiers']);
         tx.objectStore('bookings').clear();
         tx.objectStore('invoices').clear();
         tx.objectStore('resources').clear();
@@ -734,6 +765,8 @@ class IndexedDbStore {
         tx.objectStore('resourceGroups').clear();
         tx.objectStore('eventLogs').clear();
         tx.objectStore('p2pEvents').clear();
+        tx.objectStore('p2pTransportQueue').clear();
+        tx.objectStore('p2pPeerAcks').clear();
         tx.objectStore('p2pClock').clear();
         tx.objectStore('p2pMeta').clear();
         tx.objectStore('p2pMeta').put({ key: 'nodeId', value: nextNodeId });
@@ -800,7 +833,7 @@ class IndexedDbStore {
     await this.openStore();
     if (!this.idb) throw new Error('P2P replication requires IndexedDB; localStorage fallback is unsafe.');
     const tx = this.createStrictTransaction(
-      ['p2pEvents', 'p2pClock', 'p2pPeerCursors', 'p2pRecordFrontiers', 'outbox',
+      ['p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pPeerCursors', 'p2pRecordFrontiers', 'outbox',
         'tombstones', 'workspaceEntities', 'bookings', 'resources', 'invoices', 'resourceGroups'],
     );
     const report: P2pApplyReport = {
@@ -834,6 +867,7 @@ class IndexedDbStore {
               mergeP2pEvents([existing], [event]);
             } else {
               eventStore.add(event);
+              tx.objectStore('p2pTransportQueue').add({ workspaceId: batch.workspaceId, event });
               report.appendedEvents += 1;
             }
             affected.set(`${event.entity}\u0000${event.entityId}`, {
@@ -1097,6 +1131,122 @@ class IndexedDbStore {
     return resolvedNodeId;
   }
 
+  /**
+   * Read the next bounded page of immutable events not yet durably acknowledged by a peer.
+   * The offered cursor is persisted before the page is returned, so ACKs cannot skip
+   * arbitrary event ranges or acknowledge a page that was never offered.
+   */
+  public async getP2pOutboundPage(
+    workspaceId: string,
+    peerId: string,
+    limit = 100,
+  ): Promise<P2pOutboundPage> {
+    if (!workspaceId.trim() || !peerId.trim() || !Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
+      throw new Error('Invalid P2P outbound page scope or limit.');
+    }
+    await this.openStore();
+    if (!this.idb) throw new Error('P2P outbound paging requires IndexedDB.');
+    const tx = this.createStrictTransaction(['p2pPeerAcks', 'p2pTransportQueue']);
+    const ackStore = tx.objectStore('p2pPeerAcks');
+    const queueIndex = tx.objectStore('p2pTransportQueue').index('workspaceOrder');
+    let result: P2pOutboundPage | undefined;
+    const ackRequest = ackStore.get([workspaceId, peerId]);
+    ackRequest.onsuccess = () => {
+      const ack = ackRequest.result as { cursor?: number } | undefined;
+      const expectedCursor = ack?.cursor ?? 0;
+      const events: P2pEvent[] = [];
+      let nextCursor = expectedCursor;
+      let hasMore = false;
+      const range = IDBKeyRange.bound(
+        [workspaceId, expectedCursor + 1],
+        [workspaceId, Number.MAX_SAFE_INTEGER],
+      );
+      const cursorRequest = queueIndex.openCursor(range);
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result;
+        if (!cursor) {
+          ackStore.put({
+            workspaceId, peerId, cursor: expectedCursor,
+            offeredCursor: nextCursor, updatedAt: new Date().toISOString(),
+          });
+          result = { workspaceId, peerId, expectedCursor, nextCursor, events, hasMore };
+          return;
+        }
+        if (events.length >= limit) {
+          hasMore = true;
+          ackStore.put({
+            workspaceId, peerId, cursor: expectedCursor,
+            offeredCursor: nextCursor, updatedAt: new Date().toISOString(),
+          });
+          result = { workspaceId, peerId, expectedCursor, nextCursor, events, hasMore };
+          return;
+        }
+        const row = cursor.value as { workspaceId: string; event: P2pEvent };
+        events.push(row.event);
+        nextCursor = Number((cursor.key as IDBValidKey[])[1]);
+        cursor.continue();
+      };
+      cursorRequest.onerror = () => tx.abort();
+    };
+    ackRequest.onerror = () => tx.abort();
+    await waitForTransactionCompletion(tx, 'getP2pOutboundPage');
+    if (!result) throw new Error('P2P outbound page could not be read.');
+    return result;
+  }
+
+  /** Advance one peer's outbound cursor only for the exact page offered to it. */
+  public async acknowledgeP2pOutboundPage(
+    workspaceId: string,
+    peerId: string,
+    expectedCursor: number,
+    nextCursor: number,
+  ): Promise<void> {
+    if (!workspaceId.trim() || !peerId.trim()
+      || !Number.isSafeInteger(expectedCursor) || expectedCursor < 0
+      || !Number.isSafeInteger(nextCursor) || nextCursor < expectedCursor) {
+      throw new Error('Invalid P2P outbound acknowledgement.');
+    }
+    await this.openStore();
+    if (!this.idb) throw new Error('P2P acknowledgement requires IndexedDB.');
+    const tx = this.createStrictTransaction(['p2pPeerAcks', 'p2pTransportQueue']);
+    const ackStore = tx.objectStore('p2pPeerAcks');
+    let validationError: Error | null = null;
+    const abortWith = (message: string) => {
+      validationError = new Error(message);
+      try { tx.abort(); } catch { /* transaction already inactive */ }
+    };
+    const ackRequest = ackStore.get([workspaceId, peerId]);
+    ackRequest.onsuccess = () => {
+      const ack = ackRequest.result as { cursor?: number; offeredCursor?: number } | undefined;
+      const currentCursor = ack?.cursor ?? 0;
+      if (currentCursor !== expectedCursor
+        || !validateP2pAckAdvance(expectedCursor, ack?.offeredCursor ?? -1, nextCursor)) {
+        abortWith('P2P acknowledgement does not match the current offered page.');
+        return;
+      }
+      if (nextCursor === expectedCursor) return;
+      const queueRequest = tx.objectStore('p2pTransportQueue').get(nextCursor);
+      queueRequest.onsuccess = () => {
+        const row = queueRequest.result as { workspaceId?: string } | undefined;
+        if (!row || row.workspaceId !== workspaceId) {
+          abortWith('P2P acknowledgement cursor does not identify an offered event in this workspace.');
+          return;
+        }
+        ackStore.put({
+          workspaceId, peerId, cursor: nextCursor, updatedAt: new Date().toISOString(),
+        });
+      };
+      queueRequest.onerror = () => abortWith('Could not verify the acknowledged P2P event.');
+    };
+    ackRequest.onerror = () => abortWith('Could not read the current P2P acknowledgement cursor.');
+    try {
+      await waitForTransactionCompletion(tx, 'acknowledgeP2pOutboundPage');
+    } catch (error) {
+      if (validationError) throw validationError;
+      throw error;
+    }
+  }
+
   /** Backfill an event for a legacy Outbox intent without duplicating an exact event. */
   private ensureP2pEventForOutbox(tx: IDBTransaction, record: OutboxRecord): void {
     const request = tx.objectStore('p2pEvents').index('workspaceEntity')
@@ -1174,6 +1324,7 @@ class IndexedDbStore {
         'tombstones',
         'outbox',
         'p2pEvents',
+        'p2pTransportQueue',
         'p2pClock',
         'p2pMeta',
         'p2pRecordFrontiers',
@@ -1373,6 +1524,7 @@ class IndexedDbStore {
           observedClock: observed,
         });
         tx.objectStore('p2pEvents').add(event);
+        tx.objectStore('p2pTransportQueue').add({ workspaceId, event });
         tx.objectStore('p2pRecordFrontiers').put({
           workspaceId,
           entity,
@@ -1429,7 +1581,7 @@ class IndexedDbStore {
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
     await this.getP2pNodeId();
-    const tx = this.createStrictTransaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers']);
+    const tx = this.createStrictTransaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers']);
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const tombstones = tx.objectStore('tombstones');
@@ -1561,7 +1713,7 @@ class IndexedDbStore {
       // snapshot the plan was built from.
       await this.getP2pNodeId();
       const storeTx = this.createStrictTransaction(
-        [storeName, 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'],
+        [storeName, 'p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers'],
       );
       const store = storeTx.objectStore(storeName);
       const current = await new Promise<T | undefined>((resolve) => {
@@ -1589,7 +1741,7 @@ class IndexedDbStore {
     }
 
     await this.getP2pNodeId();
-    const tx = this.createStrictTransaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers']);
+    const tx = this.createStrictTransaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers']);
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const tombstones = tx.objectStore('tombstones');
@@ -1694,7 +1846,7 @@ class IndexedDbStore {
 
     const tx = this.createStrictTransaction([
       'outbox', 'workspaceEntities', 'tombstones',
-      'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers',
+      'p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers',
     ]);
     const outbox = tx.objectStore('outbox');
     const workspaceEntities = tx.objectStore('workspaceEntities');
@@ -1884,6 +2036,7 @@ class IndexedDbStore {
       'workspaceEntities',
       'tombstones',
       'p2pEvents',
+      'p2pTransportQueue',
       'p2pClock',
       'p2pMeta',
       'p2pRecordFrontiers',
@@ -2012,7 +2165,7 @@ class IndexedDbStore {
         throw new Error('Invalid remote workspace tombstone.');
       }
       const tx = this.createStrictTransaction([
-        'outbox', 'workspaceEntities', 'tombstones', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers',
+        'outbox', 'workspaceEntities', 'tombstones', 'p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers',
       ]);
       const outbox = tx.objectStore('outbox');
       const workspaceEntities = tx.objectStore('workspaceEntities');
@@ -2247,7 +2400,7 @@ class IndexedDbStore {
     if (!this.idb) throw new Error('Transactional Outbox deletes require IndexedDB.');
     await this.getP2pNodeId();
     const tx = this.createStrictTransaction([
-      'outbox', 'workspaceEntities', 'tombstones', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers',
+      'outbox', 'workspaceEntities', 'tombstones', 'p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers',
     ]);
     const outbox = tx.objectStore('outbox');
     const workspaceEntities = tx.objectStore('workspaceEntities');
@@ -2313,7 +2466,7 @@ class IndexedDbStore {
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
     await this.getP2pNodeId();
-    const tx = this.createStrictTransaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers']);
+    const tx = this.createStrictTransaction([storeName, 'outbox', 'tombstones', 'workspaceEntities', 'p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers']);
     const store = tx.objectStore(storeName);
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const tombstones = tx.objectStore('tombstones');
@@ -2397,6 +2550,7 @@ class IndexedDbStore {
       'tombstones',
       'workspaceEntities',
       'p2pEvents',
+      'p2pTransportQueue',
       'p2pClock',
       'p2pMeta',
       'p2pRecordFrontiers',
@@ -2578,7 +2732,7 @@ class IndexedDbStore {
     await this.openStore();
     if (!this.idb) throw new Error('Outbox is unavailable without IndexedDB.');
     const tx = this.createStrictTransaction(
-      ['outbox', 'tombstones', 'p2pEvents', 'p2pRecordFrontiers', 'workspaceEntities',
+      ['outbox', 'tombstones', 'p2pEvents', 'p2pTransportQueue', 'p2pRecordFrontiers', 'workspaceEntities',
         'bookings', 'resources', 'invoices', 'resourceGroups'],
     );
     const outbox = tx.objectStore('outbox');

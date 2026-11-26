@@ -699,3 +699,21 @@ from the latest persisted stock-item projection inside that transaction, rather 
 possibly stale React snapshot; separate receipts for the same item therefore compose additively. The transaction returns the exact committed stock-item payloads to the UI, so the rendered quantity is reconciled to the persisted result rather than the pre-transaction snapshot. The shared single-record Outbox, cloud-tombstone and local-only repository APIs remain available alongside the batch command.
 
 Regression coverage: `tests/purchaseOrderReceiptSafety.test.ts`.
+
+
+### P2P outbound relay queue and durable peer acknowledgements
+
+IndexedDB schema v11 adds a monotonically ordered, workspace-scoped relay queue and
+per-peer outbound acknowledgement cursors. Local events are queued in the same strict
+transaction as their business projection, Outbox, vector clock and event record. Newly
+received events are added to the relay queue in the same transaction as inbound event
+persistence, projection/conflict reconciliation and the inbound peer cursor. This enables
+authorized peers to relay events they did not originate.
+
+Outbound reads are bounded to 1–500 events and persist the exact offered cursor before
+returning a page. A peer acknowledgement advances only when it matches the current
+offered page and identifies an event in the same workspace. Replayed acknowledgements,
+stale sessions, skipped pages and cross-workspace cursor values are rejected. Queue
+compaction is deliberately disabled until a durable peer membership/revocation registry
+can prove that every authorized replica has acknowledged a checkpoint. Existing events
+are migrated incrementally through an IndexedDB cursor during the schema upgrade.

@@ -69,6 +69,19 @@ export const MAX_P2P_ENTITY_LENGTH = 128;
 export const MAX_P2P_ENTITY_ID_LENGTH = 256;
 
 /** Empty pages may not advance a durable cursor and skip unseen events. */
+export function validateP2pAckAdvance(
+  expectedCursor: number,
+  offeredCursor: number,
+  acknowledgedCursor: number,
+): boolean {
+  return Number.isSafeInteger(expectedCursor)
+    && Number.isSafeInteger(offeredCursor)
+    && Number.isSafeInteger(acknowledgedCursor)
+    && expectedCursor >= 0
+    && offeredCursor >= expectedCursor
+    && acknowledgedCursor === offeredCursor;
+}
+
 export function validateP2pCursorAdvance(
   expectedCursor: number,
   nextCursor: number,
