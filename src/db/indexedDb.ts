@@ -1656,6 +1656,7 @@ class IndexedDbStore {
         currentPayload?: Record<string, unknown>,
         currentBatch?: ReadonlyMap<string, Record<string, unknown>>,
       ) => boolean;
+      skipOutbox?: boolean;
     }>,
     commandId: string,
     rejectIfCurrentFieldEquals?: {
@@ -1792,16 +1793,18 @@ class IndexedDbStore {
         payload: persisted,
       });
       tombstones.delete(`${context.workspaceId}:${entry.entity}:${entry.entityId}`);
-      outbox.add(this.createOutboxRecord(
-        context,
-        entry.entity,
-        entry.entityId,
-        'upsert',
-        version,
-        persistedOutbound,
-        now,
-        entry.idempotencyKey,
-      ));
+      if (!entry.skipOutbox) {
+        outbox.add(this.createOutboxRecord(
+          context,
+          entry.entity,
+          entry.entityId,
+          'upsert',
+          version,
+          persistedOutbound,
+          now,
+          entry.idempotencyKey,
+        ));
+      }
       committed.push({ entity: entry.entity, entityId: entry.entityId, payload: persisted });
       this.appendLocalP2pEvent(
         tx,
@@ -2099,6 +2102,7 @@ class IndexedDbStore {
         currentPayload?: Record<string, unknown>,
         currentBatch?: ReadonlyMap<string, Record<string, unknown>>,
       ) => boolean;
+      skipOutbox?: boolean;
     }>,
     rejectIfCurrentFieldEquals?: {
       entity: OutboxEntity;

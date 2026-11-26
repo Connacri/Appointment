@@ -36,6 +36,7 @@ test('purchase receipt aggregates duplicate lines and emits matching stock movem
   assert.equal(new Set(plan.movements.map((movement) => movement.id)).size, plan.movements.length);
   assert.equal(plan.mutations.filter((mutation) => mutation.applyToCurrent !== undefined).length, 2);
   assert.equal(plan.mutations.filter((mutation) => mutation.entity === 'stock_movement').length, 2);
+  assert.equal(plan.mutations.filter((mutation) => mutation.entity === 'stock_item').every((mutation) => mutation.skipOutbox), true);
   assert.deepEqual(new Set(plan.mutations.map((mutation) => mutation.entity)), new Set(['purchase_order', 'stock_item', 'stock_movement']));
 });
 

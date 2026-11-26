@@ -21,6 +21,7 @@ test('stock delta updates the latest projection but keeps the cloud base quantit
   const batch = new Map([['stock_item:soap', latest as unknown as Record<string, unknown>]]);
   assert.equal(itemMutation.applyToCurrent?.(latest as unknown as Record<string, unknown>, batch).quantity, 12);
   assert.equal(itemMutation.toOutboxPayload?.(latest as unknown as Record<string, unknown>, batch).quantity, 15);
+  assert.equal(itemMutation.skipOutbox, true);
   const movement = movementMutation.applyToCurrent?.(undefined, batch);
   assert.equal(movement?.itemName, 'Savon');
   assert.equal(movement?.delta, -3);

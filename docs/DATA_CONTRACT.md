@@ -667,11 +667,12 @@ Negative stock is rejected; room replenishment is all-or-nothing and MUST NOT si
 insufficient stock to zero. Physical inventory counts are absolute counts: the movement delta is
 computed from the latest committed quantity, and a zero delta produces no ledger row.
 
-The local P2P/workspace projection contains the final stock quantity. The Supabase Outbox stock
-item payload deliberately retains the pre-movement quantity because the append-only stock
-movement RPC applies the delta remotely. Sending the final quantity and the movement together
-would double-apply the same stock change. Purchase-order receipt follows the same split between
-the final local projection and the pre-movement cloud stock payload.
+The local P2P/workspace projection contains the final stock quantity. Quantity-only commands
+emit the stock-item P2P event but do not enqueue a redundant stock-item cloud upsert; the
+append-only stock-movement RPC is the sole cloud quantity writer. This prevents stale item
+upserts from overwriting concurrent remote movements. Purchase-order receipt follows the same
+rule. Stock-item metadata upserts preserve the server quantity; new stock items are inserted
+with quantity zero before their opening movement is applied.
 
 When no authenticated workspace exists, the same stock projection and movement rows are written
 atomically to local-only IndexedDB storage. This is durable local operation, not P2P replication.

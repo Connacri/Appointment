@@ -436,8 +436,49 @@ export async function listStockItems(workspaceId: WorkspaceId, establishmentId: 
 }
 
 export async function saveStockItem(workspaceId: WorkspaceId, establishmentId: string, i: StockItem) {
+  if (!workspaceId.trim() || !establishmentId.trim() || !i.id.trim()) {
+    throw new Error('Workspace, établissement et identifiant article requis.');
+  }
   const db = requireSupabase();
-  return unwrap(await db.from('stock_items').upsert({id:i.id,workspace_id:workspaceId,establishment_id:establishmentId,category:i.category,name:i.name,unit:i.unit,quantity:i.quantity,min_threshold:i.minThreshold,unit_cost:i.unitCost,preferred_supplier_id:i.preferredSupplierId ?? null}).select().single());
+  const metadata = {
+    category: i.category,
+    name: i.name,
+    unit: i.unit,
+    min_threshold: i.minThreshold,
+    unit_cost: i.unitCost,
+    preferred_supplier_id: i.preferredSupplierId ?? null,
+  };
+  const { data: existing, error: lookupError } = await db.from('stock_items')
+    .select('id,deleted_at')
+    .eq('workspace_id', workspaceId)
+    .eq('establishment_id', establishmentId)
+    .eq('id', i.id)
+    .maybeSingle();
+  if (lookupError) throw new Error(lookupError.message);
+  if (existing?.deleted_at) {
+    throw new Error('Cet identifiant d’article est déjà supprimé et ne peut pas être réutilisé.');
+  }
+  if (existing) {
+    const { data, error } = await db.from('stock_items')
+      .update(metadata)
+      .eq('workspace_id', workspaceId)
+      .eq('establishment_id', establishmentId)
+      .eq('id', i.id)
+      .is('deleted_at', null)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return data;
+  }
+  const { data, error } = await db.from('stock_items')
+    .insert({
+      id: i.id, workspace_id: workspaceId, establishment_id: establishmentId,
+      ...metadata, quantity: 0,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 export async function deleteStockItem(workspaceId: WorkspaceId, itemId: string): Promise<void> {

@@ -68,6 +68,7 @@ export function buildStockDeltaMutations(input: {
         return { ...latest, quantity } as unknown as Record<string, unknown>;
       },
       toOutboxPayload: (current, batch) => latestStockItem(item, current, batch) as unknown as Record<string, unknown>,
+      skipOutbox: true,
     },
     createMovementMutation(movement, item),
   ];
