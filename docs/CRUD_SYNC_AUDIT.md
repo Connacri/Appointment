@@ -108,3 +108,5 @@ Audit status: **NOT READY for full CRUD replication or production P2P**. This is
 - Outbox push preflights server tombstones before task/stock/supplier/order/staff upserts. A matching delete blocks the upsert; a failed tombstone lookup suspends these writes to avoid accidental resurrection. The same preflight result is reused by pull to avoid duplicate queries.
 
 - Remote tombstone pages are applied in IndexedDB batches of at most 500 records, matching the database's bounded page/transaction policy.
+
+- Supabase Security Advisor: keepalive_cap now has an empty search_path and fully qualified table references. Remaining warnings: default-deny RLS on keepalive_pings/pms_mdb_imports and leaked-password protection disabled at Auth configuration level.

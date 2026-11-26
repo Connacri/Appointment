@@ -32,7 +32,7 @@ Le schéma `public` contient 21 tables, toutes avec RLS activée (deux tables te
 - Exploitation : `stock_items`, `stock_movements`, `dynamic_rates`, `audit_events`, `pms_mdb_imports`, `keepalive_pings`
 - Approvisionnement/RH : `stock_suppliers`, `purchase_orders`, `staff_members`
 
-Les relations établissement/workspace sont protégées par des clés étrangères composites. Les politiques RLS reposent sur les fonctions privées `private.has_workspace_access` et `private.has_workspace_role`. Les nouvelles tables `stock_suppliers`, `purchase_orders` et `staff_members` ont RLS, policies workspace-scoped et grants limités à `authenticated`/`service_role`. Le dernier Security Advisor signale encore deux tables RLS sans policy (`keepalive_pings`, `pms_mdb_imports`, accès API refusé par défaut), une fonction technique `keepalive_cap` avec search_path mutable, et la protection des mots de passe compromis désactivée. Aucun finding RLS ne concerne les trois nouvelles tables.
+Les relations établissement/workspace sont protégées par des clés étrangères composites. Les politiques RLS reposent sur les fonctions privées `private.has_workspace_access` et `private.has_workspace_role`. Les nouvelles tables `stock_suppliers`, `purchase_orders` et `staff_members` ont RLS, policies workspace-scoped et grants limités à `authenticated`/`service_role`. Le dernier Security Advisor signale encore deux tables RLS sans policy (`keepalive_pings`, `pms_mdb_imports`, accès API refusé par défaut), la protection des mots de passe compromis désactivée. Le search_path de `keepalive_cap` a été durci par la migration 20261126131639. Aucun finding RLS ne concerne les trois nouvelles tables.
 
 ### Métadonnées de synchronisation ajoutées
 
@@ -60,6 +60,7 @@ Migrations distantes enregistrées :
 13. `20261126125656_apply_stock_movement_atomically`
 14. `20261126130041_align_stock_preferred_supplier_reference`
 15. `20261126130712_fix_stock_movement_retry_after_soft_delete`
+16. `20261126131639_harden_keepalive_function_search_path`
 
 ## Code frontend présent
 

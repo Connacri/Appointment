@@ -611,3 +611,6 @@ Supabase pull ordering is guarded against resurrection: before pushing upserts f
 Remote tombstone application is chunked into pages of 500 before entering IndexedDB, so a workspace with a large deletion history does not exceed the local transaction safety limit.
 
 The AppContext tombstone adapter uses the IndexedDB method's inferred report type, keeping the P2P entity union single-sourced from the storage contract.
+
+
+Security hardening: migration 20261126131639_harden_keepalive_function_search_path.sql sets an empty search_path on the fully schema-qualified keepalive_cap trigger function. The remaining Security Advisor warnings are the two technical RLS tables with default-deny/no policies and Supabase Auth leaked-password protection disabled.
