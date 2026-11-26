@@ -1802,6 +1802,12 @@ class IndexedDbStore {
       entityId: string;
       payload: Record<string, unknown>;
     }>,
+    rejectIfCurrentFieldEquals?: {
+      entity: OutboxEntity;
+      entityId: string;
+      field: string;
+      value: unknown;
+    },
   ): Promise<void> {
     if (mutations.length === 0 || mutations.length > 100) {
       throw new Error('Atomic local mutation batch must contain between 1 and 100 records.');
@@ -1818,13 +1824,39 @@ class IndexedDbStore {
     }
     await this.openStore();
     if (!this.idb) throw new Error('Atomic local business mutation requires IndexedDB.');
+    if (rejectIfCurrentFieldEquals && !mutations.some((item) =>
+      item.entity === rejectIfCurrentFieldEquals.entity && item.entityId === rejectIfCurrentFieldEquals.entityId
+    )) {
+      throw new Error('Atomic local mutation precondition must reference a record in the same batch.');
+    }
     const tx = this.createStrictTransaction(['localBusinessEntities']);
     const store = tx.objectStore('localBusinessEntities');
     const updatedAt = new Date().toISOString();
-    for (const mutation of mutations) {
-      store.put({ ...mutation, updatedAt });
+    let validationError: Error | null = null;
+    const commit = () => {
+      for (const mutation of mutations) store.put({ ...mutation, updatedAt });
+    };
+    if (rejectIfCurrentFieldEquals) {
+      const request = store.get([rejectIfCurrentFieldEquals.entity, rejectIfCurrentFieldEquals.entityId]);
+      request.onsuccess = () => {
+        const current = request.result as { payload?: Record<string, unknown> } | undefined;
+        if (current?.payload?.[rejectIfCurrentFieldEquals.field] === rejectIfCurrentFieldEquals.value) {
+          validationError = new Error('Atomic local mutation precondition failed: record is already in the requested state.');
+          try { tx.abort(); } catch { /* transaction may already be inactive */ }
+          return;
+        }
+        commit();
+      };
+      request.onerror = () => tx.abort();
+    } else {
+      commit();
     }
-    await waitForTransactionCompletion(tx, 'putLocalBusinessEntitiesAtomically');
+    try {
+      await waitForTransactionCompletion(tx, 'putLocalBusinessEntitiesAtomically');
+    } catch (error) {
+      if (validationError) throw validationError;
+      throw error;
+    }
   }
 
   /**

@@ -3540,7 +3540,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else {
         // Offline-first local-only installations still commit all receipt rows
         // together; they intentionally emit no workspace/P2P event until paired.
-        await indexedDb.putLocalBusinessEntitiesAtomically(plan.mutations);
+        await indexedDb.putLocalBusinessEntitiesAtomically(
+          plan.mutations,
+          { entity: 'purchase_order', entityId: id, field: 'status', value: 'received' },
+        );
       }
 
       stockItemsRef.current = plan.stockItems;
