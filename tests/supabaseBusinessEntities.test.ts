@@ -103,6 +103,8 @@ test('workspace task and establishment UI projections wait for durable outbox co
   assert.match(indexedDb, /createObjectStore\('localBusinessEntities'/);
   assert.match(indexedDb, /putLocalBusinessEntity\(/);
   assert.match(indexedDb, /deleteLocalBusinessEntity\(/);
+  assert.match(indexedDb, /localBusinessEntities', 'issuedCards'/);
+  assert.match(indexedDb, /objectStore\('localBusinessEntities'\)\.clear\(\)/);
   assert.match(appContext, /await indexedDb.putLocalBusinessEntity\(entity, entityId, payload\)/);
   assert.match(appContext, /await indexedDb.deleteLocalBusinessEntity\(entity, entityId\)/);
   assert.match(appContext, /getLocalBusinessEntities\(\)/);
