@@ -823,7 +823,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return '';
   };
 
-  const refreshDeviceMutationAvailability = async (): Promise<void> => {
+  const refreshDeviceMutationAvailability = useCallback(async (): Promise<void> => {
     const requestId = ++deviceRegistryLoadSeqRef.current;
     const workspaceId = workspace.activeWorkspaceId?.trim();
     const establishmentId = resolveMutationEstablishmentId();
@@ -859,11 +859,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setDeviceRegistry(null);
       setDeviceMutationAvailability({ state: 'READ_ONLY', canMutate: false, reason: 'registry_unverified' });
     }
-  };
+  }, [workspace.activeWorkspaceId, selectedEstablishmentId, establishmentProfile.id, establishmentProfile.name, isCoreDataHydrated]);
 
   useEffect(() => {
     void refreshDeviceMutationAvailability();
-  }, [workspace.activeWorkspaceId, selectedEstablishmentId, establishmentProfile.id, establishmentProfile.name, isCoreDataHydrated]);
+  }, [refreshDeviceMutationAvailability]);
 
   const configureSingleDeviceTopology = async (): Promise<void> => {
     if (!supabase || !workspace.activeWorkspaceId) {
