@@ -1644,7 +1644,14 @@ class IndexedDbStore {
       entity: OutboxEntity;
       entityId: string;
       payload: Record<string, unknown>;
-      applyToCurrent?: (currentPayload?: Record<string, unknown>) => Record<string, unknown>;
+      applyToCurrent?: (
+        currentPayload?: Record<string, unknown>,
+        currentBatch?: ReadonlyMap<string, Record<string, unknown>>,
+      ) => Record<string, unknown>;
+      toOutboxPayload?: (
+        currentPayload?: Record<string, unknown>,
+        currentBatch?: ReadonlyMap<string, Record<string, unknown>>,
+      ) => Record<string, unknown>;
     }>,
     commandId: string,
     rejectIfCurrentFieldEquals?: {
@@ -1722,19 +1729,39 @@ class IndexedDbStore {
 
       const version = Math.max(entry.current?.version ?? 0, entry.tombstone?.version ?? 0) + 1;
       const now = new Date().toISOString();
+      const currentBatch = new Map<string, Record<string, unknown>>();
+      for (const currentEntry of entries) {
+        if (currentEntry.current?.payload) {
+          currentBatch.set(`${currentEntry.entity}:${currentEntry.entityId}`, currentEntry.current.payload);
+        }
+      }
       let commandPayload: Record<string, unknown>;
+      let outboundPayload: Record<string, unknown>;
       try {
-        commandPayload = entry.applyToCurrent ? entry.applyToCurrent(entry.current?.payload) : entry.payload;
+        commandPayload = entry.applyToCurrent
+          ? entry.applyToCurrent(entry.current?.payload, currentBatch)
+          : entry.payload;
+        outboundPayload = entry.toOutboxPayload
+          ? entry.toOutboxPayload(entry.current?.payload, currentBatch)
+          : commandPayload;
       } catch (error) {
         abortWith(`Atomic payload transformation failed for ${entry.entity}/${entry.entityId}: ${String(error)}`);
         return;
       }
-      if (!commandPayload || typeof commandPayload !== 'object' || Array.isArray(commandPayload) || commandPayload.id !== entry.entityId) {
+      if (!commandPayload || typeof commandPayload !== 'object' || Array.isArray(commandPayload) || commandPayload.id !== entry.entityId
+        || !outboundPayload || typeof outboundPayload !== 'object' || Array.isArray(outboundPayload) || outboundPayload.id !== entry.entityId) {
         abortWith(`Atomic payload transformation returned an invalid record for ${entry.entity}/${entry.entityId}.`);
         return;
       }
       const persisted = {
         ...commandPayload,
+        workspaceId: context.workspaceId,
+        establishmentId: context.establishmentId,
+        syncVersion: version,
+        deletedAt: null,
+      };
+      const persistedOutbound = {
+        ...outboundPayload,
         workspaceId: context.workspaceId,
         establishmentId: context.establishmentId,
         syncVersion: version,
@@ -1756,7 +1783,7 @@ class IndexedDbStore {
         entry.entityId,
         'upsert',
         version,
-        persisted,
+        persistedOutbound,
         now,
         entry.idempotencyKey,
       ));
@@ -2100,7 +2127,13 @@ class IndexedDbStore {
       }
       for (const entry of entries) {
         let payload: Record<string, unknown>;
-        try { payload = entry.applyToCurrent ? entry.applyToCurrent(entry.current?.payload) : entry.payload; }
+        const currentBatch = new Map<string, Record<string, unknown>>();
+        for (const currentEntry of entries) {
+          if (currentEntry.current?.payload) {
+            currentBatch.set(`${currentEntry.entity}:${currentEntry.entityId}`, currentEntry.current.payload);
+          }
+        }
+        try { payload = entry.applyToCurrent ? entry.applyToCurrent(entry.current?.payload, currentBatch) : entry.payload; }
         catch (error) { abortWith(`Atomic local payload transformation failed: ${String(error)}`); return; }
         if (!payload || typeof payload !== 'object' || Array.isArray(payload) || payload.id !== entry.entityId) {
           abortWith(`Atomic local payload transformation returned an invalid record for ${entry.entity}/${entry.entityId}.`);

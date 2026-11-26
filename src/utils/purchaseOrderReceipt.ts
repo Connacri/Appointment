@@ -92,6 +92,10 @@ export function buildPurchaseOrderReceiptPlan(
             const latest = { ...fallback, ...(currentPayload ?? {}) } as StockItem;
             return { ...latest, quantity: Number(latest.quantity) + delta } as unknown as Record<string, unknown>;
           },
+          toOutboxPayload: (currentPayload?: Record<string, unknown>) => {
+            const latest = { ...fallback, ...(currentPayload ?? {}) } as StockItem;
+            return latest as unknown as Record<string, unknown>;
+          },
         };
       }),
     ...movements.map((movement) => ({
