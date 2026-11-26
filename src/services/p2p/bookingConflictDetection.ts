@@ -55,8 +55,10 @@ function wallClockMinute(date: string, time: string): number | null {
   if (!dateMatch || !timeMatch) return null;
   const [, y, m, d] = dateMatch;
   const year = Number(y), month = Number(m), day = Number(d);
-  const stamp = Date.UTC(year, month - 1, day);
-  const parsed = new Date(stamp);
+  const parsed = new Date(0);
+  parsed.setUTCFullYear(year, month - 1, day);
+  parsed.setUTCHours(0, 0, 0, 0);
+  const stamp = parsed.getTime();
   if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) return null;
   return Math.floor(stamp / 60_000) + Number(timeMatch[1]) * 60 + Number(timeMatch[2]);
 }
@@ -87,9 +89,10 @@ export function detectP2pBookingConflicts(
   const byBooking = new Map<string, P2pEvent[]>();
   for (const event of events) {
     if (event.entity !== 'booking') continue;
-    const bucket = byBooking.get(event.entityId) ?? [];
+    const key = `${event.workspaceId}\\u0000${event.entityId}`;
+    const bucket = byBooking.get(key) ?? [];
     bucket.push(event);
-    byBooking.set(event.entityId, bucket);
+    byBooking.set(key, bucket);
   }
 
   const bookings: Array<{ event: P2pEvent; booking: BookingPayload; range: { start: number; end: number } }> = [];
@@ -107,7 +110,9 @@ export function detectP2pBookingConflicts(
     const a = bookings[i];
     for (let j = i + 1; j < bookings.length; j += 1) {
       const b = bookings[j];
-      if (a.booking.id === b.booking.id || a.booking.resourceId !== b.booking.resourceId) continue;
+      if (a.event.workspaceId !== b.event.workspaceId
+        || a.booking.id === b.booking.id
+        || a.booking.resourceId !== b.booking.resourceId) continue;
       const turnover = a.booking.sector === 'hotel' || b.booking.sector === 'hotel' ? 10 : 0;
       if (a.range.start < b.range.end + turnover && a.range.end + turnover > b.range.start) {
         const first = a.booking.id.localeCompare(b.booking.id) <= 0 ? a : b;
