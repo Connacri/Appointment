@@ -42,7 +42,13 @@ fn is_supported_entity(entity: &str) -> bool {
             | "establishment"
             | "task"
             | "stock_item"
+            | "stock_movement"
+            | "supplier"
+            | "purchase_order"
             | "invoice"
+            | "dynamic_rate"
+            | "staff_member"
+            | "establishment_profile"
     )
 }
 
@@ -285,6 +291,15 @@ mod tests {
 
         value.entity = "unknown_entity".into();
         assert!(value.validate().is_err());
+
+        for entity in [
+            "booking", "resource", "resource_group", "establishment", "task",
+            "stock_item", "stock_movement", "supplier", "purchase_order", "invoice",
+            "dynamic_rate", "staff_member", "establishment_profile",
+        ] {
+            value.entity = entity.into();
+            assert!(value.validate().is_ok(), "entity should be supported: {entity}");
+        }
 
         value.entity = "booking".into();
         value.created_at = "2026-02-30T12:00:00Z".into();
