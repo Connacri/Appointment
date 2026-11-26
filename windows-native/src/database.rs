@@ -2039,7 +2039,7 @@ mod tests {
             "node-b",
             1,
             &[("node-b", 1)],
-            "resources",
+            "resource",
             "resource-inbound",
             P2pOperation::Upsert,
             Some(payload),
@@ -2055,7 +2055,7 @@ mod tests {
             .unwrap();
         assert_eq!(report.applied_records, 1);
         let stored = db
-            .get_entity_record("w-1", "resources", "resource-inbound")
+            .get_entity_record("w-1", "resource", "resource-inbound")
             .unwrap()
             .unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&stored.payload).unwrap();

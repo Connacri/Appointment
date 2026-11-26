@@ -512,7 +512,7 @@ mod tests {
         let payload = r#"{"id":"r-1","sector":"hotel","customFutureField":{"enabled":true}}"#;
         db.upsert_entity_record_unreplicated(
             "ws-a",
-            "resources",
+            "resource",
             "r-1",
             payload,
             1,
@@ -520,12 +520,12 @@ mod tests {
         )
         .unwrap();
         let stored = db
-            .get_entity_record("ws-a", "resources", "r-1")
+            .get_entity_record("ws-a", "resource", "r-1")
             .unwrap()
             .unwrap();
         assert_eq!(stored.payload, payload);
         assert!(db
-            .get_entity_record("ws-b", "resources", "r-1")
+            .get_entity_record("ws-b", "resource", "r-1")
             .unwrap()
             .is_none());
     }
@@ -536,7 +536,7 @@ mod tests {
         let payload = r#"{"id":"resource-1","status":"active","futureField":{"v":2}}"#;
         db.upsert_entity_record(LocalEntityMutation {
             workspace_id: "ws-a",
-            entity: "resources",
+            entity: "resource",
             entity_id: "resource-1",
             payload,
             version: 1,
@@ -548,7 +548,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            db.get_entity_record("ws-a", "resources", "resource-1")
+            db.get_entity_record("ws-a", "resource", "resource-1")
                 .unwrap()
                 .unwrap()
                 .payload,
@@ -571,7 +571,7 @@ mod tests {
 
         let result = db.upsert_entity_record(LocalEntityMutation {
             workspace_id: "ws-a",
-            entity: "resources",
+            entity: "resource",
             entity_id: "resource-rollback",
             payload: r#"{"id":"resource-rollback"}"#,
             version: 1,
@@ -582,7 +582,7 @@ mod tests {
         });
         assert!(result.is_err());
         assert!(db
-            .get_entity_record("ws-a", "resources", "resource-rollback")
+            .get_entity_record("ws-a", "resource", "resource-rollback")
             .unwrap()
             .is_none());
         assert!(db.pending_outbox("ws-a", 10).unwrap().is_empty());
@@ -594,7 +594,7 @@ mod tests {
         let db = db();
         db.upsert_entity_record_unreplicated(
             "ws-a",
-            "resources",
+            "resource",
             "resource-delete",
             r#"{"id":"resource-delete","name":"Room 101"}"#,
             1,
@@ -604,7 +604,7 @@ mod tests {
         assert!(db
             .delete_entity_record(LocalEntityDelete {
                 workspace_id: "ws-a",
-                entity: "resources",
+                entity: "resource",
                 entity_id: "resource-delete",
                 idempotency_key: "idem-resource-delete",
                 node_id: "node-a",
@@ -613,7 +613,7 @@ mod tests {
             .unwrap());
 
         assert!(db
-            .get_entity_record("ws-a", "resources", "resource-delete")
+            .get_entity_record("ws-a", "resource", "resource-delete")
             .unwrap()
             .is_none());
         let tombstone_version: i64 = db
@@ -637,7 +637,7 @@ mod tests {
         let db = db();
         db.upsert_entity_record_unreplicated(
             "ws-a",
-            "resources",
+            "resource",
             "resource-delete-rollback",
             r#"{"id":"resource-delete-rollback"}"#,
             1,
@@ -655,7 +655,7 @@ mod tests {
         assert!(db
             .delete_entity_record(LocalEntityDelete {
                 workspace_id: "ws-a",
-                entity: "resources",
+                entity: "resource",
                 entity_id: "resource-delete-rollback",
                 idempotency_key: "idem-resource-delete-rollback",
                 node_id: "node-a",
@@ -663,7 +663,7 @@ mod tests {
             })
             .is_err());
         assert!(db
-            .get_entity_record("ws-a", "resources", "resource-delete-rollback")
+            .get_entity_record("ws-a", "resource", "resource-delete-rollback")
             .unwrap()
             .is_some());
         let tombstone_exists: bool = db.connection.query_row(
