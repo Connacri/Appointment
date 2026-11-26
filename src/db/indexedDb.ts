@@ -34,6 +34,16 @@ import {
   supportsNativeLanDiscovery,
 } from '../services/p2p/LanDiscoveryBridge';
 
+function expectedOutboxEntityForStore(
+  storeName: 'bookings' | 'resources' | 'resourceGroups',
+): OutboxEntity {
+  switch (storeName) {
+    case 'bookings': return 'booking';
+    case 'resources': return 'resource';
+    case 'resourceGroups': return 'resource_group';
+  }
+}
+
 function stableSerialize(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
   if (value && typeof value === 'object') {
@@ -1386,6 +1396,9 @@ class IndexedDbStore {
     storeName: 'bookings' | 'resources' | 'resourceGroups', item: T,
     context: OutboxMutationContext, entity: OutboxEntity
   ): Promise<void> {
+    if (entity !== expectedOutboxEntityForStore(storeName)) {
+      throw new Error(`Store/entity mismatch: ${storeName} cannot be queued as ${entity}.`);
+    }
     if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox writes.');
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
@@ -1487,6 +1500,9 @@ class IndexedDbStore {
     idempotencyKey: string,
     version?: number,
   ): Promise<void> {
+    if (entity !== expectedOutboxEntityForStore(storeName)) {
+      throw new Error(`Store/entity mismatch: ${storeName} cannot be queued as ${entity}.`);
+    }
     if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox writes.');
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
@@ -1736,9 +1752,12 @@ class IndexedDbStore {
 
   /** Atomically delete the local row and retain a workspace-scoped tombstone + delete intent. */
   public async deleteWithOutbox(
-    storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups', entityId: string,
+    storeName: 'bookings' | 'resources' | 'resourceGroups', entityId: string,
     context: OutboxMutationContext, entity: OutboxEntity
   ): Promise<void> {
+    if (entity !== expectedOutboxEntityForStore(storeName)) {
+      throw new Error(`Store/entity mismatch: ${storeName} cannot be deleted as ${entity}.`);
+    }
     if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox deletes.');
     await this.openStore();
     if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
