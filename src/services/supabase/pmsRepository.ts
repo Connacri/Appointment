@@ -719,8 +719,6 @@ export async function listWorkspaceEntityTombstones(workspaceId: WorkspaceId): P
     ['supplier', 'stock_suppliers'],
     ['purchase_order', 'purchase_orders'],
     ['staff_member', 'staff_members'],
-    ['resource', 'resources'],
-    ['resource_group', 'resource_groups'],
   ] as const;
   const results = await Promise.all(sources.map(async ([entity, table]) => {
     const { data, error } = await db.from(table).select('id,establishment_id,deleted_at,version')
