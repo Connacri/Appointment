@@ -50,6 +50,7 @@ import {
   deletePurchaseOrder as remoteDeletePurchaseOrder,
   deleteStaffMember as remoteDeleteStaffMember,
   listBookings,
+  listWorkspaces,
   listBookingTombstones,
   listDynamicRates,
   listEstablishments,
@@ -89,6 +90,7 @@ import {
 } from '../services/supabase/syncLog';
 import { hasBookingScheduleConflict, isValidCalendarDate, shouldMarkPaymentAsPaid, validateBookingOccupants } from '../utils/bookingValidation';
 import { planRoomReassignment } from '../utils/roomReassignment';
+import { evaluateMutationAvailability, type DeviceRegistry, type MutationAvailability } from '../services/p2p/deviceTopology';
 import { normalizeBookingForPersistence } from '../utils/bookingOccupants';
 import { isDemoBookingId } from '../utils/bookingPersistence';
 import { isRoomReadyForBooking } from '../utils/roomReadiness';
@@ -164,6 +166,9 @@ export type ActiveAppView =
 
 interface AppContextType {
   activeWorkspaceId: string;
+  deviceRegistry: DeviceRegistry | null;
+  deviceMutationAvailability: MutationAvailability;
+  configureSingleDeviceTopology: () => Promise<void>;
   refreshWorkspaces: () => Promise<void>;
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -818,6 +823,111 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return '';
   };
 
+  const refreshDeviceMutationAvailability = async (): Promise<void> => {
+    const workspaceId = workspace.activeWorkspaceId?.trim();
+    const establishmentId = resolveMutationEstablishmentId();
+    if (!workspaceId || !establishmentId || !isCoreDataHydrated) {
+      setDeviceRegistry(null);
+      setDeviceMutationAvailability({
+        state: isCoreDataHydrated ? 'READ_ONLY' : 'RECONNECTING',
+        canMutate: false,
+        reason: isCoreDataHydrated ? 'registry_missing' : 'data_not_ready',
+      });
+      return;
+    }
+    try {
+      const [registry, localDeviceId] = await Promise.all([
+        indexedDb.getDeviceRegistry(workspaceId, establishmentId),
+        indexedDb.getP2pNodeId(),
+      ]);
+      setDeviceRegistry(registry);
+      setDeviceMutationAvailability(evaluateMutationAvailability({
+        registry,
+        localDeviceId,
+        // No authenticated P2P coordination transport or shared registry authority is wired yet.
+        coordinationAuthority: 'none',
+        registryEpochVerified: Boolean(registry),
+        coreDataHydrated: true,
+        integrityChecksPassed: true,
+      }));
+    } catch (error) {
+      console.error('[Appointment] Device registry verification failed:', error);
+      setDeviceRegistry(null);
+      setDeviceMutationAvailability({ state: 'READ_ONLY', canMutate: false, reason: 'registry_unverified' });
+    }
+  };
+
+  useEffect(() => {
+    void refreshDeviceMutationAvailability();
+  }, [workspace.activeWorkspaceId, selectedEstablishmentId, establishmentProfile.id, establishmentProfile.name, isCoreDataHydrated]);
+
+  const configureSingleDeviceTopology = async (): Promise<void> => {
+    if (!supabase || !workspace.activeWorkspaceId) {
+      throw new Error('La configuration initiale du registre nécessite une session Supabase authentifiée et un workspace vérifié.');
+    }
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) throw new Error('Authentification administrateur Supabase requise.');
+    const workspaceRows = await listWorkspaces();
+    const membership = workspaceRows.find((row: any) =>
+      row.id === workspace.activeWorkspaceId &&
+      row.owner_id === authData.user.id &&
+      Array.isArray(row.workspace_members) &&
+      row.workspace_members.some((member: any) => member.role === 'owner'),
+    );
+    if (!membership) throw new Error('Seul le propriétaire authentifié du workspace peut initialiser le registre des appareils.');
+
+    const establishmentId = resolveMutationEstablishmentId();
+    if (!establishmentId || establishmentId === 'all') {
+      throw new Error('Sélectionnez un établissement réel avant de configurer les appareils.');
+    }
+    const existing = await indexedDb.getDeviceRegistry(workspace.activeWorkspaceId, establishmentId);
+    if (existing) throw new Error('Un registre existe déjà. Sa modification nécessite une procédure de transition authentifiée.');
+    const deviceId = await indexedDb.getP2pNodeId();
+    const now = new Date().toISOString();
+    const registry: DeviceRegistry = {
+      schemaVersion: 1,
+      workspaceId: workspace.activeWorkspaceId,
+      establishmentId,
+      deploymentMode: 'SINGLE_DEVICE',
+      epoch: 1,
+      singleDeviceId: deviceId,
+      updatedAt: now,
+      devices: [{ deviceId, role: 'admin', authorization: 'active', registeredAt: now }],
+    };
+    await indexedDb.putDeviceRegistry(registry, null);
+    setDeviceRegistry(registry);
+    setDeviceMutationAvailability(evaluateMutationAvailability({
+      registry,
+      localDeviceId: deviceId,
+      coordinationAuthority: 'none',
+      registryEpochVerified: true,
+      coreDataHydrated: isCoreDataHydrated,
+      integrityChecksPassed: true,
+    }));
+    logEvent({
+      category: 'system', action: 'system.device_topology_initialized', severity: 'success',
+      title: 'Installation mono-appareil configurée',
+      description: 'Le propriétaire authentifié a explicitement enregistré cet appareil comme unique appareil autorisé.',
+      metadata: { deploymentMode: 'SINGLE_DEVICE', epoch: 1, deviceId, establishmentId },
+    });
+  };
+
+  const assertCriticalMutationAllowed = (): void => {
+    const availability = deviceMutationAvailabilityRef.current;
+    if (!availability.canMutate) {
+      const messages: Record<MutationAvailability['reason'], string> = {
+        single_device_local: '', coordination_available: '',
+        registry_missing: 'Registre des appareils absent : les opérations métier sont bloquées jusqu’à la configuration explicite de la topologie.',
+        registry_unverified: 'Registre des appareils non vérifié : les opérations métier restent bloquées.',
+        data_not_ready: 'Données locales en cours de chargement : réessayez après la synchronisation.',
+        integrity_failed: 'Contrôle d’intégrité en échec : les opérations métier sont bloquées.',
+        device_not_authorized: 'Cet appareil n’est pas autorisé par le registre de l’établissement.',
+        no_coordination_authority: 'Établissement multi-appareils sans autorité de coordination : mode lecture seule.',
+      };
+      throw new Error(messages[availability.reason]);
+    }
+  };
+
   const createMutationId = (): string => {
     try {
       return crypto.randomUUID();
@@ -1168,6 +1278,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Before workspace authentication, the durable local projection is retained without replication.
   const persistBookingMutation = async (booking: TimelineBooking, validateSchedule = false): Promise<void> => {
     if (isDemoBookingId(booking.id, DEMO_BOOKING_IDS)) return;
+    assertCriticalMutationAllowed();
     const workspaceId = workspace.activeWorkspaceId?.trim();
     const bookedResource = latestGroupsRef.current
       .flatMap((group) => group.resources)
@@ -1315,6 +1426,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [activeQrPassBooking, setActiveQrPassBooking] = useState<TimelineBooking | null>(null);
   const [isOffline, setIsOffline] = useState(() => (typeof navigator !== 'undefined' ? !navigator.onLine : false));
+  const [deviceRegistry, setDeviceRegistry] = useState<DeviceRegistry | null>(null);
+  const [deviceMutationAvailability, setDeviceMutationAvailability] = useState<MutationAvailability>({
+    state: 'READ_ONLY', canMutate: false, reason: 'registry_missing',
+  });
+  const deviceMutationAvailabilityRef = useRef(deviceMutationAvailability);
+  deviceMutationAvailabilityRef.current = deviceMutationAvailability;
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
 
@@ -2842,6 +2959,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     id: string,
     updates: Partial<TimelineBooking>,
   ): Promise<{ success: boolean; error?: string; mode?: 'move' | 'swap' }> => {
+    try { assertCriticalMutationAllowed(); } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Opération bloquée par la politique des appareils.' };
+    }
     const existing = bookings.find((booking) => booking.id === id);
     if (!existing) return { success: false, error: 'Réservation introuvable.' };
     const proposed = normalizeBookingForPersistence({ ...existing, ...updates });
@@ -2977,6 +3097,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteBooking = async (id: string): Promise<void> => {
     const existing = bookings.find((booking) => booking.id === id);
     if (!existing) return;
+    if (!isDemoBookingId(id, DEMO_BOOKING_IDS)) assertCriticalMutationAllowed();
 
     const isDemo = isDemoBookingId(id, DEMO_BOOKING_IDS);
     if (!isDemo) {
@@ -4009,6 +4130,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         activeWorkspaceId: workspace.activeWorkspaceId,
+        deviceRegistry,
+        deviceMutationAvailability,
+        configureSingleDeviceTopology,
         refreshWorkspaces: workspace.refreshWorkspaces,
         language,
         setLanguage,
