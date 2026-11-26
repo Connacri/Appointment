@@ -153,7 +153,7 @@ export interface OutboxSummary {
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 13;
+  private dbVersion = 14;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -285,6 +285,12 @@ class IndexedDbStore {
           const entities = db.createObjectStore('workspaceEntities', { keyPath: ['workspaceId', 'entity', 'entityId'] });
           entities.createIndex('workspaceEntityId', ['workspaceId', 'entityId'], { unique: false });
           entities.createIndex('workspaceUpdatedAt', ['workspaceId', 'updatedAt'], { unique: false });
+          entities.createIndex('workspaceResource', ['workspaceId', 'payload.resourceId'], { unique: false });
+        }
+        const upgradeTxForIndexes = (e.target as IDBOpenDBRequest).transaction;
+        const workspaceEntitiesStore = upgradeTxForIndexes?.objectStore('workspaceEntities');
+        if (workspaceEntitiesStore && !workspaceEntitiesStore.indexNames.contains('workspaceResource')) {
+          workspaceEntitiesStore.createIndex('workspaceResource', ['workspaceId', 'payload.resourceId'], { unique: false });
         }
         // Local-only business records are durable but deliberately excluded from
         // workspace Outbox/P2P until a verified workspace identity is available.
@@ -957,14 +963,15 @@ class IndexedDbStore {
         if (index >= records.length) {
           // Persist booking overlap conflicts in the same transaction as the inbound
           // events and peer cursor. The transport may ACK only after this transaction commits.
-          const bookingEventsRequest = tx.objectStore('p2pEvents').index('workspaceEntity').getAll(
-            IDBKeyRange.bound([batch.workspaceId, 'booking', ''], [batch.workspaceId, 'booking', '\\uffff']),
-          );
-          bookingEventsRequest.onsuccess = () => {
-            const conflicts = detectP2pBookingConflicts(
-              bookingEventsRequest.result as P2pEvent[],
-            );
-            const conflictStore = tx.objectStore('p2pBookingConflicts');
+          const resourceIds = [...new Set(batch.events
+            .filter((event) => event.entity === 'booking' && event.operation === 'upsert'
+              && typeof event.payload?.resourceId === 'string')
+            .map((event) => String(event.payload?.resourceId)))];
+          const eventById = new Map<string, P2pEvent>();
+          const resourceRows = new Map<string, Array<{ entityId: string }>>();
+          const conflictStore = tx.objectStore('p2pBookingConflicts');
+          const finishConflictScan = (): void => {
+            const conflicts = detectP2pBookingConflicts([...eventById.values()]);
             const persistNext = (conflictIndex: number): void => {
               if (conflictIndex >= conflicts.length) {
                 tx.objectStore('p2pPeerCursors').put({
@@ -986,7 +993,48 @@ class IndexedDbStore {
             };
             persistNext(0);
           };
-          bookingEventsRequest.onerror = abort;
+          const pendingFrontiers: Array<{ entityId: string }> = [];
+          const loadFrontier = (entityId: string, done: () => void): void => {
+            const request = tx.objectStore('p2pRecordFrontiers').get([batch.workspaceId, 'booking', entityId]);
+            request.onsuccess = () => {
+              const row = request.result as { frontier?: P2pEvent[] } | undefined;
+              for (const event of row?.frontier ?? []) eventById.set(event.eventId, event);
+              done();
+            };
+            request.onerror = abort;
+          };
+          const loadRowsForResource = (index: number): void => {
+            if (index >= resourceIds.length) {
+              let remaining = pendingFrontiers.length;
+              if (remaining === 0) { finishConflictScan(); return; }
+              for (const row of pendingFrontiers) {
+                loadFrontier(row.entityId, () => {
+                  remaining -= 1;
+                  if (remaining === 0) finishConflictScan();
+                });
+              }
+              return;
+            }
+            const resourceId = resourceIds[index];
+            const request = tx.objectStore('workspaceEntities').index('workspaceResource')
+              .getAll(IDBKeyRange.only([batch.workspaceId, resourceId]));
+            request.onsuccess = () => {
+              for (const row of request.result as Array<{ entity: string; entityId: string }>) {
+                if (row.entity === 'booking' && !pendingFrontiers.some((item) => item.entityId === row.entityId)) {
+                  pendingFrontiers.push({ entityId: row.entityId });
+                }
+              }
+              loadRowsForResource(index + 1);
+            };
+            request.onerror = abort;
+          };
+          for (const event of batch.events) {
+            if (event.entity === 'booking') eventById.set(event.eventId, event);
+            if (event.entity === 'booking' && !pendingFrontiers.some((item) => item.entityId === event.entityId)) {
+              pendingFrontiers.push({ entityId: event.entityId });
+            }
+          }
+          loadRowsForResource(0);
           return;
         }
         const record = records[index];
