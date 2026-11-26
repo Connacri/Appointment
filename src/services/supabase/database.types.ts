@@ -696,6 +696,78 @@ export type Database = {
           },
         ]
       }
+      keepalive_pings: {
+        Row: {
+          created_at: string
+          id: number
+          label: string | null
+          note: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          label?: string | null
+          note?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          label?: string | null
+          note?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      pms_mdb_imports: {
+        Row: {
+          cards: number | null
+          check_in_time: string | null
+          check_out_time: string | null
+          file_name: string | null
+          hotel_id: string | null
+          id: string
+          imported_at: string | null
+          issued_cards: number | null
+          resources: number | null
+          rooms: number | null
+          site_code: number | null
+          synced: boolean | null
+          system_id: string | null
+        }
+        Insert: {
+          cards?: number | null
+          check_in_time?: string | null
+          check_out_time?: string | null
+          file_name?: string | null
+          hotel_id?: string | null
+          id?: string
+          imported_at?: string | null
+          issued_cards?: number | null
+          resources?: number | null
+          rooms?: number | null
+          site_code?: number | null
+          synced?: boolean | null
+          system_id?: string | null
+        }
+        Update: {
+          cards?: number | null
+          check_in_time?: string | null
+          check_out_time?: string | null
+          file_name?: string | null
+          hotel_id?: string | null
+          id?: string
+          imported_at?: string | null
+          issued_cards?: number | null
+          resources?: number | null
+          rooms?: number | null
+          site_code?: number | null
+          synced?: boolean | null
+          system_id?: string | null
+        }
+        Relationships: []
+      }
       pms_tasks: {
         Row: {
           assignee: string | null
@@ -833,6 +905,97 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      purchase_orders: {
+        Row: {
+          confirmed_at: string | null
+          created_at: string
+          created_by: string
+          deleted_at: string | null
+          establishment_id: string
+          id: string
+          items: Json
+          note: string | null
+          order_number: string
+          received_at: string | null
+          sent_at: string | null
+          sent_via: string | null
+          status: string
+          supplier_email: string | null
+          supplier_id: string | null
+          supplier_name: string
+          supplier_phone: string | null
+          updated_at: string
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          created_at?: string
+          created_by: string
+          deleted_at?: string | null
+          establishment_id: string
+          id: string
+          items?: Json
+          note?: string | null
+          order_number: string
+          received_at?: string | null
+          sent_at?: string | null
+          sent_via?: string | null
+          status?: string
+          supplier_email?: string | null
+          supplier_id?: string | null
+          supplier_name: string
+          supplier_phone?: string | null
+          updated_at?: string
+          version?: number
+          workspace_id: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          created_at?: string
+          created_by?: string
+          deleted_at?: string | null
+          establishment_id?: string
+          id?: string
+          items?: Json
+          note?: string | null
+          order_number?: string
+          received_at?: string | null
+          sent_at?: string | null
+          sent_via?: string | null
+          status?: string
+          supplier_email?: string | null
+          supplier_id?: string | null
+          supplier_name?: string
+          supplier_phone?: string | null
+          updated_at?: string
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_establishment_tenant_fk"
+            columns: ["establishment_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_supplier_tenant_fk"
+            columns: ["supplier_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "stock_suppliers"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       resource_groups: {
         Row: {
@@ -1006,6 +1169,78 @@ export type Database = {
           },
         ]
       }
+      staff_members: {
+        Row: {
+          assignment: string
+          created_at: string
+          default_tasks: Json
+          deleted_at: string | null
+          employment_status: string
+          establishment_id: string
+          full_name: string
+          hired_at: string
+          history: Json
+          id: string
+          phone: string | null
+          role_id: string
+          shift: string
+          updated_at: string
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          assignment?: string
+          created_at?: string
+          default_tasks?: Json
+          deleted_at?: string | null
+          employment_status?: string
+          establishment_id: string
+          full_name: string
+          hired_at?: string
+          history?: Json
+          id: string
+          phone?: string | null
+          role_id: string
+          shift: string
+          updated_at?: string
+          version?: number
+          workspace_id: string
+        }
+        Update: {
+          assignment?: string
+          created_at?: string
+          default_tasks?: Json
+          deleted_at?: string | null
+          employment_status?: string
+          establishment_id?: string
+          full_name?: string
+          hired_at?: string
+          history?: Json
+          id?: string
+          phone?: string | null
+          role_id?: string
+          shift?: string
+          updated_at?: string
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_members_establishment_tenant_fk"
+            columns: ["establishment_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "staff_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_items: {
         Row: {
           category: string
@@ -1147,6 +1382,72 @@ export type Database = {
           },
           {
             foreignKeyName: "stock_movements_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_suppliers: {
+        Row: {
+          category: string
+          contact_name: string | null
+          created_at: string
+          deleted_at: string | null
+          email: string | null
+          establishment_id: string
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          preferred_channel: string
+          updated_at: string
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          category?: string
+          contact_name?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          establishment_id: string
+          id: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          preferred_channel?: string
+          updated_at?: string
+          version?: number
+          workspace_id: string
+        }
+        Update: {
+          category?: string
+          contact_name?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          establishment_id?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          preferred_channel?: string
+          updated_at?: string
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_suppliers_establishment_tenant_fk"
+            columns: ["establishment_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "stock_suppliers_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
