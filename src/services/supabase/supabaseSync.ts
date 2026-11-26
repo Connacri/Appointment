@@ -862,7 +862,9 @@ export async function runSupabaseSync({
         params: { groups: recoveredGroupsCount, bookings: recoveredBookingsCount },
       });
 
-      if (pulledSnapshot.establishments.length > 0) {
+      if (pulledSnapshot.establishmentProfile) {
+        recoveredProfile = pulledSnapshot.establishmentProfile;
+      } else if (pulledSnapshot.establishments.length > 0) {
         const firstEst = pulledSnapshot.establishments[0];
         if (firstEst.name) {
           recoveredProfile = {
