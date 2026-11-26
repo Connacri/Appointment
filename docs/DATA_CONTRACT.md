@@ -80,6 +80,18 @@ must be removed as each entity is migrated. The CI P2P mutation-boundary gate re
 new direct `localStorage.setItem` calls whose literal key identifies business data.
 This static gate complements, but does not replace, repository-level transaction tests.
 
+### P2P protocol v1 contract
+
+The protocol event envelope has one shared entity registry in
+`src/services/p2p/protocol.ts`, consumed by IndexedDB and mirrored by Rust:
+`booking`, `resource`, `resource_group`, `establishment`, `task`,
+`stock_item`, and `invoice`. Unknown entity types are rejected before projection.
+The TypeScript and Rust validators enforce the same identity-length limits, a maximum
+of 256 vector-clock nodes, and a strict RFC 3339 timestamp subset (Gregorian calendar
+date validation, uppercase `T`/ `Z`, seconds 00–59, optional fractional seconds and
+UTC offset). Any protocol change must update both validators and their regression tests
+in the same change set. This is a wire contract: do not widen one platform independently.
+
 ## 2. Canonical business hierarchy
 
 `Hotel → Establishment → Floor → Resource`

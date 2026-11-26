@@ -64,14 +64,29 @@ fn is_valid_rfc3339_timestamp(value: &str) -> bool {
         }
         std::str::from_utf8(slice).ok()?.parse().ok()
     };
-    let Some(year) = digits(0, 4) else { return false; };
-    let Some(month) = digits(5, 7) else { return false; };
-    let Some(day) = digits(8, 10) else { return false; };
-    let Some(hour) = digits(11, 13) else { return false; };
-    let Some(minute) = digits(14, 16) else { return false; };
-    let Some(second) = digits(17, 19) else { return false; };
-    if year == 0 || !(1..=12).contains(&month) || !(0..=23).contains(&hour)
-        || minute > 59 || second > 59
+    let Some(year) = digits(0, 4) else {
+        return false;
+    };
+    let Some(month) = digits(5, 7) else {
+        return false;
+    };
+    let Some(day) = digits(8, 10) else {
+        return false;
+    };
+    let Some(hour) = digits(11, 13) else {
+        return false;
+    };
+    let Some(minute) = digits(14, 16) else {
+        return false;
+    };
+    let Some(second) = digits(17, 19) else {
+        return false;
+    };
+    if year == 0
+        || !(1..=12).contains(&month)
+        || !(0..=23).contains(&hour)
+        || minute > 59
+        || second > 59
     {
         return false;
     }
@@ -103,8 +118,12 @@ fn is_valid_rfc3339_timestamp(value: &str) -> bool {
             if index + 6 != bytes.len() || bytes.get(index + 3) != Some(&b':') {
                 return false;
             }
-            let Some(offset_hour) = digits(index + 1, index + 3) else { return false; };
-            let Some(offset_minute) = digits(index + 4, index + 6) else { return false; };
+            let Some(offset_hour) = digits(index + 1, index + 3) else {
+                return false;
+            };
+            let Some(offset_minute) = digits(index + 4, index + 6) else {
+                return false;
+            };
             if offset_hour > 23 || offset_minute > 59 {
                 return false;
             }

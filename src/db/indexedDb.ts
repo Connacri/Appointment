@@ -74,6 +74,7 @@ export interface IndexedDbStoreStats {
 
 export type IndexedDbSyncState = 'synced' | 'syncing' | 'offline';
 
+/** The P2P protocol owns the single versioned registry shared by every storage adapter. */
 export type OutboxEntity = P2pEntity;
 export type OutboxOperation = 'upsert' | 'delete';
 export type OutboxStatus = 'pending' | 'synced' | 'failed';

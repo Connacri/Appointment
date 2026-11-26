@@ -9,6 +9,7 @@ import {
   nextP2pClock,
   validateP2pEvent,
   validateP2pCursorAdvance,
+  P2P_SUPPORTED_ENTITIES,
   type P2pEvent,
 } from '../src/services/p2p/protocol';
 
@@ -114,6 +115,39 @@ test('enforces the versioned entity registry and RFC 3339 timestamps', () => {
     ...event('node-a', 1, { 'node-a': 1 }),
     createdAt: '2026-11-22T12:00:00.123+01:00',
   });
+});
+
+test('uses one explicit versioned entity registry across storage adapters', () => {
+  assert.deepEqual(P2P_SUPPORTED_ENTITIES, [
+    'booking',
+    'resource',
+    'resource_group',
+    'establishment',
+    'task',
+    'stock_item',
+    'invoice',
+  ]);
+});
+
+test('validates Gregorian leap years and month lengths strictly', () => {
+  validateP2pEvent({
+    ...event('node-a', 1, { 'node-a': 1 }),
+    createdAt: '2024-02-29T12:00:00Z',
+  });
+  assert.throws(
+    () => validateP2pEvent({
+      ...event('node-a', 1, { 'node-a': 1 }),
+      createdAt: '2025-02-29T12:00:00Z',
+    }),
+    /RFC 3339/,
+  );
+  assert.throws(
+    () => validateP2pEvent({
+      ...event('node-a', 1, { 'node-a': 1 }),
+      createdAt: '2026-04-31T12:00:00Z',
+    }),
+    /RFC 3339/,
+  );
 });
 
 test('builds a monotonically increasing local clock', () => {
