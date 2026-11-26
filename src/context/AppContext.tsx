@@ -824,9 +824,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const refreshDeviceMutationAvailability = async (): Promise<void> => {
+    const requestId = ++deviceRegistryLoadSeqRef.current;
     const workspaceId = workspace.activeWorkspaceId?.trim();
     const establishmentId = resolveMutationEstablishmentId();
     if (!workspaceId || !establishmentId || !isCoreDataHydrated) {
+      if (requestId !== deviceRegistryLoadSeqRef.current) return;
       setDeviceRegistry(null);
       setDeviceMutationAvailability({
         state: isCoreDataHydrated ? 'READ_ONLY' : 'RECONNECTING',
@@ -840,6 +842,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         indexedDb.getDeviceRegistry(workspaceId, establishmentId),
         indexedDb.getP2pNodeId(),
       ]);
+      if (requestId !== deviceRegistryLoadSeqRef.current) return;
       setDeviceRegistry(registry);
       setDeviceMutationAvailability(evaluateMutationAvailability({
         registry,
@@ -851,6 +854,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         integrityChecksPassed: true,
       }));
     } catch (error) {
+      if (requestId !== deviceRegistryLoadSeqRef.current) return;
       console.error('[Appointment] Device registry verification failed:', error);
       setDeviceRegistry(null);
       setDeviceMutationAvailability({ state: 'READ_ONLY', canMutate: false, reason: 'registry_unverified' });
@@ -895,6 +899,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       devices: [{ deviceId, role: 'admin', authorization: 'active', registeredAt: now }],
     };
     await indexedDb.putDeviceRegistry(registry, null);
+    deviceRegistryLoadSeqRef.current += 1;
     setDeviceRegistry(registry);
     setDeviceMutationAvailability(evaluateMutationAvailability({
       registry,
@@ -1431,6 +1436,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     state: 'READ_ONLY', canMutate: false, reason: 'registry_missing',
   });
   const deviceMutationAvailabilityRef = useRef(deviceMutationAvailability);
+  const deviceRegistryLoadSeqRef = useRef(0);
   deviceMutationAvailabilityRef.current = deviceMutationAvailability;
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
