@@ -1801,23 +1801,23 @@ class IndexedDbStore {
       let current: { version?: number } | undefined;
       let existing: TombstoneRecord | undefined;
       let ready = 0;
-      let action: 'apply' | 'skip' | 'conflict' = 'skip';
+      const action: { value: 'apply' | 'skip' | 'conflict' } = { value: 'skip' };
       const commit = () => {
         if (++ready !== 3) return;
         const activePending = pending.filter((row) => row.status !== 'synced');
         if (activePending.some((row) => row.operation === 'upsert')) {
-          action = 'conflict';
+          action.value = 'conflict';
           return;
         }
         if (existing?.origin === 'local' || existing?.origin === 'p2p') {
-          action = 'skip';
+          action.value = 'skip';
           return;
         }
         if (existing?.origin === 'supabase') {
           if ((existing.remoteVersion ?? 0) < remote.remoteVersion) {
             tombstones.put({ ...existing, deletedAt: remote.deletedAt, remoteVersion: remote.remoteVersion });
           }
-          action = 'skip';
+          action.value = 'skip';
           return;
         }
         const createdAt = new Date().toISOString();
@@ -1829,7 +1829,7 @@ class IndexedDbStore {
           deletedAt: remote.deletedAt, origin: 'supabase', remoteVersion: remote.remoteVersion,
         } satisfies TombstoneRecord);
         this.appendLocalP2pEvent(tx, workspaceId, remote.entity, remote.entityId, 'delete', null, createdAt);
-        action = 'apply';
+        action.value = 'apply';
       };
       pendingRequest.onsuccess = () => { pending = pendingRequest.result as OutboxRecord[]; commit(); };
       currentRequest.onsuccess = () => { current = currentRequest.result as typeof current; commit(); };
@@ -1839,8 +1839,8 @@ class IndexedDbStore {
       tombstoneRequest.onerror = () => tx.abort();
       await waitForTransactionCompletion(tx, `applyRemoteWorkspaceTombstone ${remote.entity}/${remote.entityId}`);
       const entry = { entity: remote.entity, entityId: remote.entityId };
-      if (action === 'apply') report.applied.push(entry);
-      if (action === 'conflict') report.conflicts.push(entry);
+      if (action.value === 'apply') report.applied.push(entry);
+      if (action.value === 'conflict') report.conflicts.push(entry);
     }
     return report;
   }

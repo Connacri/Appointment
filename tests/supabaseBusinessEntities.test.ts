@@ -41,6 +41,7 @@ test('stock movement RPC applies ledger and quantity in one guarded transaction'
 test('repositories and application mutation paths are connected to the new entities', () => {
   const repository = read('../src/services/supabase/pmsRepository.ts');
   const appContext = read('../src/context/AppContext.tsx');
+  const indexedDb = read('../src/db/indexedDb.ts');
   const sync = read('../src/services/supabase/supabaseSync.ts');
   const types = read('../src/services/supabase/database.types.ts');
 
@@ -58,6 +59,8 @@ test('repositories and application mutation paths are connected to the new entit
   assert.ok(sync.includes("record.entity === 'supplier'"));
   assert.ok(sync.includes("record.entity === 'purchase_order'"));
   assert.ok(sync.includes("record.entity === 'staff_member'"));
+  assert.ok(indexedDb.includes('applyRemoteWorkspaceTombstones'));
+  assert.ok(indexedDb.includes("activePending.some((row) => row.operation === 'upsert')"));
   for (const table of ['stock_suppliers', 'purchase_orders', 'staff_members']) assert.ok(types.includes(table + ':'));
   assert.ok(types.includes('apply_stock_movement'));
 });
