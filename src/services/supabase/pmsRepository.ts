@@ -653,24 +653,22 @@ export async function listStockMovements(workspaceId: WorkspaceId, establishment
   const pageSize = 500;
   const rows: Array<{
     id: string; item_id: string; timestamp: string; delta: number; reason: string;
-    room: string | null; actor_name: string | null;
+    room: string | null; actor_name: string | null; stock_items: { name: string } | null;
   }> = [];
   let offset = 0;
   while (true) {
     const { data, error } = await db.from('stock_movements')
-      .select('id,item_id,timestamp,delta,reason,room,actor_name')
+      .select('id,item_id,timestamp,delta,reason,room,actor_name,stock_items!stock_movements_item_tenant_fk(name)')
       .eq('workspace_id', workspaceId).eq('establishment_id', establishmentId)
       .order('timestamp', { ascending: false }).order('id', { ascending: false })
       .range(offset, offset + pageSize - 1);
     if (error) throw new Error(error.message);
-    rows.push(...(data ?? []));
+    rows.push(...((data ?? []) as unknown as typeof rows));
     if ((data ?? []).length < pageSize) break;
     offset += pageSize;
   }
-  const items = await listStockItems(workspaceId, establishmentId);
-  const names = new Map(items.map((item) => [item.id, item.name]));
   return rows.map((row) => ({
-    id: row.id, itemId: row.item_id, itemName: names.get(row.item_id) ?? row.item_id,
+    id: row.id, itemId: row.item_id, itemName: row.stock_items?.name ?? row.item_id,
     timestamp: row.timestamp, delta: Number(row.delta), reason: row.reason,
     room: row.room ?? undefined, user: row.actor_name ?? '',
   }));
