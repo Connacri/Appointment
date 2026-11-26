@@ -419,3 +419,5 @@ peer ACK cursors remain separate. Both adapters retain events received from othe
 for relay; neither compacts the log before trusted peer membership/checkpoint safety exists.
 
 Windows SQLite schema v8 adds a tested outbound peer cursor and exact-offered-page ACK API, with independent per-peer state and workspace-scoped event selection.
+
+P2P page transfer now has a 4 MiB serialized-byte budget in addition to the 500-event inbound cap and 1 MiB per-event ceiling. Both IndexedDB and SQLite stop a page before exceeding the byte budget, so large payloads cannot create unbounded transport buffers.

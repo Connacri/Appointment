@@ -175,3 +175,6 @@ Inbound peer cursors remain separate from outbound ACK cursors. Received events 
 the append-only event log and are therefore eligible for relay to other peers.
 
 The Windows SQLite schema-v8 outbound relay implementation uses the same exact-offer ACK rule as IndexedDB; its native regression test covers pagination, stale ACK rejection, and workspace isolation.
+
+
+P2P inbound and outbound pages are also byte-bounded: a maximum of 500 events and 4 MiB of serialized envelopes per batch/page, with a 1 MiB per-event ceiling. The page reader stops before the next event would exceed the byte budget and leaves that event for the next cursor page. This bounds memory, transaction duration and network framing independently of event count.

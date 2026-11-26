@@ -6,6 +6,7 @@ use super::PmsDatabase;
 use crate::p2p::{P2pEvent, P2pOperation};
 
 const MAX_P2P_EVENT_BYTES: usize = 1024 * 1024;
+const MAX_P2P_BATCH_BYTES: usize = 4 * 1024 * 1024;
 const MAX_P2P_CLOCK_NODES: usize = 256;
 const MAX_P2P_PAGE_SIZE: u32 = 500;
 
@@ -331,16 +332,27 @@ impl PmsDatabase {
             )
             .map_err(|e| e.to_string())?;
         let mut entries = Vec::new();
+        let mut page_bytes = 0usize;
+        let mut has_more = false;
         for row in rows {
             let (local_order, json) = row.map_err(|e| e.to_string())?;
+            let event_bytes = json.len();
             let event = serde_json::from_str(&json).map_err(|error| {
                 format!("Corrupt P2P event at local order {local_order}: {error}")
             })?;
+            if entries.len() >= limit as usize
+                || (!entries.is_empty() && page_bytes + event_bytes > MAX_P2P_BATCH_BYTES)
+            {
+                has_more = true;
+                break;
+            }
+            if event_bytes > MAX_P2P_EVENT_BYTES {
+                return Err(format!("Stored P2P event exceeds the size limit at local order {local_order}."));
+            }
+            page_bytes += event_bytes;
             entries.push(P2pEventLogEntry { local_order, event });
         }
         drop(statement);
-        let has_more = entries.len() > limit as usize;
-        entries.truncate(limit as usize);
         let next_cursor = entries
             .last()
             .map(|entry| entry.local_order)
@@ -862,6 +874,30 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn outbound_pages_obey_the_four_megabyte_budget() {
+        let db = database();
+        let payload = "x".repeat(850_000);
+        for index in 0..5 {
+            local_booking_event(
+                &db,
+                "workspace-a",
+                "node-a",
+                &format!("booking-{index}"),
+                P2pOperation::Upsert,
+                Some(json!({"blob": payload})),
+                "2026-11-23T08:00:00Z",
+            );
+        }
+        let page = db.get_p2p_outbound_page("workspace-a", "peer-b", 100).unwrap();
+        assert_eq!(page.events.len(), 4);
+        assert!(page.has_more);
+        let total_bytes: usize = page.events.iter()
+            .map(|event| serde_json::to_vec(event).unwrap().len())
+            .sum();
+        assert!(total_bytes <= MAX_P2P_BATCH_BYTES);
     }
 
     #[test]

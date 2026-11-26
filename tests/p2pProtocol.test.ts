@@ -10,6 +10,8 @@ import {
   validateP2pEvent,
   validateP2pCursorAdvance,
   validateP2pAckAdvance,
+  validateP2pBatchSize,
+  MAX_P2P_BATCH_BYTES,
   P2P_SUPPORTED_ENTITIES,
   SUPABASE_OUTBOX_ENTITIES,
   type P2pEvent,
@@ -360,4 +362,12 @@ test('outbound peer acknowledgements must match the exact offered cursor', () =>
   assert.equal(validateP2pAckAdvance(100, 149, 150), false);
   assert.equal(validateP2pAckAdvance(-1, 100, 100), false);
   assert.equal(validateP2pAckAdvance(0, Number.MAX_SAFE_INTEGER + 1, Number.MAX_SAFE_INTEGER + 1), false);
+});
+
+test('P2P batches are bounded by both event count and serialized byte size', () => {
+  assert.equal(validateP2pBatchSize(0, 0), true);
+  assert.equal(validateP2pBatchSize(500, MAX_P2P_BATCH_BYTES), true);
+  assert.equal(validateP2pBatchSize(501, 1), false);
+  assert.equal(validateP2pBatchSize(1, MAX_P2P_BATCH_BYTES + 1), false);
+  assert.equal(validateP2pBatchSize(-1, 1), false);
 });

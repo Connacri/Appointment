@@ -23,6 +23,8 @@ import {
   validateP2pEvent,
   validateP2pCursorAdvance,
   validateP2pAckAdvance,
+  validateP2pBatchSize,
+  MAX_P2P_BATCH_BYTES,
   P2P_SUPPORTED_ENTITIES,
   type OutboxEntity,
   type P2pEntity,
@@ -818,13 +820,19 @@ class IndexedDbStore {
       || batch.events.length > 500
       || !validateP2pCursorAdvance(batch.expectedCursor, batch.nextCursor, batch.events.length)
     ) throw new Error('Invalid P2P inbound batch identity, cursor or page size.');
+    let batchBytes = 0;
     for (const event of batch.events) {
       validateP2pEvent(event);
       if (event.workspaceId !== batch.workspaceId) {
         throw new Error('P2P inbound batch contains an event from another workspace.');
       }
-      if (new TextEncoder().encode(JSON.stringify(event)).byteLength > 1024 * 1024) {
+      const eventBytes = new TextEncoder().encode(JSON.stringify(event)).byteLength;
+      if (eventBytes > 1024 * 1024) {
         throw new Error('P2P event exceeds the 1 MiB persistence limit.');
+      }
+      batchBytes += eventBytes;
+      if (!validateP2pBatchSize(batch.events.length, batchBytes)) {
+        throw new Error('P2P inbound batch exceeds its 500-event or 4 MiB limit.');
       }
       if (!P2P_SUPPORTED_ENTITIES.includes(event.entity)) {
         throw new Error(`Unsupported P2P entity type: ${event.entity}`);
@@ -1158,6 +1166,7 @@ class IndexedDbStore {
       const events: P2pEvent[] = [];
       let nextCursor = expectedCursor;
       let hasMore = false;
+      let pageBytes = 0;
       const range = IDBKeyRange.bound(
         [workspaceId, expectedCursor + 1],
         [workspaceId, Number.MAX_SAFE_INTEGER],
@@ -1173,7 +1182,13 @@ class IndexedDbStore {
           result = { workspaceId, peerId, expectedCursor, nextCursor, events, hasMore };
           return;
         }
-        if (events.length >= limit) {
+        const row = cursor.value as { workspaceId: string; event: P2pEvent };
+        const eventBytes = new TextEncoder().encode(JSON.stringify(row.event)).byteLength;
+        if (eventBytes > 1024 * 1024) {
+          tx.abort();
+          return;
+        }
+        if (events.length >= limit || (events.length > 0 && pageBytes + eventBytes > MAX_P2P_BATCH_BYTES)) {
           hasMore = true;
           ackStore.put({
             workspaceId, peerId, cursor: expectedCursor,
@@ -1182,8 +1197,8 @@ class IndexedDbStore {
           result = { workspaceId, peerId, expectedCursor, nextCursor, events, hasMore };
           return;
         }
-        const row = cursor.value as { workspaceId: string; event: P2pEvent };
         events.push(row.event);
+        pageBytes += eventBytes;
         nextCursor = Number((cursor.key as IDBValidKey[])[1]);
         cursor.continue();
       };

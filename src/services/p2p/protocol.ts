@@ -64,6 +64,17 @@ function isValidRfc3339Timestamp(value: string): boolean {
 }
 
 export const MAX_P2P_CLOCK_NODES = 256;
+export const MAX_P2P_BATCH_EVENTS = 500;
+export const MAX_P2P_BATCH_BYTES = 4 * 1024 * 1024;
+
+export function validateP2pBatchSize(eventCount: number, totalBytes: number): boolean {
+  return Number.isSafeInteger(eventCount)
+    && Number.isSafeInteger(totalBytes)
+    && eventCount >= 0
+    && eventCount <= MAX_P2P_BATCH_EVENTS
+    && totalBytes >= 0
+    && totalBytes <= MAX_P2P_BATCH_BYTES;
+}
 export const MAX_P2P_NODE_ID_LENGTH = 128;
 export const MAX_P2P_ENTITY_LENGTH = 128;
 export const MAX_P2P_ENTITY_ID_LENGTH = 256;
