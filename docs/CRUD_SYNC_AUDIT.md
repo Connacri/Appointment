@@ -1,8 +1,8 @@
 # CRUD / Data Model / Supabase Audit
 
-Baseline: `main` at `5d0bb4f3c605f56e350c8bdd0acd8820da7ac1f9` (2026-11-24). Revalidated against the current AppContext, IndexedDB adapter, Supabase repository/sync runner, generated database types, and current P2P protocol. Static code-path audit; not a claim of successful runtime replication.
+Baseline: `main` at `62322b5730fdc3b0af12f1e425b082e10bd8c983` (2026-11-26). Revalidated against the current AppContext, IndexedDB adapter, Supabase repository/sync runner, generated database types, native SQLite adapters, and P2P event protocol. Static code-path audit; not a claim of successful runtime replication.
 
-## Revalidation notes (2026-11-24)
+## Revalidation notes (2026-11-26)
 
 - The recent booking fix classifies demo bookings by booking ID rather than by the resource they occupy. It prevents a real booking on a demo/bootstrap resource from being filtered as demo data; it does not close the other entity CRUD gaps below.
 - Direct localStorage persistence remains present in `src/context/AppContext.tsx`: task create/status/subtask/delete; stock item create/update/delete and stock movement ledger; supplier and purchase-order mutations; dynamic-rate mutations; staff mutations; establishment profile; invoice creation. These paths are not equivalent to the transactional IndexedDB Outbox/P2P write path.
@@ -34,6 +34,23 @@ Every business Create/Read/Update/Delete must use a typed domain repository scop
 | Spa | Component React useState for appointments/facilities/therapists/treatments | No spa tables/repository | Critical/demo-only: not persisted |
 | Event/audit log | IndexedDB eventLogs | audit_events table exists | Partial: local audit trail has no complete cloud sync contract |
 | CardLock issued cards/device audit | lockManager + IndexedDB issuedCards/MDB | Not shared PMS entity | Device-local may be intentional; shared revocation requires separate contract |
+
+
+## P2P-specific revalidation (2026-11-26)
+
+- The event log, vector-clock merge, per-record causal frontier and transactional inbound-batch APIs exist in both IndexedDB and native SQLite. They are persistence primitives, not an end-to-end replication service.
+- Windows Rust and Android Kotlin still implement UDP multicast presence discovery only. No authenticated application transport, pairing, workspace authorization, event exchange loop, durable transport ACK, anti-entropy session or peer retry scheduler is wired to the batch-apply APIs. The Windows UI explicitly reports that business transport is not enabled.
+- The inbound projection resolves concurrency only for the same `(workspace, entity, entityId)`. It does not enforce cross-record business invariants. Two distinct booking IDs can therefore be individually causally resolved while overlapping the same room/date interval. Stock aggregate constraints have the same class of risk.
+- IndexedDB inbound application accepts the current Outbox entity set (`booking`, `resource`, `resource_group`, `establishment`, `task`, `stock_item`, `invoice`), but operational projections exist only for bookings, resources, invoices and resource groups; the other entity types are stored in `workspaceEntities`. This is a generic record projection, not proof that their CRUD workflows, parent relationships or UI hydration are complete.
+- Native generic entity persistence can store arbitrary entity strings while the browser inbound path restricts the entity set. The supported entity registry must become one versioned cross-platform contract before transport is enabled.
+- TypeScript event validation now enforces the native limits for node/entity identity lengths and the 256-node vector clock (commit `73aa991`). Timestamp validation still differs between TypeScript (parseable date) and Rust (non-empty string); this remains a protocol-parity item.
+- Native booking projection validates a booking document but does not query other bookings for room/date overlap. IndexedDB projection similarly applies a resolved record without a cross-record reservation constraint. The selected offline policy therefore requires a separate domain-invariant/conflict layer; vector clocks alone cannot implement it.
+- The localStorage business-data bypasses listed in the matrix remain present. A CI diff gate now rejects new direct business-key `localStorage.setItem` writes, but it does not migrate or certify the existing legacy paths.
+- No production P2P claim is justified until authenticated transport, complete CRUD coverage, cross-record conflict handling, anti-entropy, recovery and real multi-device convergence tests pass.
+
+## Selected offline policy
+
+Appointment uses **offline operation with protection of critical operations and strict business rules**. Local validation is necessary but not a global exclusivity guarantee. During a network partition, an offline device cannot know whether another disconnected replica has accepted a conflicting booking, stock deduction or financial operation. Critical actions must therefore be represented as provisional until the required reconciliation/authority condition is met; they must never be silently promoted to globally confirmed based only on local state.
 
 ## Cross-layer evidence
 

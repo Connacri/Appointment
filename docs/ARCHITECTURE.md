@@ -138,6 +138,38 @@ events; it never shares database files.
   or globally serializable financial postings during a LAN partition; such conflicts
   must be detected after reconnection and resolved explicitly.
 
+
+## 6.1 Offline operation and critical business invariants
+
+The selected Appointment policy is offline-first with protection of critical operations.
+Each device may continue working locally, but local validation is not a global lock and
+does not prove that an isolated peer has not accepted a conflicting operation.
+
+- **Reservations:** validate local room availability before writing. A reservation created
+  while peers are unreachable is provisional, not globally confirmed. On inbound replication,
+  check overlap against every other active booking for the same resource, not only the same
+  booking ID. Preserve all conflicting events and surface a domain conflict for explicit
+  resolution; never silently discard either reservation.
+- **Inventory:** model stock changes as immutable, uniquely identified movements and derive
+  balances from the ledger. Local deductions must check the known local balance. A merged
+  negative balance or concurrent consumption is a stock conflict requiring reconciliation.
+  Do not use last-write-wins on a mutable quantity field.
+- **Invoices:** use globally unique document IDs. An invoice that requires a legally
+  sequential number must remain a draft until a unique number/range is available, or use a
+  preallocated per-device numbering range approved by the business. A device-local counter
+  is not a globally unique legal sequence.
+- **Payments:** record immutable, idempotent payment intents/receipts with explicit
+  settlement state. A locally recorded payment is not proof of external settlement.
+- **Master data and non-exclusive edits:** allow offline edits with versioned events;
+  concurrent edits remain explicit conflicts when no deterministic field-level merge is
+  defined.
+
+A fully decentralized partitioned system cannot guarantee globally exclusive room
+allocation, non-negative shared stock or globally serializable financial numbering without
+a quorum, a coordinator, or preallocated escrow rights. Appointment will not pretend
+otherwise. The UI must distinguish local validation, provisional state, durable peer
+receipt and globally reconciled state.
+
 The event protocol, native persistence and Android discovery are covered by automated
 unit/build gates. These gates do not prove authenticated transport or production
 convergence. Do not enable business replication until every release gate above is
