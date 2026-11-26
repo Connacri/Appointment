@@ -1,6 +1,6 @@
 # Appointment P2P implementation plan
 
-Status: active engineering plan. Baseline: `main` at `39358a80e23cceef181b3b0b24e51e4fe66d6abf`.
+Status: active engineering plan. Baseline: `main` at `3f28b5b5033fc617713b3bf79a6a648bb08ff464`.
 
 ## Objective
 
@@ -74,11 +74,16 @@ local success indicator may imply global confirmation.
 
 ### Phase 1 — complete local mutation boundaries
 
-Progress (2026-11-26): the P2P peer registry (13 entity types) is now separate from
-Supabase Outbox (six entity types with implemented push dispatchers). TypeScript and Rust
-validation tests cover the same peer registry. This is only a protocol prerequisite; no
-AppContext localStorage CRUD path is considered migrated by this change. Invoice is not
-cloud-Outbox eligible until its dispatcher and repository contract exist.
+Progress (2026-11-26): the P2P registry (13 entities) is separate from the 11-entity
+Supabase Outbox. AppContext now queues tasks, stock items/movements, suppliers, purchase
+orders, staff and establishment profiles into generic IndexedDB workspace projections,
+Outbox and P2P events. Startup restores those projections. Supabase schema/repositories,
+soft-delete tombstones and sync dispatch are present for those entities. Stock movement
+and stock balance updates are atomic on PostgreSQL via apply_stock_movement.
+
+This is not complete: UI enqueue calls remain fire-and-forget, local P2P identity still
+requires an active Supabase workspace, remote delete propagation and multi-device tests
+remain incomplete. Invoice and dynamic rates remain excluded from cloud Outbox.
 
 Remaining work:
 - Migrate tasks, stock items, stock movements, suppliers, purchase orders, invoices,
@@ -112,6 +117,10 @@ Remaining work:
 - Verify Android/Windows/Web protocol conformance.
 
 ### Phase 5 — independent Supabase replication
+- Progress: additive tables, RLS, generated types, Realtime, repositories and push/pull/delete
+  dispatch are implemented for tasks, stock items/movements, suppliers, purchase orders,
+  staff and establishment profiles. Invoice and dynamic-rate sync are deliberately blocked
+  pending transaction-safe/conflict-aware contracts.
 - Complete schema/RLS/repository/push/pull/delete coverage for approved shared entities.
 - Preserve P2P origin metadata and prevent cloud-to-peer-to-cloud echo loops.
 - Test cloud offline/online transitions independently of LAN sessions.
