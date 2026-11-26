@@ -5,7 +5,7 @@ Baseline: `main` at `3f28b5b5033fc617713b3bf79a6a648bb08ff464` (2026-11-26). Rev
 ## Revalidation notes (2026-11-26)
 
 - The recent booking fix classifies demo bookings by booking ID rather than by the resource they occupy. It prevents a real booking on a demo/bootstrap resource from being filtered as demo data; it does not close the other entity CRUD gaps below.
-- Direct localStorage persistence remains present in `src/context/AppContext.tsx`: task create/status/subtask/delete; stock item create/update/delete and stock movement ledger; supplier and purchase-order mutations; dynamic-rate mutations; staff mutations; establishment profile; invoice creation. These paths are not equivalent to the transactional IndexedDB Outbox/P2P write path.
+- Direct localStorage mirrors remain in `src/context/AppContext.tsx`. Task, stock, supplier, purchase-order, staff and establishment-profile mutations now enqueue to the generic IndexedDB Outbox/P2P projection when a cloud workspace is active; dynamic rates and invoices remain local-only.
 - `supabaseSync.ts` now dispatches task and stock-item upserts/deletes, append-only stock movements, suppliers, purchase orders, staff members and establishment profiles. Suppliers, purchase orders and staff have workspace-scoped tables/repositories. Invoice and dynamic_rate remain deliberately excluded from Supabase Outbox pending atomic/conflict-safe operations.
 - The P2P protocol has a 13-entity registry, separate from the 11-entity Supabase Outbox registry. This prevents P2P-only entities from being enqueued into a cloud dispatcher that cannot process them. TypeScript and Rust validate the expanded P2P registry; this is protocol groundwork only, not CRUD integration. LAN discovery advertises peer UUID/name only; it is not authenticated transport, workspace authorization, or replication. There is no verified end-to-end P2P business transport in the release gate.
 - Current GitHub Actions evidence on this audit baseline: Quality Checks, including the new P2P mutation-boundary gate, and Web Deploy succeeded. The protocol-change Windows Rust, Android and release workflows were still running at the time of the latest status check. Build/test success does not demonstrate CRUD completeness or multi-device convergence.
@@ -20,16 +20,16 @@ Every business Create/Read/Update/Delete must use a typed domain repository scop
 | Bookings / Planning | IndexedDB bookings + Outbox/tombstones | bookings + booking_payments; repository CRUD; sync push/pull/delete | Partial: best-covered entity; P2P transport and all nested payment mutations still require end-to-end tests |
 | Buildings / resource groups | IndexedDB resourceGroups + Outbox | resource_groups repository and sync | Partial; verify deletes and every setup-panel write path |
 | Rooms / resources | IndexedDB resources + Outbox; housekeeping uses putWithOutbox | resources repository; sync upsert/delete | Partial; audit every resource editor path |
-| Tasks / housekeeping tasks | localStorage omnibook_pms_tasks | pms_tasks table/repository; sync upsert only | Critical: AppContext create/update/subtask/delete handlers write localStorage and do not enqueue; no task delete dispatch |
-| Stock items | localStorage omnibook_stock_items | stock_items repository; sync upsert only | Critical: handlers do not enqueue; no delete dispatch |
-| Stock movements | localStorage omnibook_stock_movements | stock_movements table; repository insert helper | Critical: P2P event type is registered, but no typed CRUD mutation, canonical local projection or complete read/pull ledger is wired |
-| Suppliers | localStorage omnibook_stock_suppliers | No matching table/repository found | Critical: P2P event type is registered, but no typed CRUD mutation or local P2P projection is wired |
-| Purchase orders | localStorage omnibook_purchase_orders | No matching table/repository found | Critical: P2P event type is registered, but no typed CRUD mutation or local P2P projection is wired |
+| Tasks / housekeeping tasks | legacy localStorage mirror + IndexedDB workspaceEntities/Outbox/P2P event | pms_tasks typed repository; upsert + soft-delete + tombstone pull | Partial: mutation enqueue exists on active cloud workspace; UI enqueue is fire-and-forget and local P2P identity remains cloud-dependent |
+| Stock items | legacy localStorage mirror + IndexedDB workspaceEntities/Outbox/P2P event | stock_items typed repository; upsert + soft-delete + tombstone pull | Partial: quantity changes are represented by stock movements; UI enqueue is fire-and-forget |
+| Stock movements | legacy localStorage mirror + IndexedDB workspaceEntities/Outbox/P2P event | append-only ledger; atomic apply_stock_movement RPC; paginated read | Partial: cloud ledger insert and stock balance projection are atomic; opening balance/adjustment mutations enqueue movement events |
+| Suppliers | legacy localStorage mirror + IndexedDB workspaceEntities/Outbox/P2P event | stock_suppliers typed repository; RLS; soft-delete; Realtime; tombstone pull | Partial: CRUD enqueue/push/pull is connected; same-establishment supplier reference enforced for stock and orders |
+| Purchase orders | legacy localStorage mirror + IndexedDB workspaceEntities/Outbox/P2P event | purchase_orders typed repository; RLS; soft-delete; Realtime; tombstone pull | Partial: line snapshot stored as JSONB; receipt movement and order status are not yet one server transaction |
 | Invoices / quotes / proformas | localStorage omnibook_invoices; IndexedDB invoices store exists | invoices + invoice_items tables exist | Critical: invoice remains localStorage-backed; no cloud Outbox dispatcher or transactional CRUD path is enabled |
 | Dynamic pricing | localStorage omnibook_dynamic_rates | dynamic_rates table; repository list only | Critical: P2P event type is registered, but no typed CRUD mutation, Outbox/push/delete or complete pull merge |
-| HR / staff | localStorage omnibook_staff_members | No dedicated staff table in generated types | Critical: P2P event type is registered, but no typed CRUD mutation or local P2P projection is wired |
+| HR / staff | legacy localStorage mirror + IndexedDB workspaceEntities/Outbox/P2P event | staff_members typed repository; RLS; soft-delete; Realtime; tombstone pull | Partial: staff rows sync; shared role-definition catalog is not yet modeled |
 | Roles / permissions | AppContext/browser storage | No workspace role CRUD contract found | Decide explicitly device-local vs workspace-shared; currently not replicated |
-| Establishment profile | localStorage omnibook_establishment_profile | establishments repository and Outbox upsert exist | Critical: setEstablishmentProfile writes local-only, competing with cloud repository path |
+| Establishment profile | legacy localStorage mirror + IndexedDB workspaceEntities/Outbox/P2P event | establishments.settings appointmentProfile JSON; repository upsert | Partial: profile mutation queues; establishment must already exist remotely and workspace must be authenticated |
 | Channel Manager | Component React useState, seeded initial data | No channel tables/repository | Critical/demo-only: resets on remount/reload; not persisted |
 | Spa | Component React useState for appointments/facilities/therapists/treatments | No spa tables/repository | Critical/demo-only: not persisted |
 | Event/audit log | IndexedDB eventLogs | audit_events table exists | Partial: local audit trail has no complete cloud sync contract |
@@ -54,11 +54,11 @@ Appointment uses **offline operation with protection of critical operations and 
 
 ## Cross-layer evidence
 
-- IndexedDB schema version 8 has business stores bookings, invoices, resources, resourceGroups. Supabase Outbox registry: booking, resource, resource_group, establishment, task and stock_item. P2P peer registry is broader (13 entities). A store or registry member alone does not establish CRUD wiring.
+- IndexedDB schema version 9 has business stores bookings, invoices, resources, resourceGroups plus indexed generic workspaceEntities. Supabase Outbox registry has 11 dispatched entities; P2P peer registry has 13. A store or registry member alone does not establish CRUD wiring.
 - Supabase exposes 21 public tables, including new `stock_suppliers`, `purchase_orders` and `staff_members`. RLS is enabled on all; two technical tables have no policies (default deny).
 - Supabase repositories now export supplier, purchase-order, staff, stock movement, establishment profile and soft-delete methods. Invoice and dynamic-rate mutation repositories remain incomplete.
 - runSupabaseSync dispatches 11 entity types. Stock movements use an atomic server RPC; task, stock item, supplier, purchase order and staff support delete tombstones. Invoice and dynamic-rate dispatch remain absent.
-- AppContext still directly persists several business collections in localStorage. This bypasses transactional Outbox, tombstones, workspace isolation, P2P event creation, and cloud acknowledgements.
+- AppContext still maintains legacy localStorage mirrors. New mutations enqueue into generic IndexedDB workspaceEntities + Outbox + P2P event transactions, then restore those projections on startup. UI enqueue remains fire-and-forget and must become awaited/fail-closed.
 - Channel Manager and Spa keep business records in component useState only.
 - Some Supabase tables have no complete app repository/sync path; some UI models have no matching Supabase table.
 
@@ -93,3 +93,12 @@ Audit status: **NOT READY for full CRUD replication or production P2P**. This is
 - AppContext now enqueues task, stock-item, stock-movement, supplier, purchase-order, staff-member and establishment-profile mutations. Generic IndexedDB workspace projections are restored on startup; local tombstones are respected. Supabase tombstones for task, stock item, supplier, purchase order and staff are applied locally and relayed as local P2P delete events.
 - This is not complete: UI enqueue is still fire-and-forget; local P2P identity still depends on an authenticated Supabase workspace; dynamic rates and invoices are excluded; remote delete propagation for resource/group and multi-device integration are not yet certified.
 - Latest live Supabase Security Advisor: no findings on the new tables; remaining warnings are two technical RLS tables without policies (default deny), keepalive_cap mutable search_path, and leaked-password protection disabled.
+
+
+### Additional invariant gaps after the November 26 integration
+
+- Fire-and-forget enqueue means UI state may still update before IndexedDB confirms the durable Outbox transaction. This must be converted to awaited command/repository calls before claiming fail-closed local mutations.
+- Local P2P workspace identity is still derived from the authenticated Supabase workspace. An unauthenticated first-run/offline device can still use legacy local storage but cannot create workspace-scoped P2P Outbox events.
+- Dynamic rates remain excluded until a conflict-aware server contract exists; invoices remain excluded until header + line writes and invoice-number allocation are atomic.
+- Remote tombstones are now fetched and applied for tasks, stock items, suppliers, purchase orders and staff. Resource/group remote tombstones still require dedicated physical-store projection handling.
+- Purchase-order receipt still consists of multiple idempotent movement RPCs followed by a separate PO update; a single receive-purchase-order RPC is needed for atomic multi-line receipt.
