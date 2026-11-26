@@ -46,6 +46,12 @@ test('physical inventory adjustment uses latest quantity and skips a zero-delta 
     timestamp: '2026-11-26T12:00:00.000Z', movementId: 'movement-3',
   });
   const batch = new Map([['stock_item:soap', { id: 'soap', quantity: 15 }]]);
+  const [itemMutation] = buildStockItemUpdateMutations({
+    updatedItem: updated, currentItem: soap, actor: 'Admin',
+    timestamp: '2026-11-26T12:00:00.000Z', movementId: 'movement-3b',
+  });
+  assert.equal(itemMutation.applyToCurrent?.({ id: 'soap', quantity: 15 }).quantity, 12);
+  assert.equal(itemMutation.toOutboxPayload?.({ id: 'soap', quantity: 15 }).quantity, 15);
   assert.equal(movementMutation.applyToCurrent?.(undefined, batch).delta, -3);
   assert.equal(movementMutation.skipIfCurrent?.(undefined, new Map([['stock_item:soap', { id: 'soap', quantity: 12 }] ])), true);
 });

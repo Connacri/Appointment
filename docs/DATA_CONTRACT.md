@@ -665,7 +665,7 @@ A failed transaction MUST leave both stock quantity and movement ledger unchange
 Every quantity mutation is calculated against the latest projection read inside the transaction.
 Negative stock is rejected; room replenishment is all-or-nothing and MUST NOT silently clamp
 insufficient stock to zero. Physical inventory counts are absolute counts: the movement delta is
-computed from the latest committed quantity, and a zero delta produces no ledger row.
+computed from the latest committed quantity, and a zero delta produces no ledger row. The inventory-count dialog submits the absolute target to the same transactional update builder; it does not calculate a delta from the potentially stale React snapshot. The room-replenishment dialog warns and disables submission when the visible stock is insufficient, while the IndexedDB transaction independently revalidates against the latest persisted quantity.
 
 The local P2P/workspace projection contains the final stock quantity. Quantity-only commands
 emit the stock-item P2P event but do not enqueue a redundant stock-item cloud upsert; the
