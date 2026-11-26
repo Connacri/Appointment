@@ -429,12 +429,12 @@ export async function listStockItems(workspaceId: WorkspaceId, establishmentId: 
   const db = requireSupabase();
   const {data,error} = await db.from('stock_items').select('*').eq('workspace_id',workspaceId).eq('establishment_id',establishmentId).is('deleted_at',null).order('category');
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r:any)=>({id:r.id,category:r.category,name:r.name,unit:r.unit,quantity:Number(r.quantity),minThreshold:Number(r.min_threshold),unitCost:Number(r.unit_cost)}));
+  return (data ?? []).map((r) => ({id:r.id,category:r.category,name:r.name,unit:r.unit,quantity:Number(r.quantity),minThreshold:Number(r.min_threshold),unitCost:Number(r.unit_cost),preferredSupplierId:r.preferred_supplier_id ?? undefined}));
 }
 
 export async function saveStockItem(workspaceId: WorkspaceId, establishmentId: string, i: StockItem) {
   const db = requireSupabase();
-  return unwrap(await db.from('stock_items').upsert({id:i.id,workspace_id:workspaceId,establishment_id:establishmentId,category:i.category,name:i.name,unit:i.unit,quantity:i.quantity,min_threshold:i.minThreshold,unit_cost:i.unitCost}).select().single());
+  return unwrap(await db.from('stock_items').upsert({id:i.id,workspace_id:workspaceId,establishment_id:establishmentId,category:i.category,name:i.name,unit:i.unit,quantity:i.quantity,min_threshold:i.minThreshold,unit_cost:i.unitCost,preferred_supplier_id:i.preferredSupplierId ?? null}).select().single());
 }
 
 export async function deleteStockItem(workspaceId: WorkspaceId, itemId: string): Promise<void> {
