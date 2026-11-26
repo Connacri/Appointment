@@ -826,7 +826,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refreshDeviceMutationAvailability = useCallback(async (): Promise<void> => {
     const requestId = ++deviceRegistryLoadSeqRef.current;
     const workspaceId = workspace.activeWorkspaceId?.trim();
-    const establishmentId = resolveMutationEstablishmentId();
+    const establishmentId = selectedEstablishmentId !== 'all' && selectedEstablishmentId.trim()
+      ? selectedEstablishmentId
+      : establishmentProfile.id && establishmentProfile.id !== 'establishment-draft'
+        ? establishmentProfile.id
+        : establishmentProfile.name.trim() ? stableEstablishmentId(establishmentProfile) : '';
     if (!workspaceId || !establishmentId || !isCoreDataHydrated) {
       if (requestId !== deviceRegistryLoadSeqRef.current) return;
       setDeviceRegistry(null);
