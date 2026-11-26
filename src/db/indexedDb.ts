@@ -22,6 +22,7 @@ import {
   mergeP2pEvents,
   validateP2pEvent,
   validateP2pCursorAdvance,
+  validateP2pAckAdvance,
   P2P_SUPPORTED_ENTITIES,
   type OutboxEntity,
   type P2pEntity,
@@ -753,7 +754,7 @@ class IndexedDbStore {
         const nextNodeId = supportsNativeLanDiscovery()
           ? await resetNativeLanNodeIdentity()
           : this.createId();
-        const tx = this.createStrictTransaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'localBusinessEntities', 'issuedCards', 'resourceGroups', 'eventLogs', 'p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pMeta', 'p2pPeerCursors', 'p2pRecordFrontiers']);
+        const tx = this.createStrictTransaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'localBusinessEntities', 'issuedCards', 'resourceGroups', 'eventLogs', 'p2pEvents', 'p2pTransportQueue', 'p2pPeerAcks', 'p2pClock', 'p2pMeta', 'p2pPeerCursors', 'p2pRecordFrontiers']);
         tx.objectStore('bookings').clear();
         tx.objectStore('invoices').clear();
         tx.objectStore('resources').clear();
