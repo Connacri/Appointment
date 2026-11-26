@@ -76,3 +76,15 @@ test('produces stable conflict identifiers independent of event arrival order', 
   const b = stay('B', '2026-12-03', '2026-12-05');
   assert.deepEqual(detectP2pBookingConflicts([a, b]), detectP2pBookingConflicts([b, a]));
 });
+
+test('does not compare bookings across workspace boundaries', () => {
+  const a = stay('A', '2026-12-01', '2026-12-04');
+  const b = { ...stay('B', '2026-12-03', '2026-12-05'), workspaceId: 'another-hotel' };
+  assert.equal(detectP2pBookingConflicts([a, b]).length, 0);
+});
+
+test('ignores malformed legacy booking intervals without blocking valid records', () => {
+  const malformed = stay('A', '2026-02-30', '2026-03-04');
+  const valid = stay('B', '2026-03-01', '2026-03-04');
+  assert.equal(detectP2pBookingConflicts([malformed, valid]).length, 0);
+});
