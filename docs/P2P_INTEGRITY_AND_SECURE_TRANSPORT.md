@@ -12,7 +12,7 @@ Date/time comparison is performed as a timezone-independent wall-clock minute ca
 
 The deterministic conflict key is derived from workspace ID and the sorted pair of immutable event IDs. The conflict snapshot retains both booking IDs, both event IDs, resource ID, overlap interval, detection timestamp and pending status. A conflict remains pending until a separately replicated resolution event is committed.
 
-Resolution must name the selected booking, the actor/device, a reason, and the exact source conflict ID. The resolution event must causally include both conflicting source events. A peer must reject a resolution that does not reference the exact conflict frontier it has observed. Never delete either source event or silently mutate its payload.
+Resolution must name the selected booking, the actor/device, a reason, and the exact source conflict ID. The resolution event must causally include both conflicting source events. The IndexedDB implementation now records `keep_booking` and `reject_both` decisions as immutable `booking_conflict` events; it writes the corresponding cancellation booking events first, then emits the decision event with source and cancellation event references. A receiving peer leaves the conflict pending until those cancellation events are present in the current booking frontiers and causally included by the decision event. Never delete either source event or silently mutate its payload.
 
 ## Pair identity and transport security requirements
 
