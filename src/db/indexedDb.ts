@@ -1055,10 +1055,19 @@ class IndexedDbStore {
                         || cancellation.entityId !== expectedBookingId
                         || cancellation.operation !== 'upsert'
                         || cancellation.payload?.status !== 'cancelled'
-                        || cancellation.nodeId !== event.nodeId
                       ) cancellationValid = false;
-                      cancellationRemaining -= 1;
-                      commitResolution();
+                      const frontierRequest = tx.objectStore('p2pRecordFrontiers')
+                        .get([batch.workspaceId, 'booking', expectedBookingId]);
+                      frontierRequest.onsuccess = () => {
+                        const frontier = frontierRequest.result as { status?: string; frontier?: P2pEvent[] } | undefined;
+                        if (frontier?.status !== 'resolved'
+                          || !frontier.frontier?.some((item) => item.eventId === cancellationIds[index])) {
+                          cancellationValid = false;
+                        }
+                        cancellationRemaining -= 1;
+                        commitResolution();
+                      };
+                      frontierRequest.onerror = abort;
                     };
                     cancellationRequest.onerror = abort;
                   }
@@ -1340,7 +1349,7 @@ class IndexedDbStore {
           const frontierRequest = tx.objectStore('p2pRecordFrontiers').get([workspaceId, 'booking', bookingId]);
           let bookingRecord: Record<string, unknown> | undefined;
           let entityRecord: { version?: number; establishmentId?: string } | undefined;
-          let frontierRecord: { status?: string } | undefined;
+          let frontierRecord: { status?: string; frontier?: P2pEvent[] } | undefined;
           let ready = 0;
           const applyCancellation = (): void => {
             ready += 1;
@@ -1350,10 +1359,23 @@ class IndexedDbStore {
               tx.abort();
               return;
             }
-            if (bookingRecord.status === 'cancelled') { cancelNext(index + 1); return; }
             if (frontierRecord?.status !== 'resolved') {
               validationError = new Error(`Booking ${bookingId} has an unresolved record frontier; resolve that record first.`);
               tx.abort();
+              return;
+            }
+            if (bookingRecord.status === 'cancelled') {
+              const existingCancellation = frontierRecord.frontier?.find((event) =>
+                event.entity === 'booking' && event.entityId === bookingId
+                && event.operation === 'upsert' && event.payload?.status === 'cancelled'
+              );
+              if (!existingCancellation) {
+                validationError = new Error(`Booking ${bookingId} is cancelled but has no durable cancellation event.`);
+                tx.abort();
+                return;
+              }
+              cancellationEventIds.push(existingCancellation.eventId);
+              cancelNext(index + 1);
               return;
             }
             const version = Math.max(entityRecord?.version ?? 0, Number(bookingRecord.syncVersion ?? 0)) + 1;
