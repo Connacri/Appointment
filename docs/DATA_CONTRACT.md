@@ -671,6 +671,6 @@ identity is established, workspace-scoped replication remains a separate migrati
 check the current purchase-order status inside the same transaction, preventing a rapid
 double-click from applying the same receipt twice. Stock quantity increments are calculated
 from the latest persisted stock-item projection inside that transaction, rather than from a
-possibly stale React snapshot; separate receipts for the same item therefore compose additively. The transaction returns the exact committed stock-item payloads to the UI, so the rendered quantity is reconciled to the persisted result rather than the pre-transaction snapshot.
+possibly stale React snapshot; separate receipts for the same item therefore compose additively. The transaction returns the exact committed stock-item payloads to the UI, so the rendered quantity is reconciled to the persisted result rather than the pre-transaction snapshot. The shared single-record Outbox, cloud-tombstone and local-only repository APIs remain available alongside the batch command.
 
 Regression coverage: `tests/purchaseOrderReceiptSafety.test.ts`.
