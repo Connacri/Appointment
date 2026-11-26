@@ -291,3 +291,16 @@ test('booking update guard ignores malformed legacy intervals rather than blocki
   const candidate = scheduleBooking('edited', '2026-11-28', '2026-11-29');
   assert.equal(hasBookingScheduleConflict([malformed], candidate, 'edited'), false);
 });
+
+
+test('booking write validation rejects a second concurrent same-resource reservation before persistence', () => {
+  const existing = scheduleBooking('booking-a', '2026-11-27', '2026-11-29');
+  const concurrent = scheduleBooking('booking-b', '2026-11-28', '2026-11-30');
+  assert.equal(hasBookingScheduleConflict([existing], concurrent, concurrent.id), true);
+});
+
+test('booking write validation permits a non-overlapping reservation for the same resource', () => {
+  const existing = scheduleBooking('booking-a', '2026-11-27', '2026-11-29');
+  const later = scheduleBooking('booking-b', '2026-11-29', '2026-11-30', { checkInTime: '12:20' });
+  assert.equal(hasBookingScheduleConflict([existing], later, later.id), false);
+});

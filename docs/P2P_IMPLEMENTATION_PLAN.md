@@ -433,3 +433,8 @@ The outbound page scanners skip third-party-origin events and advance their curs
 The Windows SQLite inbound adapter now mirrors the IndexedDB trust boundary: event nodeId must equal the authenticated peer ID, per-event size is capped at 1 MiB, and aggregate page size at 4 MiB. A forged origin or oversized page is rejected before any event or cursor mutation.
 
 Windows SQLite schema v9 adds an index on (workspace_id, node_id, local_order); outbound paging filters at SQL level to the local installation node. This avoids scanning/forwarding third-party events and keeps cursor progression aligned with the last local event sent.
+
+
+### Booking command durability — 2026-11-26
+
+Booking create/edit/status/check-in/payment flows now await the IndexedDB commit before reporting success or mutating React state. Workspace-backed commands atomically persist the projection, Outbox intent and P2P event. The current bookings rows are re-read and overlap validation runs inside the same IndexedDB read-write transaction for creation, schedule edits and reactivation, closing the stale React-state race between tabs on one device. Pre-auth offline bookings remain durable local-only records and are not P2P replicated until workspace identity exists. Distributed overlap between separate offline devices remains unresolved and requires a dedicated P2P conflict registry and explicit resolution.

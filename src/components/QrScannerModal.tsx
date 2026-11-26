@@ -172,7 +172,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
     setSuccessReceipt(null);
   };
 
-  const handleValidateCheckIn = () => {
+  const handleValidateCheckIn = async () => {
     if (!selectedScannedBooking) return;
 
     const isCashPending = selectedScannedBooking.paymentStatus === 'pending' && selectedScannedBooking.totalPrice > 0;
@@ -185,7 +185,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose 
       return;
     }
 
-    const res = confirmCheckInAndCashPayment(selectedScannedBooking.id, isCashPending);
+    const res = await confirmCheckInAndCashPayment(selectedScannedBooking.id, isCashPending);
     if (!res.success) {
       setCashValidationError(res.message);
       return;

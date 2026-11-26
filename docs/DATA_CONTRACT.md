@@ -215,3 +215,8 @@ comes first. Cancelled bookings do not occupy a slot. Invalid proposed intervals
 closed; malformed legacy intervals are ignored so they cannot block every future edit.
 This remains a device-local check: concurrent offline bookings created on separate peers
 still require a P2P cross-record conflict workflow before global confirmation.
+
+
+### Durable booking command boundary
+
+Booking creation, editing, status transitions, QR check-in and payment confirmation await the IndexedDB transaction before changing React state or displaying success. Workspace-backed writes atomically persist the booking projection, cloud Outbox intent and P2P event. Create, schedule edits and reactivation re-read the bookings store and validate resource/time overlap inside the same read-write transaction, preventing same-device stale-state double booking across tabs. Before workspace authentication, a local-only booking is still durably stored and validated but is not yet queued for cloud or P2P replication. A failed transaction leaves the previous UI projection unchanged. Cross-device concurrent reservations still require a P2P cross-record conflict workflow and must not be silently resolved by last-write-wins.
