@@ -1034,7 +1034,7 @@ class IndexedDbStore {
                       ...conflict,
                       status: decision === 'keep_booking' ? 'resolved' : 'rejected',
                       resolution: {
-                        decision,
+                        decision: decision as 'keep_booking' | 'reject_both',
                         chosenBookingId: chosenBookingId as string | null,
                         actorNodeId: event.nodeId,
                         reason: payload.reason as string,
