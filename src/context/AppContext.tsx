@@ -784,30 +784,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         : normalized.name.trim() ? stableEstablishmentId(normalized) : '';
       if (resolvedId) normalized.id = resolvedId;
     }
-    const prev = establishmentProfile;
+    const previous = establishmentProfile;
     const changes: Array<{ field: string; before?: string; after?: string }> = [];
-    if (prev.name !== normalized.name) changes.push({ field: 'Nom établissement', before: prev.name || '—', after: normalized.name || '—' });
-    if (prev.city !== normalized.city) changes.push({ field: 'Ville', before: prev.city || '—', after: normalized.city || '—' });
-    if (prev.phone !== normalized.phone) changes.push({ field: 'Téléphone', before: prev.phone || '—', after: normalized.phone || '—' });
-    if (prev.defaultCurrency !== normalized.defaultCurrency) changes.push({ field: 'Devise', before: prev.defaultCurrency || '—', after: normalized.defaultCurrency || '—' });
-    if (changes.length > 0) {
-      logEvent({
-        category: 'system',
-        action: 'system.profile_updated',
-        severity: 'info',
+    if (previous.name !== normalized.name) changes.push({ field: 'Nom établissement', before: previous.name || '—', after: normalized.name || '—' });
+    if (previous.city !== normalized.city) changes.push({ field: 'Ville', before: previous.city || '—', after: normalized.city || '—' });
+    if (previous.phone !== normalized.phone) changes.push({ field: 'Téléphone', before: previous.phone || '—', after: normalized.phone || '—' });
+    if (previous.defaultCurrency !== normalized.defaultCurrency) changes.push({ field: 'Devise', before: previous.defaultCurrency || '—', after: normalized.defaultCurrency || '—' });
+    commitBusinessUpsert('establishment_profile', normalized.id, normalized as unknown as Record<string, unknown>, () => {
+      setEstablishmentProfileState(normalized);
+      localStorage.setItem('omnibook_establishment_profile', JSON.stringify(normalized));
+      if (changes.length > 0) logEvent({
+        category: 'system', action: 'system.profile_updated', severity: 'info',
         title: `Fiche établissement mise à jour · ${normalized.name || 'Hôtel'}`,
         description: `${changes.length} paramètre(s) établissement modifié(s).`,
-        target: { type: 'establishment', id: normalized.id, label: normalized.name },
-        changes,
+        target: { type: 'establishment', id: normalized.id, label: normalized.name }, changes,
       });
-    }
-    setEstablishmentProfileState(normalized);
-    localStorage.setItem('omnibook_establishment_profile', JSON.stringify(normalized));
-    void queueBusinessUpsert('establishment_profile', normalized.id, normalized as unknown as Record<string, unknown>, normalized.id)
-      .catch((error) => reportQueueFailure('establishment_profile', normalized.id, error));
+    }, normalized.id);
   };
 
-  const resolveMutationEstablishmentId = (): string => {
+    const resolveMutationEstablishmentId = (): string => {
     if (selectedEstablishmentId !== 'all' && selectedEstablishmentId.trim()) return selectedEstablishmentId;
     if (establishmentProfile.id && establishmentProfile.id !== 'establishment-draft') return establishmentProfile.id;
     if (establishmentProfile.name.trim()) return stableEstablishmentId(establishmentProfile);
@@ -857,6 +852,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       { workspaceId, establishmentId }, entity, entityId,
       `${workspaceId}:${entity}:${entityId}:${createMutationId()}`,
     );
+  };
+
+  const commitBusinessUpsert = (
+    entity: 'task' | 'stock_item' | 'stock_movement' | 'supplier' | 'purchase_order' | 'staff_member' | 'establishment_profile',
+    entityId: string,
+    payload: Record<string, unknown>,
+    commit: () => void,
+    establishmentOverride?: string,
+  ): void => {
+    void queueBusinessUpsert(entity, entityId, payload, establishmentOverride)
+      .then(() => { commit(); scheduleAutoSync(); })
+      .catch((error) => reportQueueFailure(entity, entityId, error));
+  };
+
+  const commitBusinessDelete = (
+    entity: 'task' | 'stock_item' | 'supplier' | 'purchase_order' | 'staff_member',
+    entityId: string,
+    commit: () => void,
+  ): void => {
+    void queueBusinessDelete(entity, entityId)
+      .then(() => { commit(); scheduleAutoSync(); })
+      .catch((error) => reportQueueFailure(entity, entityId, error));
   };
 
   const reportQueueFailure = (entity: string, entityId: string, error: unknown): void => {
@@ -2945,164 +2962,111 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addTask = (taskData: Omit<PmsTask, 'id'>) => {
-    const newTask: PmsTask = {
-      ...taskData,
-      id: `tsk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    };
-    void queueBusinessUpsert('task', newTask.id, newTask as unknown as Record<string, unknown>)
-      .catch((error) => reportQueueFailure('task', newTask.id, error));
-    playSuccessFeedback();
-    setTasks((prev) => {
-      const updated = [newTask, ...prev];
-      localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
-      return updated;
-    });
-    logEvent({
-      category: 'task',
-      action: 'task.created',
-      severity: newTask.priority === 'urgent' ? 'warn' : 'info',
-      title: `Tâche créée · ${newTask.typeName}`,
-      description: `Chambre ${newTask.room} · Assignée à ${newTask.assignee} · Priorité ${newTask.priority}`,
-      target: { type: 'task', id: newTask.id, label: newTask.typeName, secondaryLabel: newTask.room },
-      metadata: { assignee: newTask.assignee, priority: newTask.priority, category: newTask.category, date: newTask.date },
+    const newTask: PmsTask = { ...taskData, id: `tsk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}` };
+    commitBusinessUpsert('task', newTask.id, newTask as unknown as Record<string, unknown>, () => {
+      playSuccessFeedback();
+      setTasks((prev) => {
+        const updated = [newTask, ...prev];
+        localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
+        return updated;
+      });
+      logEvent({
+        category: 'task', action: 'task.created',
+        severity: newTask.priority === 'urgent' ? 'warn' : 'info',
+        title: `Tâche créée · ${newTask.typeName}`,
+        description: `Chambre ${newTask.room} · Assignée à ${newTask.assignee} · Priorité ${newTask.priority}`,
+        target: { type: 'task', id: newTask.id, label: newTask.typeName, secondaryLabel: newTask.room },
+        metadata: { assignee: newTask.assignee, priority: newTask.priority, category: newTask.category, date: newTask.date },
+      });
     });
   };
 
   const updateTaskStatus = (id: string, status: PmsTask['status'], completedByOverride?: string) => {
-    if (status === 'done') {
-      playSuccessFeedback();
-    } else {
-      playClickFeedback();
-    }
-
-    const targetTask = tasks.find((t) => t.id === id);
-    const resolvedExecutor =
-      completedByOverride?.trim() ||
-      activeOperatorNameRef.current.trim() ||
-      clientProfileRef.current?.name?.trim() ||
-      targetTask?.assignee?.trim() ||
-      resolveActorLabel(currentRoleRef.current);
-
-    if (targetTask) {
-      const statusTimestamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
-      const nextTask: PmsTask = {
-        ...targetTask,
-        status,
-        completedAt: status === 'done' ? statusTimestamp : undefined,
-        completedBy: status === 'done' ? resolvedExecutor : undefined,
-      };
-      void queueBusinessUpsert('task', id, nextTask as unknown as Record<string, unknown>)
-        .catch((error) => reportQueueFailure('task', id, error));
-      logEvent({
-        category: 'task',
-        action: 'task.status_changed',
-        severity: status === 'done' ? 'success' : status === 'cancel' ? 'warn' : 'info',
-        title: `Tâche ${targetTask.room} · ${targetTask.typeName} → ${status}`,
-        description:
-          status === 'done'
-            ? `Achevée par ${resolvedExecutor} (assignée à ${targetTask.assignee})`
-            : `Statut tâche : ${targetTask.status} → ${status} (${targetTask.assignee})`,
-        target: { type: 'task', id, label: targetTask.typeName, secondaryLabel: targetTask.room },
-        metadata: status === 'done' ? { completedBy: resolvedExecutor, assignee: targetTask.assignee } : undefined,
-        changes: [{ field: 'Statut tâche', before: targetTask.status, after: status }],
+    const target = tasks.find((task) => task.id === id);
+    if (!target) return;
+    const executor = completedByOverride?.trim() || activeOperatorNameRef.current.trim()
+      || clientProfileRef.current?.name?.trim() || target.assignee?.trim()
+      || resolveActorLabel(currentRoleRef.current);
+    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    const nextTask: PmsTask = {
+      ...target, status,
+      completedAt: status === 'done' ? now : undefined,
+      completedBy: status === 'done' ? executor : undefined,
+    };
+    commitBusinessUpsert('task', id, nextTask as unknown as Record<string, unknown>, () => {
+      if (status === 'done') playSuccessFeedback(); else playClickFeedback();
+      setTasks((prev) => {
+        const updated = prev.map((task) => task.id === id ? nextTask : task);
+        localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
+        return updated;
       });
-    }
-
-    setTasks((prev) => {
-      const updated = prev.map((t) => {
-        if (t.id === id) {
-          const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
-          const taskExecutor =
-            completedByOverride?.trim() ||
-            activeOperatorNameRef.current.trim() ||
-            clientProfileRef.current?.name?.trim() ||
-            t.assignee?.trim() ||
-            resolveActorLabel(currentRoleRef.current);
-          if (status === 'done' && t.status !== 'done' && t.consumedItems?.length) {
-            t.consumedItems.forEach((c) => {
-              addStockMovement(c.itemId, -c.quantity, `Consommation tâche: ${t.typeName}`, t.room);
-            });
-          }
-          if (status === 'done' && (t.typeId === 'clean' || t.typeId === 'depclean')) {
-            const foundRes = resourceGroups.flatMap((g) => g.resources).find((r) => r.name.includes(t.room) || r.id === t.room);
-            if (foundRes) {
-              updateHousekeepingStatus(foundRes.id, 'clean');
-            }
-          }
-          return {
-            ...t,
-            status,
-            completedAt: status === 'done' ? nowStr : undefined,
-            completedBy: status === 'done' ? taskExecutor : undefined,
-          };
+      if (status === 'done' && target.status !== 'done') {
+        for (const item of target.consumedItems ?? []) {
+          addStockMovement(item.itemId, -item.quantity, `Consommation tâche: ${target.typeName}`, target.room);
         }
-        return t;
+        if (target.typeId === 'clean' || target.typeId === 'depclean') {
+          const resource = resourceGroups.flatMap((group) => group.resources)
+            .find((item) => item.name.includes(target.room) || item.id === target.room);
+          if (resource) updateHousekeepingStatus(resource.id, 'clean');
+        }
+      }
+      logEvent({
+        category: 'task', action: 'task.status_changed',
+        severity: status === 'done' ? 'success' : status === 'cancel' ? 'warn' : 'info',
+        title: `Tâche ${target.room} · ${target.typeName} → ${status}`,
+        description: status === 'done' ? `Achevée par ${executor} (assignée à ${target.assignee})`
+          : `Statut tâche : ${target.status} → ${status} (${target.assignee})`,
+        target: { type: 'task', id, label: target.typeName, secondaryLabel: target.room },
+        metadata: status === 'done' ? { completedBy: executor, assignee: target.assignee } : undefined,
+        changes: [{ field: 'Statut tâche', before: target.status, after: status }],
       });
-      localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
-      return updated;
     });
   };
 
   const toggleSubtask = (taskId: string, subtaskId: string) => {
-    playClickFeedback();
-    const targetTask = tasks.find((t) => t.id === taskId);
-    const targetSub = targetTask?.subtasks?.find((st) => st.id === subtaskId);
-    if (targetTask && targetSub) {
-      const nextTask: PmsTask = {
-        ...targetTask,
-        subtasks: targetTask.subtasks?.map((subtask) =>
-          subtask.id === subtaskId ? { ...subtask, completed: !subtask.completed } : subtask
-        ),
-      };
-      void queueBusinessUpsert('task', taskId, nextTask as unknown as Record<string, unknown>)
-        .catch((error) => reportQueueFailure('task', taskId, error));
+    const target = tasks.find((task) => task.id === taskId);
+    const subtask = target?.subtasks?.find((item) => item.id === subtaskId);
+    if (!target || !subtask) return;
+    const nextTask: PmsTask = {
+      ...target,
+      subtasks: target.subtasks?.map((item) => item.id === subtaskId ? { ...item, completed: !item.completed } : item),
+    };
+    commitBusinessUpsert('task', taskId, nextTask as unknown as Record<string, unknown>, () => {
+      playClickFeedback();
+      setTasks((prev) => {
+        const updated = prev.map((task) => task.id === taskId ? nextTask : task);
+        localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
+        return updated;
+      });
       logEvent({
-        category: 'task',
-        action: 'task.subtask_toggled',
-        severity: 'info',
-        title: `Sous-tâche ${!targetSub.completed ? 'cochée' : 'décochée'} · ${targetTask.room}`,
-        description: `${targetSub.text} (${targetTask.typeName})`,
-        target: { type: 'task', id: taskId, label: targetTask.typeName, secondaryLabel: targetTask.room },
-        changes: [{ field: targetSub.text, before: targetSub.completed ? 'Fait' : 'À faire', after: !targetSub.completed ? 'Fait' : 'À faire' }],
+        category: 'task', action: 'task.subtask_toggled', severity: 'info',
+        title: `Sous-tâche ${!subtask.completed ? 'cochée' : 'décochée'} · ${target.room}`,
+        description: `${subtask.text} (${target.typeName})`,
+        target: { type: 'task', id: taskId, label: target.typeName, secondaryLabel: target.room },
+        changes: [{ field: subtask.text, before: subtask.completed ? 'Fait' : 'À faire', after: !subtask.completed ? 'Fait' : 'À faire' }],
       });
-    }
-    setTasks((prev) => {
-      const updated = prev.map((t) => {
-        if (t.id === taskId && t.subtasks) {
-          return {
-            ...t,
-            subtasks: t.subtasks.map((st) => (st.id === subtaskId ? { ...st, completed: !st.completed } : st)),
-          };
-        }
-        return t;
-      });
-      localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
-      return updated;
     });
   };
 
   const deleteTask = (id: string) => {
-    void queueBusinessDelete('task', id).catch((error) => reportQueueFailure('task', id, error));
-    playClickFeedback();
-    const targetTask = tasks.find((t) => t.id === id);
-    if (targetTask) {
-      logEvent({
-        category: 'task',
-        action: 'task.deleted',
-        severity: 'warn',
-        title: `Tâche supprimée · ${targetTask.room}`,
-        description: `${targetTask.typeName} (${targetTask.assignee}) supprimée.`,
-        target: { type: 'task', id, label: targetTask.typeName, secondaryLabel: targetTask.room },
+    const target = tasks.find((task) => task.id === id);
+    commitBusinessDelete('task', id, () => {
+      playClickFeedback();
+      setTasks((prev) => {
+        const updated = prev.filter((task) => task.id !== id);
+        localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
+        return updated;
       });
-    }
-    setTasks((prev) => {
-      const updated = prev.filter((t) => t.id !== id);
-      localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
-      return updated;
+      if (target) logEvent({
+        category: 'task', action: 'task.deleted', severity: 'warn',
+        title: `Tâche supprimée · ${target.room}`,
+        description: `${target.typeName} (${target.assignee}) supprimée.`,
+        target: { type: 'task', id, label: target.typeName, secondaryLabel: target.room },
+      });
     });
   };
 
-  const generateTurnoverTasksForCheckout = (roomName: string) => {
+    const generateTurnoverTasksForCheckout = (roomName: string) => {
     const foundRes = resourceGroups.flatMap((g) => g.resources).find((r) => r.name.includes(roomName) || r.id === roomName);
     if (foundRes) {
       updateHousekeepingStatus(foundRes.id, 'dirty');
