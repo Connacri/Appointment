@@ -36,18 +36,33 @@ import { subscribeWorkspaceRealtime } from '../services/supabase/supabaseRealtim
 import {
   deleteBooking as remoteDeleteBooking,
   deleteResource as remoteDeleteResource,
+  deleteStockItem as remoteDeleteStockItem,
+  deleteTask as remoteDeleteTask,
+  deleteStockSupplier as remoteDeleteStockSupplier,
+  deletePurchaseOrder as remoteDeletePurchaseOrder,
+  deleteStaffMember as remoteDeleteStaffMember,
   listBookings,
   listBookingTombstones,
   listDynamicRates,
   listEstablishments,
   listResourceGroups,
   listStockItems,
+  listStockMovements,
+  listStockSuppliers,
+  listPurchaseOrders,
+  listStaffMembers,
+  listEstablishmentProfile,
   listTasks,
   saveBooking as remoteSaveBooking,
   saveEstablishment as remoteSaveEstablishment,
+  saveEstablishmentProfile as remoteSaveEstablishmentProfile,
   saveResource as remoteSaveResource,
   saveResourceGroupRow as remoteSaveResourceGroupRow,
   saveStockItem as remoteSaveStockItem,
+  saveStockMovement as remoteSaveStockMovement,
+  saveStockSupplier as remoteSaveStockSupplier,
+  savePurchaseOrder as remoteSavePurchaseOrder,
+  saveStaffMember as remoteSaveStaffMember,
   saveTask as remoteSaveTask,
 } from '../services/supabase/pmsRepository';
 import { planBackfill, stableEstablishmentId } from '../services/supabase/backfillPlanner';
@@ -1626,6 +1641,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           pushStockItemUpsert: async (targetWsId, estId, item) => {
             await remoteSaveStockItem(targetWsId, estId, item);
           },
+          pushStockItemDelete: async (targetWsId, itemId) => {
+            await remoteDeleteStockItem(targetWsId, itemId);
+          },
+          pushTaskDelete: async (targetWsId, taskId) => {
+            await remoteDeleteTask(targetWsId, taskId);
+          },
+          pushStockMovementUpsert: async (targetWsId, estId, movement) => {
+            await remoteSaveStockMovement(targetWsId, estId, movement);
+          },
+          pushSupplierUpsert: async (targetWsId, estId, supplier) => {
+            await remoteSaveStockSupplier(targetWsId, estId, supplier);
+          },
+          pushSupplierDelete: async (targetWsId, supplierId) => {
+            await remoteDeleteStockSupplier(targetWsId, supplierId);
+          },
+          pushPurchaseOrderUpsert: async (targetWsId, estId, order) => {
+            await remoteSavePurchaseOrder(targetWsId, estId, order);
+          },
+          pushPurchaseOrderDelete: async (targetWsId, orderId) => {
+            await remoteDeletePurchaseOrder(targetWsId, orderId);
+          },
+          pushStaffMemberUpsert: async (targetWsId, estId, member) => {
+            await remoteSaveStaffMember(targetWsId, estId, member);
+          },
+          pushStaffMemberDelete: async (targetWsId, memberId) => {
+            await remoteDeleteStaffMember(targetWsId, memberId);
+          },
+          pushEstablishmentProfileUpsert: async (targetWsId, estId, profile) => {
+            await remoteSaveEstablishmentProfile(targetWsId, estId, profile);
+          },
           pullRemoteState: async (targetWsId) => {
             const [
               remoteGroups,
@@ -1642,14 +1687,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ]);
             let remoteTasks: PmsTask[] = [];
             let remoteStockItems: StockItem[] = [];
-            if (remoteEstablishments.length > 0) {
-              const [taskLists, stockLists] = await Promise.all([
-                Promise.all(remoteEstablishments.map((est) => listTasks(targetWsId, est.id).catch(() => []))),
-                Promise.all(remoteEstablishments.map((est) => listStockItems(targetWsId, est.id).catch(() => []))),
+            let remoteStockMovements: StockMovement[] = [];
+            let remoteSuppliers: StockSupplier[] = [];
+            let remotePurchaseOrders: PurchaseOrderRecord[] = [];
+            let remoteStaffMembers: StaffMemberRecord[] = [];
+            const establishmentIds = remoteEstablishments.map((est) => est.id);
+            if (establishmentIds.length === 0 && selectedEstablishmentId !== 'all') {
+              establishmentIds.push(selectedEstablishmentId);
+            }
+            if (establishmentIds.length > 0) {
+              const [taskLists, stockLists, movementLists, supplierLists, orderLists, staffLists] = await Promise.all([
+                Promise.all(establishmentIds.map((id) => listTasks(targetWsId, id))),
+                Promise.all(establishmentIds.map((id) => listStockItems(targetWsId, id))),
+                Promise.all(establishmentIds.map((id) => listStockMovements(targetWsId, id))),
+                Promise.all(establishmentIds.map((id) => listStockSuppliers(targetWsId, id))),
+                Promise.all(establishmentIds.map((id) => listPurchaseOrders(targetWsId, id))),
+                Promise.all(establishmentIds.map((id) => listStaffMembers(targetWsId, id))),
               ]);
               remoteTasks = taskLists.flat();
               remoteStockItems = stockLists.flat();
+              remoteStockMovements = movementLists.flat();
+              remoteSuppliers = supplierLists.flat();
+              remotePurchaseOrders = orderLists.flat();
+              remoteStaffMembers = staffLists.flat();
             }
+            const profileEstablishmentId = selectedEstablishmentId !== 'all'
+              ? selectedEstablishmentId
+              : establishmentIds.length === 1 ? establishmentIds[0] : '';
+            const remoteProfile = profileEstablishmentId
+              ? await listEstablishmentProfile(targetWsId, profileEstablishmentId)
+              : null;
             return {
               establishments: remoteEstablishments,
               groups: remoteGroups,
@@ -1657,6 +1724,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               bookingTombstones: remoteBookingTombstones,
               tasks: remoteTasks,
               stockItems: remoteStockItems,
+              stockMovements: remoteStockMovements,
+              suppliers: remoteSuppliers,
+              purchaseOrders: remotePurchaseOrders,
+              staffMembers: remoteStaffMembers,
+              establishmentProfile: remoteProfile,
               dynamicRates: remoteRates,
             };
           },
