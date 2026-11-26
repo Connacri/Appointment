@@ -99,6 +99,13 @@ test('workspace task and establishment UI projections wait for durable outbox co
   assert.match(appContext, /commitBusinessDelete\('staff_member'/);
   assert.equal((appContext.match(/const assignTaskToStaff:/g) ?? []).length, 1);
   assert.equal((appContext.match(/const deleteStaffMember:/g) ?? []).length, 1);
+  const indexedDb = read('../src/db/indexedDb.ts');
+  assert.match(indexedDb, /createObjectStore\('localBusinessEntities'/);
+  assert.match(indexedDb, /putLocalBusinessEntity\(/);
+  assert.match(indexedDb, /deleteLocalBusinessEntity\(/);
+  assert.match(appContext, /await indexedDb.putLocalBusinessEntity\(entity, entityId, payload\)/);
+  assert.match(appContext, /await indexedDb.deleteLocalBusinessEntity\(entity, entityId\)/);
+  assert.match(appContext, /getLocalBusinessEntities\(\)/);
   assert.match(appContext, /Réception bloquée : la transaction atomique commande/);
   assert.doesNotMatch(
     appContext.slice(appContext.indexOf('const markPurchaseOrderReceived ='), appContext.indexOf('const setDynamicRate =')),
