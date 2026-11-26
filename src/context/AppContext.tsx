@@ -917,12 +917,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!availability.canMutate) {
       const messages: Record<MutationAvailability['reason'], string> = {
         single_device_local: '', coordination_available: '',
-        registry_missing: 'Registre des appareils absent : les opérations métier sont bloquées jusqu’à la configuration explicite de la topologie.',
-        registry_unverified: 'Registre des appareils non vérifié : les opérations métier restent bloquées.',
+        registry_missing: 'Registre des appareils absent : les écritures de réservation sont bloquées jusqu’à la configuration explicite de la topologie.',
+        registry_unverified: 'Registre des appareils non vérifié : les écritures de réservation restent bloquées.',
         data_not_ready: 'Données locales en cours de chargement : réessayez après la synchronisation.',
-        integrity_failed: 'Contrôle d’intégrité en échec : les opérations métier sont bloquées.',
+        integrity_failed: 'Contrôle d’intégrité en échec : les écritures de réservation sont bloquées.',
         device_not_authorized: 'Cet appareil n’est pas autorisé par le registre de l’établissement.',
-        no_coordination_authority: 'Établissement multi-appareils sans autorité de coordination : mode lecture seule.',
+        no_coordination_authority: 'Établissement multi-appareils sans autorité de coordination : réservations en lecture seule.',
       };
       throw new Error(messages[availability.reason]);
     }
