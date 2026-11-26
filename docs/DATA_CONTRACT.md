@@ -614,3 +614,24 @@ The AppContext tombstone adapter uses the IndexedDB method's inferred report typ
 
 
 Security hardening: migration 20261126131639_harden_keepalive_function_search_path.sql sets an empty search_path on the fully schema-qualified keepalive_cap trigger function. The remaining Security Advisor warnings are the two technical RLS tables with default-deny/no policies and Supabase Auth leaked-password protection disabled.
+
+## 12. UI mutation acknowledgement boundary
+
+For workspace-backed tasks, suppliers, purchase orders, staff records and the
+establishment profile, the React projection is updated only after
+`queueBusinessUpsert` or `queueBusinessDelete` resolves. These queue operations
+commit the workspace projection, Outbox intent, tombstone state (for upserts,
+superseding an older tombstone), P2P event, vector clock and record frontier in
+one IndexedDB transaction. A rejected transaction leaves the previous UI
+projection intact and is surfaced through the mutation failure reporter.
+
+Do not treat the callback's synchronous return value as a persistence
+acknowledgement: the legacy context API still returns created records
+synchronously for compatibility, while the UI state commit is asynchronous.
+Callers requiring a user-visible completion result must be migrated to an
+explicit Promise-returning command API before presenting a success toast.
+
+Stock quantity changes, stock movement batches, purchase-order receiving,
+resource/booking mutations and invoice/dynamic-rate persistence are not covered
+by this UI acknowledgement change. They require dedicated atomic command
+contracts and must not be described as fully fail-closed by this section.
