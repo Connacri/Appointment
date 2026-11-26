@@ -1805,12 +1805,12 @@ class IndexedDbStore {
       const commit = () => {
         if (++ready !== 3) return;
         const activePending = pending.filter((row) => row.status !== 'synced');
-        if (existing?.origin === 'local' || existing?.origin === 'p2p') {
+        if (activePending.some((row) => row.operation === 'upsert')) {
           action = 'conflict';
           return;
         }
-        if (activePending.some((row) => row.operation === 'upsert')) {
-          action = 'conflict';
+        if (existing?.origin === 'local' || existing?.origin === 'p2p') {
+          action = 'skip';
           return;
         }
         if (existing?.origin === 'supabase') {
