@@ -792,7 +792,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (previous.defaultCurrency !== normalized.defaultCurrency) changes.push({ field: 'Devise', before: previous.defaultCurrency || '—', after: normalized.defaultCurrency || '—' });
     commitBusinessUpsert('establishment_profile', normalized.id, normalized as unknown as Record<string, unknown>, () => {
       setEstablishmentProfileState(normalized);
-      localStorage.setItem('omnibook_establishment_profile', JSON.stringify(normalized));
       if (changes.length > 0) logEvent({
         category: 'system', action: 'system.profile_updated', severity: 'info',
         title: `Fiche établissement mise à jour · ${normalized.name || 'Hôtel'}`,
@@ -910,7 +909,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       if (tasksRows.length) setTasks((prev) => {
         const next = mergeById(prev, tasksRows, 'task');
-        localStorage.setItem('omnibook_pms_tasks', JSON.stringify(next));
         return next;
       });
       if (stockRows.length) setStockItems((prev) => {
@@ -943,7 +941,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const profile = profileRows[profileRows.length - 1];
         setEstablishmentProfileState(profile);
         latestProfileRef.current = profile;
-        localStorage.setItem('omnibook_establishment_profile', JSON.stringify(profile));
       }
     }).catch((error) => {
       reportQueueFailure('workspaceEntities', workspaceId, error);
@@ -1927,7 +1924,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const byId = new Map(prev.filter((task) => !isRemoteDeleted('task', task.id)).map((task) => [task.id, task]));
           for (const task of result.remoteTasks) if (!isRemoteDeleted('task', task.id)) byId.set(task.id, task);
           const next = [...byId.values()];
-          localStorage.setItem('omnibook_pms_tasks', JSON.stringify(next));
           return next;
         });
       }
@@ -3680,25 +3676,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       priority: input.priority || 'normal',
       note: input.note?.trim() || `${roleDef.label.fr} · ${target.assignment} (${target.shift})`,
     });
-  };
-
-  const deleteStaffMember = (staffId: string) => {
-    void queueBusinessDelete('staff_member', staffId).catch((error) => reportQueueFailure('staff_member', staffId, error));
-    const target = staffMembers.find((s) => s.id === staffId);
-    setStaffMembers((prev) => {
-      const updated = prev.filter((m) => m.id !== staffId);
-      localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
-      return updated;
-    });
-    if (target) {
-      logEvent({
-        category: 'system',
-        action: 'staff.member_deleted',
-        severity: 'warn',
-        title: `Fiche personnel retirée · ${target.fullName}`,
-        description: `Ancien poste : ${resolveRoleDefinition(rolesRef.current, target.roleId).label.fr} (${target.assignment}).`,
-      });
-    }
   };
 
   const purgeAllUserData = async (): Promise<void> => {
