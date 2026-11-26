@@ -18,6 +18,7 @@ import { runSerialQueue } from './serialQueue';
 import { migrateBookingRecordV7 } from './bookingMigration';
 import { hasBookingScheduleConflict } from '../utils/bookingValidation';
 import { detectP2pBookingConflicts, type BookingConflictSnapshot } from '../services/p2p/bookingConflictDetection';
+import { validateDeviceRegistry, type DeviceRegistry } from '../services/p2p/deviceTopology';
 import {
   createP2pEvent,
   getP2pRecordState,
@@ -1601,6 +1602,73 @@ class IndexedDbStore {
     await waitForTransactionCompletion(tx, 'getP2pNodeId');
     if (!resolvedNodeId) throw new Error('Could not persist the local P2P node identity.');
     return resolvedNodeId;
+  }
+
+  /** Read the durable establishment device registry from the local P2P metadata store. */
+  public async getDeviceRegistry(
+    workspaceId: string,
+    establishmentId: string,
+  ): Promise<DeviceRegistry | null> {
+    if (!workspaceId.trim() || !establishmentId.trim()) {
+      throw new Error('Device registry scope is required.');
+    }
+    await this.openStore();
+    if (!this.idb) throw new Error('Device registry requires durable IndexedDB storage.');
+    const tx = this.idb.transaction(['p2pMeta'], 'readonly');
+    const key = `deviceRegistry:${workspaceId}:${establishmentId}`;
+    const request = tx.objectStore('p2pMeta').get(key);
+    const value = await new Promise<DeviceRegistry | null>((resolve, reject) => {
+      request.onsuccess = () => resolve((request.result as { value?: DeviceRegistry } | undefined)?.value ?? null);
+      request.onerror = () => reject(request.error ?? new Error('Device registry read failed.'));
+    });
+    await waitForTransactionCompletion(tx, 'getDeviceRegistry');
+    if (value) {
+      validateDeviceRegistry(value);
+      if (value.workspaceId !== workspaceId || value.establishmentId !== establishmentId) {
+        throw new Error('Stored device registry scope mismatch.');
+      }
+    }
+    return value;
+  }
+
+  /**
+   * Persist a registry with compare-and-swap epoch protection.
+   * expectedEpoch=null creates a registry only when none exists; otherwise the
+   * supplied epoch must match the current value and the new epoch must be +1.
+   */
+  public async putDeviceRegistry(
+    registry: DeviceRegistry,
+    expectedEpoch: number | null,
+  ): Promise<void> {
+    validateDeviceRegistry(registry);
+    await this.openStore();
+    if (!this.idb) throw new Error('Device registry requires durable IndexedDB storage.');
+    const key = `deviceRegistry:${registry.workspaceId}:${registry.establishmentId}`;
+    const tx = this.createStrictTransaction(['p2pMeta']);
+    const store = tx.objectStore('p2pMeta');
+    const request = store.get(key);
+    let validationError: Error | null = null;
+    request.onsuccess = () => {
+      const current = (request.result as { value?: DeviceRegistry } | undefined)?.value ?? null;
+      if (expectedEpoch === null) {
+        if (current) validationError = new Error('Device registry already exists; refusing overwrite.');
+        else if (registry.epoch !== 1) validationError = new Error('Initial device registry epoch must be 1.');
+      } else if (!current || current.epoch !== expectedEpoch || registry.epoch !== expectedEpoch + 1) {
+        validationError = new Error('Device registry epoch changed; reload before retrying.');
+      }
+      if (validationError) {
+        tx.abort();
+        return;
+      }
+      store.put({ key, value: registry });
+    };
+    request.onerror = () => tx.abort();
+    try {
+      await waitForTransactionCompletion(tx, 'putDeviceRegistry');
+    } catch (error) {
+      if (validationError) throw validationError;
+      throw error;
+    }
   }
 
   /**
