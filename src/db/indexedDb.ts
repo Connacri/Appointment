@@ -1735,6 +1735,17 @@ class IndexedDbStore {
           currentBatch.set(`${currentEntry.entity}:${currentEntry.entityId}`, currentEntry.current.payload);
         }
       }
+      if (entry.skipIfCurrent) {
+        try {
+          if (entry.skipIfCurrent(entry.current?.payload, currentBatch)) {
+            processNext(index + 1);
+            return;
+          }
+        } catch (error) {
+          abortWith(`Atomic mutation skip predicate failed for ${entry.entity}/${entry.entityId}: ${String(error)}`);
+          return;
+        }
+      }
       let commandPayload: Record<string, unknown>;
       let outboundPayload: Record<string, unknown>;
       try {
@@ -2076,7 +2087,14 @@ class IndexedDbStore {
       entity: OutboxEntity;
       entityId: string;
       payload: Record<string, unknown>;
-      applyToCurrent?: (currentPayload?: Record<string, unknown>) => Record<string, unknown>;
+      applyToCurrent?: (
+        currentPayload?: Record<string, unknown>,
+        currentBatch?: ReadonlyMap<string, Record<string, unknown>>,
+      ) => Record<string, unknown>;
+      skipIfCurrent?: (
+        currentPayload?: Record<string, unknown>,
+        currentBatch?: ReadonlyMap<string, Record<string, unknown>>,
+      ) => boolean;
     }>,
     rejectIfCurrentFieldEquals?: {
       entity: OutboxEntity;
@@ -2131,6 +2149,14 @@ class IndexedDbStore {
         for (const currentEntry of entries) {
           if (currentEntry.current?.payload) {
             currentBatch.set(`${currentEntry.entity}:${currentEntry.entityId}`, currentEntry.current.payload);
+          }
+        }
+        if (entry.skipIfCurrent) {
+          try {
+            if (entry.skipIfCurrent(entry.current?.payload, currentBatch)) continue;
+          } catch (error) {
+            abortWith(`Atomic local mutation skip predicate failed for ${entry.entity}/${entry.entityId}: ${String(error)}`);
+            return;
           }
         }
         try { payload = entry.applyToCurrent ? entry.applyToCurrent(entry.current?.payload, currentBatch) : entry.payload; }
