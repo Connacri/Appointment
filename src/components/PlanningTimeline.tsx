@@ -892,7 +892,7 @@ export const PlanningTimeline: React.FC = () => {
     <div className="flex-1 flex flex-col h-full overflow-hidden pms-gantt-root bg-[rgb(var(--pms-canvas))] relative select-none">
       {/* Responsive Toolbar: one compact, horizontally scrollable row on phones */}
       <div className="w-full min-w-0 shrink-0 border-b border-[rgb(var(--pms-border))] pms-gantt-surface select-none">
-        <div className="flex min-w-0 flex-row items-center gap-1.5 overflow-x-auto overflow-y-hidden whitespace-nowrap px-1.5 py-1 sm:overflow-visible md:px-3 md:py-1 scrollbar-thin">
+        <div className="flex min-w-0 flex-row flex-wrap items-center gap-1.5 overflow-visible whitespace-normal px-1.5 py-2 md:px-3 md:py-1.5">
           {/* Quick Date Stepper Navigation with sequential Month & Day navigation */}
           <div className="flex h-7 shrink-0 items-center gap-0.5 rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] p-0.5 shadow-2xs">
             <button
