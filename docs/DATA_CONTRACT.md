@@ -372,9 +372,10 @@ transition with an incremented registry epoch and revocation of every non-retain
 device. Regression tests cover single-device offline operation, multi-device isolation,
 missing authenticated coordination, reconnect gating and administrator authorization.
 
-This is the policy core only. It is not yet wired into AppContext/UI or into every mutation
-repository. The IndexedDB/Windows SQLite durable registry adapters, signed administrator
-transition, authenticated P2P transport, Supabase-authoritative registry persistence and
-end-to-end revocation enforcement remain required before this policy can be enabled for
-existing establishments. Until those are implemented, do not claim global read-only
-enforcement or production device revocation.
+The IndexedDB adapter now stores the registry in the durable `p2pMeta` store and exposes
+scope-checked reads plus compare-and-swap epoch writes. This is local persistence only; it is
+not yet a shared authority. The policy core is not wired into AppContext/UI or every mutation
+repository. Windows SQLite parity, signed administrator transitions, Supabase-authoritative
+registry persistence, authenticated P2P transport and end-to-end revocation enforcement
+remain required before this policy can be enabled for existing establishments. Until those
+are implemented, do not claim global read-only enforcement or production device revocation.
