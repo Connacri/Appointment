@@ -508,7 +508,7 @@ export async function saveStockSupplier(workspaceId: WorkspaceId, establishmentI
     name: supplier.name.trim(), category: supplier.category.trim() || 'Général',
     contact_name: supplier.contactName ?? null, phone: supplier.phone ?? null,
     email: supplier.email ?? null, preferred_channel: supplier.preferredChannel,
-    notes: supplier.notes ?? null, deleted_at: null,
+    notes: supplier.notes ?? null,
   }).select().single());
 }
 
@@ -572,7 +572,7 @@ export async function savePurchaseOrder(workspaceId: WorkspaceId, establishmentI
     status: order.status, note: order.note ?? null, items: order.items as unknown as Json,
     confirmed_at: order.confirmedAt ?? null, sent_at: order.sentAt ?? null,
     sent_via: order.sentVia ?? null, received_at: order.receivedAt ?? null,
-    created_at: order.createdAt, deleted_at: null,
+    created_at: order.createdAt,
   };
   return unwrap(await db.from('purchase_orders').upsert(payload).select().single());
 }
