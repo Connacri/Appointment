@@ -9,6 +9,11 @@
 
 export type P2pOperation = 'upsert' | 'delete';
 
+/**
+ * Entities whose immutable mutations may be exchanged between trusted peers.
+ * This registry is intentionally broader than the cloud Outbox: a peer event
+ * must not imply that Supabase has a table or dispatcher for that entity.
+ */
 export const P2P_SUPPORTED_ENTITIES = [
   'booking',
   'resource',
@@ -16,9 +21,26 @@ export const P2P_SUPPORTED_ENTITIES = [
   'establishment',
   'task',
   'stock_item',
+  'stock_movement',
+  'supplier',
+  'purchase_order',
   'invoice',
+  'dynamic_rate',
+  'staff_member',
+  'establishment_profile',
 ] as const;
 export type P2pEntity = typeof P2P_SUPPORTED_ENTITIES[number];
+
+/** Entities with an implemented Supabase push dispatcher. Keep this allowlist narrow. */
+export const SUPABASE_OUTBOX_ENTITIES = [
+  'booking',
+  'resource',
+  'resource_group',
+  'establishment',
+  'task',
+  'stock_item',
+] as const;
+export type OutboxEntity = typeof SUPABASE_OUTBOX_ENTITIES[number];
 
 const RFC3339_TIMESTAMP =
   /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
