@@ -24,6 +24,12 @@ import {
 import { applyStockDeductions, type StockDeductionLine } from '../utils/stockProcurement';
 import { buildPurchaseOrderReceiptPlan } from '../utils/purchaseOrderReceipt';
 import {
+  buildStockDeltaMutations,
+  buildStockItemCreationMutations,
+  buildStockItemUpdateMutations,
+  type StockAtomicMutation,
+} from '../utils/stockTransactions';
+import {
   initialResourceGroups,
   initialBookings,
   initialStockItems,
@@ -319,11 +325,11 @@ interface AppContextType {
   setFocusedTaskId: (id: string | null) => void;
   stockItems: StockItem[];
   stockMovements: StockMovement[];
-  addStockMovement: (itemId: string, delta: number, reason: string, room?: string) => void;
-  addStockItem: (item: Omit<StockItem, 'id'>) => StockItem;
-  seedStandardStockCatalog: () => number;
-  updateStockItem: (item: StockItem) => void;
-  deleteStockItem: (id: string) => void;
+  addStockMovement: (itemId: string, delta: number, reason: string, room?: string) => Promise<void>;
+  addStockItem: (item: Omit<StockItem, 'id'>) => Promise<StockItem>;
+  seedStandardStockCatalog: () => Promise<number>;
+  updateStockItem: (item: StockItem) => Promise<void>;
+  deleteStockItem: (id: string) => Promise<void>;
   recordRoomReplenishment: (input: {
     roomId?: string;
     roomName: string;
@@ -331,7 +337,7 @@ interface AppContextType {
     markRoomClean?: boolean;
     note?: string;
     operatorName?: string;
-  }) => { deductedCount: number; lowStockTriggered: StockItem[]; rupturedItems: StockItem[] };
+  }) => Promise<{ deductedCount: number; lowStockTriggered: StockItem[]; rupturedItems: StockItem[] }>;
   suppliers: StockSupplier[];
   saveSupplier: (supplier: Omit<StockSupplier, 'id'> & { id?: string }) => StockSupplier;
   deleteSupplier: (id: string) => void;
@@ -839,6 +845,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       context, entity, entityId, 'upsert', 1,
       { ...payload, workspaceId, establishmentId }, idempotencyKey,
     );
+  };
+
+  const persistStockMutationsAtomically = async (
+    mutations: StockAtomicMutation[],
+  ): Promise<Array<{ entity: 'stock_item' | 'stock_movement'; entityId: string; payload: Record<string, unknown> }>> => {
+    if (mutations.length === 0) return [];
+    const workspaceId = workspace.activeWorkspaceId?.trim();
+    let committed: Array<{ entity: 'stock_item' | 'stock_movement'; entityId: string; payload: Record<string, unknown> }>;
+    if (!workspaceId) {
+      committed = await indexedDb.putLocalBusinessEntitiesAtomically(mutations);
+    } else {
+      const establishmentId = resolveMutationEstablishmentId();
+      if (!establishmentId || establishmentId === 'all') {
+        throw new Error('Établissement réel requis pour enregistrer une opération de stock.');
+      }
+      committed = await indexedDb.enqueueWorkspaceUpsertsAtomically(
+        { workspaceId, establishmentId },
+        mutations,
+        `stock-command-${createMutationId()}`,
+      );
+      scheduleAutoSync();
+    }
+    return committed;
   };
 
   const queueBusinessDelete = async (
@@ -3172,183 +3201,158 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const addStockMovement = (itemId: string, delta: number, reason: string, room?: string) => {
-    const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    const currentList = stockItemsRef.current;
-    const targetItem = currentList.find((s) => s.id === itemId);
-    if (!targetItem || !Number.isFinite(delta) || delta === 0 || targetItem.quantity + delta < 0) {
-      reportQueueFailure('stock_movement', itemId, new Error('Article absent, quantité invalide ou stock insuffisant.'));
-      return;
-    }
-    const prevQty = targetItem.quantity;
-    const nextQty = prevQty + delta;
-    const updatedList = currentList.map((item) =>
-      item.id === itemId ? { ...item, quantity: nextQty } : item
-    );
+  const addStockMovement = async (itemId: string, delta: number, reason: string, room?: string): Promise<void> => {
+    const targetItem = stockItemsRef.current.find((item) => item.id === itemId);
+    if (!targetItem) throw new Error('Article absent du stock.');
+    const actor = resolveActorLabel(currentRoleRef.current);
+    const timestamp = new Date().toISOString();
+    const movementId = `mov_${createMutationId()}`;
+    const mutations = buildStockDeltaMutations({
+      item: targetItem, delta, reason, actor, timestamp, movementId, room,
+    });
+    const committed = await persistStockMutationsAtomically(mutations);
+    const stockRow = committed.find((row) => row.entity === 'stock_item');
+    const movementRow = committed.find((row) => row.entity === 'stock_movement');
+    if (!stockRow || !movementRow) throw new Error('Transaction de stock incomplète : projection ou mouvement absent.');
+    const updatedItem = stockRow.payload as unknown as StockItem;
+    const movement = movementRow.payload as unknown as StockMovement;
+    const previousQuantity = targetItem.quantity;
+    const updatedList = stockItemsRef.current.map((item) => item.id === itemId ? updatedItem : item);
     stockItemsRef.current = updatedList;
     setStockItems(updatedList);
     localStorage.setItem('omnibook_stock_items', JSON.stringify(updatedList));
-
-    const newMovement: StockMovement = {
-      id: `mov_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      timestamp: nowStr,
-      itemId,
-      itemName: targetItem.name,
-      delta,
-      reason,
-      room,
-      user: resolveActorLabel(currentRoleRef.current),
-    };
-    void queueBusinessUpsert('stock_movement', newMovement.id, newMovement as unknown as Record<string, unknown>)
-      .catch((error) => reportQueueFailure('stock_movement', newMovement.id, error));
-
-    setStockMovements((prev) => {
-      const updated = [newMovement, ...prev].slice(0, 200);
+    setStockMovements((previous) => {
+      const updated = [movement, ...previous].slice(0, 200);
       localStorage.setItem('omnibook_stock_movements', JSON.stringify(updated));
       return updated;
     });
-
     logEvent({
       category: 'stock',
       action: delta >= 0 ? 'stock.entry' : 'stock.exit',
-      severity: targetItem && nextQty <= targetItem.minThreshold ? 'warn' : delta >= 0 ? 'success' : 'info',
-      title: `${delta >= 0 ? 'Entrée' : 'Sortie'} stock · ${targetItem?.name || itemId}`,
-      description: `${delta >= 0 ? '+' : ''}${delta} (${prevQty} → ${nextQty}) · ${reason}${room ? ` · ${room}` : ''}`,
-      target: { type: 'stock_item', id: itemId, label: targetItem?.name || itemId, secondaryLabel: room },
-      changes: [{ field: 'Quantité stock', before: String(prevQty), after: String(nextQty) }],
+      severity: updatedItem.quantity <= updatedItem.minThreshold ? 'warn' : delta >= 0 ? 'success' : 'info',
+      title: `${delta >= 0 ? 'Entrée' : 'Sortie'} stock · ${updatedItem.name}`,
+      description: `${delta >= 0 ? '+' : ''}${delta} (${previousQuantity} → ${updatedItem.quantity}) · ${reason}${room ? ` · ${room}` : ''}`,
+      target: { type: 'stock_item', id: itemId, label: updatedItem.name, secondaryLabel: room },
+      changes: [{ field: 'Quantité stock', before: String(previousQuantity), after: String(updatedItem.quantity) }],
       metadata: { delta, reason, room: room || null },
     });
   };
 
-  const addStockItem = (input: Omit<StockItem, 'id'>): StockItem => {
-    if (!Number.isFinite(input.quantity) || input.quantity < 0) throw new Error('Quantité initiale de stock invalide.');
-    const newItem: StockItem = {
-      ...input,
-      id: `stk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    };
-    void queueBusinessUpsert('stock_item', newItem.id, { ...newItem, quantity: 0 } as unknown as Record<string, unknown>)
-      .catch((error) => reportQueueFailure('stock_item', newItem.id, error));
-    if (newItem.quantity > 0) {
-      const openingMovement: StockMovement = {
-        id: `mov_${Date.now()}_opening_${Math.random().toString(36).slice(2, 6)}`,
-        timestamp: new Date().toISOString(),
-        itemId: newItem.id,
-        itemName: newItem.name,
-        delta: newItem.quantity,
-        reason: 'Stock initial',
-        user: resolveActorLabel(currentRoleRef.current),
-      };
-      void queueBusinessUpsert('stock_movement', openingMovement.id, openingMovement as unknown as Record<string, unknown>)
-        .catch((error) => reportQueueFailure('stock_movement', openingMovement.id, error));
-    }
-    const next = [newItem, ...stockItemsRef.current];
+  const addStockItem = async (input: Omit<StockItem, 'id'>): Promise<StockItem> => {
+    const newItem: StockItem = { ...input, id: `stk_${createMutationId()}` };
+    const timestamp = new Date().toISOString();
+    const mutations = buildStockItemCreationMutations(
+      newItem, resolveActorLabel(currentRoleRef.current), timestamp, `mov_${createMutationId()}`,
+    );
+    const committed = await persistStockMutationsAtomically(mutations);
+    const savedItem = committed.find((row) => row.entity === 'stock_item')?.payload as unknown as StockItem | undefined;
+    if (!savedItem) throw new Error('Création article non confirmée par IndexedDB.');
+    const next = [savedItem, ...stockItemsRef.current.filter((item) => item.id !== savedItem.id)];
     stockItemsRef.current = next;
     setStockItems(next);
     localStorage.setItem('omnibook_stock_items', JSON.stringify(next));
+    const openingMovement = committed.find((row) => row.entity === 'stock_movement')?.payload as unknown as StockMovement | undefined;
+    if (openingMovement) {
+      setStockMovements((previous) => {
+        const updated = [openingMovement, ...previous].slice(0, 200);
+        localStorage.setItem('omnibook_stock_movements', JSON.stringify(updated));
+        return updated;
+      });
+    }
     logEvent({
-      category: 'stock',
-      action: 'stock.item_created',
-      severity: 'success',
-      title: `Article ajouté au stock · ${newItem.name}`,
-      description: `${newItem.quantity} ${newItem.unit} (seuil min ${newItem.minThreshold}) · ${newItem.category}`,
-      target: { type: 'stock_item', id: newItem.id, label: newItem.name, secondaryLabel: newItem.category },
+      category: 'stock', action: 'stock.item_created', severity: 'success',
+      title: `Article ajouté au stock · ${savedItem.name}`,
+      description: `${savedItem.quantity} ${savedItem.unit} (seuil min ${savedItem.minThreshold}) · ${savedItem.category}`,
+      target: { type: 'stock_item', id: savedItem.id, label: savedItem.name, secondaryLabel: savedItem.category },
     });
-    return newItem;
+    return savedItem;
   };
 
-  const seedStandardStockCatalog = (): number => {
-    const existingIds = new Set(stockItemsRef.current.map((s) => s.id));
-    const existingNames = new Set(stockItemsRef.current.map((s) => s.name.trim().toLowerCase()));
+  const seedStandardStockCatalog = async (): Promise<number> => {
+    const existingIds = new Set(stockItemsRef.current.map((item) => item.id));
+    const existingNames = new Set(stockItemsRef.current.map((item) => item.name.trim().toLowerCase()));
     const toAdd: StockItem[] = [];
     for (const template of initialStockItems) {
       const candidateId = `std_${template.id}`;
-      if (existingIds.has(candidateId) || existingIds.has(template.id) || existingNames.has(template.name.trim().toLowerCase())) {
-        continue;
-      }
+      if (existingIds.has(candidateId) || existingIds.has(template.id)
+        || existingNames.has(template.name.trim().toLowerCase())) continue;
       toAdd.push({ ...template, id: candidateId });
     }
     if (toAdd.length === 0) return 0;
-    for (const item of toAdd) {
-      void queueBusinessUpsert('stock_item', item.id, { ...item, quantity: 0 } as unknown as Record<string, unknown>)
-        .catch((error) => reportQueueFailure('stock_item', item.id, error));
-      if (item.quantity > 0) {
-        const openingMovement: StockMovement = {
-          id: `mov_${Date.now()}_${item.id}`, timestamp: new Date().toISOString(),
-          itemId: item.id, itemName: item.name, delta: item.quantity,
-          reason: 'Stock initial', user: resolveActorLabel(currentRoleRef.current),
-        };
-        void queueBusinessUpsert('stock_movement', openingMovement.id, openingMovement as unknown as Record<string, unknown>)
-          .catch((error) => reportQueueFailure('stock_movement', openingMovement.id, error));
-      }
-    }
-    const next = [...stockItemsRef.current, ...toAdd];
+    const actor = resolveActorLabel(currentRoleRef.current);
+    const timestamp = new Date().toISOString();
+    const mutations = toAdd.flatMap((item) => buildStockItemCreationMutations(
+      item, actor, timestamp, `mov_${createMutationId()}`,
+    ));
+    if (mutations.length > 100) throw new Error('Le catalogue dépasse la taille maximale d’une transaction atomique.');
+    const committed = await persistStockMutationsAtomically(mutations);
+    const added = committed.filter((row) => row.entity === 'stock_item').map((row) => row.payload as unknown as StockItem);
+    const movements = committed.filter((row) => row.entity === 'stock_movement').map((row) => row.payload as unknown as StockMovement);
+    const next = [...added, ...stockItemsRef.current.filter((item) => !added.some((saved) => saved.id === item.id))];
     stockItemsRef.current = next;
     setStockItems(next);
     localStorage.setItem('omnibook_stock_items', JSON.stringify(next));
+    if (movements.length > 0) {
+      setStockMovements((previous) => {
+        const updated = [...movements, ...previous].slice(0, 200);
+        localStorage.setItem('omnibook_stock_movements', JSON.stringify(updated));
+        return updated;
+      });
+    }
     logEvent({
-      category: 'stock',
-      action: 'stock.catalog_seeded',
-      severity: 'success',
-      title: `Catalogue hôtelier standard chargé`,
-      description: `${toAdd.length} consommables hôteliers ajoutés à l'économat.`,
-      metadata: { addedCount: toAdd.length },
+      category: 'stock', action: 'stock.catalog_seeded', severity: 'success',
+      title: 'Catalogue hôtelier standard chargé',
+      description: `${added.length} consommables hôteliers ajoutés à l’économat.`,
+      metadata: { addedCount: added.length },
     });
-    return toAdd.length;
+    return added.length;
   };
 
-  const updateStockItem = (updatedItem: StockItem) => {
+  const updateStockItem = async (updatedItem: StockItem): Promise<void> => {
     const existing = stockItemsRef.current.find((item) => item.id === updatedItem.id);
-    const previousQuantity = existing?.quantity ?? 0;
-    const quantityDelta = updatedItem.quantity - previousQuantity;
-    const cloudItem = { ...updatedItem, quantity: previousQuantity };
-    void queueBusinessUpsert('stock_item', updatedItem.id, cloudItem as unknown as Record<string, unknown>)
-      .catch((error) => reportQueueFailure('stock_item', updatedItem.id, error));
-    if (quantityDelta !== 0 && existing) {
-      const adjustment: StockMovement = {
-        id: `mov_${Date.now()}_adjust_${Math.random().toString(36).slice(2, 6)}`,
-        timestamp: new Date().toISOString(), itemId: updatedItem.id, itemName: updatedItem.name,
-        delta: quantityDelta, reason: 'Ajustement inventaire', user: resolveActorLabel(currentRoleRef.current),
-      };
-      void queueBusinessUpsert('stock_movement', adjustment.id, adjustment as unknown as Record<string, unknown>)
-        .catch((error) => reportQueueFailure('stock_movement', adjustment.id, error));
-      setStockMovements((prev) => {
-        const next = [adjustment, ...prev].slice(0, 200);
+    if (!existing) throw new Error('Article introuvable dans le stock.');
+    const timestamp = new Date().toISOString();
+    const mutations = buildStockItemUpdateMutations({
+      updatedItem, currentItem: existing, actor: resolveActorLabel(currentRoleRef.current),
+      timestamp, movementId: `mov_${createMutationId()}_adjust`,
+    });
+    const committed = await persistStockMutationsAtomically(mutations);
+    const savedItem = committed.find((row) => row.entity === 'stock_item')?.payload as unknown as StockItem | undefined;
+    if (!savedItem) throw new Error('Modification article non confirmée par IndexedDB.');
+    const updated = stockItemsRef.current.map((item) => item.id === savedItem.id ? savedItem : item);
+    stockItemsRef.current = updated;
+    setStockItems(updated);
+    localStorage.setItem('omnibook_stock_items', JSON.stringify(updated));
+    const adjustment = committed.find((row) => row.entity === 'stock_movement')?.payload as unknown as StockMovement | undefined;
+    if (adjustment) {
+      setStockMovements((previous) => {
+        const next = [adjustment, ...previous].slice(0, 200);
         localStorage.setItem('omnibook_stock_movements', JSON.stringify(next));
         return next;
       });
     }
-    const updated = stockItemsRef.current.map((item) => (item.id === updatedItem.id ? updatedItem : item));
-    stockItemsRef.current = updated;
-    setStockItems(updated);
-    localStorage.setItem('omnibook_stock_items', JSON.stringify(updated));
     logEvent({
-      category: 'stock',
-      action: 'stock.item_updated',
-      severity: 'info',
-      title: `Article stock mis à jour · ${updatedItem.name}`,
-      description: `Stock : ${updatedItem.quantity} ${updatedItem.unit} (seuil min ${updatedItem.minThreshold})`,
-      target: { type: 'stock_item', id: updatedItem.id, label: updatedItem.name, secondaryLabel: updatedItem.category },
-      changes: existing
-        ? [
-            ...(existing.quantity !== updatedItem.quantity ? [{ field: 'Quantité', before: String(existing.quantity), after: String(updatedItem.quantity) }] : []),
-            ...(existing.minThreshold !== updatedItem.minThreshold ? [{ field: 'Seuil alerte', before: String(existing.minThreshold), after: String(updatedItem.minThreshold) }] : []),
-          ]
+      category: 'stock', action: 'stock.item_updated', severity: 'info',
+      title: `Article stock mis à jour · ${savedItem.name}`,
+      description: `Stock : ${savedItem.quantity} ${savedItem.unit} (seuil min ${savedItem.minThreshold})`,
+      target: { type: 'stock_item', id: savedItem.id, label: savedItem.name, secondaryLabel: savedItem.category },
+      changes: existing.quantity !== savedItem.quantity
+        ? [{ field: 'Quantité', before: String(existing.quantity), after: String(savedItem.quantity) }]
         : undefined,
     });
   };
 
-  const deleteStockItem = (id: string) => {
-    void queueBusinessDelete('stock_item', id).catch((error) => reportQueueFailure('stock_item', id, error));
+  const deleteStockItem = async (id: string): Promise<void> => {
     const existing = stockItemsRef.current.find((item) => item.id === id);
+    await queueBusinessDelete('stock_item', id);
+    if (workspace.activeWorkspaceId) scheduleAutoSync();
     const updated = stockItemsRef.current.filter((item) => item.id !== id);
     stockItemsRef.current = updated;
     setStockItems(updated);
     localStorage.setItem('omnibook_stock_items', JSON.stringify(updated));
     if (existing) {
       logEvent({
-        category: 'stock',
-        action: 'stock.item_deleted',
-        severity: 'warn',
+        category: 'stock', action: 'stock.item_deleted', severity: 'warn',
         title: `Article stock supprimé · ${existing.name}`,
         description: `Article retiré de l’inventaire (${existing.quantity} ${existing.unit}).`,
         target: { type: 'stock_item', id, label: existing.name, secondaryLabel: existing.category },
@@ -3356,78 +3360,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const recordRoomReplenishment: AppContextType['recordRoomReplenishment'] = (input) => {
+  const recordRoomReplenishment: AppContextType['recordRoomReplenishment'] = async (input) => {
     const { roomId, roomName, items, markRoomClean, note, operatorName } = input;
-    const result = applyStockDeductions(stockItemsRef.current, items);
+    if (!roomName.trim()) throw new Error('La chambre ou l’unité doit être renseignée.');
+    const quantities = new Map<string, number>();
+    for (const line of items) {
+      if (!line.itemId.trim() || !Number.isFinite(line.quantity) || line.quantity <= 0) {
+        throw new Error('Chaque ligne de réalimentation doit avoir un article et une quantité strictement positive.');
+      }
+      quantities.set(line.itemId, (quantities.get(line.itemId) ?? 0) + line.quantity);
+    }
+    if (quantities.size === 0) throw new Error('Aucun article à déduire du stock.');
     const actor = operatorName?.trim() || resolveActorLabel(currentRoleRef.current);
-    const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    const reasonText = note?.trim() ? `Réalimentation chambre · ${note.trim()}` : 'Réalimentation chambre';
-
-    if (result.appliedLines.length > 0) {
-      stockItemsRef.current = result.updatedStockItems;
-      setStockItems(result.updatedStockItems);
-      localStorage.setItem('omnibook_stock_items', JSON.stringify(result.updatedStockItems));
-
-      const newMovements: StockMovement[] = result.appliedLines.map((line, idx) => ({
-        id: `mov_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
-        timestamp: nowStr,
-        itemId: line.item.id,
-        itemName: line.item.name,
-        delta: -line.deductedQty,
-        reason: reasonText,
-        room: roomName,
-        user: actor,
+    const timestamp = new Date().toISOString();
+    const reason = note?.trim() ? `Réalimentation chambre · ${note.trim()}` : 'Réalimentation chambre';
+    const mutations: StockAtomicMutation[] = [];
+    for (const [itemId, quantity] of quantities) {
+      const item = stockItemsRef.current.find((stock) => stock.id === itemId);
+      if (!item) throw new Error(`Article de stock introuvable : ${itemId}.`);
+      mutations.push(...buildStockDeltaMutations({
+        item, delta: -quantity, reason, actor, timestamp,
+        movementId: `mov_${createMutationId()}`, room: roomName,
       }));
-
-      for (const movement of newMovements) {
-        void queueBusinessUpsert('stock_movement', movement.id, movement as unknown as Record<string, unknown>)
-          .catch((error) => reportQueueFailure('stock_movement', movement.id, error));
-      }
-
-      setStockMovements((prev) => {
-        const updated = [...newMovements, ...prev].slice(0, 200);
-        localStorage.setItem('omnibook_stock_movements', JSON.stringify(updated));
-        return updated;
-      });
-
+    }
+    const committed = await persistStockMutationsAtomically(mutations);
+    const savedItems = committed.filter((row) => row.entity === 'stock_item').map((row) => row.payload as unknown as StockItem);
+    const newMovements = committed.filter((row) => row.entity === 'stock_movement').map((row) => row.payload as unknown as StockMovement);
+    if (savedItems.length !== quantities.size || newMovements.length !== quantities.size) {
+      throw new Error('Transaction de réalimentation incomplète : projections ou mouvements manquants.');
+    }
+    const savedById = new Map(savedItems.map((item) => [item.id, item]));
+    const updatedItems = stockItemsRef.current.map((item) => savedById.get(item.id) ?? item);
+    stockItemsRef.current = updatedItems;
+    setStockItems(updatedItems);
+    localStorage.setItem('omnibook_stock_items', JSON.stringify(updatedItems));
+    setStockMovements((previous) => {
+      const updated = [...newMovements, ...previous].slice(0, 200);
+      localStorage.setItem('omnibook_stock_movements', JSON.stringify(updated));
+      return updated;
+    });
+    const lowStockTriggered = savedItems.filter((item) => item.quantity <= item.minThreshold);
+    const rupturedItems = savedItems.filter((item) => item.quantity === 0);
+    logEvent({
+      category: 'stock', action: 'stock.room_replenishment',
+      severity: lowStockTriggered.length > 0 ? 'warn' : 'success',
+      title: `Réalimentation validée · ${roomName}`,
+      description: `${newMovements.length} consommable(s) déduit(s) du stock par ${actor}.`,
+      target: { type: 'resource', id: roomId, label: roomName },
+      metadata: {
+        deductedItems: newMovements.map((movement) => `${movement.itemName} ×${Math.abs(movement.delta)}`).join(', '),
+        lowStockCount: lowStockTriggered.length,
+      },
+      resourceId: roomId,
+    });
+    if (lowStockTriggered.length > 0) {
       logEvent({
-        category: 'stock',
-        action: 'stock.room_replenishment',
-        severity: result.lowStockTriggered.length > 0 ? 'warn' : 'success',
-        title: `Réalimentation validée · ${roomName}`,
-        description: `${result.appliedLines.length} consommable(s) déduit(s) du stock par ${actor}.`,
-        target: { type: 'resource', id: roomId, label: roomName },
+        category: 'stock', action: 'stock.low_threshold_alert', severity: 'warn',
+        title: `Alerte rupture / seuil bas · ${lowStockTriggered.map((item) => item.name).join(', ')}`,
+        description: `${rupturedItems.length} rupture(s) et ${lowStockTriggered.length} article(s) à commander suite à la réalimentation ${roomName}.`,
         metadata: {
-          deductedItems: result.appliedLines.map((l) => `${l.item.name} ×${l.deductedQty}`).join(', '),
-          lowStockCount: result.lowStockTriggered.length,
+          rupturedIds: rupturedItems.map((item) => item.id).join(', '),
+          lowStockIds: lowStockTriggered.map((item) => item.id).join(', '),
         },
-        resourceId: roomId,
       });
-
-      if (result.lowStockTriggered.length > 0) {
-        logEvent({
-          category: 'stock',
-          action: 'stock.low_threshold_alert',
-          severity: 'warn',
-          title: `Alerte rupture / seuil bas · ${result.lowStockTriggered.map((i) => i.name).join(', ')}`,
-          description: `${result.rupturedItems.length} rupture(s) et ${result.lowStockTriggered.length} article(s) à commander suite à la réalimentation ${roomName}.`,
-          metadata: {
-            rupturedIds: result.rupturedItems.map((i) => i.id).join(', '),
-            lowStockIds: result.lowStockTriggered.map((i) => i.id).join(', '),
-          },
-        });
-      }
     }
-
-    if (markRoomClean && roomId) {
-      updateHousekeepingStatus(roomId, 'clean');
-    }
-
-    return {
-      deductedCount: result.appliedLines.length,
-      lowStockTriggered: result.lowStockTriggered,
-      rupturedItems: result.rupturedItems,
-    };
+    if (markRoomClean && roomId) updateHousekeepingStatus(roomId, 'clean');
+    return { deductedCount: newMovements.length, lowStockTriggered, rupturedItems };
   };
 
   const saveSupplier: AppContextType['saveSupplier'] = (input) => {

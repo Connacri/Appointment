@@ -8,7 +8,8 @@ export interface PurchaseOrderReceiptMutation {
   entity: 'purchase_order' | 'stock_item' | 'stock_movement';
   entityId: string;
   payload: Record<string, unknown>;
-  applyToCurrent?: (currentPayload?: Record<string, unknown>) => Record<string, unknown>;
+  applyToCurrent?: (currentPayload?: Record<string, unknown>, currentBatch?: ReadonlyMap<string, Record<string, unknown>>) => Record<string, unknown>;
+  toOutboxPayload?: (currentPayload?: Record<string, unknown>, currentBatch?: ReadonlyMap<string, Record<string, unknown>>) => Record<string, unknown>;
 }
 
 export interface PurchaseOrderReceiptPlan {
