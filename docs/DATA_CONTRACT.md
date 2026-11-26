@@ -634,7 +634,10 @@ current AppContext boundary covers tasks, suppliers, purchase orders, staff
 records and the establishment profile. It does not yet provide an awaited
 completion result to the calling component.
 
-Stock quantity changes, stock movement batches, purchase-order receiving,
-resource/booking mutations and invoice/dynamic-rate persistence are not covered
-by this UI acknowledgement change. They require dedicated atomic command
-contracts and must not be described as fully fail-closed by this section.
+Stock quantity changes, stock movement batches, resource/booking mutations and
+invoice/dynamic-rate persistence are not covered by this UI acknowledgement
+change. Purchase-order receiving is explicitly blocked until a single local
+transaction can commit the order status, stock item projections, stock movement
+ledger, Outbox records and P2P events together. These operations require
+ dedicated atomic command contracts and must not be described as fully
+fail-closed by this section.
