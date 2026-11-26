@@ -45,7 +45,7 @@ import type { RoleCategory, AppTabId } from '../types/roles';
 import { getRoleUiCapabilities } from '../utils/rolePermissions';
 import { RoleIcon } from './RoleIcon';
 import { supabase } from '../services/supabase/supabaseClient';
-import { resolveAppIconHref } from '../utils/faviconSync';
+import { DEFAULT_FAVICON_PATH, resolveAppIconHref } from '../utils/faviconSync';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -284,6 +284,12 @@ export const Sidebar: React.FC = () => {
                   <img
                     src={appIconSrc}
                     alt={hotelDisplayName}
+                    loading="eager"
+                    decoding="async"
+                    onError={(event) => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.src = DEFAULT_FAVICON_PATH;
+                    }}
                     className="w-full h-full object-contain"
                   />
                 </div>
@@ -304,6 +310,12 @@ export const Sidebar: React.FC = () => {
                 <img
                   src={appIconSrc}
                   alt={hotelDisplayName}
+                  loading="eager"
+                  decoding="async"
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = DEFAULT_FAVICON_PATH;
+                  }}
                   className="w-full h-full object-contain"
                 />
               </div>
