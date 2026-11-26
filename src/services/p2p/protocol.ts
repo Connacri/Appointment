@@ -9,6 +9,24 @@
 
 export type P2pOperation = 'upsert' | 'delete';
 
+export const P2P_SUPPORTED_ENTITIES = [
+  'booking',
+  'resource',
+  'resource_group',
+  'establishment',
+  'task',
+  'stock_item',
+  'invoice',
+] as const;
+export type P2pEntity = typeof P2P_SUPPORTED_ENTITIES[number];
+
+const RFC3339_TIMESTAMP =
+  /^\\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\\d|3[01])T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$/;
+
+function isValidRfc3339Timestamp(value: string): boolean {
+  return RFC3339_TIMESTAMP.test(value) && Number.isFinite(Date.parse(value));
+}
+
 export const MAX_P2P_CLOCK_NODES = 256;
 export const MAX_P2P_NODE_ID_LENGTH = 128;
 export const MAX_P2P_ENTITY_LENGTH = 128;
@@ -32,7 +50,7 @@ export function validateP2pCursorAdvance(
 export interface NewP2pEvent<TPayload = Record<string, unknown>> {
   nodeId: string;
   workspaceId: string;
-  entity: string;
+  entity: P2pEntity;
   entityId: string;
   operation: P2pOperation;
   payload: TPayload | null;
@@ -103,8 +121,11 @@ export function validateP2pEvent<TPayload>(event: P2pEvent<TPayload>): void {
   if (event.eventId !== `${event.nodeId}:${event.sequence}`) {
     throw new Error('P2P event ID must match its node and sequence.');
   }
-  if (!Number.isFinite(Date.parse(event.createdAt))) {
-    throw new Error('P2P event timestamp must be a valid ISO-compatible date.');
+  if (!P2P_SUPPORTED_ENTITIES.includes(event.entity)) {
+    throw new Error(`Unsupported P2P entity type: ${event.entity}`);
+  }
+  if (!isValidRfc3339Timestamp(event.createdAt)) {
+    throw new Error('P2P event timestamp must be a valid RFC 3339 timestamp.');
   }
   switch (event.operation) {
     case 'upsert':

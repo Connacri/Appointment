@@ -33,6 +33,88 @@ pub enum P2pRecordState {
     Conflict(Vec<P2pEvent>),
 }
 
+fn is_supported_entity(entity: &str) -> bool {
+    matches!(
+        entity,
+        "booking"
+            | "resource"
+            | "resource_group"
+            | "establishment"
+            | "task"
+            | "stock_item"
+            | "invoice"
+    )
+}
+
+fn is_valid_rfc3339_timestamp(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() < 20
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || bytes[10] != b'T'
+        || bytes[13] != b':'
+        || bytes[16] != b':'
+    {
+        return false;
+    }
+    let digits = |start: usize, end: usize| -> Option<u32> {
+        let slice = bytes.get(start..end)?;
+        if !slice.iter().all(u8::is_ascii_digit) {
+            return None;
+        }
+        std::str::from_utf8(slice).ok()?.parse().ok()
+    };
+    let Some(year) = digits(0, 4) else { return false; };
+    let Some(month) = digits(5, 7) else { return false; };
+    let Some(day) = digits(8, 10) else { return false; };
+    let Some(hour) = digits(11, 13) else { return false; };
+    let Some(minute) = digits(14, 16) else { return false; };
+    let Some(second) = digits(17, 19) else { return false; };
+    if year == 0 || !(1..=12).contains(&month) || !(0..=23).contains(&hour)
+        || minute > 59 || second > 59
+    {
+        return false;
+    }
+    let leap_year = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days_in_month = match month {
+        2 if leap_year => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    if day == 0 || day > days_in_month {
+        return false;
+    }
+
+    let mut index = 19;
+    if bytes.get(index) == Some(&b'.') {
+        index += 1;
+        let fraction_start = index;
+        while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+            index += 1;
+        }
+        if index == fraction_start {
+            return false;
+        }
+    }
+    match bytes.get(index) {
+        Some(b'Z') => index += 1,
+        Some(b'+') | Some(b'-') => {
+            if index + 6 != bytes.len() || bytes[index + 3] != b':' {
+                return false;
+            }
+            let Some(offset_hour) = digits(index + 1, index + 3) else { return false; };
+            let Some(offset_minute) = digits(index + 4, index + 6) else { return false; };
+            if offset_hour > 23 || offset_minute > 59 {
+                return false;
+            }
+            index += 6;
+        }
+        _ => return false,
+    }
+    index == bytes.len()
+}
+
 impl P2pEvent {
     pub fn validate(&self) -> Result<(), &'static str> {
         if self.protocol_version != 1 {
@@ -48,8 +130,11 @@ impl P2pEvent {
         if self.sequence == 0 || self.event_id != format!("{}:{}", self.node_id, self.sequence) {
             return Err("P2P event ID must match a positive node sequence");
         }
-        if self.created_at.trim().is_empty() {
-            return Err("P2P event timestamp is required");
+        if !is_valid_rfc3339_timestamp(&self.created_at) {
+            return Err("P2P event timestamp must be a valid RFC 3339 timestamp");
+        }
+        if !is_supported_entity(&self.entity) {
+            return Err("unsupported P2P entity type");
         }
         match (&self.operation, &self.payload) {
             (P2pOperation::Upsert, Some(Value::Object(_))) => {}
@@ -172,6 +257,25 @@ mod tests {
                 .collect(),
             created_at: "2026-11-22T12:00:00.000Z".into(),
         }
+    }
+
+    #[test]
+    fn enforces_supported_entities_and_rfc3339_timestamps() {
+        let mut value = event("a", 1, &[("a", 1)], Some(json!({"x": 1})));
+        assert!(value.validate().is_ok());
+
+        value.entity = "unknown_entity".into();
+        assert!(value.validate().is_err());
+
+        value.entity = "booking".into();
+        value.created_at = "2026-02-30T12:00:00Z".into();
+        assert!(value.validate().is_err());
+
+        value.created_at = "2026-11-22 12:00:00".into();
+        assert!(value.validate().is_err());
+
+        value.created_at = "2026-11-22T12:00:00.123+01:00".into();
+        assert!(value.validate().is_ok());
     }
 
     #[test]

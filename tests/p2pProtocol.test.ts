@@ -88,6 +88,34 @@ test('enforces the same vector-clock and identity limits as the native protocol'
   );
 });
 
+test('enforces the versioned entity registry and RFC 3339 timestamps', () => {
+  assert.throws(
+    () => validateP2pEvent({
+      ...event('node-a', 1, { 'node-a': 1 }),
+      entity: 'unknown_entity',
+    } as unknown as P2pEvent),
+    /Unsupported P2P entity type/,
+  );
+  assert.throws(
+    () => validateP2pEvent({
+      ...event('node-a', 1, { 'node-a': 1 }),
+      createdAt: '2026-02-30T12:00:00Z',
+    }),
+    /RFC 3339/,
+  );
+  assert.throws(
+    () => validateP2pEvent({
+      ...event('node-a', 1, { 'node-a': 1 }),
+      createdAt: '2026-11-22 12:00:00',
+    }),
+    /RFC 3339/,
+  );
+  validateP2pEvent({
+    ...event('node-a', 1, { 'node-a': 1 }),
+    createdAt: '2026-11-22T12:00:00.123+01:00',
+  });
+});
+
 test('builds a monotonically increasing local clock', () => {
   assert.deepEqual(nextP2pClock({ 'node-a': 3, 'node-b': 7 }, 'node-a'), {
     sequence: 4,

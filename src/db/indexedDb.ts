@@ -22,6 +22,8 @@ import {
   mergeP2pEvents,
   validateP2pEvent,
   validateP2pCursorAdvance,
+  P2P_SUPPORTED_ENTITIES,
+  type P2pEntity,
   type P2pEvent,
   type P2pOperation,
 } from '../services/p2p/protocol';
@@ -72,14 +74,7 @@ export interface IndexedDbStoreStats {
 
 export type IndexedDbSyncState = 'synced' | 'syncing' | 'offline';
 
-export type OutboxEntity =
-  | 'booking'
-  | 'resource'
-  | 'resource_group'
-  | 'establishment'
-  | 'task'
-  | 'stock_item'
-  | 'invoice';
+export type OutboxEntity = P2pEntity;
 export type OutboxOperation = 'upsert' | 'delete';
 export type OutboxStatus = 'pending' | 'synced' | 'failed';
 export interface OutboxRecord {
@@ -759,7 +754,7 @@ class IndexedDbStore {
       if (new TextEncoder().encode(JSON.stringify(event)).byteLength > 1024 * 1024) {
         throw new Error('P2P event exceeds the 1 MiB persistence limit.');
       }
-      if (!(['booking', 'resource', 'resource_group', 'establishment', 'task', 'stock_item', 'invoice'] as string[]).includes(event.entity)) {
+      if (!P2P_SUPPORTED_ENTITIES.includes(event.entity)) {
         throw new Error(`Unsupported P2P entity type: ${event.entity}`);
       }
     }
