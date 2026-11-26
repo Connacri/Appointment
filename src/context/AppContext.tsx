@@ -3403,116 +3403,91 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const saveSupplier: AppContextType['saveSupplier'] = (input) => {
     const id = input.id || `sup_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const record: StockSupplier = {
-      id,
-      name: input.name.trim(),
-      category: input.category.trim() || 'Général',
-      contactName: input.contactName?.trim() || undefined,
-      phone: input.phone?.trim() || undefined,
-      email: input.email?.trim() || undefined,
-      preferredChannel: input.preferredChannel || 'whatsapp',
+      id, name: input.name.trim(), category: input.category.trim() || 'Général',
+      contactName: input.contactName?.trim() || undefined, phone: input.phone?.trim() || undefined,
+      email: input.email?.trim() || undefined, preferredChannel: input.preferredChannel || 'whatsapp',
       notes: input.notes?.trim() || undefined,
     };
-    void queueBusinessUpsert('supplier', record.id, record as unknown as Record<string, unknown>)
-      .catch((error) => reportQueueFailure('supplier', record.id, error));
-    setSuppliers((prev) => {
-      const exists = prev.some((s) => s.id === id);
-      const updated = exists ? prev.map((s) => (s.id === id ? record : s)) : [record, ...prev];
-      localStorage.setItem('omnibook_stock_suppliers', JSON.stringify(updated));
-      return updated;
-    });
-    logEvent({
-      category: 'stock',
-      action: input.id ? 'stock.supplier_updated' : 'stock.supplier_created',
-      severity: 'info',
-      title: `Fournisseur enregistré · ${record.name}`,
-      description: `Canal préféré : ${record.preferredChannel.toUpperCase()}${record.phone ? ` · ${record.phone}` : ''}`,
+    commitBusinessUpsert('supplier', record.id, record as unknown as Record<string, unknown>, () => {
+      setSuppliers((prev) => {
+        const exists = prev.some((supplier) => supplier.id === id);
+        const updated = exists ? prev.map((supplier) => supplier.id === id ? record : supplier) : [record, ...prev];
+        localStorage.setItem('omnibook_stock_suppliers', JSON.stringify(updated));
+        return updated;
+      });
+      logEvent({
+        category: 'stock', action: input.id ? 'stock.supplier_updated' : 'stock.supplier_created',
+        severity: 'info', title: `Fournisseur enregistré · ${record.name}`,
+        description: `Canal préféré : ${record.preferredChannel.toUpperCase()}${record.phone ? ` · ${record.phone}` : ''}`,
+      });
     });
     return record;
   };
 
   const deleteSupplier = (id: string) => {
-    void queueBusinessDelete('supplier', id).catch((error) => reportQueueFailure('supplier', id, error));
-    setSuppliers((prev) => {
-      const updated = prev.filter((s) => s.id !== id);
+    commitBusinessDelete('supplier', id, () => setSuppliers((prev) => {
+      const updated = prev.filter((supplier) => supplier.id !== id);
       localStorage.setItem('omnibook_stock_suppliers', JSON.stringify(updated));
       return updated;
-    });
+    }));
   };
 
   const createPurchaseOrder: AppContextType['createPurchaseOrder'] = (input) => {
     const nowIso = new Date().toISOString();
     const id = `po_${Date.now()}_${createMutationId().slice(0, 8).toUpperCase()}`;
     const record: PurchaseOrderRecord = {
-      ...input,
-      id,
-      orderNumber:
-        input.orderNumber?.trim() ||
-        `CMD-${nowIso.slice(0, 7).replace('-', '')}-${id.slice(-6)}`,
-      createdAt: nowIso,
-      createdBy: input.createdBy?.trim() || resolveActorLabel(currentRoleRef.current),
+      ...input, id,
+      orderNumber: input.orderNumber?.trim() || `CMD-${nowIso.slice(0, 7).replace('-', '')}-${id.slice(-6)}`,
+      createdAt: nowIso, createdBy: input.createdBy?.trim() || resolveActorLabel(currentRoleRef.current),
     };
-    void queueBusinessUpsert('purchase_order', record.id, record as unknown as Record<string, unknown>)
-      .catch((error) => reportQueueFailure('purchase_order', record.id, error));
-    setPurchaseOrders((prev) => {
-      const updated = [record, ...prev];
-      localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
-      return updated;
-    });
-    logEvent({
-      category: 'stock',
-      action: 'stock.purchase_order_created',
-      severity: record.status === 'confirmed' ? 'success' : 'info',
-      title: `Commande ${record.orderNumber} (${record.status}) · ${record.supplierName}`,
-      description: `${record.items.length} ligne(s) préparée(s) par ${record.createdBy}.`,
+    commitBusinessUpsert('purchase_order', record.id, record as unknown as Record<string, unknown>, () => {
+      setPurchaseOrders((prev) => {
+        const updated = [record, ...prev];
+        localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
+        return updated;
+      });
+      logEvent({
+        category: 'stock', action: 'stock.purchase_order_created',
+        severity: record.status === 'confirmed' ? 'success' : 'info',
+        title: `Commande ${record.orderNumber} (${record.status}) · ${record.supplierName}`,
+        description: `${record.items.length} ligne(s) préparée(s) par ${record.createdBy}.`,
+      });
     });
     return record;
   };
 
   const updatePurchaseOrder = (po: PurchaseOrderRecord) => {
-    void queueBusinessUpsert('purchase_order', po.id, po as unknown as Record<string, unknown>)
-      .catch((error) => reportQueueFailure('purchase_order', po.id, error));
-    setPurchaseOrders((prev) => {
-      const updated = prev.map((item) => (item.id === po.id ? po : item));
-      localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
-      return updated;
-    });
-    logEvent({
-      category: 'stock',
-      action: 'stock.purchase_order_updated',
-      severity: po.status === 'sent' || po.status === 'confirmed' ? 'success' : 'info',
-      title: `Commande ${po.orderNumber} (${po.status}) · ${po.supplierName}`,
-      description: po.sentVia
-        ? `Envoyée au fournisseur via ${po.sentVia.toUpperCase()}.`
-        : `${po.items.length} article(s) — statut ${po.status}.`,
+    commitBusinessUpsert('purchase_order', po.id, po as unknown as Record<string, unknown>, () => {
+      setPurchaseOrders((prev) => {
+        const updated = prev.map((item) => item.id === po.id ? po : item);
+        localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
+        return updated;
+      });
+      logEvent({
+        category: 'stock', action: 'stock.purchase_order_updated',
+        severity: po.status === 'sent' || po.status === 'confirmed' ? 'success' : 'info',
+        title: `Commande ${po.orderNumber} (${po.status}) · ${po.supplierName}`,
+        description: po.sentVia ? `Envoyée au fournisseur via ${po.sentVia.toUpperCase()}.` : `${po.items.length} article(s) — statut ${po.status}.`,
+      });
     });
   };
 
   const deletePurchaseOrder = (id: string) => {
-    void queueBusinessDelete('purchase_order', id).catch((error) => reportQueueFailure('purchase_order', id, error));
-    setPurchaseOrders((prev) => {
+    commitBusinessDelete('purchase_order', id, () => setPurchaseOrders((prev) => {
       const updated = prev.filter((item) => item.id !== id);
       localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
       return updated;
-    });
+    }));
   };
 
   const markPurchaseOrderReceived = (id: string) => {
-    const targetPo = purchaseOrders.find((p) => p.id === id);
-    if (!targetPo || targetPo.status === 'received') return;
-    for (const line of targetPo.items) {
-      if (line.orderQty > 0) {
-        addStockMovement(line.itemId, line.orderQty, `Réception commande ${targetPo.orderNumber}`);
-      }
-    }
-    const nowIso = new Date().toISOString();
-    updatePurchaseOrder({
-      ...targetPo,
-      status: 'received',
-      receivedAt: nowIso,
-    });
+    const target = purchaseOrders.find((order) => order.id === id);
+    if (!target || target.status === 'received') return;
+    updatePurchaseOrder({ ...target, status: 'received', receivedAt: new Date().toISOString() });
+    // Stock receipt is not applied here until item + movements + order can commit atomically.
   };
 
-  const setDynamicRate = (roomType: string, date: string, price: number) => {
+    const setDynamicRate = (roomType: string, date: string, price: number) => {
     const prevPrice = dynamicRates[roomType]?.[date];
     setDynamicRates((prev) => {
       const next = { ...prev, [roomType]: { ...(prev[roomType] || {}), [date]: price } };
@@ -3586,112 +3561,115 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createStaffMember: AppContextType['createStaffMember'] = (input) => {
     const approvedBy = resolveActorLabel(currentRoleRef.current);
     const record = buildStaffMemberRecord({
-      fullName: input.fullName,
-      phone: input.phone,
-      roleId: input.roleId,
-      assignment: input.assignment,
-      shift: input.shift,
-      defaultTasks: input.defaultTasks,
-      status: input.status || 'active',
-      note: input.note,
-      approvedBy,
+      fullName: input.fullName, phone: input.phone, roleId: input.roleId,
+      assignment: input.assignment, shift: input.shift, defaultTasks: input.defaultTasks,
+      status: input.status || 'active', note: input.note, approvedBy,
     });
-
-    void queueBusinessUpsert('staff_member', record.id, record as unknown as Record<string, unknown>)
-      .catch((error) => reportQueueFailure('staff_member', record.id, error));
-    setStaffMembers((prev) => {
-      const updated = [record, ...prev];
-      localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
-      return updated;
-    });
-
-    const roleDef = resolveRoleDefinition(rolesRef.current, input.roleId);
-    logEvent({
-      category: 'system',
-      action: 'staff.member_created',
-      severity: 'success',
-      title: `Personnel créé · ${record.fullName} (${roleDef.label.fr})`,
-      description: `Affectation : ${record.assignment} · Shift ${record.shift} · ${record.defaultTasks.length} tâche(s).`,
-      metadata: { roleId: record.roleId, assignment: record.assignment, shift: record.shift },
-    });
-
-    if (input.createInitialTasks && record.defaultTasks.length > 0) {
-      const targetRoom = input.initialRoom?.trim() || record.assignment || 'Étage 1';
-      const category = mapRoleToTaskCategory(roleDef);
-      const todayDate = new Date().toISOString().slice(0, 10);
-      record.defaultTasks.forEach((taskTitle) => {
-        addTask({
-          room: targetRoom,
-          typeId: 'custom',
-          typeName: taskTitle,
-          category,
-          assignee: record.fullName,
-          date: todayDate,
-          status: 'pending',
-          priority: 'normal',
-          note: `${roleDef.label.fr} · ${record.assignment} (${record.shift})`,
-        });
+    commitBusinessUpsert('staff_member', record.id, record as unknown as Record<string, unknown>, () => {
+      setStaffMembers((prev) => {
+        const updated = [record, ...prev];
+        localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
+        return updated;
       });
-    }
-
+      const role = resolveRoleDefinition(rolesRef.current, input.roleId);
+      logEvent({
+        category: 'system', action: 'staff.member_created', severity: 'success',
+        title: `Personnel créé · ${record.fullName} (${role.label.fr})`,
+        description: `Affectation : ${record.assignment} · Shift ${record.shift} · ${record.defaultTasks.length} tâche(s).`,
+        metadata: { roleId: record.roleId, assignment: record.assignment, shift: record.shift },
+      });
+      if (input.createInitialTasks && record.defaultTasks.length > 0) {
+        const room = input.initialRoom?.trim() || record.assignment || 'Étage 1';
+        const category = mapRoleToTaskCategory(role);
+        const date = new Date().toISOString().slice(0, 10);
+        record.defaultTasks.forEach((taskTitle) => addTask({
+          room, typeId: 'custom', typeName: taskTitle, category, assignee: record.fullName,
+          date, status: 'pending', priority: 'normal',
+          note: `${role.label.fr} · ${record.assignment} (${record.shift})`,
+        }));
+      }
+    });
     return record;
   };
 
   const updateStaffAssignment: AppContextType['updateStaffAssignment'] = (staffId, patch) => {
-    const approvedBy = resolveActorLabel(currentRoleRef.current);
-    const target = staffMembers.find((s) => s.id === staffId);
+    const target = staffMembers.find((member) => member.id === staffId);
     if (!target) return;
-    const updatedMember = applyStaffAssignmentUpdate(target, { ...patch, approvedBy });
-    void queueBusinessUpsert('staff_member', staffId, updatedMember as unknown as Record<string, unknown>)
-      .catch((error) => reportQueueFailure('staff_member', staffId, error));
-
-    setStaffMembers((prev) => {
-      const updated = prev.map((member) => member.id === staffId ? updatedMember : member);
-      localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
-      return updated;
+    const updatedMember = applyStaffAssignmentUpdate(target, {
+      ...patch, approvedBy: resolveActorLabel(currentRoleRef.current),
     });
-
-    logEvent({
-      category: 'system',
-      action: 'staff.assignment_updated',
-      severity: 'info',
-      title: `Affectation mise à jour · ${target.fullName}`,
-      description: `${target.assignment} → ${patch.assignment} (${patch.shift})${patch.note ? ` · ${patch.note}` : ''}`,
-      changes: [
-        ...(target.assignment !== patch.assignment ? [{ field: 'Affectation', before: target.assignment, after: patch.assignment }] : []),
-        ...(target.shift !== patch.shift ? [{ field: 'Shift', before: target.shift, after: patch.shift }] : []),
-      ],
+    commitBusinessUpsert('staff_member', staffId, updatedMember as unknown as Record<string, unknown>, () => {
+      setStaffMembers((prev) => {
+        const updated = prev.map((member) => member.id === staffId ? updatedMember : member);
+        localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
+        return updated;
+      });
+      logEvent({
+        category: 'system', action: 'staff.assignment_updated', severity: 'info',
+        title: `Affectation mise à jour · ${target.fullName}`,
+        description: `${target.assignment} → ${patch.assignment} (${patch.shift})${patch.note ? ` · ${patch.note}` : ''}`,
+        changes: [
+          ...(target.assignment !== patch.assignment ? [{ field: 'Affectation', before: target.assignment, after: patch.assignment }] : []),
+          ...(target.shift !== patch.shift ? [{ field: 'Shift', before: target.shift, after: patch.shift }] : []),
+        ],
+      });
     });
   };
 
   const promoteOrTransferStaff: AppContextType['promoteOrTransferStaff'] = (staffId, change) => {
-    const approvedBy = resolveActorLabel(currentRoleRef.current);
-    const target = staffMembers.find((s) => s.id === staffId);
+    const target = staffMembers.find((member) => member.id === staffId);
     if (!target) return;
-
     const fromRole = resolveRoleDefinition(rolesRef.current, target.roleId);
     const toRole = resolveRoleDefinition(rolesRef.current, change.newRoleId);
-    const updatedMember = applyStaffPromotionOrTransfer(target, { ...change, approvedBy });
-    void queueBusinessUpsert('staff_member', staffId, updatedMember as unknown as Record<string, unknown>)
-      .catch((error) => reportQueueFailure('staff_member', staffId, error));
-
-    setStaffMembers((prev) => {
-      const updated = prev.map((member) => member.id === staffId ? updatedMember : member);
-      localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
-      return updated;
+    const updatedMember = applyStaffPromotionOrTransfer(target, {
+      ...change, approvedBy: resolveActorLabel(currentRoleRef.current),
     });
-
-    logEvent({
-      category: 'system',
-      action: change.changeType === 'promoted' ? 'staff.promoted' : 'staff.transferred',
-      severity: 'success',
-      title: `${change.changeType === 'promoted' ? 'Promotion' : 'Mutation / Changement de poste'} · ${target.fullName}`,
-      description: `${fromRole.label.fr} → ${toRole.label.fr}${change.newAssignment ? ` · ${change.newAssignment}` : ''}`,
-      changes: [{ field: 'Poste / Rôle', before: fromRole.label.fr, after: toRole.label.fr }],
+    commitBusinessUpsert('staff_member', staffId, updatedMember as unknown as Record<string, unknown>, () => {
+      setStaffMembers((prev) => {
+        const updated = prev.map((member) => member.id === staffId ? updatedMember : member);
+        localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
+        return updated;
+      });
+      logEvent({
+        category: 'system', action: change.changeType === 'promoted' ? 'staff.promoted' : 'staff.transferred',
+        severity: 'success',
+        title: `${change.changeType === 'promoted' ? 'Promotion' : 'Mutation / Changement de poste'} · ${target.fullName}`,
+        description: `${fromRole.label.fr} → ${toRole.label.fr}${change.newAssignment ? ` · ${change.newAssignment}` : ''}`,
+        changes: [{ field: 'Poste / Rôle', before: fromRole.label.fr, after: toRole.label.fr }],
+      });
     });
   };
 
   const assignTaskToStaff: AppContextType['assignTaskToStaff'] = (staffId, input) => {
+    const target = staffMembers.find((member) => member.id === staffId);
+    if (!target) return;
+    const role = resolveRoleDefinition(rolesRef.current, target.roleId);
+    addTask({
+      room: input.room.trim() || target.assignment || '101', typeId: 'custom',
+      typeName: input.taskTitle.trim(), category: mapRoleToTaskCategory(role),
+      assignee: target.fullName, date: new Date().toISOString().slice(0, 10),
+      status: 'pending', priority: input.priority || 'normal',
+      note: input.note?.trim() || `${role.label.fr} · ${target.assignment} (${target.shift})`,
+    });
+  };
+
+  const deleteStaffMember = (staffId: string) => {
+    const target = staffMembers.find((member) => member.id === staffId);
+    commitBusinessDelete('staff_member', staffId, () => {
+      setStaffMembers((prev) => {
+        const updated = prev.filter((member) => member.id !== staffId);
+        localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
+        return updated;
+      });
+      if (target) logEvent({
+        category: 'system', action: 'staff.member_deleted', severity: 'warn',
+        title: `Fiche personnel retirée · ${target.fullName}`,
+        description: `Ancien poste : ${resolveRoleDefinition(rolesRef.current, target.roleId).label.fr} (${target.assignment}).`,
+      });
+    });
+  };
+
+    const assignTaskToStaff: AppContextType['assignTaskToStaff'] = (staffId, input) => {
     const target = staffMembers.find((s) => s.id === staffId);
     if (!target) return;
     const roleDef = resolveRoleDefinition(rolesRef.current, target.roleId);
