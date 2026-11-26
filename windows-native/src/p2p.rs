@@ -98,9 +98,9 @@ fn is_valid_rfc3339_timestamp(value: &str) -> bool {
         }
     }
     match bytes.get(index) {
-        Some(b'Z') => index += 1,
-        Some(b'+') | Some(b'-') => {
-            if index + 6 != bytes.len() || bytes[index + 3] != b':' {
+        Some(&b'Z') => index += 1,
+        Some(&b'+') | Some(&b'-') => {
+            if index + 6 != bytes.len() || bytes.get(index + 3) != Some(&b':') {
                 return false;
             }
             let Some(offset_hour) = digits(index + 1, index + 3) else { return false; };
