@@ -293,12 +293,25 @@ mod tests {
         assert!(value.validate().is_err());
 
         for entity in [
-            "booking", "resource", "resource_group", "establishment", "task",
-            "stock_item", "stock_movement", "supplier", "purchase_order", "invoice",
-            "dynamic_rate", "staff_member", "establishment_profile",
+            "booking",
+            "resource",
+            "resource_group",
+            "establishment",
+            "task",
+            "stock_item",
+            "stock_movement",
+            "supplier",
+            "purchase_order",
+            "invoice",
+            "dynamic_rate",
+            "staff_member",
+            "establishment_profile",
         ] {
             value.entity = entity.into();
-            assert!(value.validate().is_ok(), "entity should be supported: {entity}");
+            assert!(
+                value.validate().is_ok(),
+                "entity should be supported: {entity}"
+            );
         }
 
         value.entity = "booking".into();
