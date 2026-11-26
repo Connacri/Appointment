@@ -3357,6 +3357,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         user: actor,
       }));
 
+      for (const movement of newMovements) {
+        void queueBusinessUpsert('stock_movement', movement.id, movement as unknown as Record<string, unknown>)
+          .catch((error) => reportQueueFailure('stock_movement', movement.id, error));
+      }
+
       setStockMovements((prev) => {
         const updated = [...newMovements, ...prev].slice(0, 200);
         localStorage.setItem('omnibook_stock_movements', JSON.stringify(updated));
@@ -3415,6 +3420,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       preferredChannel: input.preferredChannel || 'whatsapp',
       notes: input.notes?.trim() || undefined,
     };
+    void queueBusinessUpsert('supplier', record.id, record as unknown as Record<string, unknown>)
+      .catch((error) => reportQueueFailure('supplier', record.id, error));
     setSuppliers((prev) => {
       const exists = prev.some((s) => s.id === id);
       const updated = exists ? prev.map((s) => (s.id === id ? record : s)) : [record, ...prev];
@@ -3432,6 +3439,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteSupplier = (id: string) => {
+    void queueBusinessDelete('supplier', id).catch((error) => reportQueueFailure('supplier', id, error));
     setSuppliers((prev) => {
       const updated = prev.filter((s) => s.id !== id);
       localStorage.setItem('omnibook_stock_suppliers', JSON.stringify(updated));
@@ -3450,6 +3458,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: nowIso,
       createdBy: input.createdBy?.trim() || resolveActorLabel(currentRoleRef.current),
     };
+    void queueBusinessUpsert('purchase_order', record.id, record as unknown as Record<string, unknown>)
+      .catch((error) => reportQueueFailure('purchase_order', record.id, error));
     setPurchaseOrders((prev) => {
       const updated = [record, ...prev];
       localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
@@ -3466,6 +3476,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updatePurchaseOrder = (po: PurchaseOrderRecord) => {
+    void queueBusinessUpsert('purchase_order', po.id, po as unknown as Record<string, unknown>)
+      .catch((error) => reportQueueFailure('purchase_order', po.id, error));
     setPurchaseOrders((prev) => {
       const updated = prev.map((item) => (item.id === po.id ? po : item));
       localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
@@ -3483,6 +3495,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deletePurchaseOrder = (id: string) => {
+    void queueBusinessDelete('purchase_order', id).catch((error) => reportQueueFailure('purchase_order', id, error));
     setPurchaseOrders((prev) => {
       const updated = prev.filter((item) => item.id !== id);
       localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
@@ -3591,6 +3604,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       approvedBy,
     });
 
+    void queueBusinessUpsert('staff_member', record.id, record as unknown as Record<string, unknown>)
+      .catch((error) => reportQueueFailure('staff_member', record.id, error));
     setStaffMembers((prev) => {
       const updated = [record, ...prev];
       localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
@@ -3633,13 +3648,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const approvedBy = resolveActorLabel(currentRoleRef.current);
     const target = staffMembers.find((s) => s.id === staffId);
     if (!target) return;
+    const updatedMember = applyStaffAssignmentUpdate(target, { ...patch, approvedBy });
+    void queueBusinessUpsert('staff_member', staffId, updatedMember as unknown as Record<string, unknown>)
+      .catch((error) => reportQueueFailure('staff_member', staffId, error));
 
     setStaffMembers((prev) => {
-      const updated = prev.map((member) =>
-        member.id === staffId
-          ? applyStaffAssignmentUpdate(member, { ...patch, approvedBy })
-          : member
-      );
+      const updated = prev.map((member) => member.id === staffId ? updatedMember : member);
       localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
       return updated;
     });
@@ -3664,13 +3678,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const fromRole = resolveRoleDefinition(rolesRef.current, target.roleId);
     const toRole = resolveRoleDefinition(rolesRef.current, change.newRoleId);
+    const updatedMember = applyStaffPromotionOrTransfer(target, { ...change, approvedBy });
+    void queueBusinessUpsert('staff_member', staffId, updatedMember as unknown as Record<string, unknown>)
+      .catch((error) => reportQueueFailure('staff_member', staffId, error));
 
     setStaffMembers((prev) => {
-      const updated = prev.map((member) =>
-        member.id === staffId
-          ? applyStaffPromotionOrTransfer(member, { ...change, approvedBy })
-          : member
-      );
+      const updated = prev.map((member) => member.id === staffId ? updatedMember : member);
       localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
       return updated;
     });
@@ -3703,6 +3716,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteStaffMember = (staffId: string) => {
+    void queueBusinessDelete('staff_member', staffId).catch((error) => reportQueueFailure('staff_member', staffId, error));
     const target = staffMembers.find((s) => s.id === staffId);
     setStaffMembers((prev) => {
       const updated = prev.filter((m) => m.id !== staffId);
