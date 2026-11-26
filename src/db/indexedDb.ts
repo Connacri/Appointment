@@ -968,8 +968,7 @@ class IndexedDbStore {
               && typeof event.payload?.resourceId === 'string')
             .map((event) => String(event.payload?.resourceId)))];
           const eventById = new Map<string, P2pEvent>();
-          const resourceRows = new Map<string, Array<{ entityId: string }>>();
-          const conflictStore = tx.objectStore('p2pBookingConflicts');
+                const conflictStore = tx.objectStore('p2pBookingConflicts');
           const finishConflictScan = (): void => {
             const conflicts = detectP2pBookingConflicts([...eventById.values()]);
             const persistNext = (conflictIndex: number): void => {
