@@ -1796,7 +1796,7 @@ mod tests {
         let cursor: i64 = db
             .connection
             .query_row(
-                "SELECT cursor FROM p2p_peer_cursors WHERE workspace_id='w-1' AND peer_id='peer-b'",
+                "SELECT cursor FROM p2p_peer_cursors WHERE workspace_id='w-1' AND peer_id='node-b'",
                 [],
                 |row| row.get(0),
             )
@@ -2030,7 +2030,7 @@ mod tests {
             .is_err());
         assert_eq!(db.p2p_event_count("w-1").unwrap(), 0);
         let cursor_exists: bool = db.connection.query_row(
-            "SELECT EXISTS(SELECT 1 FROM p2p_peer_cursors WHERE workspace_id='w-1' AND peer_id='peer-b')",
+            "SELECT EXISTS(SELECT 1 FROM p2p_peer_cursors WHERE workspace_id='w-1' AND peer_id='node-b')",
             [],
             |row| row.get(0),
         ).unwrap();
