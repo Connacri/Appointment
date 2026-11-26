@@ -2851,6 +2851,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       resources,
       id,
       proposed.resourceId,
+      existing.resourceId,
     );
     if (!plan.ok) {
       const messages: Record<typeof plan.reason, string> = {
