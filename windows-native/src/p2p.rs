@@ -49,6 +49,7 @@ fn is_supported_entity(entity: &str) -> bool {
             | "dynamic_rate"
             | "staff_member"
             | "establishment_profile"
+            | "booking_conflict"
     )
 }
 
@@ -306,6 +307,7 @@ mod tests {
             "dynamic_rate",
             "staff_member",
             "establishment_profile",
+            "booking_conflict",
         ] {
             value.entity = entity.into();
             assert!(
