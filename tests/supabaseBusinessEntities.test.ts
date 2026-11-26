@@ -59,6 +59,9 @@ test('repositories and application mutation paths are connected to the new entit
   assert.ok(sync.includes("record.entity === 'supplier'"));
   assert.ok(sync.includes("record.entity === 'purchase_order'"));
   assert.ok(sync.includes("record.entity === 'staff_member'"));
+  assert.ok(sync.includes("remoteTombstoneLookupAvailable"));
+  assert.ok(sync.includes("remoteTombstoneKeys.has(tombstoneKey)"));
+  assert.ok(sync.includes("Lecture des tombstones Supabase indisponible"));
   assert.ok(indexedDb.includes('applyRemoteWorkspaceTombstones'));
   assert.ok(indexedDb.includes("activePending.some((row) => row.operation === 'upsert')"));
   for (const table of ['stock_suppliers', 'purchase_orders', 'staff_members']) assert.ok(types.includes(table + ':'));

@@ -1752,6 +1752,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             indexedDb.applyRemoteBookingTombstones(targetWsId, tombstones),
           applyRemoteWorkspaceTombstones: (targetWsId, tombstones) =>
             indexedDb.applyRemoteWorkspaceTombstones(targetWsId, tombstones),
+          getRemoteWorkspaceTombstones: (targetWsId) => listWorkspaceEntityTombstones(targetWsId),
           markOutboxSynced: (id) => indexedDb.markOutboxSynced(id),
           markOutboxFailed: (id, error, nextAttemptAt) =>
             indexedDb.markOutboxFailed(id, error, nextAttemptAt),
