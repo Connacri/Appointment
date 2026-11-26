@@ -478,11 +478,19 @@ export async function listDynamicRates(workspaceId: WorkspaceId, establishmentId
 export async function listStockSuppliers(workspaceId: WorkspaceId, establishmentId: string): Promise<StockSupplier[]> {
   if (!workspaceId.trim() || !establishmentId.trim()) throw new Error('Workspace et établissement requis.');
   const db = requireSupabase();
-  const { data, error } = await db.from('stock_suppliers').select('*')
-    .eq('workspace_id', workspaceId).eq('establishment_id', establishmentId)
-    .is('deleted_at', null).order('name');
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => ({
+  const rows: Database['public']['Tables']['stock_suppliers']['Row'][] = [];
+  const pageSize = 500;
+  let offset = 0;
+  while (true) {
+    const { data, error } = await db.from('stock_suppliers').select('*')
+      .eq('workspace_id', workspaceId).eq('establishment_id', establishmentId)
+      .is('deleted_at', null).order('name').range(offset, offset + pageSize - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []));
+    if ((data ?? []).length < pageSize) break;
+    offset += pageSize;
+  }
+  return rows.map((row) => ({
     id: row.id, name: row.name, category: row.category,
     contactName: row.contact_name ?? undefined, phone: row.phone ?? undefined,
     email: row.email ?? undefined, preferredChannel: row.preferred_channel as StockSupplier['preferredChannel'],
@@ -522,11 +530,20 @@ export async function deleteStockSupplier(workspaceId: WorkspaceId, supplierId: 
 export async function listPurchaseOrders(workspaceId: WorkspaceId, establishmentId: string): Promise<PurchaseOrderRecord[]> {
   if (!workspaceId.trim() || !establishmentId.trim()) throw new Error('Workspace et établissement requis.');
   const db = requireSupabase();
-  const { data, error } = await db.from('purchase_orders').select('*')
-    .eq('workspace_id', workspaceId).eq('establishment_id', establishmentId)
-    .is('deleted_at', null).order('created_at', { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => ({
+  const rows: Database['public']['Tables']['purchase_orders']['Row'][] = [];
+  const pageSize = 500;
+  let offset = 0;
+  while (true) {
+    const { data, error } = await db.from('purchase_orders').select('*')
+      .eq('workspace_id', workspaceId).eq('establishment_id', establishmentId)
+      .is('deleted_at', null).order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []));
+    if ((data ?? []).length < pageSize) break;
+    offset += pageSize;
+  }
+  return rows.map((row) => ({
     id: row.id, orderNumber: row.order_number, createdAt: row.created_at,
     confirmedAt: row.confirmed_at ?? undefined, sentAt: row.sent_at ?? undefined,
     sentVia: (row.sent_via ?? undefined) as PurchaseOrderRecord['sentVia'],
@@ -577,11 +594,19 @@ export async function deletePurchaseOrder(workspaceId: WorkspaceId, orderId: str
 export async function listStaffMembers(workspaceId: WorkspaceId, establishmentId: string): Promise<StaffMemberRecord[]> {
   if (!workspaceId.trim() || !establishmentId.trim()) throw new Error('Workspace et établissement requis.');
   const db = requireSupabase();
-  const { data, error } = await db.from('staff_members').select('*')
-    .eq('workspace_id', workspaceId).eq('establishment_id', establishmentId)
-    .is('deleted_at', null).order('full_name');
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => ({
+  const rows: Database['public']['Tables']['staff_members']['Row'][] = [];
+  const pageSize = 500;
+  let offset = 0;
+  while (true) {
+    const { data, error } = await db.from('staff_members').select('*')
+      .eq('workspace_id', workspaceId).eq('establishment_id', establishmentId)
+      .is('deleted_at', null).order('full_name').range(offset, offset + pageSize - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []));
+    if ((data ?? []).length < pageSize) break;
+    offset += pageSize;
+  }
+  return rows.map((row) => ({
     id: row.id, fullName: row.full_name, phone: row.phone ?? undefined,
     roleId: row.role_id as StaffMemberRecord['roleId'], assignment: row.assignment,
     shift: row.shift as StaffMemberRecord['shift'],
