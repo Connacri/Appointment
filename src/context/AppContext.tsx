@@ -3154,10 +3154,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
     const currentList = stockItemsRef.current;
     const targetItem = currentList.find((s) => s.id === itemId);
-    const prevQty = targetItem?.quantity ?? 0;
-    const nextQty = Math.max(0, prevQty + delta);
+    if (!targetItem || !Number.isFinite(delta) || delta === 0 || targetItem.quantity + delta < 0) {
+      reportQueueFailure('stock_movement', itemId, new Error('Article absent, quantité invalide ou stock insuffisant.'));
+      return;
+    }
+    const prevQty = targetItem.quantity;
+    const nextQty = prevQty + delta;
     const updatedList = currentList.map((item) =>
-      item.id === itemId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
+      item.id === itemId ? { ...item, quantity: nextQty } : item
     );
     stockItemsRef.current = updatedList;
     setStockItems(updatedList);
@@ -3167,12 +3171,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `mov_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       timestamp: nowStr,
       itemId,
-      itemName: targetItem?.name || itemId,
+      itemName: targetItem.name,
       delta,
       reason,
       room,
       user: resolveActorLabel(currentRoleRef.current),
     };
+    void queueBusinessUpsert('stock_movement', newMovement.id, newMovement as unknown as Record<string, unknown>)
+      .catch((error) => reportQueueFailure('stock_movement', newMovement.id, error));
 
     setStockMovements((prev) => {
       const updated = [newMovement, ...prev].slice(0, 200);
@@ -3193,10 +3199,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addStockItem = (input: Omit<StockItem, 'id'>): StockItem => {
+    if (!Number.isFinite(input.quantity) || input.quantity < 0) throw new Error('Quantité initiale de stock invalide.');
     const newItem: StockItem = {
       ...input,
       id: `stk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     };
+    void queueBusinessUpsert('stock_item', newItem.id, { ...newItem, quantity: 0 } as unknown as Record<string, unknown>)
+      .catch((error) => reportQueueFailure('stock_item', newItem.id, error));
+    if (newItem.quantity > 0) {
+      const openingMovement: StockMovement = {
+        id: `mov_${Date.now()}_opening_${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        itemId: newItem.id,
+        itemName: newItem.name,
+        delta: newItem.quantity,
+        reason: 'Stock initial',
+        user: resolveActorLabel(currentRoleRef.current),
+      };
+      void queueBusinessUpsert('stock_movement', openingMovement.id, openingMovement as unknown as Record<string, unknown>)
+        .catch((error) => reportQueueFailure('stock_movement', openingMovement.id, error));
+    }
     const next = [newItem, ...stockItemsRef.current];
     stockItemsRef.current = next;
     setStockItems(next);
@@ -3224,6 +3246,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toAdd.push({ ...template, id: candidateId });
     }
     if (toAdd.length === 0) return 0;
+    for (const item of toAdd) {
+      void queueBusinessUpsert('stock_item', item.id, { ...item, quantity: 0 } as unknown as Record<string, unknown>)
+        .catch((error) => reportQueueFailure('stock_item', item.id, error));
+      if (item.quantity > 0) {
+        const openingMovement: StockMovement = {
+          id: `mov_${Date.now()}_${item.id}`, timestamp: new Date().toISOString(),
+          itemId: item.id, itemName: item.name, delta: item.quantity,
+          reason: 'Stock initial', user: resolveActorLabel(currentRoleRef.current),
+        };
+        void queueBusinessUpsert('stock_movement', openingMovement.id, openingMovement as unknown as Record<string, unknown>)
+          .catch((error) => reportQueueFailure('stock_movement', openingMovement.id, error));
+      }
+    }
     const next = [...stockItemsRef.current, ...toAdd];
     stockItemsRef.current = next;
     setStockItems(next);
@@ -3241,6 +3276,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateStockItem = (updatedItem: StockItem) => {
     const existing = stockItemsRef.current.find((item) => item.id === updatedItem.id);
+    const previousQuantity = existing?.quantity ?? 0;
+    const quantityDelta = updatedItem.quantity - previousQuantity;
+    const cloudItem = { ...updatedItem, quantity: previousQuantity };
+    void queueBusinessUpsert('stock_item', updatedItem.id, cloudItem as unknown as Record<string, unknown>)
+      .catch((error) => reportQueueFailure('stock_item', updatedItem.id, error));
+    if (quantityDelta !== 0 && existing) {
+      const adjustment: StockMovement = {
+        id: `mov_${Date.now()}_adjust_${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: new Date().toISOString(), itemId: updatedItem.id, itemName: updatedItem.name,
+        delta: quantityDelta, reason: 'Ajustement inventaire', user: resolveActorLabel(currentRoleRef.current),
+      };
+      void queueBusinessUpsert('stock_movement', adjustment.id, adjustment as unknown as Record<string, unknown>)
+        .catch((error) => reportQueueFailure('stock_movement', adjustment.id, error));
+      setStockMovements((prev) => {
+        const next = [adjustment, ...prev].slice(0, 200);
+        localStorage.setItem('omnibook_stock_movements', JSON.stringify(next));
+        return next;
+      });
+    }
     const updated = stockItemsRef.current.map((item) => (item.id === updatedItem.id ? updatedItem : item));
     stockItemsRef.current = updated;
     setStockItems(updated);
@@ -3262,6 +3316,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteStockItem = (id: string) => {
+    void queueBusinessDelete('stock_item', id).catch((error) => reportQueueFailure('stock_item', id, error));
     const existing = stockItemsRef.current.find((item) => item.id === id);
     const updated = stockItemsRef.current.filter((item) => item.id !== id);
     stockItemsRef.current = updated;
