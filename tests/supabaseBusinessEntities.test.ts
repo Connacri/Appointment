@@ -86,11 +86,11 @@ test('workspace task and establishment UI projections wait for durable outbox co
     appContext.indexOf('const reportQueueFailure ='),
   );
 
-  assert.match(upsertHelper, /queueBusinessUpsert\\([\\s\\S]*?\\.then\\(\\(\\) => \\{\\s*commit\\(\\)/);
-  assert.match(deleteHelper, /queueBusinessDelete\\([\\s\\S]*?\\.then\\(\\(\\) => \\{\\s*commit\\(\\)/);
-  assert.match(appContext, /commitBusinessUpsert\\('task'/);
-  assert.match(appContext, /commitBusinessDelete\\('task'/);
-  assert.match(appContext, /commitBusinessUpsert\\('establishment_profile'/);
+  assert.match(upsertHelper, /queueBusinessUpsert\([\s\S]*?\.then\(\(\) => \{\s*commit\(\)/);
+  assert.match(deleteHelper, /queueBusinessDelete\([\s\S]*?\.then\(\(\) => \{\s*commit\(\)/);
+  assert.match(appContext, /commitBusinessUpsert\('task'/);
+  assert.match(appContext, /commitBusinessDelete\('task'/);
+  assert.match(appContext, /commitBusinessUpsert\('establishment_profile'/);
   assert.doesNotMatch(appContext, /localStorage\\.setItem\\('omnibook_pms_tasks'/);
   assert.doesNotMatch(appContext, /localStorage\\.setItem\\('omnibook_establishment_profile'/);
 });
