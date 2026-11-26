@@ -779,7 +779,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setEstablishmentProfile = (profile: EstablishmentProfile) => {
     const normalized = { ...DEFAULT_ESTABLISHMENT_PROFILE, ...profile };
     if (normalized.id === 'establishment-draft') {
-      const resolvedId = resolveMutationEstablishmentId();
+      const resolvedId = selectedEstablishmentId !== 'all' && selectedEstablishmentId.trim()
+        ? selectedEstablishmentId
+        : normalized.name.trim() ? stableEstablishmentId(normalized) : '';
       if (resolvedId) normalized.id = resolvedId;
     }
     const prev = establishmentProfile;
