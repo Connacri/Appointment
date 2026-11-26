@@ -33,6 +33,7 @@ test('purchase receipt aggregates duplicate lines and emits matching stock movem
   assert.equal(plan.stockItems.find((item) => item.id === 'water')?.quantity, 13);
   assert.deepEqual(plan.movements.map((movement) => [movement.itemId, movement.delta]), [['soap', 7], ['water', 3]]);
   assert.equal(plan.mutations.length, 5);
+  assert.equal(new Set(plan.movements.map((movement) => movement.id)).size, plan.movements.length);
   assert.equal(plan.mutations.filter((mutation) => mutation.entity === 'stock_movement').length, 2);
   assert.deepEqual(new Set(plan.mutations.map((mutation) => mutation.entity)), new Set(['purchase_order', 'stock_item', 'stock_movement']));
 });

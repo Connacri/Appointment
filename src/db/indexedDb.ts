@@ -1635,7 +1635,7 @@ class IndexedDbStore {
   /**
    * Commit a bounded set of generic business upserts, their Outbox rows and their
    * P2P events in one strict IndexedDB transaction. Optional payload transforms
-   * apply deltas to the latest persisted projection; P2P events are appended
+   * apply deltas to the latest persisted projection and return committed payloads; P2P events are appended
    * sequentially so every event observes the previous event's vector-clock advance.
    */
   public async enqueueWorkspaceUpsertsAtomically(
