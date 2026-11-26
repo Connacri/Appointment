@@ -1652,6 +1652,10 @@ class IndexedDbStore {
         currentPayload?: Record<string, unknown>,
         currentBatch?: ReadonlyMap<string, Record<string, unknown>>,
       ) => Record<string, unknown>;
+      skipIfCurrent?: (
+        currentPayload?: Record<string, unknown>,
+        currentBatch?: ReadonlyMap<string, Record<string, unknown>>,
+      ) => boolean;
     }>,
     commandId: string,
     rejectIfCurrentFieldEquals?: {
