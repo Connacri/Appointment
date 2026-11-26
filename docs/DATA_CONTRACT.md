@@ -104,6 +104,30 @@ Remaining work:
 - Add a durable domain-conflict registry and user-facing resolution workflow.
 - Test each invariant on local commands and inbound P2P application.
 
+### Phase 2 progress — cross-device booking overlap detection (2026-11-26)
+
+Implemented on branch `feat/p2p-integrity-secure-transport`:
+- A pure P2P detector groups immutable booking events by booking ID, retains each
+  booking's causal frontier, and compares different IDs sharing a resource.
+- The detector applies the existing cancelled-status rule, hotel time defaults and
+  symmetric ten-minute turnover. Wall-clock comparison is independent of the host
+  operating-system timezone.
+- IndexedDB schema v13 adds a durable `p2pBookingConflicts` registry. Schema v14 adds
+  a `workspaceResource` index to scope conflict scans to rooms affected by an inbound
+  booking batch rather than loading the full P2P event history.
+- Newly detected conflict snapshots are committed in the same strict IndexedDB
+  transaction as inbound event/projection/frontier changes and the peer cursor. The
+  inbound method resolves only after the transaction commits, so its caller can ACK
+  durable receipt afterward.
+- A paginated-by-limit read API exposes pending conflict snapshots for a future UI.
+- Regression tests cover different booking IDs, distinct rooms, cancellation,
+  symmetric turnover, stale causal versions and arrival-order-independent IDs.
+
+Not yet implemented: explicit conflict decisions and their replicated resolution
+events, local UI integration, Windows SQLite parity, authenticated pairing/revocation,
+live Windows↔Android transport, anti-entropy, and physical multi-device restart tests.
+This slice is not a release gate pass and must not be described as production-ready.
+
 ### Phase 3 — Windows ↔ Android secure transport
 - Implement explicit pairing, authentication, event origin signatures and workspace
   authorization.
