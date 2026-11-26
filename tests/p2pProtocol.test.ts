@@ -141,6 +141,11 @@ test('uses one explicit versioned entity registry across storage adapters', () =
     'establishment',
     'task',
     'stock_item',
+    'stock_movement',
+    'supplier',
+    'purchase_order',
+    'staff_member',
+    'establishment_profile',
   ]);
 });
 
