@@ -24,7 +24,16 @@ const RFC3339_TIMESTAMP =
   /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 
 function isValidRfc3339Timestamp(value: string): boolean {
-  return RFC3339_TIMESTAMP.test(value) && Number.isFinite(Date.parse(value));
+  if (!RFC3339_TIMESTAMP.test(value) || !Number.isFinite(Date.parse(value))) return false;
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(5, 7));
+  const day = Number(value.slice(8, 10));
+  if (year < 1) return false;
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = month === 2
+    ? (leapYear ? 29 : 28)
+    : ([4, 6, 9, 11].includes(month) ? 30 : 31);
+  return day >= 1 && day <= daysInMonth;
 }
 
 export const MAX_P2P_CLOCK_NODES = 256;
