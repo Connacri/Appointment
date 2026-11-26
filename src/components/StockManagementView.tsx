@@ -93,7 +93,10 @@ export const StockManagementView: React.FC = () => {
     setStockMutationError(null);
     try { await action(); }
     catch (error) { setStockMutationError(error instanceof Error ? error.message : 'Échec de l’opération de stock.'); }
-    finally { setIsStockMutationPending(false); }
+    finally {
+      stockMutationPendingRef.current = false;
+      setIsStockMutationPending(false);
+    }
   };
 
   // New / Edit Stock Item Modal
