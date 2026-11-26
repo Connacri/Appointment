@@ -86,7 +86,7 @@ import {
   type SyncLogEntry,
   type SyncProgressEvent,
 } from '../services/supabase/syncLog';
-import { isValidCalendarDate, shouldMarkPaymentAsPaid, validateBookingOccupants } from '../utils/bookingValidation';
+import { hasBookingScheduleConflict, isValidCalendarDate, shouldMarkPaymentAsPaid, validateBookingOccupants } from '../utils/bookingValidation';
 import { normalizeBookingForPersistence } from '../utils/bookingOccupants';
 import { isDemoBookingId } from '../utils/bookingPersistence';
 import { isRoomReadyForBooking } from '../utils/roomReadiness';
@@ -2438,28 +2438,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     excludeBookingId?: string,
     checkInTime = '14:00',
     checkOutTime = '12:00'
-  ): boolean => {
-    const toMinutes = (date: string | undefined, time: string | undefined) => {
-      if (typeof date !== 'string' || typeof time !== 'string') return Number.NaN;
-      const [year, month, day] = date.split('-').map(Number);
-      const [hour, minute] = time.split(':').map(Number);
-      return new Date(year, month - 1, day, hour, minute).getTime();
-    };
-    const requestedStart = toMinutes(startDate, checkInTime);
-    const requestedEnd = toMinutes(endDate, checkOutTime);
-    if (!Number.isFinite(requestedStart) || !Number.isFinite(requestedEnd) || requestedEnd <= requestedStart) return true;
-    const turnoverMs = 10 * 60 * 1000;
-    return bookings.some((b) => {
-      if (b.resourceId !== resourceId || b.id === excludeBookingId || b.status === 'cancelled') return false;
-      const existingStart = toMinutes(b.startDate, b.checkInTime || '14:00');
-      const existingEnd = toMinutes(b.endDate, b.checkOutTime || '12:00') + (b.sector === 'hotel' ? turnoverMs : 0);
-      // Imported/legacy records without usable dates occupy no slot: skip them
-      // instead of throwing inside the submit handler, which silently blocked
-      // every new booking made on the same room.
-      if (!Number.isFinite(existingStart) || !Number.isFinite(existingEnd)) return false;
-      return requestedStart < existingEnd && requestedEnd > existingStart;
-    });
-  };
+  ): boolean => hasBookingScheduleConflict(
+    bookings,
+    {
+      id: excludeBookingId ?? '',
+      resourceId,
+      sector: bookings.find((booking) => booking.resourceId === resourceId)?.sector ?? 'hotel',
+      startDate,
+      endDate,
+      checkInTime,
+      checkOutTime,
+      status: 'confirmed',
+    },
+    excludeBookingId,
+  );
 
   // Network offline listener
   useEffect(() => {
@@ -2728,6 +2720,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const merged = normalizeBookingForPersistence({ ...existing, ...updates });
+    const touchesSchedule = [
+      'resourceId',
+      'sector',
+      'startDate',
+      'endDate',
+      'checkInTime',
+      'checkOutTime',
+    ].some((field) => field in updates);
+    const reactivatesBooking = existing.status === 'cancelled' && merged.status !== 'cancelled';
+    if ((touchesSchedule || reactivatesBooking) && merged.status !== 'cancelled') {
+      if (hasBookingScheduleConflict(bookings, merged, id)) {
+        const message = language === 'fr'
+          ? 'Modification refusée : cette ressource est déjà réservée sur cette plage, ou le délai de rotation de 10 minutes est insuffisant.'
+          : language === 'ar'
+            ? 'تم رفض التعديل: المورد محجوز بالفعل خلال هذه الفترة أو أن مهلة التجهيز غير كافية.'
+            : 'Update rejected: this resource is already booked in this interval or the 10-minute turnover is insufficient.';
+        logEvent({
+          category: 'booking',
+          action: 'booking.rejected',
+          severity: 'warn',
+          title: `Modification refusée · conflit de réservation · ${merged.resourceName}`,
+          description: message,
+          target: { type: 'booking', id, label: merged.guestName, secondaryLabel: merged.resourceName },
+          metadata: {
+            reason: 'scheduling_conflict_on_update',
+            resourceId: merged.resourceId,
+            startDate: merged.startDate,
+            endDate: merged.endDate,
+          },
+          bookingId: id,
+          resourceId: merged.resourceId,
+        });
+        return { success: false, error: message };
+      }
+    }
     const touchesOccupancyOrIdentity =
       'adults' in updates ||
       'children' in updates ||

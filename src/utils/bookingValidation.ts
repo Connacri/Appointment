@@ -29,6 +29,52 @@ export const isValidCalendarDate = (value: string): boolean => {
 export const isValidBookingDateRange = (startDate: string, endDate: string): boolean =>
   isValidCalendarDate(startDate) && isValidCalendarDate(endDate) && endDate >= startDate;
 
+const bookingTimestamp = (date: string, time: string): number => {
+  if (!isValidCalendarDate(date) || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(time)) {
+    return Number.NaN;
+  }
+  const [year, month, day] = date.split('-').map(Number);
+  const [hour, minute] = time.split(':').map(Number);
+  return new Date(year, month - 1, day, hour, minute).getTime();
+};
+
+/**
+ * Revalidates a proposed booking interval against the current local projection.
+ * The 10-minute hotel turnover is symmetric: it applies whether the edited
+ * booking is before or after the existing stay. Cancelled bookings occupy no slot.
+ * Invalid proposed intervals fail closed; malformed legacy rows are ignored.
+ */
+export function hasBookingScheduleConflict(
+  bookings: readonly TimelineBooking[],
+  candidate: Pick<TimelineBooking, 'id' | 'resourceId' | 'sector' | 'startDate' | 'endDate' | 'checkInTime' | 'checkOutTime' | 'status'>,
+  excludeBookingId?: string,
+): boolean {
+  if (!candidate.resourceId || candidate.status === 'cancelled') return false;
+  const candidateStart = bookingTimestamp(candidate.startDate, candidate.checkInTime || '14:00');
+  const candidateEnd = bookingTimestamp(candidate.endDate, candidate.checkOutTime || '12:00');
+  if (!Number.isFinite(candidateStart) || !Number.isFinite(candidateEnd) || candidateEnd <= candidateStart) {
+    return true;
+  }
+
+  return bookings.some((existing) => {
+    if (
+      existing.resourceId !== candidate.resourceId
+      || existing.id === (excludeBookingId ?? candidate.id)
+      || existing.status === 'cancelled'
+    ) return false;
+    const existingStart = bookingTimestamp(existing.startDate, existing.checkInTime || '14:00');
+    const existingEnd = bookingTimestamp(existing.endDate, existing.checkOutTime || '12:00');
+    if (!Number.isFinite(existingStart) || !Number.isFinite(existingEnd) || existingEnd <= existingStart) {
+      return false;
+    }
+    const turnoverMs = candidate.sector === 'hotel' || existing.sector === 'hotel'
+      ? 10 * 60 * 1000
+      : 0;
+    return candidateStart < existingEnd + turnoverMs
+      && candidateEnd + turnoverMs > existingStart;
+  });
+}
+
 /**
  * A pending payment is settled only when cash receipt was explicitly confirmed.
  * A payment already marked as paid remains paid when check-in is confirmed.

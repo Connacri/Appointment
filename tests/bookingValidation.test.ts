@@ -223,3 +223,71 @@ test('CardLock import does not fabricate building or floor 1 when source fields 
   assert.ok(planning.warnings.some((warning) => warning.includes('1 chambre(s) exclue(s)')));
 });
 
+
+
+import { hasBookingScheduleConflict } from '../src/utils/bookingValidation';
+import type { TimelineBooking } from '../src/types/booking';
+
+const scheduleBooking = (
+  id: string,
+  startDate: string,
+  endDate: string,
+  overrides: Partial<TimelineBooking> = {},
+): TimelineBooking => ({
+  id,
+  resourceId: 'room-101',
+  resourceName: '101',
+  sector: 'hotel',
+  guestName: id,
+  guestEmail: '',
+  guestPhone: '',
+  startDate,
+  endDate,
+  checkInTime: '14:00',
+  checkOutTime: '12:00',
+  status: 'confirmed',
+  totalPrice: 100,
+  paymentStatus: 'pending',
+  ...overrides,
+});
+
+test('booking update guard detects overlaps against a different booking ID', () => {
+  const existing = scheduleBooking('existing', '2026-11-27', '2026-11-29');
+  const candidate = scheduleBooking('edited', '2026-11-28', '2026-11-30');
+  assert.equal(hasBookingScheduleConflict([existing], candidate, 'edited'), true);
+});
+
+test('booking update guard applies the hotel turnover buffer in both directions', () => {
+  const existing = scheduleBooking('existing', '2026-11-27', '2026-11-28');
+  const candidateAfter = scheduleBooking('edited', '2026-11-28', '2026-11-29', {
+    checkInTime: '12:05',
+  });
+  const candidateBefore = scheduleBooking('edited', '2026-11-26', '2026-11-27', {
+    checkOutTime: '13:55',
+  });
+  assert.equal(hasBookingScheduleConflict([existing], candidateAfter, 'edited'), true);
+  assert.equal(hasBookingScheduleConflict([existing], candidateBefore, 'edited'), true);
+});
+
+test('booking update guard allows a sufficient turnover gap and ignores cancelled bookings', () => {
+  const existing = scheduleBooking('existing', '2026-11-27', '2026-11-28');
+  const candidate = scheduleBooking('edited', '2026-11-28', '2026-11-29', {
+    checkInTime: '12:11',
+  });
+  assert.equal(hasBookingScheduleConflict([existing], candidate, 'edited'), false);
+  assert.equal(
+    hasBookingScheduleConflict([{ ...existing, status: 'cancelled' }], candidate, 'edited'),
+    false,
+  );
+});
+
+test('booking update guard fails closed for an invalid candidate interval', () => {
+  const candidate = scheduleBooking('edited', '2026-11-29', '2026-11-28');
+  assert.equal(hasBookingScheduleConflict([], candidate, 'edited'), true);
+});
+
+test('booking update guard ignores malformed legacy intervals rather than blocking all edits', () => {
+  const malformed = scheduleBooking('legacy', 'not-a-date', '2026-11-28');
+  const candidate = scheduleBooking('edited', '2026-11-28', '2026-11-29');
+  assert.equal(hasBookingScheduleConflict([malformed], candidate, 'edited'), false);
+});

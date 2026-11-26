@@ -203,3 +203,15 @@ The outbound paging regression also includes a foreign-origin event in the same 
 The general SQLite event-log inspection API remains workspace-wide and includes all origins; only the peer-specific outbound page API filters by the local node identity. The workspace event history must not be narrowed by transport-specific sender filtering.
 
 Regression coverage retains a workspace-wide event-log reader while restricting the outbound page query to the authenticated local origin.
+
+
+## Booking update scheduling guard
+
+Creating a booking already checks resource/time overlap. Updates that change resource,
+sector, dates or check-in/check-out times now run the same guard while excluding the
+booking being edited. Reactivating a cancelled booking is also revalidated. The hotel
+turnover buffer is symmetric: a 10-minute gap is required regardless of which booking
+comes first. Cancelled bookings do not occupy a slot. Invalid proposed intervals fail
+closed; malformed legacy intervals are ignored so they cannot block every future edit.
+This remains a device-local check: concurrent offline bookings created on separate peers
+still require a P2P cross-record conflict workflow before global confirmation.
