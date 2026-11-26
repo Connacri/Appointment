@@ -189,6 +189,8 @@ fn backup_before_migration_if_needed(
 }
 
 const CURRENT_SCHEMA_VERSION: i64 = 8;
+const MAX_P2P_EVENT_BYTES: usize = 1024 * 1024;
+const MAX_P2P_BATCH_BYTES: usize = 4 * 1024 * 1024;
 
 impl PmsDatabase {
     pub fn open(path: impl AsRef<std::path::Path>) -> rusqlite::Result<Self> {
@@ -712,12 +714,23 @@ impl PmsDatabase {
         {
             return Err("invalid P2P inbound batch identity, cursor range or page size".into());
         }
-        if batch
-            .events
-            .iter()
-            .any(|event| event.workspace_id != batch.workspace_id)
-        {
-            return Err("P2P inbound batch contains an event from another workspace".into());
+        let mut batch_bytes = 0usize;
+        for event in batch.events {
+            if event.workspace_id != batch.workspace_id {
+                return Err("P2P inbound batch contains an event from another workspace".into());
+            }
+            if event.node_id != batch.peer_id {
+                return Err("P2P peer may only submit events authored by its authenticated node identity".into());
+            }
+            event.validate().map_err(str::to_string)?;
+            let event_bytes = serde_json::to_vec(event).map_err(|e| e.to_string())?.len();
+            if event_bytes > MAX_P2P_EVENT_BYTES {
+                return Err("P2P inbound event exceeds the 1 MiB size limit".into());
+            }
+            batch_bytes += event_bytes;
+            if batch_bytes > MAX_P2P_BATCH_BYTES {
+                return Err("P2P inbound batch exceeds the 4 MiB serialized-byte limit".into());
+            }
         }
 
         let tx = self.connection.transaction().map_err(|e| e.to_string())?;
@@ -1766,7 +1779,7 @@ mod tests {
         let report = db
             .apply_received_p2p_batch(P2pInboundBatch {
                 workspace_id: "w-1",
-                peer_id: "peer-b",
+                peer_id: "node-b",
                 expected_cursor: 0,
                 next_cursor: 1,
                 events: std::slice::from_ref(&event),
@@ -1794,7 +1807,7 @@ mod tests {
         assert!(db
             .apply_received_p2p_batch(P2pInboundBatch {
                 workspace_id: "w-1",
-                peer_id: "peer-b",
+                peer_id: "node-b",
                 expected_cursor: 0,
                 next_cursor: 1,
                 events: std::slice::from_ref(&event),
@@ -1831,7 +1844,7 @@ mod tests {
         let report = db
             .apply_received_p2p_batch(P2pInboundBatch {
                 workspace_id: "w-1",
-                peer_id: "peer-b",
+                peer_id: "node-b",
                 expected_cursor: 0,
                 next_cursor: 1,
                 events: std::slice::from_ref(&event),
@@ -1905,7 +1918,7 @@ mod tests {
         let report = db
             .apply_received_p2p_batch(P2pInboundBatch {
                 workspace_id: "w-1",
-                peer_id: "peer-b",
+                peer_id: "node-b",
                 expected_cursor: 0,
                 next_cursor: 1,
                 events: std::slice::from_ref(&event),
@@ -1958,7 +1971,7 @@ mod tests {
         let report = db
             .apply_received_p2p_batch(P2pInboundBatch {
                 workspace_id: "w-1",
-                peer_id: "peer-b",
+                peer_id: "node-b",
                 expected_cursor: 0,
                 next_cursor: 1,
                 events: std::slice::from_ref(&event),
@@ -2009,7 +2022,7 @@ mod tests {
         assert!(db
             .apply_received_p2p_batch(P2pInboundBatch {
                 workspace_id: "w-1",
-                peer_id: "peer-b",
+                peer_id: "node-b",
                 expected_cursor: 0,
                 next_cursor: 1,
                 events: std::slice::from_ref(&event),
@@ -2048,7 +2061,7 @@ mod tests {
         let report = db
             .apply_received_p2p_batch(P2pInboundBatch {
                 workspace_id: "w-1",
-                peer_id: "peer-b",
+                peer_id: "node-b",
                 expected_cursor: 0,
                 next_cursor: 1,
                 events: std::slice::from_ref(&event),
@@ -2654,6 +2667,36 @@ mod tests {
         assert!(db.workspace_is_owned_by("w-owner", "u-owner").unwrap());
         assert!(!db.workspace_is_owned_by("w-owner", "u-other").unwrap());
         assert!(!db.workspace_is_owned_by("w-missing", "u-owner").unwrap());
+    }
+
+    #[test]
+    fn inbound_page_rejects_events_not_authored_by_the_authenticated_peer() {
+        let mut db = database();
+        let forged = remote_event(
+            "node-c",
+            1,
+            &[("node-c", 1)],
+            "booking",
+            "b-forged-origin",
+            P2pOperation::Upsert,
+            Some(serde_json::to_value(booking("b-forged-origin")).unwrap()),
+        );
+        assert!(db
+            .apply_received_p2p_batch(P2pInboundBatch {
+                workspace_id: "w-1",
+                peer_id: "node-b",
+                expected_cursor: 0,
+                next_cursor: 1,
+                events: std::slice::from_ref(&forged),
+            })
+            .is_err());
+        assert_eq!(db.p2p_event_count("w-1").unwrap(), 0);
+        let cursor: Option<i64> = db.connection.query_row(
+            "SELECT cursor FROM p2p_peer_cursors WHERE workspace_id='w-1' AND peer_id='node-b'",
+            [],
+            |row| row.get(0),
+        ).optional().unwrap();
+        assert_eq!(cursor, None);
     }
 
     #[test]

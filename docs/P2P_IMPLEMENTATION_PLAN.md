@@ -429,3 +429,5 @@ Windows SQLite migration tests now verify schema v8 and the outbound ACK table, 
 IndexedDB schema v12 cleans any third-party events left in the outbound queue by the earlier prototype. SQLite outbound page selection likewise requires the local node identity and skips foreign-origin events. Multi-hop relay stays disabled until immutable origin signatures can be verified end to end.
 
 The outbound page scanners skip third-party-origin events and advance their cursor across those rows, while sending only the local node's own events until event-origin signatures are available.
+
+The Windows SQLite inbound adapter now mirrors the IndexedDB trust boundary: event nodeId must equal the authenticated peer ID, per-event size is capped at 1 MiB, and aggregate page size at 4 MiB. A forged origin or oversized page is rejected before any event or cursor mutation.

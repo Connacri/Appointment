@@ -189,3 +189,5 @@ The Windows schema migration regression now asserts schema version 8 and verifie
 IndexedDB schema v12 removes non-local events from any queue created by the earlier relay prototype. The SQLite outbound page API also requires the local node ID and skips events authored by other nodes. Multi-hop relay remains disabled until immutable event-origin signatures and verification are in place.
 
 The SQLite page scanner uses a bounded indexed query and skips non-origin events without serializing them into the outbound frame; the cursor advances across skipped rows and stops at the next local-origin event when a page limit is reached.
+
+Windows inbound SQLite pages now enforce the same origin and framing rules as IndexedDB: every event nodeId must equal the authenticated peer ID, each event is at most 1 MiB, and the full page is at most 4 MiB. The batch is rejected before opening the persistence transaction if any of these checks fail.
