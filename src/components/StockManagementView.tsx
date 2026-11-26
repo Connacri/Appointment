@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Boxes,
   Plus,
@@ -83,10 +83,12 @@ export const StockManagementView: React.FC = () => {
   const [reasonInput, setReasonInput] = useState<string>('');
   const [roomInput, setRoomInput] = useState<string>('');
   const [isStockMutationPending, setIsStockMutationPending] = useState(false);
+  const stockMutationPendingRef = useRef(false);
   const [stockMutationError, setStockMutationError] = useState<string | null>(null);
 
   const runStockMutation = async (action: () => Promise<unknown>) => {
-    if (isStockMutationPending) return;
+    if (stockMutationPendingRef.current) return;
+    stockMutationPendingRef.current = true;
     setIsStockMutationPending(true);
     setStockMutationError(null);
     try { await action(); }

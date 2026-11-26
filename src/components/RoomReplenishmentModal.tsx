@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Boxes,
   CheckCircle2,
@@ -90,6 +90,7 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
   const [markRoomClean, setMarkRoomClean] = useState<boolean>(true);
   const [note, setNote] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submissionPendingRef = useRef(false);
   const [isSeedingCatalog, setIsSeedingCatalog] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [submissionResult, setSubmissionResult] = useState<{
@@ -184,7 +185,8 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedLines.length === 0 || isSubmitting) return;
+    if (selectedLines.length === 0 || submissionPendingRef.current) return;
+    submissionPendingRef.current = true;
     setIsSubmitting(true);
     setSubmissionError(null);
     try {
@@ -195,7 +197,10 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
       setSubmissionResult({ roomName: resolvedRoomName, ...res });
     } catch (error) {
       setSubmissionError(error instanceof Error ? error.message : 'Échec de la réalimentation du stock.');
-    } finally { setIsSubmitting(false); }
+    } finally {
+      submissionPendingRef.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   const canSeedCatalog =
@@ -206,7 +211,9 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
   return (
     <div
       dir={isAr ? 'rtl' : 'ltr'}
-      onClick={onClose}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !submissionPendingRef.current) onClose();
+      }}
       className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center bg-slate-950/60 backdrop-blur-xs p-0 sm:p-4 pms-modal-backdrop"
     >
       <div
