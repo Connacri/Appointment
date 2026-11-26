@@ -99,6 +99,11 @@ test('workspace task and establishment UI projections wait for durable outbox co
   assert.match(appContext, /commitBusinessDelete\('staff_member'/);
   assert.equal((appContext.match(/const assignTaskToStaff:/g) ?? []).length, 1);
   assert.equal((appContext.match(/const deleteStaffMember:/g) ?? []).length, 1);
+  assert.match(appContext, /Réception bloquée : la transaction atomique commande/);
+  assert.doesNotMatch(
+    appContext.slice(appContext.indexOf('const markPurchaseOrderReceived ='), appContext.indexOf('const setDynamicRate =')),
+    /updatePurchaseOrder\\(/,
+  );
   assert.equal(appContext.includes("localStorage.setItem('omnibook_pms_tasks'"), false);
   assert.equal(appContext.includes("localStorage.setItem('omnibook_establishment_profile'"), false);
 });
