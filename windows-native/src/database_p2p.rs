@@ -347,7 +347,9 @@ impl PmsDatabase {
                 break;
             }
             if event_bytes > MAX_P2P_EVENT_BYTES {
-                return Err(format!("Stored P2P event exceeds the size limit at local order {local_order}."));
+                return Err(format!(
+                    "Stored P2P event exceeds the size limit at local order {local_order}."
+                ));
             }
             page_bytes += event_bytes;
             entries.push(P2pEventLogEntry { local_order, event });
@@ -891,10 +893,14 @@ mod tests {
                 "2026-11-23T08:00:00Z",
             );
         }
-        let page = db.get_p2p_outbound_page("workspace-a", "peer-b", 100).unwrap();
+        let page = db
+            .get_p2p_outbound_page("workspace-a", "peer-b", 100)
+            .unwrap();
         assert_eq!(page.events.len(), 4);
         assert!(page.has_more);
-        let total_bytes: usize = page.events.iter()
+        let total_bytes: usize = page
+            .events
+            .iter()
             .map(|event| serde_json::to_vec(event).unwrap().len())
             .sum();
         assert!(total_bytes <= MAX_P2P_BATCH_BYTES);

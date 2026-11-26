@@ -367,6 +367,7 @@ test('outbound peer acknowledgements must match the exact offered cursor', () =>
 test('P2P batches are bounded by both event count and serialized byte size', () => {
   assert.equal(validateP2pBatchSize(0, 0), true);
   assert.equal(validateP2pBatchSize(500, MAX_P2P_BATCH_BYTES), true);
+  assert.equal(validateP2pBatchSize(500, MAX_P2P_BATCH_BYTES - 1), true);
   assert.equal(validateP2pBatchSize(501, 1), false);
   assert.equal(validateP2pBatchSize(1, MAX_P2P_BATCH_BYTES + 1), false);
   assert.equal(validateP2pBatchSize(-1, 1), false);
