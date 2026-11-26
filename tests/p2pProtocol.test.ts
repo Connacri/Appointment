@@ -378,5 +378,6 @@ test('P2P batches are bounded by both event count and serialized byte size', () 
 test('a connected peer may only submit events carrying its authenticated node identity', () => {
   assert.equal(isP2pEventAuthoredByPeer('node-a', { nodeId: 'node-a' }), true);
   assert.equal(isP2pEventAuthoredByPeer('node-a', { nodeId: 'node-b' }), false);
+  assert.equal(isP2pEventAuthoredByPeer('node-b', { nodeId: 'node-a' }), false);
   assert.equal(isP2pEventAuthoredByPeer('', { nodeId: 'node-a' }), false);
 });

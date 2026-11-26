@@ -425,3 +425,5 @@ P2P page transfer now has a 4 MiB serialized-byte budget in addition to the 500-
 Windows SQLite migration tests now verify schema v8 and the outbound ACK table, alongside the existing inbound cursor and record-frontier checks.
 
 IndexedDB schema v12 cleans any third-party events left in the outbound queue by the earlier prototype. SQLite outbound page selection likewise requires the local node identity and skips foreign-origin events. Multi-hop relay stays disabled until immutable origin signatures can be verified end to end.
+
+The outbound page scanners skip third-party-origin events and advance their cursor across those rows, while sending only the local node's own events until event-origin signatures are available.

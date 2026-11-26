@@ -335,16 +335,15 @@ impl PmsDatabase {
             .map_err(|e| e.to_string())?;
         let mut entries = Vec::new();
         let mut page_bytes = 0usize;
-        let mut scanned_count = 0usize;
+        
         let mut has_more = false;
         let mut next_cursor = expected_cursor;
-        for row in rows {
+        for (scanned_count, row) in rows.enumerate() {
             let (local_order, json) = row.map_err(|e| e.to_string())?;
             if scanned_count >= limit as usize {
                 has_more = true;
                 break;
             }
-            scanned_count += 1;
             let event_bytes = json.len();
             if event_bytes > MAX_P2P_EVENT_BYTES {
                 return Err(format!(
