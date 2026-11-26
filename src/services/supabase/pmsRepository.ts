@@ -617,40 +617,34 @@ export async function deleteStaffMember(workspaceId: WorkspaceId, memberId: stri
 }
 
 /** Stock movements are append-only; retries must match the immutable original row. */
-export async function saveStockMovement(workspaceId: WorkspaceId, establishmentId: string, movement: StockMovement): Promise<void> {
+/** Apply the append-only movement and its stock projection in one PostgreSQL transaction. */
+export async function saveStockMovement(workspaceId: WorkspaceId, establishmentId: string, movement: StockMovement): Promise<number> {
   if (!workspaceId.trim() || !establishmentId.trim() || !movement.id.trim() || !movement.itemId.trim()
-    || !Number.isFinite(movement.delta) || movement.delta === 0) {
+    || !Number.isFinite(movement.delta) || movement.delta === 0 || !movement.reason.trim()) {
     throw new Error('Mouvement de stock invalide ou non rattaché à un établissement.');
   }
+  const timestamp = new Date(
+    movement.timestamp.includes('T') ? movement.timestamp : `${movement.timestamp.replace(' ', 'T')}Z`,
+  );
+  if (!Number.isFinite(timestamp.getTime())) throw new Error('Horodatage du mouvement invalide.');
   const db = requireSupabase();
-  const row = {
-    id: movement.id, workspace_id: workspaceId, establishment_id: establishmentId,
-    item_id: movement.itemId, timestamp: movement.timestamp, delta: movement.delta,
-    reason: movement.reason, room: movement.room ?? null, actor_name: movement.user,
-  };
-  const readExisting = async () => {
-    const { data, error } = await db.from('stock_movements').select('id,workspace_id,establishment_id,item_id,timestamp,delta,reason,room,actor_name')
-      .eq('workspace_id', workspaceId).eq('id', movement.id).maybeSingle();
-    if (error) throw new Error(error.message);
-    return data;
-  };
-  const existing = await readExisting();
-  if (existing) {
-    const same = existing.establishment_id === establishmentId && existing.item_id === row.item_id
-      && existing.timestamp === row.timestamp && Number(existing.delta) === row.delta
-      && existing.reason === row.reason && existing.room === row.room && existing.actor_name === row.actor_name;
-    if (!same) throw new Error('Conflit d’idempotence : cet identifiant de mouvement existe avec un contenu différent.');
-    return;
+  const { data, error } = await db.rpc('apply_stock_movement', {
+    p_workspace_id: workspaceId,
+    p_establishment_id: establishmentId,
+    p_movement_id: movement.id,
+    p_item_id: movement.itemId,
+    p_timestamp: timestamp.toISOString(),
+    p_delta: movement.delta,
+    p_reason: movement.reason.trim(),
+    p_room: movement.room ?? null,
+    p_actor_name: movement.user || null,
+  });
+  if (error) throw new Error(error.message);
+  const quantity = Number(data);
+  if (!Number.isFinite(quantity) || quantity < 0) {
+    throw new Error('Réponse invalide du registre de stock après application du mouvement.');
   }
-  const { error } = await db.from('stock_movements').insert(row);
-  if (!error) return;
-  if (error.code !== '23505') throw new Error(error.message);
-  const raced = await readExisting();
-  if (!raced || raced.establishment_id !== establishmentId || raced.item_id !== row.item_id
-    || raced.timestamp !== row.timestamp || Number(raced.delta) !== row.delta
-    || raced.reason !== row.reason || raced.room !== row.room || raced.actor_name !== row.actor_name) {
-    throw new Error('Conflit d’idempotence après une insertion concurrente du mouvement.');
-  }
+  return quantity;
 }
 
 export async function listStockMovements(workspaceId: WorkspaceId, establishmentId: string): Promise<StockMovement[]> {
