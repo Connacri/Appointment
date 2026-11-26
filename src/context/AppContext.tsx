@@ -52,6 +52,7 @@ import {
   listPurchaseOrders,
   listStaffMembers,
   listEstablishmentProfile,
+  listWorkspaceEntityTombstones,
   listTasks,
   saveBooking as remoteSaveBooking,
   saveEstablishment as remoteSaveEstablishment,
@@ -1747,6 +1748,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           getTombstones: (targetWsId) => indexedDb.getTombstones(targetWsId),
           applyRemoteBookingTombstones: (targetWsId, tombstones) =>
             indexedDb.applyRemoteBookingTombstones(targetWsId, tombstones),
+          applyRemoteWorkspaceTombstones: (targetWsId, tombstones) =>
+            indexedDb.applyRemoteWorkspaceTombstones(targetWsId, tombstones),
           markOutboxSynced: (id) => indexedDb.markOutboxSynced(id),
           markOutboxFailed: (id, error, nextAttemptAt) =>
             indexedDb.markOutboxFailed(id, error, nextAttemptAt),
@@ -1862,6 +1865,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               purchaseOrders: remotePurchaseOrders,
               staffMembers: remoteStaffMembers,
               establishmentProfile: remoteProfile,
+              tombstones: await listWorkspaceEntityTombstones(targetWsId),
               dynamicRates: remoteRates,
             };
           },
