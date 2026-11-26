@@ -91,6 +91,14 @@ test('workspace task and establishment UI projections wait for durable outbox co
   assert.match(appContext, /commitBusinessUpsert\('task'/);
   assert.match(appContext, /commitBusinessDelete\('task'/);
   assert.match(appContext, /commitBusinessUpsert\('establishment_profile'/);
+  assert.match(appContext, /commitBusinessUpsert\('supplier'/);
+  assert.match(appContext, /commitBusinessUpsert\('purchase_order'/);
+  assert.match(appContext, /commitBusinessUpsert\('staff_member'/);
+  assert.match(appContext, /commitBusinessDelete\('supplier'/);
+  assert.match(appContext, /commitBusinessDelete\('purchase_order'/);
+  assert.match(appContext, /commitBusinessDelete\('staff_member'/);
+  assert.equal((appContext.match(/const assignTaskToStaff:/g) ?? []).length, 1);
+  assert.equal((appContext.match(/const deleteStaffMember:/g) ?? []).length, 1);
   assert.equal(appContext.includes("localStorage.setItem('omnibook_pms_tasks'"), false);
   assert.equal(appContext.includes("localStorage.setItem('omnibook_establishment_profile'"), false);
 });
