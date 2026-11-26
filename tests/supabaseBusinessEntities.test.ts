@@ -67,6 +67,7 @@ test('repositories and application mutation paths are connected to the new entit
   assert.ok(sync.includes("Lecture des tombstones Supabase indisponible"));
   assert.ok(indexedDb.includes('applyRemoteWorkspaceTombstones'));
   assert.ok(appContext.includes('offset += 500'));
+  assert.ok(appContext.includes('Awaited<ReturnType<typeof indexedDb.applyRemoteWorkspaceTombstones>>'));
   assert.ok(indexedDb.includes("activePending.some((row) => row.operation === 'upsert')"));
   for (const table of ['stock_suppliers', 'purchase_orders', 'staff_members']) assert.ok(types.includes(table + ':'));
   assert.ok(types.includes('apply_stock_movement'));

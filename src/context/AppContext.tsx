@@ -1751,7 +1751,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           applyRemoteBookingTombstones: (targetWsId, tombstones) =>
             indexedDb.applyRemoteBookingTombstones(targetWsId, tombstones),
           applyRemoteWorkspaceTombstones: async (targetWsId, tombstones) => {
-            const report = { applied: [] as Array<{ entity: P2pEntity; entityId: string }>, conflicts: [] as Array<{ entity: P2pEntity; entityId: string }> };
+            const report: Awaited<ReturnType<typeof indexedDb.applyRemoteWorkspaceTombstones>> = { applied: [], conflicts: [] };
             for (let offset = 0; offset < tombstones.length; offset += 500) {
               const page = await indexedDb.applyRemoteWorkspaceTombstones(targetWsId, tombstones.slice(offset, offset + 500));
               report.applied.push(...page.applied);
