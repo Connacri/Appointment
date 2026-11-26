@@ -13,6 +13,7 @@ import {
   toSupabaseBookingRow,
 } from './bookingMapper';
 
+const SUPABASE_PAGE_SIZE = 500;
 type WorkspaceId = string;
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new Error(result.error.message);
@@ -211,7 +212,7 @@ export interface RemoteBookingTombstone {
 export async function listBookingTombstones(workspaceId: WorkspaceId): Promise<RemoteBookingTombstone[]> {
   if (!workspaceId.trim()) throw new Error('Workspace requis pour lire les suppressions distantes.');
   const db = requireSupabase();
-  const pageSize = 500;
+  const pageSize = SUPABASE_PAGE_SIZE;
   const tombstones: RemoteBookingTombstone[] = [];
   let offset = 0;
 
@@ -253,7 +254,7 @@ export async function listBookings(workspaceId: WorkspaceId, establishmentId?: s
   // PostgREST caps a single response (Supabase default max rows). Pull the whole
   // workspace page by page through the calendar index instead of silently
   // truncating history at the first page.
-  const pageSize = 500;
+  const pageSize = SUPABASE_PAGE_SIZE;
   const first = await listBookingsWindow(workspaceId, '0001-01-01', '9999-12-31', {
     establishmentId,
     offset: 0,
@@ -479,7 +480,7 @@ export async function listStockSuppliers(workspaceId: WorkspaceId, establishment
   if (!workspaceId.trim() || !establishmentId.trim()) throw new Error('Workspace et établissement requis.');
   const db = requireSupabase();
   const rows: Database['public']['Tables']['stock_suppliers']['Row'][] = [];
-  const pageSize = 500;
+  const pageSize = SUPABASE_PAGE_SIZE;
   let offset = 0;
   while (true) {
     const { data, error } = await db.from('stock_suppliers').select('*')
@@ -531,7 +532,7 @@ export async function listPurchaseOrders(workspaceId: WorkspaceId, establishment
   if (!workspaceId.trim() || !establishmentId.trim()) throw new Error('Workspace et établissement requis.');
   const db = requireSupabase();
   const rows: Database['public']['Tables']['purchase_orders']['Row'][] = [];
-  const pageSize = 500;
+  const pageSize = SUPABASE_PAGE_SIZE;
   let offset = 0;
   while (true) {
     const { data, error } = await db.from('purchase_orders').select('*')
@@ -595,7 +596,7 @@ export async function listStaffMembers(workspaceId: WorkspaceId, establishmentId
   if (!workspaceId.trim() || !establishmentId.trim()) throw new Error('Workspace et établissement requis.');
   const db = requireSupabase();
   const rows: Database['public']['Tables']['staff_members']['Row'][] = [];
-  const pageSize = 500;
+  const pageSize = SUPABASE_PAGE_SIZE;
   let offset = 0;
   while (true) {
     const { data, error } = await db.from('staff_members').select('*')
@@ -680,7 +681,7 @@ export async function saveStockMovement(workspaceId: WorkspaceId, establishmentI
 export async function listStockMovements(workspaceId: WorkspaceId, establishmentId: string): Promise<StockMovement[]> {
   if (!workspaceId.trim() || !establishmentId.trim()) throw new Error('Workspace et établissement requis.');
   const db = requireSupabase();
-  const pageSize = 500;
+  const pageSize = SUPABASE_PAGE_SIZE;
   const rows: Array<{
     id: string; item_id: string; timestamp: string; delta: number; reason: string;
     room: string | null; actor_name: string | null; stock_items: { name: string } | null;
@@ -745,7 +746,7 @@ export async function listWorkspaceEntityTombstones(workspaceId: WorkspaceId): P
     ['purchase_order', 'purchase_orders'],
     ['staff_member', 'staff_members'],
   ] as const;
-  const pageSize = 500;
+  const pageSize = SUPABASE_PAGE_SIZE;
   const results = await Promise.all(sources.map(async ([entity, table]) => {
     const rows: SupabaseEntityTombstone[] = [];
     let offset = 0;

@@ -604,3 +604,6 @@ This is an integration milestone, not proof of complete convergence. Remaining g
 6. Implement secure peer transport and pairing. LAN discovery remains discovery only.
 
 Do not claim all business CRUD is synchronized or production-ready until these gates pass.
+
+
+Supabase pull ordering is guarded against resurrection: before pushing upserts for soft-delete-capable entities, the sync engine reads server tombstones. Matching upserts are held for explicit resolution; if tombstone lookup is unavailable, those upserts are suspended. The normal pull reuses the preflight result instead of querying tombstones twice and retries lookup only if preflight failed. Repository page size is centralized at 500 rows for supplier, order, staff, movement and tombstone reads.

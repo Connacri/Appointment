@@ -1868,7 +1868,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               purchaseOrders: remotePurchaseOrders,
               staffMembers: remoteStaffMembers,
               establishmentProfile: remoteProfile,
-              tombstones: await listWorkspaceEntityTombstones(targetWsId),
               dynamicRates: remoteRates,
             };
           },

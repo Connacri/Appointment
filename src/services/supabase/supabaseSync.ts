@@ -872,14 +872,22 @@ export async function runSupabaseSync({
       if (pulledSnapshot.bookingTombstones.length > 0) {
         await adapter.applyRemoteBookingTombstones(workspaceId, pulledSnapshot.bookingTombstones);
       }
-      if ((pulledSnapshot.tombstones?.length ?? 0) > 0) {
+      let tombstonesToApply = pulledSnapshot.tombstones ?? [];
+      if (tombstonesToApply.length === 0 && !remoteTombstoneLookupAvailable && adapter.getRemoteWorkspaceTombstones) {
+        try {
+          tombstonesToApply = await adapter.getRemoteWorkspaceTombstones(workspaceId);
+          remoteTombstoneLookupAvailable = true;
+          for (const tombstone of tombstonesToApply) remoteTombstoneKeys.add(`${tombstone.entity}:${tombstone.entityId}`);
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : 'lecture des tombstones distants impossible';
+          warnings.push(`Relecture des suppressions cloud impossible : ${detail}`);
+        }
+      }
+      if (tombstonesToApply.length > 0) {
         if (!adapter.applyRemoteWorkspaceTombstones) {
           throw new Error('Remote workspace tombstones have no local transactional adapter.');
         }
-        const lateApply = await adapter.applyRemoteWorkspaceTombstones(
-          workspaceId,
-          pulledSnapshot.tombstones ?? [],
-        );
+        const lateApply = await adapter.applyRemoteWorkspaceTombstones(workspaceId, tombstonesToApply);
         appliedRemoteTombstones = {
           applied: [...appliedRemoteTombstones.applied, ...lateApply.applied],
           conflicts: [...appliedRemoteTombstones.conflicts, ...lateApply.conflicts],
