@@ -798,6 +798,131 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('omnibook_establishment_profile', JSON.stringify(normalized));
   };
 
+  const resolveMutationEstablishmentId = (): string => {
+    if (selectedEstablishmentId !== 'all' && selectedEstablishmentId.trim()) return selectedEstablishmentId;
+    if (establishmentProfile.id && establishmentProfile.id !== 'establishment-draft') return establishmentProfile.id;
+    if (establishmentProfile.name.trim()) return stableEstablishmentId(establishmentProfile);
+    return '';
+  };
+
+  const createMutationId = (): string => {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+    }
+  };
+
+  const queueBusinessUpsert = async (
+    entity: 'task' | 'stock_item' | 'stock_movement' | 'supplier' | 'purchase_order' | 'staff_member' | 'establishment_profile',
+    entityId: string,
+    payload: Record<string, unknown>,
+    establishmentOverride?: string,
+  ): Promise<void> => {
+    const workspaceId = workspace.activeWorkspaceId?.trim();
+    // Local-only installations remain usable; cloud Outbox requires a verified tenant.
+    if (!workspaceId) return;
+    const establishmentId = establishmentOverride?.trim() || resolveMutationEstablishmentId();
+    if (!establishmentId || establishmentId === 'all') {
+      throw new Error(`Établissement réel requis pour synchroniser ${entity}/${entityId}.`);
+    }
+    const context = { workspaceId, establishmentId };
+    const idempotencyKey = `${workspaceId}:${entity}:${entityId}:${createMutationId()}`;
+    await indexedDb.enqueueOutboxOnly(
+      context, entity, entityId, 'upsert', 1,
+      { ...payload, workspaceId, establishmentId }, idempotencyKey,
+    );
+  };
+
+  const queueBusinessDelete = async (
+    entity: 'task' | 'stock_item' | 'supplier' | 'purchase_order' | 'staff_member',
+    entityId: string,
+  ): Promise<void> => {
+    const workspaceId = workspace.activeWorkspaceId?.trim();
+    if (!workspaceId) return;
+    const establishmentId = resolveMutationEstablishmentId();
+    if (!establishmentId || establishmentId === 'all') {
+      throw new Error(`Établissement réel requis pour supprimer ${entity}/${entityId}.`);
+    }
+    await indexedDb.deleteWorkspaceEntityWithOutbox(
+      { workspaceId, establishmentId }, entity, entityId,
+      `${workspaceId}:${entity}:${entityId}:${createMutationId()}`,
+    );
+  };
+
+  const reportQueueFailure = (entity: string, entityId: string, error: unknown): void => {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error(`[P2P/Outbox] ${entity}/${entityId} was not queued:`, detail);
+    setCloudSyncStatus((prev) => ({
+      ...prev,
+      phase: 'error',
+      lastError: `Mutation locale non ajoutée à l’Outbox (${entity}/${entityId}) : ${detail}`,
+    }));
+  };
+
+  // Recover committed generic projections before relying on the localStorage mirror.
+  useEffect(() => {
+    const workspaceId = workspace.activeWorkspaceId?.trim();
+    if (!workspaceId) return;
+    let cancelled = false;
+    void Promise.all([
+      indexedDb.getWorkspaceEntities<PmsTask>(workspaceId, 'task'),
+      indexedDb.getWorkspaceEntities<StockItem>(workspaceId, 'stock_item'),
+      indexedDb.getWorkspaceEntities<StockMovement>(workspaceId, 'stock_movement'),
+      indexedDb.getWorkspaceEntities<StockSupplier>(workspaceId, 'supplier'),
+      indexedDb.getWorkspaceEntities<PurchaseOrderRecord>(workspaceId, 'purchase_order'),
+      indexedDb.getWorkspaceEntities<StaffMemberRecord>(workspaceId, 'staff_member'),
+      indexedDb.getWorkspaceEntities<EstablishmentProfile>(workspaceId, 'establishment_profile'),
+    ]).then(([tasksRows, stockRows, movementRows, supplierRows, orderRows, staffRows, profileRows]) => {
+      if (cancelled) return;
+      const mergeById = <T extends { id: string }>(local: T[], durable: T[]): T[] => {
+        const rows = new Map(local.map((item) => [item.id, item]));
+        for (const item of durable) rows.set(item.id, item);
+        return [...rows.values()];
+      };
+      if (tasksRows.length) setTasks((prev) => {
+        const next = mergeById(prev, tasksRows);
+        localStorage.setItem('omnibook_pms_tasks', JSON.stringify(next));
+        return next;
+      });
+      if (stockRows.length) setStockItems((prev) => {
+        const next = mergeById(prev, stockRows);
+        stockItemsRef.current = next;
+        localStorage.setItem('omnibook_stock_items', JSON.stringify(next));
+        return next;
+      });
+      if (movementRows.length) setStockMovements((prev) => {
+        const next = mergeById(prev, movementRows).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        localStorage.setItem('omnibook_stock_movements', JSON.stringify(next.slice(0, 200)));
+        return next.slice(0, 200);
+      });
+      if (supplierRows.length) setSuppliers((prev) => {
+        const next = mergeById(prev, supplierRows);
+        localStorage.setItem('omnibook_stock_suppliers', JSON.stringify(next));
+        return next;
+      });
+      if (orderRows.length) setPurchaseOrders((prev) => {
+        const next = mergeById(prev, orderRows);
+        localStorage.setItem('omnibook_purchase_orders', JSON.stringify(next));
+        return next;
+      });
+      if (staffRows.length) setStaffMembers((prev) => {
+        const next = mergeById(prev, staffRows);
+        localStorage.setItem('omnibook_staff_members', JSON.stringify(next));
+        return next;
+      });
+      if (profileRows.length && !(latestProfileRef.current.name ?? '').trim()) {
+        const profile = profileRows[profileRows.length - 1];
+        setEstablishmentProfileState(profile);
+        latestProfileRef.current = profile;
+        localStorage.setItem('omnibook_establishment_profile', JSON.stringify(profile));
+      }
+    }).catch((error) => {
+      reportQueueFailure('workspaceEntities', workspaceId, error);
+    });
+    return () => { cancelled = true; };
+  }, [workspace.activeWorkspaceId]);
+
   const [hasOnboarded, setHasOnboardedState] = useState<boolean>(() => {
     return localStorage.getItem('omnibook_onboarding_completed') === 'true';
   });
