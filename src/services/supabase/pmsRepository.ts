@@ -1,4 +1,5 @@
 import { requireSupabase } from './supabaseClient';
+import type { Database, Json } from './database.types';
 import type {
   TimelineBooking, ResourceGroup, ResourceItem, HotelEstablishment, EstablishmentSyncRecord,
   PmsTask, StockItem, StockMovement, StockSupplier, PurchaseOrderRecord,
@@ -545,16 +546,17 @@ export async function savePurchaseOrder(workspaceId: WorkspaceId, establishmentI
     || !Number.isFinite(item.unitCost) || item.unitCost < 0
   )) throw new Error('Lignes de commande invalides.');
   const db = requireSupabase();
-  return unwrap(await db.from('purchase_orders').upsert({
+  const payload: Database['public']['Tables']['purchase_orders']['Insert'] = {
     id: order.id, workspace_id: workspaceId, establishment_id: establishmentId,
     order_number: order.orderNumber, supplier_id: order.supplierId ?? null,
     supplier_name: order.supplierName, supplier_phone: order.supplierPhone ?? null,
     supplier_email: order.supplierEmail ?? null, created_by: order.createdBy,
-    status: order.status, note: order.note ?? null, items: order.items,
+    status: order.status, note: order.note ?? null, items: order.items as unknown as Json,
     confirmed_at: order.confirmedAt ?? null, sent_at: order.sentAt ?? null,
     sent_via: order.sentVia ?? null, received_at: order.receivedAt ?? null,
     created_at: order.createdAt, deleted_at: null,
-  }).select().single());
+  };
+  return unwrap(await db.from('purchase_orders').upsert(payload).select().single());
 }
 
 export async function deletePurchaseOrder(workspaceId: WorkspaceId, orderId: string): Promise<void> {
@@ -594,13 +596,15 @@ export async function saveStaffMember(workspaceId: WorkspaceId, establishmentId:
     throw new Error('Workspace, établissement, identifiant et nom du membre du personnel obligatoires.');
   }
   const db = requireSupabase();
-  return unwrap(await db.from('staff_members').upsert({
+  const payload: Database['public']['Tables']['staff_members']['Insert'] = {
     id: member.id, workspace_id: workspaceId, establishment_id: establishmentId,
     full_name: member.fullName.trim(), phone: member.phone ?? null, role_id: member.roleId,
     assignment: member.assignment, shift: member.shift, default_tasks: member.defaultTasks,
-    employment_status: member.status, hired_at: member.hiredAt, history: member.history,
+    employment_status: member.status, hired_at: member.hiredAt,
+    history: member.history as unknown as Json,
     deleted_at: null,
-  }).select().single());
+  };
+  return unwrap(await db.from('staff_members').upsert(payload).select().single());
 }
 
 export async function deleteStaffMember(workspaceId: WorkspaceId, memberId: string): Promise<void> {
@@ -636,8 +640,8 @@ export async function saveStockMovement(workspaceId: WorkspaceId, establishmentI
     p_timestamp: timestamp.toISOString(),
     p_delta: movement.delta,
     p_reason: movement.reason.trim(),
-    p_room: movement.room ?? null,
-    p_actor_name: movement.user || null,
+    ...(movement.room ? { p_room: movement.room } : {}),
+    ...(movement.user ? { p_actor_name: movement.user } : {}),
   });
   if (error) throw new Error(error.message);
   const quantity = Number(data);
@@ -691,7 +695,7 @@ export async function saveEstablishmentProfile(
   const settings = data.settings && typeof data.settings === 'object' && !Array.isArray(data.settings)
     ? data.settings as Record<string, unknown> : {};
   const { error: updateError } = await db.from('establishments').update({
-    settings: { ...settings, appointmentProfile: profile },
+    settings: { ...settings, appointmentProfile: profile as unknown as Json } as unknown as Json,
   }).eq('workspace_id', workspaceId).eq('id', establishmentId);
   if (updateError) throw new Error(updateError.message);
 }
