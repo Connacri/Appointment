@@ -923,6 +923,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const assertCriticalMutationAllowed = (): void => {
     const availability = deviceMutationAvailabilityRef.current;
+    const activeWorkspaceId = workspace.activeWorkspaceId?.trim();
+    const activeEstablishmentId = resolveMutationEstablishmentId();
+    if (
+      !deviceRegistry ||
+      !activeWorkspaceId ||
+      !activeEstablishmentId ||
+      deviceRegistry.workspaceId !== activeWorkspaceId ||
+      deviceRegistry.establishmentId !== activeEstablishmentId
+    ) {
+      throw new Error('Le registre des appareils ne correspond plus au workspace/établissement actif. Rechargement et vérification requis.');
+    }
     if (!availability.canMutate) {
       const messages: Record<MutationAvailability['reason'], string> = {
         single_device_local: '', coordination_available: '',
@@ -4101,6 +4112,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Wait for IndexedDB completion. A failed transaction must not be reported as success.
     await indexedDb.clearAll();
+    deviceRegistryLoadSeqRef.current += 1;
+    setDeviceRegistry(null);
+    setDeviceMutationAvailability({ state: 'READ_ONLY', canMutate: false, reason: 'registry_missing' });
   };
 
   const eventLogs = useMemo<EventLogEntry[]>(() => {
