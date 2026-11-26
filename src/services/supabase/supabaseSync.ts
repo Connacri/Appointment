@@ -244,8 +244,7 @@ export function shouldSkipRedundantSync(params: {
   return nowMs - lastSyncedMs >= 0 && nowMs - lastSyncedMs < freshnessWindowMs;
 }
 
-function mergeWorkspaceRows<T extends { id: string }>(
-  localRows: readonly T[],
+function filterRemoteWorkspaceRows<T extends { id: string }>(
   remoteRows: readonly T[],
   entity: OutboxEntity,
   workspaceId: string,
@@ -254,12 +253,7 @@ function mergeWorkspaceRows<T extends { id: string }>(
 ): T[] {
   const pendingIds = new Set(pendingOutbox.filter((row) => row.entity === entity).map((row) => row.entityId));
   const deletedIds = new Set(tombstones.filter((row) => row.workspaceId === workspaceId && row.entity === entity).map((row) => row.entityId));
-  const merged = new Map(localRows.map((row) => [row.id, row]));
-  for (const row of remoteRows) {
-    if (!pendingIds.has(row.id) && !deletedIds.has(row.id)) merged.set(row.id, row);
-  }
-  for (const id of deletedIds) merged.delete(id);
-  return [...merged.values()];
+  return remoteRows.filter((row) => !pendingIds.has(row.id) && !deletedIds.has(row.id));
 }
 
 function sortOutboxForPush(records: OutboxRecord[]): OutboxRecord[] {
@@ -970,16 +964,16 @@ export async function runSupabaseSync({
     remoteStockItems: pulledSnapshot?.stockItems ?? [],
     remoteDynamicRates: pulledSnapshot?.dynamicRates ?? {},
     remoteStockMovements: pulledSnapshot
-      ? mergeWorkspaceRows([], pulledSnapshot.stockMovements ?? [], 'stock_movement', workspaceId, mergePendingOutbox, mergeLocalTombstones)
+      ? filterRemoteWorkspaceRows(pulledSnapshot.stockMovements ?? [], 'stock_movement', workspaceId, mergePendingOutbox, mergeLocalTombstones)
       : [],
     remoteSuppliers: pulledSnapshot
-      ? mergeWorkspaceRows([], pulledSnapshot.suppliers ?? [], 'supplier', workspaceId, mergePendingOutbox, mergeLocalTombstones)
+      ? filterRemoteWorkspaceRows(pulledSnapshot.suppliers ?? [], 'supplier', workspaceId, mergePendingOutbox, mergeLocalTombstones)
       : [],
     remotePurchaseOrders: pulledSnapshot
-      ? mergeWorkspaceRows([], pulledSnapshot.purchaseOrders ?? [], 'purchase_order', workspaceId, mergePendingOutbox, mergeLocalTombstones)
+      ? filterRemoteWorkspaceRows(pulledSnapshot.purchaseOrders ?? [], 'purchase_order', workspaceId, mergePendingOutbox, mergeLocalTombstones)
       : [],
     remoteStaffMembers: pulledSnapshot
-      ? mergeWorkspaceRows([], pulledSnapshot.staffMembers ?? [], 'staff_member', workspaceId, mergePendingOutbox, mergeLocalTombstones)
+      ? filterRemoteWorkspaceRows(pulledSnapshot.staffMembers ?? [], 'staff_member', workspaceId, mergePendingOutbox, mergeLocalTombstones)
       : [],
     recoveredProfile,
     warnings,
