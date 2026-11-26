@@ -193,3 +193,5 @@ The SQLite page scanner uses a bounded indexed query and skips non-origin events
 Windows inbound SQLite pages now enforce the same origin and framing rules as IndexedDB: every event nodeId must equal the authenticated peer ID, each event is at most 1 MiB, and the full page is at most 4 MiB. The batch is rejected before opening the persistence transaction if any of these checks fail.
 
 Regression coverage includes a forged-origin batch: a sender identified as node-b cannot append a node-c event or advance node-b's inbound cursor.
+
+The SQLite inbound-origin regression verifies that a node-b transport session cannot submit a node-c event and that the failed batch leaves both the event log and node-b inbound cursor unchanged.

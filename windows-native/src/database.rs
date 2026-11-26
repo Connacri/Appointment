@@ -720,7 +720,10 @@ impl PmsDatabase {
                 return Err("P2P inbound batch contains an event from another workspace".into());
             }
             if event.node_id != batch.peer_id {
-                return Err("P2P peer may only submit events authored by its authenticated node identity".into());
+                return Err(
+                    "P2P peer may only submit events authored by its authenticated node identity"
+                        .into(),
+                );
             }
             event.validate().map_err(str::to_string)?;
             let event_bytes = serde_json::to_vec(event).map_err(|e| e.to_string())?.len();
@@ -2691,11 +2694,15 @@ mod tests {
             })
             .is_err());
         assert_eq!(db.p2p_event_count("w-1").unwrap(), 0);
-        let cursor: Option<i64> = db.connection.query_row(
-            "SELECT cursor FROM p2p_peer_cursors WHERE workspace_id='w-1' AND peer_id='node-b'",
-            [],
-            |row| row.get(0),
-        ).optional().unwrap();
+        let cursor: Option<i64> = db
+            .connection
+            .query_row(
+                "SELECT cursor FROM p2p_peer_cursors WHERE workspace_id='w-1' AND peer_id='node-b'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .unwrap();
         assert_eq!(cursor, None);
     }
 
