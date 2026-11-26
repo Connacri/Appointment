@@ -152,7 +152,7 @@ function personDisplayLabel(
  * - Single-person booking: primary full name is required; phone and email are optional (syntax-checked if provided).
  * - Multi-person booking (`adults + children > 1`):
  *   - Every occupant (primary, additional adults, children) requires full name and identity document.
- *   - Primary guest requires a valid phone number; additional adults (2+) and children do NOT require phone or email.
+ *   - Phone and email are optional for every occupant; provided values are syntax-checked.
  *   - Email is optional for everyone (syntax-checked only when provided).
  */
 export function validateBookingOccupants(
@@ -237,22 +237,7 @@ export function validateBookingOccupants(
     }
 
     const trimmedPhone = person.phone.trim();
-    if (person.isPrimary) {
-      if (!isValidPhoneNumber(trimmedPhone)) {
-        errors.push({
-          personIndex: index,
-          role: person.role,
-          isPrimary: person.isPrimary,
-          field: 'phone',
-          message:
-            language === 'ar'
-              ? `${label}: رقم هاتف صالح مطلوب.`
-              : language === 'en'
-              ? `${label}: valid phone number is required.`
-              : `${label} : un numéro de téléphone valide est obligatoire.`,
-        });
-      }
-    } else if (trimmedPhone && !isValidPhoneNumber(trimmedPhone)) {
+    if (trimmedPhone && !isValidPhoneNumber(trimmedPhone)) {
       errors.push({
         personIndex: index,
         role: person.role,
