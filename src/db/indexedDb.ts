@@ -139,7 +139,7 @@ export interface OutboxSummary {
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 9;
+  private dbVersion = 10;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -271,6 +271,12 @@ class IndexedDbStore {
           const entities = db.createObjectStore('workspaceEntities', { keyPath: ['workspaceId', 'entity', 'entityId'] });
           entities.createIndex('workspaceEntityId', ['workspaceId', 'entityId'], { unique: false });
           entities.createIndex('workspaceUpdatedAt', ['workspaceId', 'updatedAt'], { unique: false });
+        }
+        // Local-only business records are durable but deliberately excluded from
+        // workspace Outbox/P2P until a verified workspace identity is available.
+        if (!db.objectStoreNames.contains('localBusinessEntities')) {
+          const localEntities = db.createObjectStore('localBusinessEntities', { keyPath: ['entity', 'entityId'] });
+          localEntities.createIndex('entity', 'entity', { unique: false });
         }
         if (!db.objectStoreNames.contains('issuedCards')) {
           const issuedCards = db.createObjectStore('issuedCards', { keyPath: 'id' });
@@ -1843,6 +1849,48 @@ class IndexedDbStore {
       if (action.value === 'conflict') report.conflicts.push(entry);
     }
     return report;
+  }
+
+  /** Persist local-only business data without inventing a workspace or emitting P2P events. */
+  public async putLocalBusinessEntity(
+    entity: OutboxEntity,
+    entityId: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    if (!entityId.trim() || !payload || typeof payload !== 'object') {
+      throw new Error('Local business entity identity and payload are required.');
+    }
+    await this.openStore();
+    if (!this.idb) throw new Error('Durable local business storage requires IndexedDB.');
+    const tx = this.createStrictTransaction(['localBusinessEntities']);
+    tx.objectStore('localBusinessEntities').put({
+      entity, entityId, payload, updatedAt: new Date().toISOString(),
+    });
+    await waitForTransactionCompletion(tx, `putLocalBusinessEntity ${entity}/${entityId}`);
+  }
+
+  /** Remove one local-only business projection. Workspace deletes must use tombstones. */
+  public async deleteLocalBusinessEntity(entity: OutboxEntity, entityId: string): Promise<void> {
+    if (!entityId.trim()) throw new Error('Local business entity identity is required.');
+    await this.openStore();
+    if (!this.idb) throw new Error('Durable local business storage requires IndexedDB.');
+    const tx = this.createStrictTransaction(['localBusinessEntities']);
+    tx.objectStore('localBusinessEntities').delete([entity, entityId]);
+    await waitForTransactionCompletion(tx, `deleteLocalBusinessEntity ${entity}/${entityId}`);
+  }
+
+  /** Read durable local-only projections for an unauthenticated/offline installation. */
+  public async getLocalBusinessEntities<T = Record<string, unknown>>(): Promise<Array<{ entity: OutboxEntity; entityId: string; payload: T }>> {
+    await this.openStore();
+    if (!this.idb) throw new Error('Durable local business storage requires IndexedDB.');
+    const tx = this.idb.transaction(['localBusinessEntities'], 'readonly');
+    const request = tx.objectStore('localBusinessEntities').getAll();
+    const rows = await new Promise<Array<{ entity: OutboxEntity; entityId: string; payload: T }>>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result as Array<{ entity: OutboxEntity; entityId: string; payload: T }>);
+      request.onerror = () => reject(request.error ?? new Error('Local business entity read failed.'));
+    });
+    await waitForTransactionCompletion(tx, 'getLocalBusinessEntities');
+    return rows;
   }
 
   /** Read one entity family from the workspace-scoped generic materialized projection. */
