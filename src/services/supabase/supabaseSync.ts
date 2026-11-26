@@ -244,6 +244,24 @@ export function shouldSkipRedundantSync(params: {
   return nowMs - lastSyncedMs >= 0 && nowMs - lastSyncedMs < freshnessWindowMs;
 }
 
+function mergeWorkspaceRows<T extends { id: string }>(
+  localRows: readonly T[],
+  remoteRows: readonly T[],
+  entity: OutboxEntity,
+  workspaceId: string,
+  pendingOutbox: readonly OutboxRecord[],
+  tombstones: readonly TombstoneRecord[],
+): T[] {
+  const pendingIds = new Set(pendingOutbox.filter((row) => row.entity === entity).map((row) => row.entityId));
+  const deletedIds = new Set(tombstones.filter((row) => row.workspaceId === workspaceId && row.entity === entity).map((row) => row.entityId));
+  const merged = new Map(localRows.map((row) => [row.id, row]));
+  for (const row of remoteRows) {
+    if (!pendingIds.has(row.id) && !deletedIds.has(row.id)) merged.set(row.id, row);
+  }
+  for (const id of deletedIds) merged.delete(id);
+  return [...merged.values()];
+}
+
 function sortOutboxForPush(records: OutboxRecord[]): OutboxRecord[] {
   return [...records].sort((a, b) => {
     const pA = ENTITY_PUSH_PRIORITY[a.entity] ?? 99;
@@ -485,6 +503,8 @@ export async function runSupabaseSync({
   let pushFailedCount = 0;
   let firstPushError: string | null = null;
   let prefetchedRemote: PulledSupabaseSnapshot | null = null;
+  let mergePendingOutbox: OutboxRecord[] = [];
+  let mergeLocalTombstones: TombstoneRecord[] = [];
 
   const acknowledgePush = async (record: OutboxRecord): Promise<void> => {
     await adapter.markOutboxSynced(record.id);
@@ -816,6 +836,8 @@ export async function runSupabaseSync({
         adapter.getPendingOutbox(workspaceId, 500, true),
         adapter.getTombstones(workspaceId),
       ]);
+      mergePendingOutbox = remainingPending;
+      mergeLocalTombstones = tombstones;
 
       const merged = mergeCloudStateWithLocal({
         localGroups,
@@ -945,10 +967,18 @@ export async function runSupabaseSync({
     remoteTasks: pulledSnapshot?.tasks ?? [],
     remoteStockItems: pulledSnapshot?.stockItems ?? [],
     remoteDynamicRates: pulledSnapshot?.dynamicRates ?? {},
-    remoteStockMovements: pulledSnapshot?.stockMovements ?? [],
-    remoteSuppliers: pulledSnapshot?.suppliers ?? [],
-    remotePurchaseOrders: pulledSnapshot?.purchaseOrders ?? [],
-    remoteStaffMembers: pulledSnapshot?.staffMembers ?? [],
+    remoteStockMovements: pulledSnapshot
+      ? mergeWorkspaceRows([], pulledSnapshot.stockMovements ?? [], 'stock_movement', workspaceId, mergePendingOutbox, mergeLocalTombstones)
+      : [],
+    remoteSuppliers: pulledSnapshot
+      ? mergeWorkspaceRows([], pulledSnapshot.suppliers ?? [], 'supplier', workspaceId, mergePendingOutbox, mergeLocalTombstones)
+      : [],
+    remotePurchaseOrders: pulledSnapshot
+      ? mergeWorkspaceRows([], pulledSnapshot.purchaseOrders ?? [], 'purchase_order', workspaceId, mergePendingOutbox, mergeLocalTombstones)
+      : [],
+    remoteStaffMembers: pulledSnapshot
+      ? mergeWorkspaceRows([], pulledSnapshot.staffMembers ?? [], 'staff_member', workspaceId, mergePendingOutbox, mergeLocalTombstones)
+      : [],
     recoveredProfile,
     warnings,
   };
