@@ -1250,6 +1250,7 @@ export type Database = {
           id: string
           min_threshold: number
           name: string
+          preferred_supplier_id: string | null
           quantity: number
           unit: string
           unit_cost: number
@@ -1265,6 +1266,7 @@ export type Database = {
           id: string
           min_threshold?: number
           name: string
+          preferred_supplier_id?: string | null
           quantity?: number
           unit: string
           unit_cost?: number
@@ -1280,6 +1282,7 @@ export type Database = {
           id?: string
           min_threshold?: number
           name?: string
+          preferred_supplier_id?: string | null
           quantity?: number
           unit?: string
           unit_cost?: number
@@ -1301,6 +1304,17 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "establishments"
             referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "stock_items_supplier_establishment_fk"
+            columns: [
+              "preferred_supplier_id",
+              "workspace_id",
+              "establishment_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "stock_suppliers"
+            referencedColumns: ["id", "workspace_id", "establishment_id"]
           },
           {
             foreignKeyName: "stock_items_workspace_id_fkey"
