@@ -28,6 +28,7 @@ export const P2P_SUPPORTED_ENTITIES = [
   'dynamic_rate',
   'staff_member',
   'establishment_profile',
+  'booking_conflict',
 ] as const;
 export type P2pEntity = typeof P2P_SUPPORTED_ENTITIES[number];
 
