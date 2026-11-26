@@ -10,6 +10,7 @@ import {
   validateP2pEvent,
   validateP2pCursorAdvance,
   P2P_SUPPORTED_ENTITIES,
+  SUPABASE_OUTBOX_ENTITIES,
   type P2pEvent,
 } from '../src/services/p2p/protocol';
 
@@ -125,7 +126,21 @@ test('uses one explicit versioned entity registry across storage adapters', () =
     'establishment',
     'task',
     'stock_item',
+    'stock_movement',
+    'supplier',
+    'purchase_order',
     'invoice',
+    'dynamic_rate',
+    'staff_member',
+    'establishment_profile',
+  ]);
+  assert.deepEqual(SUPABASE_OUTBOX_ENTITIES, [
+    'booking',
+    'resource',
+    'resource_group',
+    'establishment',
+    'task',
+    'stock_item',
   ]);
 });
 
