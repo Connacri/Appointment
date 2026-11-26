@@ -652,3 +652,20 @@ A failure must leave all effects unchanged and must not enqueue a partial mutati
 The UI currently blocks receipt because this atomic command is not implemented; this
 is an intentional fail-closed limitation, not a completed receiving workflow.
 Regression coverage: `tests/purchaseOrderReceiptSafety.test.ts`.
+
+
+### Atomic purchase-order receipt command
+
+Purchase-order receipt is implemented as a single local command. The command validates every
+line, aggregates repeated stock-item references, rejects missing stock items and invalid
+quantities, then commits the purchase-order status, stock-item projections, stock-movement
+ledger, Outbox rows and sequential P2P events in one strict IndexedDB transaction. Event
+append is serialized inside that transaction so each event observes the preceding vector-clock
+advance. A concurrent second receipt is rejected by a transaction-level status precondition.
+
+For installations without an authenticated workspace identity, the same business rows are
+written atomically to `localBusinessEntities`; this is durable local-only storage and does not
+emit P2P events or claim peer synchronization. Once a workspace identity is established,
+workspace-scoped replication remains a separate migration/pairing requirement.
+
+Regression coverage: `tests/purchaseOrderReceiptSafety.test.ts`.

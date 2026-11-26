@@ -22,7 +22,7 @@ import {
   DocumentType,
 } from '../types/booking';
 import { applyStockDeductions, type StockDeductionLine } from '../utils/stockProcurement';
-import { PURCHASE_ORDER_RECEIPT_BLOCKED_REASON } from '../utils/purchaseOrderReceipt';
+import { buildPurchaseOrderReceiptPlan } from '../utils/purchaseOrderReceipt';
 import {
   initialResourceGroups,
   initialBookings,
@@ -344,7 +344,7 @@ interface AppContextType {
   ) => PurchaseOrderRecord;
   updatePurchaseOrder: (po: PurchaseOrderRecord) => void;
   deletePurchaseOrder: (id: string) => void;
-  markPurchaseOrderReceived: (id: string) => void;
+  markPurchaseOrderReceived: (id: string) => Promise<void>;
   focusedStockTab: 'stock' | 'movements' | 'reorder' | 'suppliers' | null;
   setFocusedStockTab: (tab: 'stock' | 'movements' | 'reorder' | 'suppliers' | null) => void;
   dynamicRates: Record<string, Record<string, number>>;
@@ -3512,12 +3512,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const markPurchaseOrderReceived = (id: string) => {
+  const markPurchaseOrderReceived = async (id: string): Promise<void> => {
     const target = purchaseOrders.find((order) => order.id === id);
     if (!target || target.status === 'received') return;
-    // Receipt must remain blocked until one local transaction commits the order,
-    // stock projections, movement ledger and replication intent.
-    reportQueueFailure('purchase_order', id, new Error(PURCHASE_ORDER_RECEIPT_BLOCKED_REASON));
+
+    try {
+      const now = new Date().toISOString();
+      const plan = buildPurchaseOrderReceiptPlan(
+        target,
+        stockItemsRef.current,
+        resolveActorLabel(currentRoleRef.current),
+        now,
+        () => `mov_${createMutationId()}`,
+      );
+      const workspaceId = workspace.activeWorkspaceId?.trim();
+
+      if (workspaceId) {
+        const establishmentId = resolveMutationEstablishmentId();
+        if (!establishmentId || establishmentId === 'all') {
+          throw new Error('Établissement réel requis pour réceptionner cette commande.');
+        }
+        await indexedDb.enqueueWorkspaceUpsertsAtomically(
+          { workspaceId, establishmentId },
+          plan.mutations,
+          `purchase-order-receipt-${createMutationId()}`,
+          { entity: 'purchase_order', entityId: id, field: 'status', value: 'received' },
+        );
+        scheduleAutoSync();
+      } else {
+        // Offline-first local-only installations still commit all receipt rows
+        // together; they intentionally emit no workspace/P2P event until paired.
+        await indexedDb.putLocalBusinessEntitiesAtomically(plan.mutations);
+      }
+
+      stockItemsRef.current = plan.stockItems;
+      setStockItems(plan.stockItems);
+      localStorage.setItem('omnibook_stock_items', JSON.stringify(plan.stockItems));
+      setStockMovements((previous) => {
+        const next = [...plan.movements, ...previous].slice(0, 200);
+        localStorage.setItem('omnibook_stock_movements', JSON.stringify(next));
+        return next;
+      });
+      setPurchaseOrders((previous) => {
+        const next = previous.map((order) => order.id === id ? plan.purchaseOrder : order);
+        localStorage.setItem('omnibook_purchase_orders', JSON.stringify(next));
+        return next;
+      });
+      logEvent({
+        category: 'stock',
+        action: 'stock.purchase_order_received',
+        severity: 'success',
+        title: `Commande ${target.orderNumber} réceptionnée · ${target.supplierName}`,
+        description: `${plan.movements.length} mouvement(s) de stock validé(s) atomiquement.`,
+        target: { type: 'purchase_order', id, label: target.orderNumber },
+        metadata: { movementCount: plan.movements.length, itemCount: plan.stockItems.length },
+      });
+    } catch (error) {
+      reportQueueFailure('purchase_order', id, error);
+    }
   };
 
     const setDynamicRate = (roomType: string, date: string, price: number) => {

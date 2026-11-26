@@ -1633,6 +1633,201 @@ class IndexedDbStore {
   }
 
   /**
+   * Commit a bounded set of generic business upserts, their Outbox rows and their
+   * P2P events in one strict IndexedDB transaction. P2P events are appended
+   * sequentially so every event observes the previous event's vector-clock advance.
+   */
+  public async enqueueWorkspaceUpsertsAtomically(
+    context: OutboxMutationContext,
+    mutations: readonly Array<{
+      entity: OutboxEntity;
+      entityId: string;
+      payload: Record<string, unknown>;
+    }>,
+    commandId: string,
+    rejectIfCurrentFieldEquals?: {
+      entity: OutboxEntity;
+      entityId: string;
+      field: string;
+      value: unknown;
+    },
+  ): Promise<void> {
+    if (!context.workspaceId.trim() || !context.establishmentId?.trim() || !commandId.trim()) {
+      throw new Error('Workspace, establishment and command identity are required for an atomic mutation.');
+    }
+    if (mutations.length === 0 || mutations.length > 100) {
+      throw new Error('Atomic workspace mutation batch must contain between 1 and 100 records.');
+    }
+    const identities = new Set<string>();
+    for (const mutation of mutations) {
+      if (!mutation.entityId.trim() || !mutation.payload || typeof mutation.payload !== 'object'
+        || Array.isArray(mutation.payload) || mutation.payload.id !== mutation.entityId) {
+        throw new Error('Atomic workspace mutation contains an invalid entity identity or payload.');
+      }
+      const identity = `${mutation.entity}:${mutation.entityId}`;
+      if (identities.has(identity)) throw new Error(`Duplicate entity in atomic mutation batch: ${identity}`);
+      identities.add(identity);
+    }
+    if (rejectIfCurrentFieldEquals && !mutations.some((item) =>
+      item.entity === rejectIfCurrentFieldEquals.entity && item.entityId === rejectIfCurrentFieldEquals.entityId
+    )) {
+      throw new Error('Atomic mutation precondition must reference a record in the same batch.');
+    }
+
+    await this.openStore();
+    if (!this.idb) throw new Error('Atomic workspace mutation requires IndexedDB.');
+    await this.getP2pNodeId();
+
+    const tx = this.createStrictTransaction([
+      'outbox', 'workspaceEntities', 'tombstones',
+      'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers',
+    ]);
+    const outbox = tx.objectStore('outbox');
+    const workspaceEntities = tx.objectStore('workspaceEntities');
+    const tombstones = tx.objectStore('tombstones');
+    const entries = mutations.map((mutation) => ({
+      ...mutation,
+      idempotencyKey: `${context.workspaceId}:${commandId}:${mutation.entity}:${mutation.entityId}`,
+      current: undefined as { version?: number; payload?: Record<string, unknown> } | undefined,
+      tombstone: undefined as TombstoneRecord | undefined,
+      existing: undefined as OutboxRecord | undefined,
+      ready: 0,
+    }));
+    let readyCount = 0;
+    let validationError: Error | null = null;
+    const abortWith = (message: string) => {
+      validationError = new Error(message);
+      try { tx.abort(); } catch { /* transaction may already be inactive */ }
+    };
+
+    const processNext = (index: number): void => {
+      if (index >= entries.length) return;
+      const entry = entries[index];
+      if (entry.existing) {
+        abortWith(`Atomic command idempotency key already exists: ${entry.entity}/${entry.entityId}.`);
+        return;
+      }
+      if (
+        rejectIfCurrentFieldEquals
+        && entry.entity === rejectIfCurrentFieldEquals.entity
+        && entry.entityId === rejectIfCurrentFieldEquals.entityId
+        && entry.current?.payload?.[rejectIfCurrentFieldEquals.field] === rejectIfCurrentFieldEquals.value
+      ) {
+        abortWith(`Atomic command precondition failed: ${entry.entity}/${entry.entityId} is already in the requested state.`);
+        return;
+      }
+
+      const version = Math.max(entry.current?.version ?? 0, entry.tombstone?.version ?? 0) + 1;
+      const now = new Date().toISOString();
+      const persisted = {
+        ...entry.payload,
+        workspaceId: context.workspaceId,
+        establishmentId: context.establishmentId,
+        syncVersion: version,
+        deletedAt: null,
+      };
+      workspaceEntities.put({
+        workspaceId: context.workspaceId,
+        establishmentId: context.establishmentId,
+        entity: entry.entity,
+        entityId: entry.entityId,
+        version,
+        updatedAt: now,
+        payload: persisted,
+      });
+      tombstones.delete(`${context.workspaceId}:${entry.entity}:${entry.entityId}`);
+      outbox.add(this.createOutboxRecord(
+        context,
+        entry.entity,
+        entry.entityId,
+        'upsert',
+        version,
+        persisted,
+        now,
+        entry.idempotencyKey,
+      ));
+      this.appendLocalP2pEvent(
+        tx,
+        context.workspaceId,
+        entry.entity,
+        entry.entityId,
+        'upsert',
+        persisted,
+        now,
+        () => processNext(index + 1),
+      );
+    };
+
+    for (const entry of entries) {
+      const tombstoneId = `${context.workspaceId}:${entry.entity}:${entry.entityId}`;
+      const requests = [
+        outbox.index('idempotencyKey').get(entry.idempotencyKey),
+        workspaceEntities.get([context.workspaceId, entry.entity, entry.entityId]),
+        tombstones.get(tombstoneId),
+      ];
+      requests[0].onsuccess = () => {
+        entry.existing = requests[0].result as OutboxRecord | undefined;
+        entry.ready += 1;
+        readyCount += 1;
+        if (readyCount === entries.length * 3) processNext(0);
+      };
+      requests[1].onsuccess = () => {
+        entry.current = requests[1].result as typeof entry.current;
+        entry.ready += 1;
+        readyCount += 1;
+        if (readyCount === entries.length * 3) processNext(0);
+      };
+      requests[2].onsuccess = () => {
+        entry.tombstone = requests[2].result as TombstoneRecord | undefined;
+        entry.ready += 1;
+        readyCount += 1;
+        if (readyCount === entries.length * 3) processNext(0);
+      };
+      requests.forEach((request) => { request.onerror = () => tx.abort(); });
+    }
+
+    try {
+      await waitForTransactionCompletion(tx, 'enqueueWorkspaceUpsertsAtomically');
+    } catch (error) {
+      if (validationError) throw validationError;
+      throw error;
+    }
+    this.emitOutboxChange();
+  }
+
+  /** Persist a local-only multi-entity command atomically without fabricating a workspace. */
+  public async putLocalBusinessEntitiesAtomically(
+    mutations: readonly Array<{
+      entity: OutboxEntity;
+      entityId: string;
+      payload: Record<string, unknown>;
+    }>,
+  ): Promise<void> {
+    if (mutations.length === 0 || mutations.length > 100) {
+      throw new Error('Atomic local mutation batch must contain between 1 and 100 records.');
+    }
+    const identities = new Set<string>();
+    for (const mutation of mutations) {
+      if (!mutation.entityId.trim() || !mutation.payload || typeof mutation.payload !== 'object'
+        || Array.isArray(mutation.payload) || mutation.payload.id !== mutation.entityId) {
+        throw new Error('Atomic local mutation contains an invalid entity identity or payload.');
+      }
+      const identity = `${mutation.entity}:${mutation.entityId}`;
+      if (identities.has(identity)) throw new Error(`Duplicate entity in atomic local mutation batch: ${identity}`);
+      identities.add(identity);
+    }
+    await this.openStore();
+    if (!this.idb) throw new Error('Atomic local business mutation requires IndexedDB.');
+    const tx = this.createStrictTransaction(['localBusinessEntities']);
+    const store = tx.objectStore('localBusinessEntities');
+    const updatedAt = new Date().toISOString();
+    for (const mutation of mutations) {
+      store.put({ ...mutation, updatedAt });
+    }
+    await waitForTransactionCompletion(tx, 'putLocalBusinessEntitiesAtomically');
+  }
+
+  /**
    * Enqueue exactly one Outbox mutation guarded by an explicit idempotency key,
    * without touching any operational store. Used for entities that have no local
    * IndexedDB store (e.g. establishments) where the remote row is the source of
