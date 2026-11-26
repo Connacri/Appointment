@@ -13,7 +13,8 @@
     "assets:generate": "npx @capacitor/assets generate",
     "i18n:check": "node --import tsx scripts/check-i18n.ts",
     "typecheck": "tsc --noEmit",
-    "data-contract:check": "node scripts/verify-data-contract.mjs"
+    "data-contract:check": "node scripts/verify-data-contract.mjs",
+    "p2p:check": "node scripts/check-p2p-mutation-boundaries.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.95.0",

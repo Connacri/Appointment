@@ -69,6 +69,17 @@ TypeScript compilation is not proof of database alignment. Matching column names
 proof of business-rule alignment. A connected client or successful HTTP request is not
 proof of synchronization or referential integrity.
 
+
+### Replication write boundary
+
+New business-data mutations MUST NOT persist directly through `localStorage.setItem`.
+They must enter the typed domain repository and commit the local projection, version,
+Outbox intent, tombstone when applicable, and P2P event atomically. Existing legacy
+business-key writes are tracked as migration debt; they are not approved patterns and
+must be removed as each entity is migrated. The CI P2P mutation-boundary gate rejects
+new direct `localStorage.setItem` calls whose literal key identifies business data.
+This static gate complements, but does not replace, repository-level transaction tests.
+
 ## 2. Canonical business hierarchy
 
 `Hotel → Establishment → Floor → Resource`

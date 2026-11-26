@@ -33,6 +33,24 @@ jobs:
       - name: Validate data-contract change set
         run: npm run data-contract:check
 
+  p2p-mutation-boundaries:
+    name: P2P mutation boundary (no new localStorage business writes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout full history for PR/push diff
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Reject new business persistence bypasses
+        run: npm run p2p:check
+
   typecheck:
     name: TypeScript typecheck
     runs-on: ubuntu-latest
