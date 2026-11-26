@@ -1,13 +1,13 @@
 # CRUD / Data Model / Supabase Audit
 
-Baseline: `main` at `9f35e4af2d7761ea691bb4921dad2775bfbeb155` (2026-11-26). Revalidated against the current AppContext, IndexedDB adapter, Supabase repository/sync runner, generated database types, native SQLite adapters, and P2P event protocol. Static code-path audit; not a claim of successful runtime replication.
+Baseline: `main` at `39358a80e23cceef181b3b0b24e51e4fe66d6abf` (2026-11-26). Revalidated against the current AppContext, IndexedDB adapter, Supabase repository/sync runner, generated database types, native SQLite adapters, and P2P event protocol. Static code-path audit; not a claim of successful runtime replication.
 
 ## Revalidation notes (2026-11-26)
 
 - The recent booking fix classifies demo bookings by booking ID rather than by the resource they occupy. It prevents a real booking on a demo/bootstrap resource from being filtered as demo data; it does not close the other entity CRUD gaps below.
 - Direct localStorage persistence remains present in `src/context/AppContext.tsx`: task create/status/subtask/delete; stock item create/update/delete and stock movement ledger; supplier and purchase-order mutations; dynamic-rate mutations; staff mutations; establishment profile; invoice creation. These paths are not equivalent to the transactional IndexedDB Outbox/P2P write path.
 - The current `src/services/supabase/supabaseSync.ts` dispatches task and stock-item **upserts only**. It has booking/resource delete dispatch, but no invoice dispatch and no task/stock-item delete dispatch. The `invoice` Outbox union member and IndexedDB invoice store therefore must not be mistaken for a working invoice sync pipeline.
-- The current P2P protocol validates event identity, causal clocks, payload size, cursor monotonicity, a versioned seven-entity registry, matching identity limits and a strict RFC 3339 timestamp subset in TypeScript and Rust. LAN discovery advertises peer UUID/name only; it is not authenticated transport, workspace authorization, or replication. There is no verified end-to-end P2P business transport in the release gate.
+- The P2P protocol now has a 13-entity registry, separate from the six-entity Supabase Outbox registry. This prevents P2P-only entities from being enqueued into a cloud dispatcher that cannot process them. TypeScript and Rust validate the expanded P2P registry; this is protocol groundwork only, not CRUD integration. LAN discovery advertises peer UUID/name only; it is not authenticated transport, workspace authorization, or replication. There is no verified end-to-end P2P business transport in the release gate.
 - Current GitHub Actions evidence on this audit baseline: Quality Checks, including the new P2P mutation-boundary gate, and Web Deploy succeeded. The protocol-change Windows Rust, Android and release workflows were still running at the time of the latest status check. Build/test success does not demonstrate CRUD completeness or multi-device convergence.
 
 ## Required invariant
@@ -22,12 +22,12 @@ Every business Create/Read/Update/Delete must use a typed domain repository scop
 | Rooms / resources | IndexedDB resources + Outbox; housekeeping uses putWithOutbox | resources repository; sync upsert/delete | Partial; audit every resource editor path |
 | Tasks / housekeeping tasks | localStorage omnibook_pms_tasks | pms_tasks table/repository; sync upsert only | Critical: AppContext create/update/subtask/delete handlers write localStorage and do not enqueue; no task delete dispatch |
 | Stock items | localStorage omnibook_stock_items | stock_items repository; sync upsert only | Critical: handlers do not enqueue; no delete dispatch |
-| Stock movements | localStorage omnibook_stock_movements | stock_movements table; repository insert helper | Critical: no Outbox entity, no complete read/pull/replication ledger |
-| Suppliers | localStorage omnibook_stock_suppliers | No matching table/repository found | Critical: local-only |
-| Purchase orders | localStorage omnibook_purchase_orders | No matching table/repository found | Critical: local-only |
+| Stock movements | localStorage omnibook_stock_movements | stock_movements table; repository insert helper | Critical: P2P event type is registered, but no typed CRUD mutation, canonical local projection or complete read/pull ledger is wired |
+| Suppliers | localStorage omnibook_stock_suppliers | No matching table/repository found | Critical: P2P event type is registered, but no typed CRUD mutation or local P2P projection is wired |
+| Purchase orders | localStorage omnibook_purchase_orders | No matching table/repository found | Critical: P2P event type is registered, but no typed CRUD mutation or local P2P projection is wired |
 | Invoices / quotes / proformas | localStorage omnibook_invoices; IndexedDB invoices store exists | invoices + invoice_items tables exist | Critical: Outbox union has invoice, but sync dispatch/repository CRUD is missing; split local persistence paths |
-| Dynamic pricing | localStorage omnibook_dynamic_rates | dynamic_rates table; repository list only | Critical: no mutation Outbox/push/delete or complete pull merge |
-| HR / staff | localStorage omnibook_staff_members | No dedicated staff table in generated types | Critical: local-only |
+| Dynamic pricing | localStorage omnibook_dynamic_rates | dynamic_rates table; repository list only | Critical: P2P event type is registered, but no typed CRUD mutation, Outbox/push/delete or complete pull merge |
+| HR / staff | localStorage omnibook_staff_members | No dedicated staff table in generated types | Critical: P2P event type is registered, but no typed CRUD mutation or local P2P projection is wired |
 | Roles / permissions | AppContext/browser storage | No workspace role CRUD contract found | Decide explicitly device-local vs workspace-shared; currently not replicated |
 | Establishment profile | localStorage omnibook_establishment_profile | establishments repository and Outbox upsert exist | Critical: setEstablishmentProfile writes local-only, competing with cloud repository path |
 | Channel Manager | Component React useState, seeded initial data | No channel tables/repository | Critical/demo-only: resets on remount/reload; not persisted |
@@ -41,7 +41,7 @@ Every business Create/Read/Update/Delete must use a typed domain repository scop
 - The event log, vector-clock merge, per-record causal frontier and transactional inbound-batch APIs exist in both IndexedDB and native SQLite. They are persistence primitives, not an end-to-end replication service.
 - Windows Rust and Android Kotlin still implement UDP multicast presence discovery only. No authenticated application transport, pairing, workspace authorization, event exchange loop, durable transport ACK, anti-entropy session or peer retry scheduler is wired to the batch-apply APIs. The Windows UI explicitly reports that business transport is not enabled.
 - The inbound projection resolves concurrency only for the same `(workspace, entity, entityId)`. It does not enforce cross-record business invariants. Two distinct booking IDs can therefore be individually causally resolved while overlapping the same room/date interval. Stock aggregate constraints have the same class of risk.
-- IndexedDB inbound application accepts the current Outbox entity set (`booking`, `resource`, `resource_group`, `establishment`, `task`, `stock_item`, `invoice`), but operational projections exist only for bookings, resources, invoices and resource groups; the other entity types are stored in `workspaceEntities`. This is a generic record projection, not proof that their CRUD workflows, parent relationships or UI hydration are complete.
+- IndexedDB inbound application accepts the P2P registry. Operational projections exist only for bookings, resources, invoices and resource groups; the other entity types are stored in `workspaceEntities`. This generic inbound projection is not proof that their CRUD workflows, parent relationships or UI hydration are complete. Cloud Outbox acceptance is a separate six-entity contract.
 - The generic native entity-record storage API accepts string entity names for its unreplicated import path. Local replicated writes pass through P2P event validation and must use the canonical singular registry names (`resource`, not `resources`). Native regression tests now use the same registry as IndexedDB.
 - TypeScript and Rust now enforce one explicit P2P v1 entity registry, matching node/entity identity limits, the 256-node vector-clock limit, and the same strict RFC 3339 timestamp subset (commits `73aa991`, `cde0591`, `4e28e0c`, `72bfb8e`). Both runtimes have regression coverage. A shared cross-language fixture harness remains desirable; the two test suites are still maintained separately.
 - Native booking projection validates a booking document but does not query other bookings for room/date overlap. IndexedDB projection similarly applies a resolved record without a cross-record reservation constraint. The selected offline policy therefore requires a separate domain-invariant/conflict layer; vector clocks alone cannot implement it.
@@ -76,3 +76,10 @@ Appointment uses **offline operation with protection of critical operations and 
 Do not declare CRUD synchronization complete until each entity has an owner scope, schema/model, version, delete policy, mapper, local transaction, Outbox, P2P apply, Supabase push/pull, migration, RLS and regression tests. Verify parent/child integrity for bookings/resources/establishments, invoices/items/payments, tasks/stock consumption, and suppliers/orders/movements.
 
 Audit status: **NOT READY for full CRUD replication or production P2P**. This is an architectural audit; no production records were modified.
+
+
+## Phase 1 progress (2026-11-26)
+
+- Completed foundation: separated the 13-entity peer-event registry from the six-entity Supabase Outbox registry. The Outbox is intentionally limited to entities with implemented push dispatchers; invoice is no longer advertised as cloud-push-capable.
+- TypeScript and Rust P2P validation tests now assert the same expanded peer entity list. This change does not migrate AppContext localStorage CRUD paths and does not make these entities operationally replicable yet.
+- Remaining Phase 1 work: transactional local repositories and resumable legacy migration for tasks, stock items/movements, suppliers, purchase orders, invoices, dynamic rates, staff and establishment profile; then CRUD-level failure/rollback and restart tests.
