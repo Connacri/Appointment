@@ -1775,6 +1775,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       }
 
+      if (result.remoteStockMovements.length > 0) {
+        setStockMovements((prev) => {
+          const byId = new Map(prev.map((movement) => [movement.id, movement]));
+          for (const movement of result.remoteStockMovements) byId.set(movement.id, movement);
+          const next = [...byId.values()];
+          localStorage.setItem('omnibook_stock_movements', JSON.stringify(next));
+          return next;
+        });
+      }
+
+      if (result.remoteSuppliers.length > 0) {
+        setSuppliers((prev) => {
+          const byId = new Map(prev.map((supplier) => [supplier.id, supplier]));
+          for (const supplier of result.remoteSuppliers) byId.set(supplier.id, supplier);
+          const next = [...byId.values()];
+          localStorage.setItem('omnibook_stock_suppliers', JSON.stringify(next));
+          return next;
+        });
+      }
+
+      if (result.remotePurchaseOrders.length > 0) {
+        setPurchaseOrders((prev) => {
+          const byId = new Map(prev.map((order) => [order.id, order]));
+          for (const order of result.remotePurchaseOrders) byId.set(order.id, order);
+          const next = [...byId.values()];
+          localStorage.setItem('omnibook_purchase_orders', JSON.stringify(next));
+          return next;
+        });
+      }
+
+      if (result.remoteStaffMembers.length > 0) {
+        setStaffMembers((prev) => {
+          const byId = new Map(prev.map((member) => [member.id, member]));
+          for (const member of result.remoteStaffMembers) byId.set(member.id, member);
+          const next = [...byId.values()];
+          localStorage.setItem('omnibook_staff_members', JSON.stringify(next));
+          return next;
+        });
+      }
+
       if (Object.keys(result.remoteDynamicRates).length > 0) {
         setDynamicRates((prev) => {
           const next = { ...prev };
