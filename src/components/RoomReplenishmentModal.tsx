@@ -89,6 +89,9 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [markRoomClean, setMarkRoomClean] = useState<boolean>(true);
   const [note, setNote] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSeedingCatalog, setIsSeedingCatalog] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [submissionResult, setSubmissionResult] = useState<{
     roomName: string;
     deductedCount: number;
@@ -113,6 +116,8 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
     setMarkRoomClean(true);
     setNote('');
     setSubmissionResult(null);
+    setSubmissionError(null);
+    setIsSubmitting(false);
   }, [isOpen, initialRoomId, initialRoomName, initialQuantities, rooms]);
 
   useEffect(() => {
@@ -177,21 +182,20 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
     });
   };
 
-  const handleConfirm = (e: React.FormEvent) => {
+  const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedLines.length === 0) return;
-    const res = recordRoomReplenishment({
-      roomId: selectedRoomObj?.id,
-      roomName: resolvedRoomName,
-      items: selectedLines,
-      markRoomClean,
-      note,
-      operatorName: activeOperatorName.trim() || undefined,
-    });
-    setSubmissionResult({
-      roomName: resolvedRoomName,
-      ...res,
-    });
+    if (selectedLines.length === 0 || isSubmitting) return;
+    setIsSubmitting(true);
+    setSubmissionError(null);
+    try {
+      const res = await recordRoomReplenishment({
+        roomId: selectedRoomObj?.id, roomName: resolvedRoomName, items: selectedLines,
+        markRoomClean, note, operatorName: activeOperatorName.trim() || undefined,
+      });
+      setSubmissionResult({ roomName: resolvedRoomName, ...res });
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : 'Échec de la réalimentation du stock.');
+    } finally { setIsSubmitting(false); }
   };
 
   const canSeedCatalog =
@@ -401,8 +405,16 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
                   {canSeedCatalog && (
                     <button
                       type="button"
-                      onClick={() => seedStandardStockCatalog()}
-                      className="min-h-[44px] px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold cursor-pointer"
+                      disabled={isSeedingCatalog}
+                      onClick={() => {
+                        if (isSeedingCatalog) return;
+                        setIsSeedingCatalog(true);
+                        setSubmissionError(null);
+                        void seedStandardStockCatalog()
+                          .catch((error) => setSubmissionError(error instanceof Error ? error.message : 'Échec du chargement du catalogue.'))
+                          .finally(() => setIsSeedingCatalog(false));
+                      }}
+                      className="min-h-[44px] px-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold cursor-pointer"
                     >
                       {t(
                         'Charger la dotation hôtelière standard (25 articles)',
@@ -555,6 +567,11 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
               )}
             </div>
 
+            {submissionError && (
+              <div role="alert" className="mx-4 sm:mx-5 mb-2 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
+                {submissionError}
+              </div>
+            )}
             {/* Footer CTA */}
             <div className="px-4 sm:px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex flex-wrap items-center justify-between gap-2 shrink-0">
               <div className="text-xs text-slate-600 dark:text-slate-300 tabular-nums">
@@ -574,15 +591,15 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={selectedLines.length === 0}
+                  disabled={selectedLines.length === 0 || isSubmitting}
                   className="min-h-[44px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
                 >
                   <CheckCircle2 size={15} />
                   <span>
                     {t(
-                      'Valider réalimentation & Déduire du stock',
-                      'Validate & Deduct Stock',
-                      'تأكيد التزويد والخصم'
+                      isSubmitting ? 'Validation…' : 'Valider réalimentation & Déduire du stock',
+                      isSubmitting ? 'Validating…' : 'Validate & Deduct Stock',
+                      isSubmitting ? 'جارٍ التحقق…' : 'تأكيد التزويد والخصم'
                     )}
                   </span>
                 </button>

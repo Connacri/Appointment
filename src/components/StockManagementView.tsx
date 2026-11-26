@@ -82,6 +82,17 @@ export const StockManagementView: React.FC = () => {
   const [quantityInput, setQuantityInput] = useState<number>(1);
   const [reasonInput, setReasonInput] = useState<string>('');
   const [roomInput, setRoomInput] = useState<string>('');
+  const [isStockMutationPending, setIsStockMutationPending] = useState(false);
+  const [stockMutationError, setStockMutationError] = useState<string | null>(null);
+
+  const runStockMutation = async (action: () => Promise<unknown>) => {
+    if (isStockMutationPending) return;
+    setIsStockMutationPending(true);
+    setStockMutationError(null);
+    try { await action(); }
+    catch (error) { setStockMutationError(error instanceof Error ? error.message : 'Échec de l’opération de stock.'); }
+    finally { setIsStockMutationPending(false); }
+  };
 
   // New / Edit Stock Item Modal
   const [itemModalOpen, setItemModalOpen] = useState(false);
@@ -181,21 +192,20 @@ export const StockManagementView: React.FC = () => {
     setRoomInput('');
   };
 
-  const handleConfirmMovement = (e: React.FormEvent) => {
+  const handleConfirmMovement = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!movementModal.item) return;
+    if (!movementModal.item || isStockMutationPending) return;
     const { item, type } = movementModal;
-    if (type === 'in') {
-      addStockMovement(item.id, quantityInput, reasonInput || 'Entrée stock');
-    } else if (type === 'out') {
-      addStockMovement(item.id, -quantityInput, reasonInput || 'Sortie stock', roomInput);
-    } else if (type === 'inventory') {
-      const delta = quantityInput - item.quantity;
-      if (delta !== 0) {
-        addStockMovement(item.id, delta, 'Ajustement inventaire physique');
+    await runStockMutation(async () => {
+      if (type === 'in') await addStockMovement(item.id, quantityInput, reasonInput || 'Entrée stock');
+      else if (type === 'out') await addStockMovement(item.id, -quantityInput, reasonInput || 'Sortie stock', roomInput);
+      else {
+        if (!Number.isFinite(quantityInput) || quantityInput < 0) throw new Error('La quantité inventoriée doit être positive ou nulle.');
+        const delta = quantityInput - item.quantity;
+        if (delta !== 0) await addStockMovement(item.id, delta, 'Ajustement inventaire physique');
       }
-    }
-    setMovementModal({ open: false, type: 'in', item: null });
+      setMovementModal({ open: false, type: 'in', item: null });
+    });
   };
 
   const openCreateItemModal = () => {
@@ -226,9 +236,9 @@ export const StockManagementView: React.FC = () => {
     setItemModalOpen(true);
   };
 
-  const handleSaveStockItem = (e: React.FormEvent) => {
+  const handleSaveStockItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!itemForm.name.trim()) return;
+    if (!itemForm.name.trim() || isStockMutationPending) return;
     const payload = {
       name: itemForm.name.trim(),
       category: itemForm.category.trim() || 'Accueil',
@@ -238,12 +248,11 @@ export const StockManagementView: React.FC = () => {
       unitCost: Math.max(0, Number(itemForm.unitCost) || 0),
       preferredSupplierId: itemForm.preferredSupplierId || undefined,
     };
-    if (editingItem) {
-      updateStockItem({ ...editingItem, ...payload });
-    } else {
-      addStockItem(payload);
-    }
-    setItemModalOpen(false);
+    await runStockMutation(async () => {
+      if (editingItem) await updateStockItem({ ...editingItem, ...payload });
+      else await addStockItem(payload);
+      setItemModalOpen(false);
+    });
   };
 
   const exportMovementsCSV = () => {
@@ -604,11 +613,18 @@ export const StockManagementView: React.FC = () => {
           ))}
         </div>
 
+        {stockMutationError && (
+          <div role="alert" className="rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
+            {stockMutationError}
+          </div>
+        )}
+
         {activeTab === 'stock' && (
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => seedStandardStockCatalog()}
+              disabled={isStockMutationPending}
+              onClick={() => void runStockMutation(seedStandardStockCatalog)}
               className="min-h-[40px] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 cursor-pointer"
             >
               <PackagePlus size={14} className="text-blue-500" />
@@ -787,7 +803,8 @@ export const StockManagementView: React.FC = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => deleteStockItem(item.id)}
+                          disabled={isStockMutationPending}
+                          onClick={() => void runStockMutation(() => deleteStockItem(item.id))}
                           aria-label={t('Supprimer article', 'Delete item', 'حذف')}
                           className="min-h-[36px] min-w-[36px] rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center justify-center cursor-pointer"
                         >
@@ -1751,6 +1768,7 @@ export const StockManagementView: React.FC = () => {
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
+                  disabled={isStockMutationPending}
                   onClick={() => setMovementModal({ open: false, type: 'in', item: null })}
                   className="min-h-[40px] px-3.5 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                 >
@@ -1758,9 +1776,10 @@ export const StockManagementView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="min-h-[40px] px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer"
+                  disabled={isStockMutationPending}
+                  className="min-h-[40px] px-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer"
                 >
-                  {t('Enregistrer', 'Save', 'حفظ')}
+                  {isStockMutationPending ? t('Enregistrement…', 'Saving…', 'جارٍ الحفظ…') : t('Enregistrer', 'Save', 'حفظ')}
                 </button>
               </div>
             </form>
@@ -1906,6 +1925,7 @@ export const StockManagementView: React.FC = () => {
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
+                  disabled={isStockMutationPending}
                   onClick={() => setItemModalOpen(false)}
                   className="min-h-[40px] px-3.5 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                 >
@@ -1913,9 +1933,10 @@ export const StockManagementView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="min-h-[40px] px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold cursor-pointer"
+                  disabled={isStockMutationPending}
+                  className="min-h-[40px] px-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold cursor-pointer"
                 >
-                  {t('Enregistrer', 'Save', 'حفظ')}
+                  {isStockMutationPending ? t('Enregistrement…', 'Saving…', 'جارٍ الحفظ…') : t('Enregistrer', 'Save', 'حفظ')}
                 </button>
               </div>
             </form>
