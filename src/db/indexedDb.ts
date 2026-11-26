@@ -971,14 +971,84 @@ class IndexedDbStore {
                 const conflictStore = tx.objectStore('p2pBookingConflicts');
           const finishConflictScan = (): void => {
             const conflicts = detectP2pBookingConflicts([...eventById.values()]);
-            const persistNext = (conflictIndex: number): void => {
-              if (conflictIndex >= conflicts.length) {
+            const applyResolution = (conflictId: string, done: () => void): void => {
+              const conflictRequest = conflictStore.get(conflictId);
+              conflictRequest.onsuccess = () => {
+                const conflict = conflictRequest.result as BookingConflictSnapshot | undefined;
+                if (!conflict || conflict.status !== 'pending') { done(); return; }
+                const resolutionRequest = tx.objectStore('p2pEvents').index('workspaceEntity')
+                  .getAll(IDBKeyRange.only([batch.workspaceId, 'booking_conflict', conflictId]));
+                resolutionRequest.onsuccess = () => {
+                  const state = getP2pRecordState(resolutionRequest.result as P2pEvent[]);
+                  if (state.kind !== 'resolved') { done(); return; }
+                  const event = state.event;
+                  const payload = event.payload as Record<string, unknown>;
+                  const expectedSourceIds = [conflict.firstEventId, conflict.secondEventId].sort();
+                  const suppliedSourceIds = Array.isArray(payload.sourceEventIds)
+                    ? (payload.sourceEventIds as unknown[]).filter((value): value is string => typeof value === 'string').sort()
+                    : [];
+                  const causallyIncludes = (sourceId: string): boolean => {
+                    const separator = sourceId.lastIndexOf(':');
+                    if (separator <= 0) return false;
+                    const sourceNode = sourceId.slice(0, separator);
+                    const sourceSequence = Number(sourceId.slice(separator + 1));
+                    return Number.isSafeInteger(sourceSequence) && sourceSequence > 0
+                      && (event.clock[sourceNode] ?? 0) >= sourceSequence;
+                  };
+                  const decision = payload.decision;
+                  const chosenBookingId = payload.chosenBookingId;
+                  const validDecision = decision === 'keep_booking'
+                    ? (chosenBookingId === conflict.firstBookingId || chosenBookingId === conflict.secondBookingId)
+                    : decision === 'reject_both' && chosenBookingId === null;
+                  if (
+                    payload.id !== conflict.id
+                    || payload.conflictId !== conflict.id
+                    || payload.actorNodeId !== event.nodeId
+                    || typeof payload.reason !== 'string' || !payload.reason.trim() || payload.reason.length > 1000
+                    || typeof payload.resolvedAt !== 'string'
+                    || !validDecision
+                    || suppliedSourceIds.length !== 2
+                    || suppliedSourceIds[0] !== expectedSourceIds[0]
+                    || suppliedSourceIds[1] !== expectedSourceIds[1]
+                    || !expectedSourceIds.every(causallyIncludes)
+                  ) { done(); return; }
+                  conflictStore.put({
+                    ...conflict,
+                    status: decision === 'keep_booking' ? 'resolved' : 'rejected',
+                    resolution: {
+                      decision,
+                      chosenBookingId: chosenBookingId as string | null,
+                      actorNodeId: event.nodeId,
+                      reason: payload.reason,
+                      resolvedAt: payload.resolvedAt,
+                      eventId: event.eventId,
+                    },
+                  } satisfies BookingConflictSnapshot);
+                  done();
+                };
+                resolutionRequest.onerror = abort;
+              };
+              conflictRequest.onerror = abort;
+            };
+            const conflictIds = [...new Set([
+              ...conflicts.map((conflict) => conflict.id),
+              ...batch.events.filter((event) => event.entity === 'booking_conflict').map((event) => event.entityId),
+            ])];
+            const applyResolutionNext = (index: number): void => {
+              if (index >= conflictIds.length) {
                 tx.objectStore('p2pPeerCursors').put({
                   workspaceId: batch.workspaceId,
                   peerId: batch.peerId,
                   cursor: batch.nextCursor,
                   updatedAt: new Date().toISOString(),
                 });
+                return;
+              }
+              applyResolution(conflictIds[index], () => applyResolutionNext(index + 1));
+            };
+            const persistNext = (conflictIndex: number): void => {
+              if (conflictIndex >= conflicts.length) {
+                applyResolutionNext(0);
                 return;
               }
               const conflict = conflicts[conflictIndex];
@@ -1116,6 +1186,119 @@ class IndexedDbStore {
 
     await waitForTransactionCompletion(tx, 'applyReceivedP2pBatch');
     return report;
+  }
+
+  /** Resolve one cross-device booking conflict and replicate the decision as an immutable P2P event. */
+  public async resolveP2pBookingConflict(
+    workspaceId: string,
+    conflictId: string,
+    decision: 'keep_booking' | 'reject_both',
+    chosenBookingId: string | null,
+    actorId: string,
+    reason: string,
+  ): Promise<BookingConflictSnapshot> {
+    if (!workspaceId.trim() || !conflictId.trim() || !actorId.trim() || !reason.trim() || reason.length > 1000) {
+      throw new Error('Workspace, conflict, actor and a resolution reason are required.');
+    }
+    if (decision === 'keep_booking' && !chosenBookingId) {
+      throw new Error('A booking must be selected when resolving with keep_booking.');
+    }
+    if (decision === 'reject_both' && chosenBookingId !== null) {
+      throw new Error('reject_both must not select a booking.');
+    }
+    await this.openStore();
+    if (!this.idb) throw new Error('P2P conflict resolution requires IndexedDB.');
+    const nodeId = await this.getP2pNodeId();
+    const tx = this.createStrictTransaction([
+      'p2pBookingConflicts', 'p2pMeta', 'p2pClock', 'p2pEvents',
+      'p2pTransportQueue', 'p2pRecordFrontiers',
+    ]);
+    let validationError: Error | null = null;
+    let resolved: BookingConflictSnapshot | undefined;
+    const store = tx.objectStore('p2pBookingConflicts');
+    const request = store.get(conflictId);
+    request.onsuccess = () => {
+      const conflict = request.result as BookingConflictSnapshot | undefined;
+      if (!conflict || conflict.workspaceId !== workspaceId) {
+        validationError = new Error('Booking conflict was not found in this workspace.');
+        tx.abort();
+        return;
+      }
+      if (conflict.status !== 'pending') {
+        validationError = new Error('Booking conflict has already been resolved.');
+        tx.abort();
+        return;
+      }
+      if (decision === 'keep_booking'
+        && chosenBookingId !== conflict.firstBookingId && chosenBookingId !== conflict.secondBookingId) {
+        validationError = new Error('Selected booking is not part of this conflict.');
+        tx.abort();
+        return;
+      }
+      const sourceIds = [conflict.firstEventId, conflict.secondEventId];
+      let remaining = sourceIds.length;
+      let sourceMissing = false;
+      const sourceEvents: P2pEvent[] = [];
+      const createResolution = (): void => {
+        if (remaining !== 0) return;
+        if (sourceMissing || sourceEvents.length !== 2) {
+          validationError = new Error('Both source booking events must be present before resolving the conflict.');
+          tx.abort();
+          return;
+        }
+        const resolvedAt = new Date().toISOString();
+        const payload = {
+          id: conflict.id,
+          conflictId: conflict.id,
+          decision,
+          chosenBookingId,
+          actorNodeId: nodeId,
+          actorId,
+          reason: reason.trim(),
+          resolvedAt,
+          sourceEventIds: sourceIds,
+        };
+        this.appendLocalP2pEvent(
+          tx, workspaceId, 'booking_conflict', conflict.id, 'upsert', payload, resolvedAt,
+          (event) => {
+            if (!event) { tx.abort(); return; }
+            resolved = {
+              ...conflict,
+              status: decision === 'keep_booking' ? 'resolved' : 'rejected',
+              resolution: {
+                decision,
+                chosenBookingId,
+                actorNodeId: nodeId,
+                reason: reason.trim(),
+                resolvedAt,
+                eventId: event.eventId,
+              },
+            };
+            store.put(resolved);
+          },
+        );
+      };
+      for (const sourceId of sourceIds) {
+        const sourceRequest = tx.objectStore('p2pEvents').get([workspaceId, sourceId]);
+        sourceRequest.onsuccess = () => {
+          if (!sourceRequest.result) sourceMissing = true;
+          else sourceEvents.push(sourceRequest.result as P2pEvent);
+          remaining -= 1;
+          createResolution();
+        };
+        sourceRequest.onerror = () => tx.abort();
+      }
+    };
+    request.onerror = () => tx.abort();
+    try {
+      await waitForTransactionCompletion(tx, 'resolveP2pBookingConflict');
+    } catch (error) {
+      if (validationError) throw validationError;
+      throw error;
+    }
+    if (!resolved) throw new Error('Booking conflict resolution did not commit.');
+    this.emitOutboxChange();
+    return resolved;
   }
 
   /** List durable cross-ID booking conflicts for the conflict-resolution UI. */
@@ -1653,7 +1836,7 @@ class IndexedDbStore {
     operation: P2pOperation,
     payload: Record<string, unknown> | null,
     createdAt: string,
-    onQueued?: () => void,
+    onQueued?: (event?: P2pEvent) => void,
   ): void {
     const metaStore = tx.objectStore('p2pMeta');
     const clockStore = tx.objectStore('p2pClock');
@@ -1700,7 +1883,7 @@ class IndexedDbStore {
         for (const [clockNodeId, sequence] of Object.entries(event.clock)) {
           clockStore.put({ workspaceId, nodeId: clockNodeId, sequence });
         }
-        onQueued?.();
+        onQueued?.(event);
       } catch (error) {
         tx.abort();
         throw error;
