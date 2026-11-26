@@ -1,4 +1,8 @@
-import type { OutboxEntity, OutboxRecord, OutboxSummary, TombstoneRecord } from '../../db/indexedDb';
+import type {
+  AppliedRemoteTombstones, OutboxEntity, OutboxRecord, OutboxSummary,
+  RemoteWorkspaceTombstone, TombstoneRecord,
+} from '../../db/indexedDb';
+import type { P2pEntity } from '../p2p/protocol';
 import type {
   EstablishmentSyncRecord,
   HotelEstablishment,
@@ -54,6 +58,7 @@ export interface PulledSupabaseSnapshot {
   purchaseOrders?: PurchaseOrderRecord[];
   staffMembers?: StaffMemberRecord[];
   establishmentProfile?: EstablishmentProfile | null;
+  tombstones?: RemoteWorkspaceTombstone[];
 }
 
 export interface SupabaseSyncAdapter {
@@ -70,6 +75,10 @@ export interface SupabaseSyncAdapter {
     workspaceId: string,
     tombstones: RemoteBookingTombstone[],
   ) => Promise<void>;
+  applyRemoteWorkspaceTombstones?: (
+    workspaceId: string,
+    tombstones: RemoteWorkspaceTombstone[],
+  ) => Promise<AppliedRemoteTombstones>;
   markOutboxSynced: (id: string) => Promise<void>;
   markOutboxFailed: (id: string, error: string, nextAttemptAt: string) => Promise<void>;
   pushEstablishmentUpsert?: (
@@ -150,6 +159,8 @@ export interface RunSupabaseSyncResult {
   remoteSuppliers: StockSupplier[];
   remotePurchaseOrders: PurchaseOrderRecord[];
   remoteStaffMembers: StaffMemberRecord[];
+  remoteTombstoneIds: Array<{ entity: P2pEntity; entityId: string }>;
+  remoteTombstoneConflicts: Array<{ entity: P2pEntity; entityId: string }>;
   recoveredProfile: Partial<EstablishmentProfile> | null;
   warnings: string[];
   skippedReason?: 'offline' | 'unconfigured' | 'unauthenticated' | 'no_workspace';
@@ -381,6 +392,8 @@ export async function runSupabaseSync({
     remoteSuppliers: [],
     remotePurchaseOrders: [],
     remoteStaffMembers: [],
+    remoteTombstoneIds: [],
+    remoteTombstoneConflicts: [],
     recoveredProfile: null,
   };
 
@@ -813,6 +826,7 @@ export async function runSupabaseSync({
   let mergedGroups: ResourceGroup[] | null = null;
   let mergedBookings: TimelineBooking[] | null = null;
   let recoveredProfile: Partial<EstablishmentProfile> | null = null;
+  let appliedRemoteTombstones: AppliedRemoteTombstones = { applied: [], conflicts: [] };
 
   if (pulledSnapshot) {
     try {
@@ -821,6 +835,18 @@ export async function runSupabaseSync({
       // envelope so a future authenticated LAN transport can relay the tombstone.
       if (pulledSnapshot.bookingTombstones.length > 0) {
         await adapter.applyRemoteBookingTombstones(workspaceId, pulledSnapshot.bookingTombstones);
+      }
+      if ((pulledSnapshot.tombstones?.length ?? 0) > 0) {
+        if (!adapter.applyRemoteWorkspaceTombstones) {
+          throw new Error('Remote workspace tombstones have no local transactional adapter.');
+        }
+        appliedRemoteTombstones = await adapter.applyRemoteWorkspaceTombstones(
+          workspaceId,
+          pulledSnapshot.tombstones ?? [],
+        );
+        if (appliedRemoteTombstones.conflicts.length > 0) {
+          warnings.push(`${appliedRemoteTombstones.conflicts.length} suppression(s) cloud en conflit avec une mutation locale en attente.`);
+        }
       }
 
       // These reads are part of the merge safety boundary. If either fails,
@@ -975,6 +1001,8 @@ export async function runSupabaseSync({
     remoteStaffMembers: pulledSnapshot
       ? filterRemoteWorkspaceRows(pulledSnapshot.staffMembers ?? [], 'staff_member', workspaceId, mergePendingOutbox, mergeLocalTombstones)
       : [],
+    remoteTombstoneIds: appliedRemoteTombstones.applied,
+    remoteTombstoneConflicts: appliedRemoteTombstones.conflicts,
     recoveredProfile,
     warnings,
   };
