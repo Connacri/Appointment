@@ -669,6 +669,8 @@ emit P2P events or claim peer synchronization. React state is updated only after
 transaction completes; no new business-data localStorage mirror is written. Once a workspace
 identity is established, workspace-scoped replication remains a separate migration/pairing requirement. Both paths
 check the current purchase-order status inside the same transaction, preventing a rapid
-double-click from applying the same receipt twice.
+double-click from applying the same receipt twice. Stock quantity increments are calculated
+from the latest persisted stock-item projection inside that transaction, rather than from a
+possibly stale React snapshot; separate receipts for the same item therefore compose additively.
 
 Regression coverage: `tests/purchaseOrderReceiptSafety.test.ts`.

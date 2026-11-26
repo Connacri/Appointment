@@ -1643,6 +1643,7 @@ class IndexedDbStore {
       entity: OutboxEntity;
       entityId: string;
       payload: Record<string, unknown>;
+      applyToCurrent?: (currentPayload?: Record<string, unknown>) => Record<string, unknown>;
     }>,
     commandId: string,
     rejectIfCurrentFieldEquals?: {
@@ -1651,7 +1652,7 @@ class IndexedDbStore {
       field: string;
       value: unknown;
     },
-  ): Promise<void> {
+  ): Promise<Array<{ entity: OutboxEntity; entityId: string; payload: Record<string, unknown> }>> {
     if (!context.workspaceId.trim() || !context.establishmentId?.trim() || !commandId.trim()) {
       throw new Error('Workspace, establishment and command identity are required for an atomic mutation.');
     }
@@ -1694,6 +1695,7 @@ class IndexedDbStore {
       ready: 0,
     }));
     let readyCount = 0;
+    const committed: Array<{ entity: OutboxEntity; entityId: string; payload: Record<string, unknown> }> = [];
     let validationError: Error | null = null;
     const abortWith = (message: string) => {
       validationError = new Error(message);
@@ -1719,8 +1721,19 @@ class IndexedDbStore {
 
       const version = Math.max(entry.current?.version ?? 0, entry.tombstone?.version ?? 0) + 1;
       const now = new Date().toISOString();
+      let commandPayload: Record<string, unknown>;
+      try {
+        commandPayload = entry.applyToCurrent ? entry.applyToCurrent(entry.current?.payload) : entry.payload;
+      } catch (error) {
+        abortWith(`Atomic payload transformation failed for ${entry.entity}/${entry.entityId}: ${String(error)}`);
+        return;
+      }
+      if (!commandPayload || typeof commandPayload !== 'object' || Array.isArray(commandPayload) || commandPayload.id !== entry.entityId) {
+        abortWith(`Atomic payload transformation returned an invalid record for ${entry.entity}/${entry.entityId}.`);
+        return;
+      }
       const persisted = {
-        ...entry.payload,
+        ...commandPayload,
         workspaceId: context.workspaceId,
         establishmentId: context.establishmentId,
         syncVersion: version,
@@ -1746,6 +1759,7 @@ class IndexedDbStore {
         now,
         entry.idempotencyKey,
       ));
+      committed.push({ entity: entry.entity, entityId: entry.entityId, payload: persisted });
       this.appendLocalP2pEvent(
         tx,
         context.workspaceId,
@@ -1793,6 +1807,7 @@ class IndexedDbStore {
       throw error;
     }
     this.emitOutboxChange();
+    return committed;
   }
 
   /** Persist a local-only multi-entity command atomically without fabricating a workspace. */
@@ -1801,14 +1816,15 @@ class IndexedDbStore {
       entity: OutboxEntity;
       entityId: string;
       payload: Record<string, unknown>;
+      applyToCurrent?: (currentPayload?: Record<string, unknown>) => Record<string, unknown>;
     }>,
-    rejectIfCurrentFieldEquals?: {
+    rejectIfCurrentFieldEquals?:
       entity: OutboxEntity;
       entityId: string;
       field: string;
       value: unknown;
     },
-  ): Promise<void> {
+  ): Promise<Array<{ entity: OutboxEntity; entityId: string; payload: Record<string, unknown> }>> {
     if (mutations.length === 0 || mutations.length > 100) {
       throw new Error('Atomic local mutation batch must contain between 1 and 100 records.');
     }
@@ -1832,24 +1848,39 @@ class IndexedDbStore {
     const tx = this.createStrictTransaction(['localBusinessEntities']);
     const store = tx.objectStore('localBusinessEntities');
     const updatedAt = new Date().toISOString();
+    const entries = mutations.map((mutation) => ({ ...mutation, current: undefined as { payload?: Record<string, unknown> } | undefined }));
+    const committed: Array<{ entity: OutboxEntity; entityId: string; payload: Record<string, unknown> }> = [];
+    let readyCount = 0;
     let validationError: Error | null = null;
-    const commit = () => {
-      for (const mutation of mutations) store.put({ ...mutation, updatedAt });
+    const abortWith = (message: string) => {
+      validationError = new Error(message);
+      try { tx.abort(); } catch { /* already inactive */ }
     };
-    if (rejectIfCurrentFieldEquals) {
-      const request = store.get([rejectIfCurrentFieldEquals.entity, rejectIfCurrentFieldEquals.entityId]);
-      request.onsuccess = () => {
-        const current = request.result as { payload?: Record<string, unknown> } | undefined;
-        if (current?.payload?.[rejectIfCurrentFieldEquals.field] === rejectIfCurrentFieldEquals.value) {
-          validationError = new Error('Atomic local mutation precondition failed: record is already in the requested state.');
-          try { tx.abort(); } catch { /* transaction may already be inactive */ }
+    const commit = () => {
+      if (readyCount !== entries.length) return;
+      if (rejectIfCurrentFieldEquals) {
+        const guarded = entries.find((entry) => entry.entity === rejectIfCurrentFieldEquals.entity && entry.entityId === rejectIfCurrentFieldEquals.entityId);
+        if (guarded?.current?.payload?.[rejectIfCurrentFieldEquals.field] === rejectIfCurrentFieldEquals.value) {
+          abortWith('Atomic local mutation precondition failed: record is already in the requested state.');
           return;
         }
-        commit();
-      };
+      }
+      for (const entry of entries) {
+        let payload: Record<string, unknown>;
+        try { payload = entry.applyToCurrent ? entry.applyToCurrent(entry.current?.payload) : entry.payload; }
+        catch (error) { abortWith(`Atomic local payload transformation failed: ${String(error)}`); return; }
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload) || payload.id !== entry.entityId) {
+          abortWith(`Atomic local payload transformation returned an invalid record for ${entry.entity}/${entry.entityId}.`);
+          return;
+        }
+        store.put({ entity: entry.entity, entityId: entry.entityId, payload, updatedAt });
+        committed.push({ entity: entry.entity, entityId: entry.entityId, payload });
+      }
+    };
+    for (const entry of entries) {
+      const request = store.get([entry.entity, entry.entityId]);
+      request.onsuccess = () => { entry.current = request.result as typeof entry.current; readyCount += 1; commit(); };
       request.onerror = () => tx.abort();
-    } else {
-      commit();
     }
     try {
       await waitForTransactionCompletion(tx, 'putLocalBusinessEntitiesAtomically');
@@ -1857,244 +1888,7 @@ class IndexedDbStore {
       if (validationError) throw validationError;
       throw error;
     }
-  }
-
-  /**
-   * Enqueue exactly one Outbox mutation guarded by an explicit idempotency key,
-   * without touching any operational store. Used for entities that have no local
-   * IndexedDB store (e.g. establishments) where the remote row is the source of
-   * truth after the push ACK. Idempotent: any record with the same key for this
-   * workspace/entity is not duplicated (failed records keep retrying in place).
-   */
-  public async enqueueOutboxOnly(
-    context: OutboxMutationContext,
-    entity: OutboxEntity,
-    entityId: string,
-    operation: OutboxOperation,
-    version: number,
-    payload: Record<string, unknown> | null,
-    idempotencyKey: string,
-  ): Promise<void> {
-    if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox writes.');
-    if (operation !== 'upsert') {
-      throw new Error('Outbox-only compatibility writes currently accept upserts only; use a tombstone-aware delete API.');
-    }
-    if (!entityId.trim() || !idempotencyKey.trim() || !Number.isSafeInteger(version) || version < 1) {
-      throw new Error('Outbox-only mutation identity, idempotency key and version are required.');
-    }
-    await this.openStore();
-    if (!this.idb) throw new Error('Transactional outbox requires IndexedDB; localStorage fallback is not safe for cloud sync.');
-
-    // Read the idempotency key, current entity version and tombstone in the SAME
-    // strict read/write transaction as the Outbox + P2P append. This closes the
-    // read-then-write race between tabs and makes revisions monotonic.
-    await this.getP2pNodeId();
-    const tx = this.createStrictTransaction([
-      'outbox',
-      'workspaceEntities',
-      'tombstones',
-      'p2pEvents',
-      'p2pClock',
-      'p2pMeta',
-      'p2pRecordFrontiers',
-    ]);
-    const outbox = tx.objectStore('outbox');
-    const workspaceEntities = tx.objectStore('workspaceEntities');
-    const tombstones = tx.objectStore('tombstones');
-    const tombstoneId = `${context.workspaceId}:${entity}:${entityId}`;
-    const existingRequest = outbox.index('idempotencyKey').get(idempotencyKey);
-    const currentRequest = workspaceEntities.get([context.workspaceId, entity, entityId]);
-    const tombstoneRequest = tombstones.get(tombstoneId);
-
-    let existing: OutboxRecord | undefined;
-    let current: { version?: number; establishmentId?: string } | undefined;
-    let previousTombstone: TombstoneRecord | undefined;
-    let existingReady = false;
-    let currentReady = false;
-    let tombstoneReady = false;
-    let validationError: Error | null = null;
-
-    const abortWith = (message: string) => {
-      validationError = new Error(message);
-      try { tx.abort(); } catch { /* transaction may already be inactive */ }
-    };
-
-    const commit = () => {
-      if (!existingReady || !currentReady || !tombstoneReady) return;
-
-      if (existing) {
-        if (
-          existing.workspaceId !== context.workspaceId
-          || existing.entity !== entity
-          || existing.entityId !== entityId
-          || existing.operation !== operation
-          || (context.establishmentId !== undefined && existing.establishmentId !== context.establishmentId)
-          || stableSerialize(existing.payload) !== stableSerialize(payload)
-        ) {
-          abortWith(
-            `Idempotency key collision for ${entity}/${entityId}: the key already identifies a different immutable mutation.`,
-          );
-          return;
-        }
-
-        // An exact retry keeps the original ACK state/version. Only repair a
-        // missing P2P envelope; never overwrite a newer materialized entity.
-        if (!current || (current.version ?? 0) <= existing.version) {
-          this.ensureP2pEventForOutbox(tx, existing);
-        }
-        return;
-      }
-
-      const resolvedVersion = Math.max(
-        version,
-        (current?.version ?? 0) + 1,
-        (previousTombstone?.version ?? 0) + 1,
-      );
-      const now = new Date().toISOString();
-      workspaceEntities.put({
-        workspaceId: context.workspaceId,
-        establishmentId: context.establishmentId ?? current?.establishmentId,
-        entity,
-        entityId,
-        version: resolvedVersion,
-        updatedAt: now,
-        payload: payload ?? {},
-      });
-      // A new upsert supersedes the old tombstone at this higher entity version.
-      tombstones.delete(tombstoneId);
-      outbox.add(this.createOutboxRecord(
-        context,
-        entity,
-        entityId,
-        operation,
-        resolvedVersion,
-        payload,
-        now,
-        idempotencyKey,
-      ));
-      this.appendLocalP2pEvent(tx, context.workspaceId, entity, entityId, operation, payload, now);
-    };
-
-    existingRequest.onsuccess = () => {
-      existing = existingRequest.result as OutboxRecord | undefined;
-      existingReady = true;
-      commit();
-    };
-    currentRequest.onsuccess = () => {
-      current = currentRequest.result as typeof current;
-      currentReady = true;
-      commit();
-    };
-    tombstoneRequest.onsuccess = () => {
-      previousTombstone = tombstoneRequest.result as TombstoneRecord | undefined;
-      tombstoneReady = true;
-      commit();
-    };
-    existingRequest.onerror = () => tx.abort();
-    currentRequest.onerror = () => tx.abort();
-    tombstoneRequest.onerror = () => tx.abort();
-
-    try {
-      await waitForTransactionCompletion(tx, `enqueueOutboxOnly ${entity}/${entityId}`);
-    } catch (error) {
-      if (validationError) throw validationError;
-      throw error;
-    }
-    this.emitOutboxChange();
-  }
-
-  /** Apply cloud tombstones without resurrecting a locally pending mutation. */
-  public async applyRemoteWorkspaceTombstones(
-    workspaceId: string,
-    remoteTombstones: readonly RemoteWorkspaceTombstone[],
-  ): Promise<AppliedRemoteTombstones> {
-    if (!workspaceId.trim()) throw new Error('Workspace is required for remote tombstones.');
-    if (remoteTombstones.length > 500) throw new Error('Remote tombstone page exceeds the 500-row limit.');
-    await this.openStore();
-    if (!this.idb) throw new Error('Remote tombstones require IndexedDB.');
-    await this.getP2pNodeId();
-    const report: AppliedRemoteTombstones = { applied: [], conflicts: [] };
-
-    for (const remote of remoteTombstones) {
-      if (!P2P_SUPPORTED_ENTITIES.includes(remote.entity) || !remote.entityId.trim()
-        || !Number.isSafeInteger(remote.remoteVersion) || remote.remoteVersion < 1
-        || !Number.isFinite(Date.parse(remote.deletedAt))) {
-        throw new Error('Invalid remote workspace tombstone.');
-      }
-      const tx = this.createStrictTransaction([
-        'outbox', 'workspaceEntities', 'tombstones', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers',
-      ]);
-      const outbox = tx.objectStore('outbox');
-      const workspaceEntities = tx.objectStore('workspaceEntities');
-      const tombstones = tx.objectStore('tombstones');
-      const id = `${workspaceId}:${remote.entity}:${remote.entityId}`;
-      const pendingRequest = outbox.index('workspaceEntity').getAll([workspaceId, remote.entity, remote.entityId]);
-      const currentRequest = workspaceEntities.get([workspaceId, remote.entity, remote.entityId]);
-      const tombstoneRequest = tombstones.get(id);
-      let pending: OutboxRecord[] = [];
-      let current: { version?: number } | undefined;
-      let existing: TombstoneRecord | undefined;
-      let ready = 0;
-      const action: { value: 'apply' | 'skip' | 'conflict' } = { value: 'skip' };
-      const commit = () => {
-        if (++ready !== 3) return;
-        const activePending = pending.filter((row) => row.status !== 'synced');
-        if (activePending.some((row) => row.operation === 'upsert')) {
-          action.value = 'conflict';
-          return;
-        }
-        if (existing?.origin === 'local' || existing?.origin === 'p2p') {
-          action.value = 'skip';
-          return;
-        }
-        if (existing?.origin === 'supabase') {
-          if ((existing.remoteVersion ?? 0) < remote.remoteVersion) {
-            tombstones.put({ ...existing, deletedAt: remote.deletedAt, remoteVersion: remote.remoteVersion });
-          }
-          action.value = 'skip';
-          return;
-        }
-        const createdAt = new Date().toISOString();
-        const version = (current?.version ?? 0) + 1;
-        workspaceEntities.delete([workspaceId, remote.entity, remote.entityId]);
-        tombstones.put({
-          id, workspaceId, establishmentId: remote.establishmentId,
-          entity: remote.entity, entityId: remote.entityId, version,
-          deletedAt: remote.deletedAt, origin: 'supabase', remoteVersion: remote.remoteVersion,
-        } satisfies TombstoneRecord);
-        this.appendLocalP2pEvent(tx, workspaceId, remote.entity, remote.entityId, 'delete', null, createdAt);
-        action.value = 'apply';
-      };
-      pendingRequest.onsuccess = () => { pending = pendingRequest.result as OutboxRecord[]; commit(); };
-      currentRequest.onsuccess = () => { current = currentRequest.result as typeof current; commit(); };
-      tombstoneRequest.onsuccess = () => { existing = tombstoneRequest.result as TombstoneRecord | undefined; commit(); };
-      pendingRequest.onerror = () => tx.abort();
-      currentRequest.onerror = () => tx.abort();
-      tombstoneRequest.onerror = () => tx.abort();
-      await waitForTransactionCompletion(tx, `applyRemoteWorkspaceTombstone ${remote.entity}/${remote.entityId}`);
-      const entry = { entity: remote.entity, entityId: remote.entityId };
-      if (action.value === 'apply') report.applied.push(entry);
-      if (action.value === 'conflict') report.conflicts.push(entry);
-    }
-    return report;
-  }
-
-  /** Persist local-only business data without inventing a workspace or emitting P2P events. */
-  public async putLocalBusinessEntity(
-    entity: OutboxEntity,
-    entityId: string,
-    payload: Record<string, unknown>,
-  ): Promise<void> {
-    if (!entityId.trim() || !payload || typeof payload !== 'object') {
-      throw new Error('Local business entity identity and payload are required.');
-    }
-    await this.openStore();
-    if (!this.idb) throw new Error('Durable local business storage requires IndexedDB.');
-    const tx = this.createStrictTransaction(['localBusinessEntities']);
-    tx.objectStore('localBusinessEntities').put({
-      entity, entityId, payload, updatedAt: new Date().toISOString(),
-    });
-    await waitForTransactionCompletion(tx, `putLocalBusinessEntity ${entity}/${entityId}`);
+    return committed;
   }
 
   /** Remove one local-only business projection. Workspace deletes must use tombstones. */

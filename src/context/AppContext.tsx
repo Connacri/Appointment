@@ -3525,12 +3525,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
       const workspaceId = workspace.activeWorkspaceId?.trim();
 
+      let committedRows: Array<{ entity: string; entityId: string; payload: Record<string, unknown> }>;
       if (workspaceId) {
         const establishmentId = resolveMutationEstablishmentId();
-        if (!establishmentId || establishmentId === 'all') {
-          throw new Error('Établissement réel requis pour réceptionner cette commande.');
-        }
-        await indexedDb.enqueueWorkspaceUpsertsAtomically(
+        if (!establishmentId || establishmentId === 'all') throw new Error('Établissement réel requis pour réceptionner cette commande.');
+        committedRows = await indexedDb.enqueueWorkspaceUpsertsAtomically(
           { workspaceId, establishmentId },
           plan.mutations,
           `purchase-order-receipt-${createMutationId()}`,
@@ -3538,26 +3537,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
         scheduleAutoSync();
       } else {
-        // Offline-first local-only installations still commit all receipt rows
-        // together; they intentionally emit no workspace/P2P event until paired.
-        await indexedDb.putLocalBusinessEntitiesAtomically(
+        committedRows = await indexedDb.putLocalBusinessEntitiesAtomically(
           plan.mutations,
           { entity: 'purchase_order', entityId: id, field: 'status', value: 'received' },
         );
       }
-
-      stockItemsRef.current = plan.stockItems;
-      setStockItems(plan.stockItems);
-      setStockMovements((previous) => {
-        const next = [...plan.movements, ...previous].slice(0, 200);
-        localStorage.setItem('omnibook_stock_movements', JSON.stringify(next));
-        return next;
-      });
-      setPurchaseOrders((previous) => {
-        const next = previous.map((order) => order.id === id ? plan.purchaseOrder : order);
-        localStorage.setItem('omnibook_purchase_orders', JSON.stringify(next));
-        return next;
-      });
+      const committedStockById = new Map(
+        committedRows.filter((row) => row.entity === 'stock_item').map((row) => [row.entityId, row.payload as unknown as StockItem]),
+      );
+      const committedStockItems = stockItemsRef.current.map((item) => committedStockById.get(item.id) ?? item);
+      const committedOrder = (committedRows.find((row) => row.entity === 'purchase_order')?.payload as unknown as PurchaseOrderRecord | undefined)
+        ?? plan.purchaseOrder;
+      stockItemsRef.current = committedStockItems;
+      setStockItems(committedStockItems);
+      setStockMovements((previous) => [...plan.movements, ...previous].slice(0, 200));
+      setPurchaseOrders((previous) => previous.map((order) => order.id === id ? committedOrder : order));
       logEvent({
         category: 'stock',
         action: 'stock.purchase_order_received',
@@ -3565,7 +3559,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: `Commande ${target.orderNumber} réceptionnée · ${target.supplierName}`,
         description: `${plan.movements.length} mouvement(s) de stock validé(s) atomiquement.`,
         target: { type: 'purchase_order', id, label: target.orderNumber },
-        metadata: { movementCount: plan.movements.length, itemCount: plan.stockItems.length },
+        metadata: { movementCount: plan.movements.length, itemCount: committedStockById.size },
       });
     } catch (error) {
       reportQueueFailure('purchase_order', id, error);

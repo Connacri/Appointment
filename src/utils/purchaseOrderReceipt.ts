@@ -8,6 +8,7 @@ export interface PurchaseOrderReceiptMutation {
   entity: 'purchase_order' | 'stock_item' | 'stock_movement';
   entityId: string;
   payload: Record<string, unknown>;
+  applyToCurrent?: (currentPayload?: Record<string, unknown>) => Record<string, unknown>;
 }
 
 export interface PurchaseOrderReceiptPlan {
@@ -80,7 +81,19 @@ export function buildPurchaseOrderReceiptPlan(
     { entity: 'purchase_order', entityId: purchaseOrder.id, payload: purchaseOrder as unknown as Record<string, unknown> },
     ...updatedStockItems
       .filter((item) => quantities.has(item.id))
-      .map((item) => ({ entity: 'stock_item' as const, entityId: item.id, payload: item as unknown as Record<string, unknown> })),
+      .map((item) => {
+        const delta = quantities.get(item.id) ?? 0;
+        const fallback = currentStockItems.find((current) => current.id === item.id) ?? item;
+        return {
+          entity: 'stock_item' as const,
+          entityId: item.id,
+          payload: fallback as unknown as Record<string, unknown>,
+          applyToCurrent: (currentPayload?: Record<string, unknown>) => {
+            const latest = { ...fallback, ...(currentPayload ?? {}) } as StockItem;
+            return { ...latest, quantity: Number(latest.quantity) + delta } as unknown as Record<string, unknown>;
+          },
+        };
+      }),
     ...movements.map((movement) => ({
       entity: 'stock_movement' as const,
       entityId: movement.id,

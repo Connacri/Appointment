@@ -26,6 +26,9 @@ test('purchase receipt aggregates duplicate lines and emits matching stock movem
   assert.equal(plan.purchaseOrder.status, 'received');
   assert.equal(plan.purchaseOrder.receivedAt, '2026-11-26T12:00:00.000Z');
   assert.equal(plan.stockItems.find((item) => item.id === 'soap')?.quantity, 11);
+  const soapMutation = plan.mutations.find((mutation) => mutation.entity === 'stock_item' && mutation.entityId === 'soap');
+  assert.ok(soapMutation?.applyToCurrent);
+  assert.equal(soapMutation.applyToCurrent({ id: 'soap', quantity: 100 }).quantity, 107);
   assert.equal(plan.stockItems.find((item) => item.id === 'water')?.quantity, 13);
   assert.deepEqual(plan.movements.map((movement) => [movement.itemId, movement.delta]), [['soap', 7], ['water', 3]]);
   assert.equal(plan.mutations.length, 5);
