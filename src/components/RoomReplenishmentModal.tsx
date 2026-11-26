@@ -155,6 +155,10 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
   );
 
   const totalUnitsSelected = selectedLines.reduce((sum, l) => sum + l.quantity, 0);
+  const insufficientLines = selectedLines.filter((line) => {
+    const item = stockItems.find((candidate) => candidate.id === line.itemId);
+    return !item || line.quantity > item.quantity;
+  });
 
   if (!isOpen) return null;
 
@@ -467,7 +471,8 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
                   <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
                     {filteredItems.map((item) => {
                       const chosenQty = Number(quantities[item.id]) || 0;
-                      const projected = Math.max(0, item.quantity - chosenQty);
+                      const projected = item.quantity - chosenQty;
+                      const isInsufficient = chosenQty > item.quantity;
                       const willTriggerLow = chosenQty > 0 && projected <= item.minThreshold;
                       const isCurrentlyLow = item.quantity <= item.minThreshold;
 
@@ -490,14 +495,19 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
                             <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] font-mono tabular-nums">
                               <span
                                 className={
-                                  isCurrentlyLow
+                                  isInsufficient || isCurrentlyLow
                                     ? 'text-rose-600 dark:text-rose-400 font-bold'
                                     : 'text-slate-500 dark:text-slate-400'
                                 }
                               >
                                 {t('En stock', 'In stock', 'المتوفر')}: {item.quantity} {item.unit}
                               </span>
-                              {willTriggerLow && (
+                              {isInsufficient && (
+                                <span className="text-rose-600 dark:text-rose-400 font-bold">
+                                  {t('Stock insuffisant', 'Insufficient stock', 'المخزون غير كافٍ')}
+                                </span>
+                              )}
+                              {willTriggerLow && !isInsufficient && (
                                 <span className="text-rose-600 dark:text-rose-400 font-bold">
                                   → {projected} ({t('Alerte seuil!', 'Low alert!', 'تنبيه نفاد!')})
                                 </span>
@@ -582,6 +592,11 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
             {/* Footer CTA */}
             <div className="px-4 sm:px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex flex-wrap items-center justify-between gap-2 shrink-0">
               <div className="text-xs text-slate-600 dark:text-slate-300 tabular-nums">
+                {insufficientLines.length > 0 && (
+                  <div className="mb-1 text-rose-600 dark:text-rose-400 font-semibold">
+                    {t('Quantité demandée supérieure au stock disponible.', 'Requested quantity exceeds available stock.', 'الكمية المطلوبة تتجاوز المخزون المتاح.')}
+                  </div>
+                )}
                 <span className="font-bold text-slate-900 dark:text-white">{selectedLines.length}</span>{' '}
                 {t('réf.', 'items', 'أصناف')} ·{' '}
                 <span className="font-bold text-slate-900 dark:text-white">{totalUnitsSelected}</span>{' '}
@@ -598,7 +613,7 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={selectedLines.length === 0 || isSubmitting}
+                  disabled={selectedLines.length === 0 || isSubmitting || insufficientLines.length > 0}
                   className="min-h-[44px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
                 >
                   <CheckCircle2 size={15} />

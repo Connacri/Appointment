@@ -3219,7 +3219,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!stockRow || !movementRow) throw new Error('Transaction de stock incomplète : projection ou mouvement absent.');
     const updatedItem = stockRow.payload as unknown as StockItem;
     const movement = movementRow.payload as unknown as StockMovement;
-    const previousQuantity = targetItem.quantity;
+    const previousQuantity = updatedItem.quantity - delta;
     const updatedList = stockItemsRef.current.map((item) => item.id === itemId ? updatedItem : item);
     stockItemsRef.current = updatedList;
     setStockItems(updatedList);

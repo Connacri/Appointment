@@ -206,8 +206,7 @@ export const StockManagementView: React.FC = () => {
       else if (type === 'out') await addStockMovement(item.id, -quantityInput, reasonInput || 'Sortie stock', roomInput);
       else {
         if (!Number.isFinite(quantityInput) || quantityInput < 0) throw new Error('La quantité inventoriée doit être positive ou nulle.');
-        const delta = quantityInput - item.quantity;
-        if (delta !== 0) await addStockMovement(item.id, delta, 'Ajustement inventaire physique');
+        await updateStockItem({ ...item, quantity: quantityInput });
       }
       setMovementModal({ open: false, type: 'in', item: null });
     });
