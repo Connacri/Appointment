@@ -39,6 +39,18 @@ test('swaps two reservations atomically when both final room assignments are con
   }
 });
 
+test('uses the original room when the edited booking dates and target room change together', () => {
+  const original = booking('a', 'r1', '2026-11-25', '2026-11-28');
+  const edited = { ...original, resourceId: 'r2', startDate: '2026-11-26', endDate: '2026-11-29' };
+  const other = booking('b', 'r2', '2026-11-27', '2026-11-28');
+  const result = planRoomReassignment([edited, other], resources, 'a', 'r2', original.resourceId);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.mode, 'swap');
+    if (result.mode === 'swap') assert.equal(result.bookings[1].resourceId, 'r1');
+  }
+});
+
 test('rejects a swap if a third reservation conflicts with either final assignment', () => {
   const a = booking('a', 'r1', '2026-11-25', '2026-11-28');
   const b = booking('b', 'r2', '2026-11-26', '2026-11-27');
