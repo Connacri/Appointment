@@ -2189,6 +2189,167 @@ class IndexedDbStore {
     }
   }
 
+  /** Persist a multi-booking room swap as one durable local + Outbox + P2P transaction. */
+  public async putBookingsAtomicallyWithOutbox(
+    items: [TimelineBooking, TimelineBooking],
+    context: OutboxMutationContext,
+    validateCurrentBookings: (bookings: TimelineBooking[]) => void,
+  ): Promise<void> {
+    if (items[0].id === items[1].id) throw new Error('A room swap requires two distinct bookings.');
+    if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox writes.');
+    await this.openStore();
+    if (!this.idb) throw new Error('Transactional room swaps require IndexedDB.');
+    await this.getP2pNodeId();
+
+    const tx = this.createStrictTransaction([
+      'bookings', 'outbox', 'tombstones', 'workspaceEntities',
+      'p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers',
+    ]);
+    const bookingsStore = tx.objectStore('bookings');
+    const workspaceEntities = tx.objectStore('workspaceEntities');
+    const tombstones = tx.objectStore('tombstones');
+    const outbox = tx.objectStore('outbox');
+    let rows: TimelineBooking[] = [];
+    let rowsReady = false;
+    let readyCount = 0;
+    const currentEntities: Array<{ version?: number; establishmentId?: string } | undefined> = [undefined, undefined];
+    const previousTombstones: Array<TombstoneRecord | undefined> = [undefined, undefined];
+    let validationError: Error | null = null;
+    const finish = () => {
+      if (!rowsReady || readyCount !== 4) return;
+      try {
+        const replacedIds = new Set(items.map((item) => item.id));
+        validateCurrentBookings([
+          ...rows.filter((row) => !replacedIds.has(row.id)),
+          ...items,
+        ]);
+      } catch (error) {
+        validationError = error instanceof Error ? error : new Error(String(error));
+        tx.abort();
+        return;
+      }
+
+      const persistedItems = items.map((item, index) => {
+        const baseItem = migrateBookingRecordV7(item as Partial<TimelineBooking>) as TimelineBooking;
+        const establishmentId = context.establishmentId
+          ?? currentEntities[index]?.establishmentId
+          ?? (baseItem as TimelineBooking & { establishmentId?: string }).establishmentId;
+        const version = Math.max(
+          currentEntities[index]?.version ?? 0,
+          previousTombstones[index]?.version ?? 0,
+        ) + 1;
+        const persisted = {
+          ...baseItem,
+          workspaceId: context.workspaceId,
+          ...(establishmentId ? { establishmentId } : {}),
+          syncVersion: version,
+          deletedAt: null,
+        } as TimelineBooking & Record<string, unknown>;
+        workspaceEntities.put({
+          workspaceId: context.workspaceId,
+          establishmentId,
+          entity: 'booking',
+          entityId: item.id,
+          version,
+          updatedAt: new Date().toISOString(),
+          payload: persisted,
+        });
+        bookingsStore.put(persisted);
+        outbox.add(this.createOutboxRecord(
+          { workspaceId: context.workspaceId, establishmentId },
+          'booking',
+          item.id,
+          'upsert',
+          version,
+          persisted,
+          new Date().toISOString(),
+        ));
+        return persisted;
+      });
+
+      // appendLocalP2pEvent reads the per-node clock. Queue the two events serially
+      // so both cannot observe the same sequence number inside this transaction.
+      const appendNext = (index: number) => {
+        if (index >= persistedItems.length) return;
+        const persisted = persistedItems[index];
+        this.appendLocalP2pEvent(
+          tx,
+          context.workspaceId,
+          'booking',
+          persisted.id,
+          'upsert',
+          persisted as Record<string, unknown>,
+          new Date().toISOString(),
+          () => appendNext(index + 1),
+        );
+      };
+      appendNext(0);
+    };
+
+    const rowsRequest = bookingsStore.getAll();
+    rowsRequest.onsuccess = () => { rows = rowsRequest.result as TimelineBooking[]; rowsReady = true; finish(); };
+    rowsRequest.onerror = () => tx.abort();
+
+    items.forEach((item, index) => {
+      const entityRequest = workspaceEntities.get([context.workspaceId, 'booking', item.id]);
+      const tombstoneRequest = tombstones.get(`${context.workspaceId}:booking:${item.id}`);
+      entityRequest.onsuccess = () => {
+        currentEntities[index] = entityRequest.result as { version?: number; establishmentId?: string } | undefined;
+        readyCount += 1;
+        finish();
+      };
+      tombstoneRequest.onsuccess = () => {
+        previousTombstones[index] = tombstoneRequest.result as TombstoneRecord | undefined;
+        readyCount += 1;
+        finish();
+      };
+      entityRequest.onerror = () => tx.abort();
+      tombstoneRequest.onerror = () => tx.abort();
+    });
+
+    try {
+      await waitForTransactionCompletion(tx, 'putBookingsAtomicallyWithOutbox');
+    } catch (error) {
+      if (validationError) throw validationError;
+      throw error;
+    }
+    this.emitOutboxChange();
+  }
+
+  /** Local-only counterpart used before a workspace identity is available. */
+  public async putLocalBookingsAtomically(
+    items: [TimelineBooking, TimelineBooking],
+    validateCurrentBookings: (bookings: TimelineBooking[]) => void,
+  ): Promise<void> {
+    if (items[0].id === items[1].id) throw new Error('A room swap requires two distinct bookings.');
+    await this.openStore();
+    if (!this.idb) throw new Error('Transactional room swaps require IndexedDB.');
+    const tx = this.createStrictTransaction(['bookings']);
+    const store = tx.objectStore('bookings');
+    let validationError: Error | null = null;
+    const request = store.getAll();
+    request.onsuccess = () => {
+      try {
+        const replacedIds = new Set(items.map((item) => item.id));
+        validateCurrentBookings([
+          ...(request.result as TimelineBooking[]).filter((row) => !replacedIds.has(row.id)),
+          ...items,
+        ]);
+        for (const item of items) store.put(migrateBookingRecordV7(item as Partial<TimelineBooking>));
+      } catch (error) {
+        validationError = error instanceof Error ? error : new Error(String(error));
+        tx.abort();
+      }
+    };
+    request.onerror = () => tx.abort();
+    try {
+      await waitForTransactionCompletion(tx, 'putLocalBookingsAtomically');
+    } catch (error) {
+      if (validationError) throw validationError;
+      throw error;
+    }
+  }
+
   /**
    * Read a single outbox record by its unique idempotency key within a workspace.
    * Used by backfill to avoid seeding duplicate Outbox records on re-runs.
