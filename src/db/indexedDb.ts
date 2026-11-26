@@ -127,7 +127,7 @@ export interface OutboxSummary {
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 8;
+  private dbVersion = 9;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -298,6 +298,12 @@ class IndexedDbStore {
 
         // v7 upgrade: index sector+startDate and normalize existing local booking records without data loss.
         const upgradeTx = (e.target as IDBOpenDBRequest).transaction;
+        if (upgradeTx && db.objectStoreNames.contains('workspaceEntities')) {
+          const entities = upgradeTx.objectStore('workspaceEntities');
+          if (!entities.indexNames.contains('workspaceEntityType')) {
+            entities.createIndex('workspaceEntityType', ['workspaceId', 'entity'], { unique: false });
+          }
+        }
         if (e.oldVersion > 0 && e.oldVersion < 7 && upgradeTx) {
           if (db.objectStoreNames.contains('bookings')) {
             const bStore = upgradeTx.objectStore('bookings');
@@ -1744,6 +1750,92 @@ class IndexedDbStore {
 
     try {
       await waitForTransactionCompletion(tx, `enqueueOutboxOnly ${entity}/${entityId}`);
+    } catch (error) {
+      if (validationError) throw validationError;
+      throw error;
+    }
+    this.emitOutboxChange();
+  }
+
+  /** Read one entity family from the workspace-scoped generic materialized projection. */
+  public async getWorkspaceEntities<T = Record<string, unknown>>(
+    workspaceId: string,
+    entity: P2pEntity,
+  ): Promise<T[]> {
+    if (!workspaceId.trim()) return [];
+    await this.openStore();
+    if (!this.idb) throw new Error('Workspace entity reads require IndexedDB.');
+    const tx = this.idb.transaction(['workspaceEntities'], 'readonly');
+    const request = tx.objectStore('workspaceEntities').index('workspaceEntityType').getAll([workspaceId, entity]);
+    const rows = await new Promise<Array<{ payload?: T }>>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result as Array<{ payload?: T }>);
+      request.onerror = () => reject(request.error ?? new Error('Workspace entity read failed.'));
+    });
+    await waitForTransactionCompletion(tx, `getWorkspaceEntities ${entity}`);
+    return rows.flatMap((row) => row.payload ? [row.payload] : []);
+  }
+
+  /** Generic soft-delete for entities without a dedicated operational IndexedDB store. */
+  public async deleteWorkspaceEntityWithOutbox(
+    context: OutboxMutationContext,
+    entity: OutboxEntity,
+    entityId: string,
+    idempotencyKey: string,
+  ): Promise<void> {
+    if (!context.workspaceId.trim() || !entityId.trim() || !idempotencyKey.trim()) {
+      throw new Error('Workspace, entity identity and idempotency key are required for a delete.');
+    }
+    await this.openStore();
+    if (!this.idb) throw new Error('Transactional Outbox deletes require IndexedDB.');
+    await this.getP2pNodeId();
+    const tx = this.createStrictTransaction([
+      'outbox', 'workspaceEntities', 'tombstones', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers',
+    ]);
+    const outbox = tx.objectStore('outbox');
+    const workspaceEntities = tx.objectStore('workspaceEntities');
+    const tombstones = tx.objectStore('tombstones');
+    const tombstoneId = `${context.workspaceId}:${entity}:${entityId}`;
+    const existingRequest = outbox.index('idempotencyKey').get(idempotencyKey);
+    const currentRequest = workspaceEntities.get([context.workspaceId, entity, entityId]);
+    const tombstoneRequest = tombstones.get(tombstoneId);
+    let existing: OutboxRecord | undefined;
+    let current: { version?: number } | undefined;
+    let previousTombstone: TombstoneRecord | undefined;
+    let ready = 0;
+    let validationError: Error | null = null;
+    const abortWith = (message: string) => {
+      validationError = new Error(message);
+      try { tx.abort(); } catch { /* transaction may already be inactive */ }
+    };
+    const commit = () => {
+      if (ready !== 3) return;
+      if (existing) {
+        if (existing.workspaceId !== context.workspaceId || existing.entity !== entity
+          || existing.entityId !== entityId || existing.operation !== 'delete' || existing.payload !== null) {
+          abortWith('Idempotency key collision for workspace entity delete.');
+          return;
+        }
+        this.ensureP2pEventForOutbox(tx, existing);
+        return;
+      }
+      const version = Math.max(current?.version ?? 0, previousTombstone?.version ?? 0) + 1;
+      const deletedAt = new Date().toISOString();
+      workspaceEntities.delete([context.workspaceId, entity, entityId]);
+      tombstones.put({
+        id: tombstoneId, workspaceId: context.workspaceId, establishmentId: context.establishmentId,
+        entity, entityId, version, deletedAt, origin: 'local',
+      } satisfies TombstoneRecord);
+      outbox.add(this.createOutboxRecord(context, entity, entityId, 'delete', version, null, deletedAt, idempotencyKey));
+      this.appendLocalP2pEvent(tx, context.workspaceId, entity, entityId, 'delete', null, deletedAt);
+    };
+    existingRequest.onsuccess = () => { existing = existingRequest.result as OutboxRecord | undefined; ready += 1; commit(); };
+    currentRequest.onsuccess = () => { current = currentRequest.result as typeof current; ready += 1; commit(); };
+    tombstoneRequest.onsuccess = () => { previousTombstone = tombstoneRequest.result as TombstoneRecord | undefined; ready += 1; commit(); };
+    existingRequest.onerror = () => tx.abort();
+    currentRequest.onerror = () => tx.abort();
+    tombstoneRequest.onerror = () => tx.abort();
+    try {
+      await waitForTransactionCompletion(tx, `deleteWorkspaceEntityWithOutbox ${entity}/${entityId}`);
     } catch (error) {
       if (validationError) throw validationError;
       throw error;
