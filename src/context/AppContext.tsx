@@ -936,7 +936,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
       if (orderRows.length) setPurchaseOrders((prev) => {
         const next = mergeById(prev, orderRows, 'purchase_order');
-        localStorage.setItem('omnibook_purchase_orders', JSON.stringify(next));
         return next;
       });
       if (staffRows.length) setStaffMembers((prev) => {
@@ -1984,8 +1983,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const byId = new Map(prev.map((movement) => [movement.id, movement]));
           for (const movement of result.remoteStockMovements) byId.set(movement.id, movement);
           const next = [...byId.values()];
-          localStorage.setItem('omnibook_stock_movements', JSON.stringify(next));
-          return next;
+            return next;
         });
       }
 
@@ -3547,7 +3545,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       stockItemsRef.current = plan.stockItems;
       setStockItems(plan.stockItems);
-      localStorage.setItem('omnibook_stock_items', JSON.stringify(plan.stockItems));
       setStockMovements((previous) => {
         const next = [...plan.movements, ...previous].slice(0, 200);
         localStorage.setItem('omnibook_stock_movements', JSON.stringify(next));

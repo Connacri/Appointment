@@ -1639,7 +1639,7 @@ class IndexedDbStore {
    */
   public async enqueueWorkspaceUpsertsAtomically(
     context: OutboxMutationContext,
-    mutations: readonly Array<{
+    mutations: ReadonlyArray<{
       entity: OutboxEntity;
       entityId: string;
       payload: Record<string, unknown>;
@@ -1797,7 +1797,7 @@ class IndexedDbStore {
 
   /** Persist a local-only multi-entity command atomically without fabricating a workspace. */
   public async putLocalBusinessEntitiesAtomically(
-    mutations: readonly Array<{
+    mutations: ReadonlyArray<{
       entity: OutboxEntity;
       entityId: string;
       payload: Record<string, unknown>;

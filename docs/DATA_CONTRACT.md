@@ -665,7 +665,8 @@ advance. A concurrent second receipt is rejected by a transaction-level status p
 
 For installations without an authenticated workspace identity, the same business rows are
 written atomically to `localBusinessEntities`; this is durable local-only storage and does not
-emit P2P events or claim peer synchronization. Once a workspace identity is established,
-workspace-scoped replication remains a separate migration/pairing requirement.
+emit P2P events or claim peer synchronization. React state is updated only after that local
+transaction completes; no new business-data localStorage mirror is written. Once a workspace
+identity is established, workspace-scoped replication remains a separate migration/pairing requirement.
 
 Regression coverage: `tests/purchaseOrderReceiptSafety.test.ts`.
