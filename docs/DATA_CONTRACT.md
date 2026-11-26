@@ -641,3 +641,14 @@ transaction can commit the order status, stock item projections, stock movement
 ledger, Outbox records and P2P events together. These operations require
  dedicated atomic command contracts and must not be described as fully
 fail-closed by this section.
+
+### Purchase-order receipt transaction boundary
+
+A purchase order MUST NOT transition to `received` until one local IndexedDB transaction
+has committed all three effects together: the purchase-order status/receipt timestamp,
+the affected stock-item quantity projections, and the corresponding stock-movement
+ledger entries. The same transaction must include the Outbox/P2P replication intent.
+A failure must leave all effects unchanged and must not enqueue a partial mutation.
+The UI currently blocks receipt because this atomic command is not implemented; this
+is an intentional fail-closed limitation, not a completed receiving workflow.
+Regression coverage: `tests/purchaseOrderReceiptSafety.test.ts`.

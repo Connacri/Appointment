@@ -22,6 +22,7 @@ import {
   DocumentType,
 } from '../types/booking';
 import { applyStockDeductions, type StockDeductionLine } from '../utils/stockProcurement';
+import { PURCHASE_ORDER_RECEIPT_BLOCKED_REASON } from '../utils/purchaseOrderReceipt';
 import {
   initialResourceGroups,
   initialBookings,
@@ -3514,13 +3515,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const markPurchaseOrderReceived = (id: string) => {
     const target = purchaseOrders.find((order) => order.id === id);
     if (!target || target.status === 'received') return;
-    // Fail closed: never mark an order received while its stock ledger and item
-    // projections cannot be committed in the same local transaction.
-    reportQueueFailure(
-      'purchase_order',
-      id,
-      new Error('Réception bloquée : la transaction atomique commande + mouvements + quantités de stock n’est pas encore disponible.'),
-    );
+    // Receipt must remain blocked until one local transaction commits the order,
+    // stock projections, movement ledger and replication intent.
+    reportQueueFailure('purchase_order', id, new Error(PURCHASE_ORDER_RECEIPT_BLOCKED_REASON));
   };
 
     const setDynamicRate = (roomType: string, date: string, price: number) => {
