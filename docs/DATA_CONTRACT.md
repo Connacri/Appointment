@@ -379,3 +379,23 @@ repository. Windows SQLite parity, signed administrator transitions, Supabase-au
 registry persistence, authenticated P2P transport and end-to-end revocation enforcement
 remain required before this policy can be enabled for existing establishments. Until those
 are implemented, do not claim global read-only enforcement or production device revocation.
+
+
+### AppContext policy integration — guarded booking commands
+
+The AppContext now loads the local device registry for the active workspace and establishment,
+exposes the computed mutation availability, and displays a read-only warning when the device
+is not registered or coordination is unavailable. The durable booking mutation path checks
+the policy before writing; this covers booking create/update/status/payment/check-in, while
+room reassignment and booking deletion have explicit guards for their direct atomic paths.
+
+A first-time `SINGLE_DEVICE` registry can be initialized only after Supabase Auth identifies
+the caller and a fresh workspace membership query confirms that the caller owns the active
+workspace. The owner must explicitly press the setup action; no mode is inferred from network
+or peer presence. This initial setup is establishment-scoped and local to this installation.
+
+Important limits: this is not yet a global read-only gate for tasks, stock, suppliers, purchase
+orders, staff, housekeeping, invoices, settings or every keyboard/context-menu action.
+The local registry is not yet authoritative across devices. `MULTI_DEVICE` therefore remains
+read-only because no shared registry authority or authenticated P2P coordination transport is
+available. Do not treat this slice as production multi-device authorization.
