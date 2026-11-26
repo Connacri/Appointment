@@ -5,9 +5,9 @@ import test from 'node:test';
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 test('Supabase business entity migrations are additive and tenant-scoped', () => {
-  const schema = read('../supabase/migrations/20261126153000_add_suppliers_purchase_orders_staff.sql');
-  const scope = read('../supabase/migrations/20261126153200_enforce_supplier_establishment_scope.sql');
-  const preferredSupplier = read('../supabase/migrations/20261126153400_align_stock_preferred_supplier_reference.sql');
+  const schema = read('../supabase/migrations/20261126125047_align_inventory_procurement_and_staff_entities.sql');
+  const scope = read('../supabase/migrations/20261126125552_enforce_supplier_establishment_scope.sql');
+  const preferredSupplier = read('../supabase/migrations/20261126130041_align_stock_preferred_supplier_reference.sql');
 
   for (const table of ['stock_suppliers', 'purchase_orders', 'staff_members']) {
     assert.match(schema, new RegExp('create table if not exists public\\.' + table, 'i'));
@@ -24,7 +24,7 @@ test('Supabase business entity migrations are additive and tenant-scoped', () =>
 });
 
 test('stock movement RPC applies ledger and quantity in one guarded transaction', () => {
-  const sql = read('../supabase/migrations/20261126153300_apply_stock_movement_atomically.sql');
+  const sql = read('../supabase/migrations/20261126125656_apply_stock_movement_atomically.sql');
   assert.match(sql, /security invoker/i);
   assert.match(sql, /for update/i);
   assert.match(sql, /idempotency conflict/i);
