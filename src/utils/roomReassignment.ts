@@ -18,6 +18,7 @@ export function planRoomReassignment(
   resources: readonly ResourceItem[],
   bookingId: string,
   targetResourceId: string,
+  originalResourceId?: string,
 ): RoomReassignmentPlan {
   const current = bookings.find((booking) => booking.id === bookingId);
   if (!current) return { ok: false, reason: 'booking_not_found' };
@@ -44,7 +45,7 @@ export function planRoomReassignment(
     return { ok: false, reason: 'target_conflict' };
   }
 
-  const source = resources.find((resource) => resource.id === current.resourceId);
+  const source = resources.find((resource) => resource.id === (originalResourceId || current.resourceId));
   if (!source || isOutOfOrder(source)) return { ok: false, reason: 'room_out_of_order' };
 
   const swappedCurrent = candidate;
