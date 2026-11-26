@@ -16,6 +16,7 @@ import { EVENT_LOG_MAX_ENTRIES, sortEventLogsDesc } from '../utils/eventLog';
 import { waitForTransactionCompletion } from './indexedDbTransaction';
 import { runSerialQueue } from './serialQueue';
 import { migrateBookingRecordV7 } from './bookingMigration';
+import { hasBookingScheduleConflict } from '../utils/bookingValidation';
 import {
   createP2pEvent,
   getP2pRecordState,
@@ -1629,7 +1630,8 @@ class IndexedDbStore {
   /** Opt-in only: demo/bootstrap data must never call this method. */
   public async putWithOutbox<T extends { id: string }>(
     storeName: 'bookings' | 'resources' | 'resourceGroups', item: T,
-    context: OutboxMutationContext, entity: OutboxEntity
+    context: OutboxMutationContext, entity: OutboxEntity,
+    validateCurrentBookings?: (bookings: TimelineBooking[]) => void,
   ): Promise<void> {
     if (entity !== expectedOutboxEntityForStore(storeName)) {
       throw new Error(`Store/entity mismatch: ${storeName} cannot be queued as ${entity}.`);
@@ -1649,8 +1651,20 @@ class IndexedDbStore {
     let previousTombstone: TombstoneRecord | undefined;
     let entityReady = false;
     let tombstoneReady = false;
+    let bookingRowsReady = !validateCurrentBookings;
+    let currentBookingRows: TimelineBooking[] = [];
+    let validationError: Error | null = null;
     const commitMutation = () => {
-      if (!entityReady || !tombstoneReady) return;
+      if (!entityReady || !tombstoneReady || !bookingRowsReady) return;
+      if (validateCurrentBookings) {
+        try {
+          validateCurrentBookings(currentBookingRows);
+        } catch (error) {
+          validationError = error instanceof Error ? error : new Error(String(error));
+          tx.abort();
+          return;
+        }
+      }
       const baseItem =
         storeName === 'bookings'
           ? (migrateBookingRecordV7(item as Partial<TimelineBooking>) as T)
@@ -1695,8 +1709,51 @@ class IndexedDbStore {
     tombstoneRequest.onsuccess = () => { previousTombstone = tombstoneRequest.result as TombstoneRecord | undefined; tombstoneReady = true; commitMutation(); };
     request.onerror = () => tx.abort();
     tombstoneRequest.onerror = () => tx.abort();
-    await waitForTransactionCompletion(tx, `putWithOutbox ${entity}/${item.id}`);
+    if (validateCurrentBookings) {
+      const bookingsRequest = store.getAll();
+      bookingsRequest.onsuccess = () => {
+        currentBookingRows = bookingsRequest.result as TimelineBooking[];
+        bookingRowsReady = true;
+        commitMutation();
+      };
+      bookingsRequest.onerror = () => tx.abort();
+    }
+    try {
+      await waitForTransactionCompletion(tx, `putWithOutbox ${entity}/${item.id}`);
+    } catch (error) {
+      if (validationError) throw validationError;
+      throw error;
+    }
     this.emitOutboxChange();
+  }
+
+  /** Durable local-only booking write before workspace authentication. */
+  public async putLocalBooking(
+    item: TimelineBooking,
+    validateCurrentBookings?: (bookings: TimelineBooking[]) => void,
+  ): Promise<void> {
+    await this.openStore();
+    if (!this.idb) throw new Error('Durable booking persistence requires IndexedDB.');
+    const tx = this.createStrictTransaction(['bookings']);
+    const store = tx.objectStore('bookings');
+    let validationError: Error | null = null;
+    const request = store.getAll();
+    request.onsuccess = () => {
+      try {
+        validateCurrentBookings?.(request.result as TimelineBooking[]);
+        store.put(migrateBookingRecordV7(item as Partial<TimelineBooking>));
+      } catch (error) {
+        validationError = error instanceof Error ? error : new Error(String(error));
+        tx.abort();
+      }
+    };
+    request.onerror = () => tx.abort();
+    try {
+      await waitForTransactionCompletion(tx, `putLocalBooking ${item.id}`);
+    } catch (error) {
+      if (validationError) throw validationError;
+      throw error;
+    }
   }
 
   /**

@@ -262,18 +262,18 @@ interface AppContextType {
   setResourceGroups: React.Dispatch<React.SetStateAction<ResourceGroup[]>>;
   updateHousekeepingStatus: (resourceId: string, status: 'clean' | 'cleaning' | 'dirty' | 'out_of_order') => void;
   checkConflict: (resourceId: string, startDate: string, endDate: string, excludeBookingId?: string, checkInTime?: string, checkOutTime?: string) => boolean;
-  addBooking: (booking: Omit<TimelineBooking, 'id'>) => { success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'; booking?: TimelineBooking };
-  updateBooking: (id: string, updates: Partial<TimelineBooking>) => { success: boolean; error?: string };
-  updateBookingStatus: (id: string, status: BookingStatus) => void;
+  addBooking: (booking: Omit<TimelineBooking, 'id'>) => Promise<{ success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'; booking?: TimelineBooking }>;
+  updateBooking: (id: string, updates: Partial<TimelineBooking>) => Promise<{ success: boolean; error?: string }>;
+  updateBookingStatus: (id: string, status: BookingStatus) => Promise<{ success: boolean; error?: string }>;
   deleteBooking: (id: string) => Promise<void>;
   confirmCheckInAndCashPayment: (
     bookingId: string,
     cashReceived?: boolean
-  ) => { success: boolean; message: string; booking?: TimelineBooking };
+  ) => Promise<{ success: boolean; message: string; booking?: TimelineBooking }>;
   markBookingAsPaid: (
     bookingId: string,
     receiptNote?: string
-  ) => { success: boolean; message: string; booking?: TimelineBooking };
+  ) => Promise<{ success: boolean; message: string; booking?: TimelineBooking }>;
   selectedBooking: TimelineBooking | null;
   setSelectedBooking: (booking: TimelineBooking | null) => void;
   lastCreatedInvoice: InvoiceRecord | null;
@@ -1160,9 +1160,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, delayMs);
   }, []);
 
-  // Only explicit user-created/edited records enter the outbox. Bootstrap mock records are excluded.
-  const persistBookingMutation = (booking: TimelineBooking) => {
-    if (!workspace.activeWorkspaceId || isDemoBookingId(booking.id, DEMO_BOOKING_IDS)) return;
+  // Do not report a booking mutation until its local IndexedDB transaction commits.
+  // Workspace writes atomically persist the projection, Outbox intent and P2P event.
+  // Before workspace authentication, the durable local projection is retained without replication.
+  const persistBookingMutation = async (booking: TimelineBooking, validateSchedule = false): Promise<void> => {
+    if (isDemoBookingId(booking.id, DEMO_BOOKING_IDS)) return;
+    const workspaceId = workspace.activeWorkspaceId?.trim();
     const bookedResource = latestGroupsRef.current
       .flatMap((group) => group.resources)
       .find((resource) => resource.id === booking.resourceId);
@@ -1170,19 +1173,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       selectedEstablishmentId !== 'all'
         ? selectedEstablishmentId
         : bookedResource?.establishmentId || stableEstablishmentId(establishmentProfile);
-    void indexedDb.putWithOutbox(
-      'bookings',
-      booking,
-      {
-        workspaceId: workspace.activeWorkspaceId,
-        establishmentId: resolvedEstablishmentId,
-      },
-      'booking'
-    )
-      .then(() => {
-        scheduleAutoSync();
-      })
-      .catch((error) => console.error('[Outbox] Booking mutation was not queued:', error));
+    const validateCurrentBookings = validateSchedule && booking.status !== 'cancelled'
+      ? (rows: TimelineBooking[]) => {
+          const scoped = rows.filter((row) => !workspaceId
+            || !(row as TimelineBooking & { workspaceId?: string }).workspaceId
+            || (row as TimelineBooking & { workspaceId?: string }).workspaceId === workspaceId);
+          if (hasBookingScheduleConflict(scoped, booking, booking.id)) {
+            throw new Error('Conflit de réservation : cette ressource est déjà occupée sur cette plage horaire.');
+          }
+        }
+      : undefined;
+    if (workspaceId) {
+      await indexedDb.putWithOutbox(
+        'bookings', booking,
+        { workspaceId, establishmentId: resolvedEstablishmentId },
+        'booking', validateCurrentBookings,
+      );
+      scheduleAutoSync();
+      return;
+    }
+    await indexedDb.putLocalBooking(booking, validateCurrentBookings);
   };
 
   const createInvoiceFromBooking = (booking: TimelineBooking, docType: DocumentType = 'invoice'): InvoiceRecord | null => {
@@ -2475,9 +2485,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentBaseDate(`${newY}-${newM}-${newD}`);
   };
 
-  const addBooking = (
+  const addBooking = async (
     bookingData: Omit<TimelineBooking, 'id'>
-  ): { success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'; booking?: TimelineBooking } => {
+  ): Promise<{ success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'; booking?: TimelineBooking }> => {
     // Validate both calendar dates for every reservation sector before changing state.
     if (!isValidCalendarDate(bookingData.startDate) || !isValidCalendarDate(bookingData.endDate)) {
       const msg =
@@ -2648,8 +2658,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...normalizedInput,
       id: `bkg_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`,
     });
+    try {
+      await persistBookingMutation(newBkg, true);
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Impossible d’enregistrer durablement la réservation.' };
+    }
     setBookings((prev) => [newBkg, ...prev]);
-    persistBookingMutation(newBkg);
 
     logEvent({
       category: 'booking',
@@ -2710,10 +2724,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, booking: newBkg };
   };
 
-  const updateBooking = (
+  const updateBooking = async (
     id: string,
     updates: Partial<TimelineBooking>
-  ): { success: boolean; error?: string } => {
+  ): Promise<{ success: boolean; error?: string }> => {
     const existing = bookings.find((booking) => booking.id === id);
     if (!existing) {
       return { success: false, error: 'Booking not found.' };
@@ -2793,7 +2807,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    persistBookingMutation(merged);
+    try {
+      await persistBookingMutation(merged, touchesSchedule || reactivatesBooking);
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Impossible d’enregistrer la modification de réservation.' };
+    }
     const changes = computeBookingDiff(existing, merged);
     if (changes.length > 0) {
       logEvent({
@@ -2823,10 +2841,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true };
   };
 
-  const updateBookingStatus = (id: string, status: BookingStatus) => {
+  const updateBookingStatus = async (id: string, status: BookingStatus): Promise<{ success: boolean; error?: string }> => {
     const existing = bookings.find((booking) => booking.id === id);
-    if (existing) {
-      persistBookingMutation({ ...existing, status });
+    if (!existing) return { success: false, error: 'Booking not found.' };
+    const updated = { ...existing, status };
+    try {
+      await persistBookingMutation(updated, existing.status === 'cancelled' && status !== 'cancelled');
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Impossible d’enregistrer le statut de réservation.' };
+    }
+    {
       logEvent({
         category: 'booking',
         action: 'booking.status_changed',
@@ -2844,12 +2868,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resourceId: existing.resourceId,
       });
     }
-    setBookings((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, status } : b))
-    );
-    if (selectedBooking && selectedBooking.id === id) {
-      setSelectedBooking((prev) => (prev ? { ...prev, status } : null));
-    }
+    setBookings((prev) => prev.map((b) => (b.id === id ? updated : b)));
+    if (selectedBooking && selectedBooking.id === id) setSelectedBooking(updated);
+    return { success: true };
   };
 
   const deleteBooking = async (id: string): Promise<void> => {
@@ -2909,10 +2930,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (selectedBooking?.id === id) setSelectedBooking(null);
   };
 
-  const markBookingAsPaid = (
+  const markBookingAsPaid = async (
     bookingId: string,
     receiptNote?: string
-  ): { success: boolean; message: string; booking?: TimelineBooking } => {
+  ): Promise<{ success: boolean; message: string; booking?: TimelineBooking }> => {
     const currentBooking = bookings.find((booking) => booking.id === bookingId);
     const targetBooking = currentBooking ? {
       ...currentBooking,
@@ -2920,8 +2941,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notes: (currentBooking.notes || '') + (receiptNote ||
         ' [✓ Reçu de paiement acquitté via QR Code - Marqué PAYÉ par le personnel]'),
     } : undefined;
-    if (targetBooking && currentBooking) {
-      persistBookingMutation(targetBooking);
+    if (!targetBooking || !currentBooking) {
+      return { success: false, message: language === 'fr' ? 'Réservation introuvable.' : 'Booking not found.' };
+    }
+    try {
+      await persistBookingMutation(targetBooking);
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : 'Impossible d’enregistrer le paiement.' };
+    }
+    {
       logEvent({
         category: 'billing',
         action: 'booking.payment_settled',
@@ -2963,10 +2991,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  const confirmCheckInAndCashPayment = (
+  const confirmCheckInAndCashPayment = async (
     bookingId: string,
     cashReceived: boolean = false
-  ): { success: boolean; message: string; booking?: TimelineBooking } => {
+  ): Promise<{ success: boolean; message: string; booking?: TimelineBooking }> => {
     const currentBooking = bookings.find((booking) => booking.id === bookingId);
     if (!currentBooking) {
       return {
@@ -2995,7 +3023,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : ' [✓ Présence confirmée via QR Code]'),
     };
 
-    persistBookingMutation(updatedBooking);
+    try {
+      await persistBookingMutation(updatedBooking);
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : 'Impossible d’enregistrer le check-in.' };
+    }
     const changes: Array<{ field: string; before?: string; after?: string }> = [];
     if (currentBooking.status !== 'checked_in') {
       changes.push({ field: 'Statut séjour', before: currentBooking.status, after: 'checked_in' });
