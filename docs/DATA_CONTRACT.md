@@ -197,3 +197,5 @@ Regression coverage includes a forged-origin batch: a sender identified as node-
 The SQLite inbound-origin regression verifies that a node-b transport session cannot submit a node-c event and that the failed batch leaves both the event log and node-b inbound cursor unchanged.
 
 Windows SQLite schema v9 adds a covering workspace/node/local-order index. Outbound pages query only rows whose persisted node_id matches the local installation identity, so foreign-origin events are excluded by the database query rather than scanned and skipped. This avoids empty cursor-advance pages and keeps per-peer resume cursors aligned with the last locally authored event actually sent.
+
+The outbound paging regression also includes a foreign-origin event in the same workspace and verifies that a node-a page contains only node-a events.

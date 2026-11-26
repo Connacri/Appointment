@@ -348,7 +348,12 @@ impl PmsDatabase {
             .map_err(|e| e.to_string())?;
         let rows = statement
             .query_map(
-                params![workspace_id, expected_cursor, local_node_id, i64::from(limit) + 1],
+                params![
+                    workspace_id,
+                    expected_cursor,
+                    local_node_id,
+                    i64::from(limit) + 1
+                ],
                 |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
             )
             .map_err(|e| e.to_string())?;
