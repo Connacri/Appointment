@@ -6,6 +6,7 @@ import type {
 } from '../../types/booking';
 import type { StaffMemberRecord } from '../../types/roles';
 import type { EstablishmentProfile } from '../../types/establishment';
+import type { P2pEntity } from '../p2p/protocol';
 import {
   BOOKING_SELECT_COLUMNS,
   fromSupabaseBookingRow,
@@ -698,6 +699,39 @@ export async function saveEstablishmentProfile(
     settings: { ...settings, appointmentProfile: profile as unknown as Json } as unknown as Json,
   }).eq('workspace_id', workspaceId).eq('id', establishmentId);
   if (updateError) throw new Error(updateError.message);
+}
+
+export interface SupabaseEntityTombstone {
+  entity: P2pEntity;
+  entityId: string;
+  establishmentId: string;
+  deletedAt: string;
+  remoteVersion: number;
+}
+
+/** Read only explicit server tombstones; absence from an active-row query is not a delete. */
+export async function listWorkspaceEntityTombstones(workspaceId: WorkspaceId): Promise<SupabaseEntityTombstone[]> {
+  if (!workspaceId.trim()) return [];
+  const db = requireSupabase();
+  const sources = [
+    ['task', 'pms_tasks'],
+    ['stock_item', 'stock_items'],
+    ['supplier', 'stock_suppliers'],
+    ['purchase_order', 'purchase_orders'],
+    ['staff_member', 'staff_members'],
+    ['resource', 'resources'],
+    ['resource_group', 'resource_groups'],
+  ] as const;
+  const results = await Promise.all(sources.map(async ([entity, table]) => {
+    const { data, error } = await db.from(table).select('id,establishment_id,deleted_at,version')
+      .eq('workspace_id', workspaceId).not('deleted_at', 'is', null);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => ({
+      entity, entityId: row.id, establishmentId: row.establishment_id,
+      deletedAt: row.deleted_at as string, remoteVersion: Number(row.version),
+    } satisfies SupabaseEntityTombstone));
+  }));
+  return results.flat().sort((a, b) => a.deletedAt.localeCompare(b.deletedAt) || a.entityId.localeCompare(b.entityId));
 }
 
 export async function listEstablishmentProfile(
