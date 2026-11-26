@@ -823,8 +823,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     establishmentOverride?: string,
   ): Promise<void> => {
     const workspaceId = workspace.activeWorkspaceId?.trim();
-    // Local-only installations remain usable; cloud Outbox requires a verified tenant.
-    if (!workspaceId) return;
+    // Local-only installations remain durable without inventing a workspace identity.
+    if (!workspaceId) {
+      await indexedDb.putLocalBusinessEntity(entity, entityId, payload);
+      return;
+    }
     const establishmentId = establishmentOverride?.trim() || resolveMutationEstablishmentId();
     if (!establishmentId || establishmentId === 'all') {
       throw new Error(`Établissement réel requis pour synchroniser ${entity}/${entityId}.`);
@@ -842,7 +845,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     entityId: string,
   ): Promise<void> => {
     const workspaceId = workspace.activeWorkspaceId?.trim();
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      await indexedDb.deleteLocalBusinessEntity(entity, entityId);
+      return;
+    }
     const establishmentId = resolveMutationEstablishmentId();
     if (!establishmentId || establishmentId === 'all') {
       throw new Error(`Établissement réel requis pour supprimer ${entity}/${entityId}.`);
@@ -1069,6 +1075,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [resourceGroups, setResourceGroups] = useState<ResourceGroup[]>([]);
   const [bookings, setBookings] = useState<TimelineBooking[]>([]);
   const [isCoreDataHydrated, setIsCoreDataHydrated] = useState(false);
+  
+  // Local-only records use a separate IndexedDB store and are never assigned a
+  // fabricated workspace ID or emitted as P2P events.
+  useEffect(() => {
+    if (workspace.activeWorkspaceId?.trim()) return;
+    let cancelled = false;
+    void indexedDb.getLocalBusinessEntities().then((rows) => {
+      if (cancelled || workspace.activeWorkspaceId?.trim()) return;
+      const byEntity = <T extends { id: string }>(entity: string): T[] =>
+        rows.filter((row) => row.entity === entity).map((row) => row.payload as T);
+      const localTasks = byEntity<PmsTask>('task');
+      const localStock = byEntity<StockItem>('stock_item');
+      const localMovements = byEntity<StockMovement>('stock_movement');
+      const localSuppliers = byEntity<StockSupplier>('supplier');
+      const localOrders = byEntity<PurchaseOrderRecord>('purchase_order');
+      const localStaff = byEntity<StaffMemberRecord>('staff_member');
+      const localProfiles = byEntity<EstablishmentProfile>('establishment_profile');
+      if (localTasks.length) setTasks((previous) => [...new Map([...previous, ...localTasks].map((item) => [item.id, item])).values()]);
+      if (localStock.length) {
+        const merged = [...new Map([...stockItemsRef.current, ...localStock].map((item) => [item.id, item])).values()];
+        stockItemsRef.current = merged;
+        setStockItems(merged);
+      }
+      if (localMovements.length) setStockMovements((previous) => [...new Map([...previous, ...localMovements].map((item) => [item.id, item])).values()]);
+      if (localSuppliers.length) setSuppliers((previous) => [...new Map([...previous, ...localSuppliers].map((item) => [item.id, item])).values()]);
+      if (localOrders.length) setPurchaseOrders((previous) => [...new Map([...previous, ...localOrders].map((item) => [item.id, item])).values()]);
+      if (localStaff.length) setStaffMembers((previous) => [...new Map([...previous, ...localStaff].map((item) => [item.id, item])).values()]);
+      if (localProfiles.length && !(establishmentProfile.name ?? '').trim()) {
+        setEstablishmentProfileState(localProfiles[localProfiles.length - 1]);
+      }
+    }).catch((error) => reportQueueFailure('localBusinessEntities', 'local-only', error));
+    return () => { cancelled = true; };
+  }, [workspace.activeWorkspaceId]);
 
   const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>(INITIAL_CLOUD_SYNC_STATUS);
   const [syncLog, setSyncLog] = useState<SyncLogEntry[]>([]);
