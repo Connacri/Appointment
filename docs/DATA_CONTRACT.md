@@ -361,3 +361,20 @@ required.
 This policy defines topology and availability; it does not by itself implement a distributed
 consensus protocol, secure transport, cryptographic device identity, or global room locks.
 Those remain separate release-gated engineering work.
+
+
+### Device topology policy core — initial implementation
+
+The transport-independent policy engine is implemented in `src/services/p2p/deviceTopology.ts`.
+It validates a versioned establishment device registry, computes the fail-closed mutation
+state, and builds an explicit administrator-only `MULTI_DEVICE` to `SINGLE_DEVICE`
+transition with an incremented registry epoch and revocation of every non-retained active
+device. Regression tests cover single-device offline operation, multi-device isolation,
+missing authenticated coordination, reconnect gating and administrator authorization.
+
+This is the policy core only. It is not yet wired into AppContext/UI or into every mutation
+repository. The IndexedDB/Windows SQLite durable registry adapters, signed administrator
+transition, authenticated P2P transport, Supabase-authoritative registry persistence and
+end-to-end revocation enforcement remain required before this policy can be enabled for
+existing establishments. Until those are implemented, do not claim global read-only
+enforcement or production device revocation.
