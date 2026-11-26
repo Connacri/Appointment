@@ -3451,12 +3451,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const createPurchaseOrder: AppContextType['createPurchaseOrder'] = (input) => {
     const nowIso = new Date().toISOString();
+    const id = `po_${Date.now()}_${createMutationId().slice(0, 8).toUpperCase()}`;
     const record: PurchaseOrderRecord = {
       ...input,
-      id: `po_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id,
       orderNumber:
         input.orderNumber?.trim() ||
-        `CMD-${nowIso.slice(0, 7).replace('-', '')}-${String(Math.floor(100 + Math.random() * 900))}`,
+        `CMD-${nowIso.slice(0, 7).replace('-', '')}-${id.slice(-6)}`,
       createdAt: nowIso,
       createdBy: input.createdBy?.trim() || resolveActorLabel(currentRoleRef.current),
     };
