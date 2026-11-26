@@ -25,6 +25,7 @@ test('Supabase business entity migrations are additive and tenant-scoped', () =>
 
 test('stock movement RPC applies ledger and quantity in one guarded transaction', () => {
   const sql = read('../supabase/migrations/20261126125656_apply_stock_movement_atomically.sql');
+  const retry = read('../supabase/migrations/20261126130712_fix_stock_movement_retry_after_soft_delete.sql');
   assert.match(sql, /security invoker/i);
   assert.match(sql, /for update/i);
   assert.match(sql, /idempotency conflict/i);
@@ -32,6 +33,9 @@ test('stock movement RPC applies ledger and quantity in one guarded transaction'
   assert.match(sql, /insert into public\\.stock_movements/i);
   assert.match(sql, /update public\\.stock_items/i);
   assert.match(sql, /grant execute[\\s\\S]*to authenticated/i);
+  assert.match(retry, /fast idempotency path/i);
+  assert.match(retry, /stock movement idempotency conflict/i);
+  assert.match(retry, /s.deleted_at is null/i);
 });
 
 test('repositories and application mutation paths are connected to the new entities', () => {

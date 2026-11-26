@@ -41,11 +41,11 @@ if (has(sourceDataPaths) && !has(/^tests\/.*\.(test|spec)\.[cm]?[jt]sx?$/)) {
 }
 const changedMigrations = changed.filter((file) => /^supabase\/migrations\/\d+.*\.sql$/.test(file));
 const generatedTypesChanged = changed.includes('src/services/supabase/database.types.ts');
-// Policy-only and constraint-only migrations cannot alter the table or column
+// Policy-, constraint- and function-only migrations cannot alter the table or column
 // shape represented by generated types. They must declare that explicitly; every
 // other schema-affecting migration still requires regenerated types in the same set.
 const isNoTypeChangeMigration = (file) =>
-  /^--\s*data-contract:\s*(policy-only|constraint-only)\b/m.test(readFileSync(file, 'utf8'));
+  /^--\s*data-contract:\s*(policy-only|constraint-only|function-only)\b/m.test(readFileSync(file, 'utf8'));
 const schemaMigrations = changedMigrations.filter((file) => !isNoTypeChangeMigration(file));
 if (schemaMigrations.length > 0 && !generatedTypesChanged) {
   errors.push('A remote SQL migration changed the schema: regenerate and commit src/services/supabase/database.types.ts.');

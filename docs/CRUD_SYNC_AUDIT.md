@@ -102,3 +102,5 @@ Audit status: **NOT READY for full CRUD replication or production P2P**. This is
 - Dynamic rates remain excluded until a conflict-aware server contract exists; invoices remain excluded until header + line writes and invoice-number allocation are atomic.
 - Remote tombstones are now fetched and applied for tasks, stock items, suppliers, purchase orders and staff. Resource/group remote tombstones still require dedicated physical-store projection handling.
 - Purchase-order receipt still consists of multiple idempotent movement RPCs followed by a separate PO update; a single receive-purchase-order RPC is needed for atomic multi-line receipt.
+
+- A follow-up function-only migration makes stock movement retries idempotent after the referenced stock item is soft-deleted; a duplicate event still must match the immutable original payload.

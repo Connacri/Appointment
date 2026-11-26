@@ -59,6 +59,7 @@ Migrations distantes enregistrées :
 12. `20261126125552_enforce_supplier_establishment_scope`
 13. `20261126125656_apply_stock_movement_atomically`
 14. `20261126130041_align_stock_preferred_supplier_reference`
+15. `20261126130712_fix_stock_movement_retry_after_soft_delete`
 
 ## Code frontend présent
 

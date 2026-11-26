@@ -1,4 +1,4 @@
--- data-contract: constraint-only
+-- data-contract: function-only
 create or replace function public.apply_stock_movement(
   p_workspace_id uuid,
   p_establishment_id text,

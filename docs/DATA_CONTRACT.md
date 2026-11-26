@@ -578,6 +578,9 @@ The November 26 schema migrations are additive and versioned under supabase/migr
   projection atomically.
 - 20261126130041_align_stock_preferred_supplier_reference.sql: persists the optional
   preferred supplier reference with workspace/establishment-scoped referential integrity.
+- 20261126130712_fix_stock_movement_retry_after_soft_delete.sql: makes duplicate movement
+  retries succeed idempotently even when the stock item was soft-deleted after the first
+  commit, while preserving content-equivocation checks.
 
 Generated Supabase types are regenerated from the live project after schema changes.
 Repositories now read/write suppliers, purchase orders and staff members; stock movement
