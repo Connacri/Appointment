@@ -412,6 +412,19 @@ export async function saveTask(workspaceId: WorkspaceId, establishmentId: string
   return unwrap(await db.from('pms_tasks').upsert({id:t.id,workspace_id:workspaceId,establishment_id:establishmentId,room:t.room,type_id:t.typeId,type_name:t.typeName,category:t.category,assignee:t.assignee,task_date:t.date,status:t.status,priority:t.priority,note:t.note ?? null,subtasks:t.subtasks ?? [],tools:t.tools ?? [],consumed_items:t.consumedItems ?? [],completed_by:t.completedBy ?? null,completed_at:t.completedAt ?? null}).select().single());
 }
 
+export async function deleteTask(workspaceId: WorkspaceId, taskId: string): Promise<void> {
+  if (!workspaceId.trim() || !taskId.trim()) throw new Error('Workspace et tâche requis.');
+  const db = requireSupabase();
+  const { data, error } = await db.from('pms_tasks').update({ deleted_at: new Date().toISOString() })
+    .eq('workspace_id', workspaceId).eq('id', taskId).is('deleted_at', null).select('id').maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data) return;
+  const { data: tombstone, error: verifyError } = await db.from('pms_tasks').select('id')
+    .eq('workspace_id', workspaceId).eq('id', taskId).not('deleted_at', 'is', null).maybeSingle();
+  if (verifyError) throw new Error(verifyError.message);
+  if (!tombstone) throw new Error('Tâche absente ou inaccessible dans ce workspace.');
+}
+
 export async function listStockItems(workspaceId: WorkspaceId, establishmentId: string): Promise<StockItem[]> {
   const db = requireSupabase();
   const {data,error} = await db.from('stock_items').select('*').eq('workspace_id',workspaceId).eq('establishment_id',establishmentId).is('deleted_at',null).order('category');
@@ -422,6 +435,19 @@ export async function listStockItems(workspaceId: WorkspaceId, establishmentId: 
 export async function saveStockItem(workspaceId: WorkspaceId, establishmentId: string, i: StockItem) {
   const db = requireSupabase();
   return unwrap(await db.from('stock_items').upsert({id:i.id,workspace_id:workspaceId,establishment_id:establishmentId,category:i.category,name:i.name,unit:i.unit,quantity:i.quantity,min_threshold:i.minThreshold,unit_cost:i.unitCost}).select().single());
+}
+
+export async function deleteStockItem(workspaceId: WorkspaceId, itemId: string): Promise<void> {
+  if (!workspaceId.trim() || !itemId.trim()) throw new Error('Workspace et article stock requis.');
+  const db = requireSupabase();
+  const { data, error } = await db.from('stock_items').update({ deleted_at: new Date().toISOString() })
+    .eq('workspace_id', workspaceId).eq('id', itemId).is('deleted_at', null).select('id').maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data) return;
+  const { data: tombstone, error: verifyError } = await db.from('stock_items').select('id')
+    .eq('workspace_id', workspaceId).eq('id', itemId).not('deleted_at', 'is', null).maybeSingle();
+  if (verifyError) throw new Error(verifyError.message);
+  if (!tombstone) throw new Error('Article stock absent ou inaccessible dans ce workspace.');
 }
 
 export async function addStockMovement(workspaceId: WorkspaceId, establishmentId: string, m: StockMovement) {
