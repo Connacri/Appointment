@@ -987,6 +987,15 @@ class IndexedDbStore {
                   const suppliedSourceIds = Array.isArray(payload.sourceEventIds)
                     ? (payload.sourceEventIds as unknown[]).filter((value): value is string => typeof value === 'string').sort()
                     : [];
+                  const cancelledIds = Array.isArray(payload.cancelledBookingIds)
+                    ? (payload.cancelledBookingIds as unknown[]).filter((value): value is string => typeof value === 'string')
+                    : [];
+                  const cancellationIds = Array.isArray(payload.cancellationEventIds)
+                    ? (payload.cancellationEventIds as unknown[]).filter((value): value is string => typeof value === 'string')
+                    : [];
+                  const expectedCancelledIds = payload.decision === 'reject_both'
+                    ? [conflict.firstBookingId, conflict.secondBookingId].sort()
+                    : [conflict.firstBookingId === payload.chosenBookingId ? conflict.secondBookingId : conflict.firstBookingId];
                   const causallyIncludes = (sourceId: string): boolean => {
                     const separator = sourceId.lastIndexOf(':');
                     if (separator <= 0) return false;
@@ -1010,45 +1019,83 @@ class IndexedDbStore {
                     || suppliedSourceIds.length !== 2
                     || suppliedSourceIds[0] !== expectedSourceIds[0]
                     || suppliedSourceIds[1] !== expectedSourceIds[1]
+                    || cancelledIds.length !== expectedCancelledIds.length
+                    || expectedCancelledIds.some((id) => !cancelledIds.includes(id))
+                    || cancellationIds.length !== expectedCancelledIds.length
                     || !expectedSourceIds.every(causallyIncludes)
+                    || !cancellationIds.every(causallyIncludes)
                   ) { done(); return; }
-                  conflictStore.put({
-                    ...conflict,
-                    status: decision === 'keep_booking' ? 'resolved' : 'rejected',
-                    resolution: {
-                      decision,
-                      chosenBookingId: chosenBookingId as string | null,
-                      actorNodeId: event.nodeId,
-                      reason: payload.reason,
-                      resolvedAt: payload.resolvedAt,
-                      eventId: event.eventId,
-                    },
-                  } satisfies BookingConflictSnapshot);
-                  done();
+                  let cancellationRemaining = cancellationIds.length;
+                  let cancellationValid = true;
+                  const commitResolution = (): void => {
+                    if (cancellationRemaining !== 0) return;
+                    if (!cancellationValid) { done(); return; }
+                    conflictStore.put({
+                      ...conflict,
+                      status: decision === 'keep_booking' ? 'resolved' : 'rejected',
+                      resolution: {
+                        decision,
+                        chosenBookingId: chosenBookingId as string | null,
+                        actorNodeId: event.nodeId,
+                        reason: payload.reason as string,
+                        resolvedAt: payload.resolvedAt as string,
+                        eventId: event.eventId,
+                      },
+                    } satisfies BookingConflictSnapshot);
+                    done();
+                  };
+                  for (let index = 0; index < cancellationIds.length; index += 1) {
+                    const cancellationRequest = tx.objectStore('p2pEvents')
+                      .get([batch.workspaceId, cancellationIds[index]]);
+                    cancellationRequest.onsuccess = () => {
+                      const cancellation = cancellationRequest.result as P2pEvent | undefined;
+                      const expectedBookingId = expectedCancelledIds[index];
+                      if (
+                        !cancellation || cancellation.entity !== 'booking'
+                        || cancellation.entityId !== expectedBookingId
+                        || cancellation.operation !== 'upsert'
+                        || cancellation.payload?.status !== 'cancelled'
+                        || cancellation.nodeId !== event.nodeId
+                      ) cancellationValid = false;
+                      cancellationRemaining -= 1;
+                      commitResolution();
+                    };
+                    cancellationRequest.onerror = abort;
+                  }
                 };
                 resolutionRequest.onerror = abort;
               };
               conflictRequest.onerror = abort;
             };
-            const conflictIds = [...new Set([
-              ...conflicts.map((conflict) => conflict.id),
-              ...batch.events.filter((event) => event.entity === 'booking_conflict').map((event) => event.entityId),
-            ])];
-            const applyResolutionNext = (index: number): void => {
-              if (index >= conflictIds.length) {
-                tx.objectStore('p2pPeerCursors').put({
-                  workspaceId: batch.workspaceId,
-                  peerId: batch.peerId,
-                  cursor: batch.nextCursor,
-                  updatedAt: new Date().toISOString(),
-                });
-                return;
-              }
-              applyResolution(conflictIds[index], () => applyResolutionNext(index + 1));
+            const applyPendingConflicts = (): void => {
+              const pendingRequest = conflictStore.index('workspaceStatus')
+                .getAll(IDBKeyRange.only([batch.workspaceId, 'pending']));
+              pendingRequest.onsuccess = () => {
+                const pendingIds = (pendingRequest.result as BookingConflictSnapshot[]).map((item) => item.id);
+                const conflictIds = [...new Set([
+                  ...conflicts.map((conflict) => conflict.id),
+                  ...pendingIds,
+                  ...batch.events.filter((event) => event.entity === 'booking_conflict').map((event) => event.entityId),
+                ])];
+                const applyResolutionNext = (index: number): void => {
+                  if (index >= conflictIds.length) {
+                    tx.objectStore('p2pPeerCursors').put({
+                      workspaceId: batch.workspaceId,
+                      peerId: batch.peerId,
+                      cursor: batch.nextCursor,
+                      updatedAt: new Date().toISOString(),
+                    });
+                    return;
+                  }
+                  applyResolution(conflictIds[index], () => applyResolutionNext(index + 1));
+                };
+                applyResolutionNext(0);
+              };
+              pendingRequest.onerror = abort;
             };
             const persistNext = (conflictIndex: number): void => {
               if (conflictIndex >= conflicts.length) {
-                applyResolutionNext(0);
+                applyPendingConflicts();
                 return;
               }
               const conflict = conflicts[conflictIndex];
@@ -1247,6 +1294,7 @@ class IndexedDbStore {
           return;
         }
         const resolvedAt = new Date().toISOString();
+        const cancellationEventIds: string[] = [];
         const appendResolutionEvent = (): void => {
           const payload = {
             id: conflict.id,
@@ -1258,6 +1306,8 @@ class IndexedDbStore {
             reason: reason.trim(),
             resolvedAt,
             sourceEventIds: sourceIds,
+            cancellationEventIds,
+            cancelledBookingIds: bookingsToCancel,
           };
           this.appendLocalP2pEvent(
             tx, workspaceId, 'booking_conflict', conflict.id, 'upsert', payload, resolvedAt,
@@ -1321,7 +1371,11 @@ class IndexedDbStore {
             ));
             this.appendLocalP2pEvent(
               tx, workspaceId, 'booking', bookingId, 'upsert', cancelledPayload, resolvedAt,
-              () => cancelNext(index + 1),
+              (event) => {
+                if (!event) { tx.abort(); return; }
+                cancellationEventIds.push(event.eventId);
+                cancelNext(index + 1);
+              },
             );
           };
           bookingRequest.onsuccess = () => {
