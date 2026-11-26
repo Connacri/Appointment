@@ -379,5 +379,6 @@ test('a connected peer may only submit events carrying its authenticated node id
   assert.equal(isP2pEventAuthoredByPeer('node-a', { nodeId: 'node-a' }), true);
   assert.equal(isP2pEventAuthoredByPeer('node-a', { nodeId: 'node-b' }), false);
   assert.equal(isP2pEventAuthoredByPeer('node-b', { nodeId: 'node-a' }), false);
+  assert.equal(isP2pEventAuthoredByPeer('node-a', { nodeId: 'node-a' }), true);
   assert.equal(isP2pEventAuthoredByPeer('', { nodeId: 'node-a' }), false);
 });

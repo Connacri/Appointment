@@ -155,13 +155,15 @@ successful event append.
 
 ### Phase 3 progress — durable outbound pages (2026-11-26)
 
-IndexedDB schema v11 now maintains a durable relay queue for locally authored and
-newly received P2P events. It exposes bounded outbound page reads and per-peer durable
-ACK cursors. The ACK must match the exact page offered to that peer; arbitrary cursor
-jumps and cross-workspace acknowledgements are rejected. Incoming events are re-enqueued
-for relay to other peers in the same transaction as event/projection/cursor commit.
-Queue compaction remains disabled until trusted peer membership and revocation are
-implemented. This is a persistence/protocol layer, not a live network transport.
+IndexedDB schema v11 introduced a durable outbound queue and per-peer ACK cursors.
+Schema v12 restricts that queue to events authored by the local node and removes any
+third-party events left by the earlier relay prototype. Inbound events are committed to
+the event log, projection/conflict state and inbound peer cursor, but are not queued for
+outbound delivery. Until immutable origin signatures are implemented, a peer may submit
+only events whose nodeId matches its authenticated peer ID. Multi-hop relay is disabled;
+each device sends its own events directly to its peers. Queue compaction remains disabled
+until trusted peer membership and revocation are implemented. This is a persistence/
+protocol layer, not a live network transport.
 
 
 ### Windows SQLite outbound relay and ACK contract
@@ -171,8 +173,9 @@ The append-only `p2p_events.local_order` log is the relay queue; a schema-v8
 `p2p_peer_acks` table stores the current durable cursor and exact offered cursor.
 Outbound pages are bounded to 1–500 events. ACKs are accepted only for the exact page
 previously offered and only when the cursor identifies an event in the same workspace.
-Inbound peer cursors remain separate from outbound ACK cursors. Received events share
-the append-only event log and are therefore eligible for relay to other peers.
+Inbound peer cursors remain separate from outbound ACK cursors. Received events remain
+in the append-only event log for local reconciliation but are excluded from outbound pages
+until end-to-end event-origin signatures are available.
 
 The Windows SQLite schema-v8 outbound relay implementation uses the same exact-offer ACK rule as IndexedDB; its native regression test covers pagination, stale ACK rejection, and workspace isolation.
 

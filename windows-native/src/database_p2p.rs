@@ -335,7 +335,6 @@ impl PmsDatabase {
             .map_err(|e| e.to_string())?;
         let mut entries = Vec::new();
         let mut page_bytes = 0usize;
-        
         let mut has_more = false;
         let mut next_cursor = expected_cursor;
         for (scanned_count, row) in rows.enumerate() {
