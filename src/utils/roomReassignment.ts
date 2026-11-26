@@ -27,7 +27,7 @@ export function planRoomReassignment(
   if (!target) return { ok: false, reason: 'resource_not_found' };
   if (target.sector !== current.sector) return { ok: false, reason: 'sector_mismatch' };
   if (isOutOfOrder(target)) return { ok: false, reason: 'room_out_of_order' };
-  if (target.id === current.resourceId) return { ok: true, mode: 'move', booking: current };
+  if (target.id === (originalResourceId || current.resourceId)) return { ok: true, mode: 'move', booking: current };
 
   const candidate = { ...current, resourceId: target.id, resourceName: target.name };
   const conflicts = bookings.filter((other) =>
