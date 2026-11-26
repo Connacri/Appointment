@@ -1891,20 +1891,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setBookings(result.mergedBookings);
       }
 
-      if (result.remoteTasks.length > 0) {
+      const remoteTombstoneKeys = new Set(
+        result.remoteTombstoneIds.map((item) => `${item.entity}:${item.entityId}`),
+      );
+      const isRemoteDeleted = (entity: string, id: string) => remoteTombstoneKeys.has(`${entity}:${id}`);
+
+      if (result.remoteTasks.length > 0 || result.remoteTombstoneIds.some((item) => item.entity === 'task')) {
         setTasks((prev) => {
-          const byId = new Map(prev.map((t) => [t.id, t]));
-          for (const task of result.remoteTasks) byId.set(task.id, task);
+          const byId = new Map(prev.filter((task) => !isRemoteDeleted('task', task.id)).map((task) => [task.id, task]));
+          for (const task of result.remoteTasks) if (!isRemoteDeleted('task', task.id)) byId.set(task.id, task);
           const next = [...byId.values()];
           localStorage.setItem('omnibook_pms_tasks', JSON.stringify(next));
           return next;
         });
       }
 
-      if (result.remoteStockItems.length > 0) {
+      if (result.remoteStockItems.length > 0 || result.remoteTombstoneIds.some((item) => item.entity === 'stock_item')) {
         setStockItems((prev) => {
-          const byId = new Map(prev.map((s) => [s.id, s]));
-          for (const item of result.remoteStockItems) byId.set(item.id, item);
+          const byId = new Map(prev.filter((item) => !isRemoteDeleted('stock_item', item.id)).map((item) => [item.id, item]));
+          for (const item of result.remoteStockItems) if (!isRemoteDeleted('stock_item', item.id)) byId.set(item.id, item);
           const next = [...byId.values()];
           stockItemsRef.current = next;
           localStorage.setItem('omnibook_stock_items', JSON.stringify(next));
@@ -1922,33 +1927,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       }
 
-      if (result.remoteSuppliers.length > 0) {
+      if (result.remoteSuppliers.length > 0 || result.remoteTombstoneIds.some((item) => item.entity === 'supplier')) {
         setSuppliers((prev) => {
-          const byId = new Map(prev.map((supplier) => [supplier.id, supplier]));
-          for (const supplier of result.remoteSuppliers) byId.set(supplier.id, supplier);
+          const byId = new Map(prev.filter((supplier) => !isRemoteDeleted('supplier', supplier.id)).map((supplier) => [supplier.id, supplier]));
+          for (const supplier of result.remoteSuppliers) if (!isRemoteDeleted('supplier', supplier.id)) byId.set(supplier.id, supplier);
           const next = [...byId.values()];
           localStorage.setItem('omnibook_stock_suppliers', JSON.stringify(next));
           return next;
         });
       }
 
-      if (result.remotePurchaseOrders.length > 0) {
+      if (result.remotePurchaseOrders.length > 0 || result.remoteTombstoneIds.some((item) => item.entity === 'purchase_order')) {
         setPurchaseOrders((prev) => {
-          const byId = new Map(prev.map((order) => [order.id, order]));
-          for (const order of result.remotePurchaseOrders) byId.set(order.id, order);
+          const byId = new Map(prev.filter((order) => !isRemoteDeleted('purchase_order', order.id)).map((order) => [order.id, order]));
+          for (const order of result.remotePurchaseOrders) if (!isRemoteDeleted('purchase_order', order.id)) byId.set(order.id, order);
           const next = [...byId.values()];
           localStorage.setItem('omnibook_purchase_orders', JSON.stringify(next));
           return next;
         });
       }
 
-      if (result.remoteStaffMembers.length > 0) {
+      if (result.remoteStaffMembers.length > 0 || result.remoteTombstoneIds.some((item) => item.entity === 'staff_member')) {
         setStaffMembers((prev) => {
-          const byId = new Map(prev.map((member) => [member.id, member]));
-          for (const member of result.remoteStaffMembers) byId.set(member.id, member);
+          const byId = new Map(prev.filter((member) => !isRemoteDeleted('staff_member', member.id)).map((member) => [member.id, member]));
+          for (const member of result.remoteStaffMembers) if (!isRemoteDeleted('staff_member', member.id)) byId.set(member.id, member);
           const next = [...byId.values()];
           localStorage.setItem('omnibook_staff_members', JSON.stringify(next));
           return next;
+        });
+      }
+
+      if (result.remoteTombstoneConflicts.length > 0) {
+        appendSyncLog({
+          key: 'syncLogError',
+          level: 'warn',
+          detail: `${result.remoteTombstoneConflicts.length} suppression(s) cloud ignorée(s) car une mutation locale est encore en attente.`,
         });
       }
 
