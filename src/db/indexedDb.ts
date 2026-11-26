@@ -23,6 +23,7 @@ import {
   validateP2pEvent,
   validateP2pCursorAdvance,
   P2P_SUPPORTED_ENTITIES,
+  type OutboxEntity,
   type P2pEntity,
   type P2pEvent,
   type P2pOperation,
@@ -74,8 +75,8 @@ export interface IndexedDbStoreStats {
 
 export type IndexedDbSyncState = 'synced' | 'syncing' | 'offline';
 
-/** The P2P protocol owns the single versioned registry shared by every storage adapter. */
-export type OutboxEntity = P2pEntity;
+/** Outbox entities are the subset with an implemented Supabase push dispatcher. */
+export type { OutboxEntity } from '../services/p2p/protocol';
 export type OutboxOperation = 'upsert' | 'delete';
 export type OutboxStatus = 'pending' | 'synced' | 'failed';
 export interface OutboxRecord {
@@ -85,7 +86,7 @@ export interface OutboxRecord {
   createdAt: string; nextAttemptAt: string; lastError?: string;
 }
 export interface TombstoneRecord {
-  id: string; workspaceId: string; establishmentId?: string; entity: OutboxEntity;
+  id: string; workspaceId: string; establishmentId?: string; entity: P2pEntity;
   entityId: string; version: number; deletedAt: string;
   /** Origin is used to preserve a local/peer delete against stale cloud snapshots. */
   origin?: 'local' | 'supabase' | 'p2p';
@@ -307,7 +308,7 @@ class IndexedDbStore {
             cursorReq.onsuccess = (cursorEvent) => {
               const cursor = (cursorEvent.target as IDBRequest<IDBCursorWithValue | null>).result;
               if (!cursor) return;
-              const row = cursor.value as { entity?: OutboxEntity; payload?: Record<string, unknown> };
+              const row = cursor.value as { entity?: P2pEntity; payload?: Record<string, unknown> };
               if (row?.entity === 'booking' && row.payload && typeof row.payload === 'object') {
                 cursor.update({
                   ...row,
@@ -665,7 +666,7 @@ class IndexedDbStore {
 
   /** Physical business-record deletion is disabled; use deleteWithOutbox for a tombstone. */
   public async remove(
-    _storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups',
+    _storeName: 'bookings' | 'resources' | 'resourceGroups',
     _id: string,
   ): Promise<void> {
     throw new Error(
@@ -936,7 +937,7 @@ class IndexedDbStore {
   ): void {
     const workspaceEntities = tx.objectStore('workspaceEntities');
     const tombstones = tx.objectStore('tombstones');
-    const entity = event.entity as OutboxEntity;
+    const entity = event.entity as P2pEntity;
     const tombstoneId = `${event.workspaceId}:${entity}:${event.entityId}`;
     const entityRequest = workspaceEntities.get([event.workspaceId, entity, event.entityId]);
     const tombstoneRequest = tombstones.get(tombstoneId);
@@ -1297,7 +1298,7 @@ class IndexedDbStore {
   private appendLocalP2pEvent(
     tx: IDBTransaction,
     workspaceId: string,
-    entity: OutboxEntity,
+    entity: P2pEntity,
     entityId: string,
     operation: P2pOperation,
     payload: Record<string, unknown> | null,
@@ -1382,7 +1383,7 @@ class IndexedDbStore {
 
   /** Opt-in only: demo/bootstrap data must never call this method. */
   public async putWithOutbox<T extends { id: string }>(
-    storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups', item: T,
+    storeName: 'bookings' | 'resources' | 'resourceGroups', item: T,
     context: OutboxMutationContext, entity: OutboxEntity
   ): Promise<void> {
     if (!context.workspaceId.trim()) throw new Error('Workspace isolation required for outbox writes.');
@@ -1479,7 +1480,7 @@ class IndexedDbStore {
    * Opt-in only: demo/bootstrap data must never call this method.
    */
   public async putWithOutboxByKey<T extends { id: string }>(
-    storeName: 'bookings' | 'invoices' | 'resources' | 'resourceGroups',
+    storeName: 'bookings' | 'resources' | 'resourceGroups',
     item: T,
     context: OutboxMutationContext,
     entity: OutboxEntity,
