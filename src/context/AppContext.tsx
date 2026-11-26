@@ -2967,7 +2967,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       playSuccessFeedback();
       setTasks((prev) => {
         const updated = [newTask, ...prev];
-        localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
         return updated;
       });
       logEvent({
@@ -2997,7 +2996,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (status === 'done') playSuccessFeedback(); else playClickFeedback();
       setTasks((prev) => {
         const updated = prev.map((task) => task.id === id ? nextTask : task);
-        localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
         return updated;
       });
       if (status === 'done' && target.status !== 'done') {
@@ -3035,7 +3033,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       playClickFeedback();
       setTasks((prev) => {
         const updated = prev.map((task) => task.id === taskId ? nextTask : task);
-        localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
         return updated;
       });
       logEvent({
@@ -3054,7 +3051,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       playClickFeedback();
       setTasks((prev) => {
         const updated = prev.filter((task) => task.id !== id);
-        localStorage.setItem('omnibook_pms_tasks', JSON.stringify(updated));
         return updated;
       });
       if (target) logEvent({
