@@ -1,164 +1,419 @@
-# Appointment P2P implementation plan
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::BTreeMap;
 
-Status: active engineering plan. Baseline: `main` at `3f28b5b5033fc617713b3bf79a6a648bb08ff464`.
+/// Immutable, transport-neutral Appointment P2P event envelope (protocol v1).
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct P2pEvent {
+    pub protocol_version: u16,
+    pub event_id: String,
+    pub node_id: String,
+    pub sequence: u64,
+    pub workspace_id: String,
+    pub entity: String,
+    pub entity_id: String,
+    pub operation: P2pOperation,
+    pub payload: Option<Value>,
+    pub clock: BTreeMap<String, u64>,
+    pub created_at: String,
+}
 
-## Objective
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum P2pOperation {
+    Upsert,
+    Delete,
+}
 
-Deliver decentralized, offline-first replication between Appointment Windows and Android
-installations, with Web participation where browser security permits it. Keep the existing
-SQLite (Windows) and IndexedDB (Web/Android) storage engines. Supabase remains an
-independent remote replica/backup and must never act as a LAN coordinator.
+#[derive(Clone, Debug, PartialEq)]
+pub enum P2pRecordState {
+    Missing,
+    Resolved(P2pEvent),
+    Conflict(Vec<P2pEvent>),
+}
 
-No database-engine replacement is planned. ObjectBox and FyroDB are out of scope.
+fn is_supported_entity(entity: &str) -> bool {
+    matches!(
+        entity,
+        "booking"
+            | "resource"
+            | "resource_group"
+            | "establishment"
+            | "task"
+            | "stock_item"
+            | "stock_movement"
+            | "supplier"
+            | "purchase_order"
+            | "invoice"
+            | "dynamic_rate"
+            | "staff_member"
+            | "establishment_profile"
+    )
+}
 
-## Accepted consistency policy
+fn is_valid_rfc3339_timestamp(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() < 20
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || bytes[10] != b'T'
+        || bytes[13] != b':'
+        || bytes[16] != b':'
+    {
+        return false;
+    }
+    let digits = |start: usize, end: usize| -> Option<u32> {
+        let slice = bytes.get(start..end)?;
+        if !slice.iter().all(u8::is_ascii_digit) {
+            return None;
+        }
+        std::str::from_utf8(slice).ok()?.parse().ok()
+    };
+    let Some(year) = digits(0, 4) else {
+        return false;
+    };
+    let Some(month) = digits(5, 7) else {
+        return false;
+    };
+    let Some(day) = digits(8, 10) else {
+        return false;
+    };
+    let Some(hour) = digits(11, 13) else {
+        return false;
+    };
+    let Some(minute) = digits(14, 16) else {
+        return false;
+    };
+    let Some(second) = digits(17, 19) else {
+        return false;
+    };
+    if year == 0
+        || !(1..=12).contains(&month)
+        || !(0..=23).contains(&hour)
+        || minute > 59
+        || second > 59
+    {
+        return false;
+    }
+    let leap_year = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days_in_month = match month {
+        2 if leap_year => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    if day == 0 || day > days_in_month {
+        return false;
+    }
 
-**Offline with protection of critical operations and strict business rules.**
+    let mut index = 19;
+    if bytes.get(index) == Some(&b'.') {
+        index += 1;
+        let fraction_start = index;
+        while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+            index += 1;
+        }
+        if index == fraction_start {
+            return false;
+        }
+    }
+    match bytes.get(index) {
+        Some(&b'Z') => index += 1,
+        Some(&b'+') | Some(&b'-') => {
+            if index + 6 != bytes.len() || bytes.get(index + 3) != Some(&b':') {
+                return false;
+            }
+            let Some(offset_hour) = digits(index + 1, index + 3) else {
+                return false;
+            };
+            let Some(offset_minute) = digits(index + 4, index + 6) else {
+                return false;
+            };
+            if offset_hour > 23 || offset_minute > 59 {
+                return false;
+            }
+            index += 6;
+        }
+        _ => return false,
+    }
+    index == bytes.len()
+}
 
-Each device may persist locally validated operations while disconnected. Critical operations
-must carry a provisional state until the relevant peers have reconciled. A vector clock
-detects causality; it does not detect business conflicts across different record IDs.
+impl P2pEvent {
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.protocol_version != 1 {
+            return Err("unsupported P2P protocol version");
+        }
+        if self.node_id.trim().is_empty()
+            || self.workspace_id.trim().is_empty()
+            || self.entity.trim().is_empty()
+            || self.entity_id.trim().is_empty()
+        {
+            return Err("P2P event identity and scope fields are required");
+        }
+        if self.sequence == 0 || self.event_id != format!("{}:{}", self.node_id, self.sequence) {
+            return Err("P2P event ID must match a positive node sequence");
+        }
+        if !is_valid_rfc3339_timestamp(&self.created_at) {
+            return Err("P2P event timestamp must be a valid RFC 3339 timestamp");
+        }
+        if !is_supported_entity(&self.entity) {
+            return Err("unsupported P2P entity type");
+        }
+        match (&self.operation, &self.payload) {
+            (P2pOperation::Upsert, Some(Value::Object(_))) => {}
+            (P2pOperation::Upsert, _) => return Err("P2P upsert requires an object payload"),
+            (P2pOperation::Delete, None) => {}
+            (P2pOperation::Delete, Some(_)) => return Err("P2P delete must not contain a payload"),
+        }
+        if self.clock.get(&self.node_id).copied() != Some(self.sequence) {
+            return Err("P2P event clock must contain its own node sequence");
+        }
+        if self.clock.len() > 256 {
+            return Err("P2P event clock exceeds the supported 256-node limit");
+        }
+        if self.entity.len() > 128 || self.entity_id.len() > 256 || self.node_id.len() > 128 {
+            return Err("P2P event identity fields exceed their size limits");
+        }
+        if self
+            .clock
+            .iter()
+            .any(|(node, sequence)| node.trim().is_empty() || *sequence == 0 || node.len() > 128)
+        {
+            return Err("P2P event clock contains an invalid node or sequence");
+        }
+        Ok(())
+    }
+}
 
-### Domain rules
+pub fn happens_before(a: &P2pEvent, b: &P2pEvent) -> bool {
+    if a.event_id == b.event_id {
+        return false;
+    }
 
-| Domain | Local offline behavior | Reconciliation rule |
-|---|---|---|
-| Reservations | Check dates, resource, status and locally known overlaps. Mark as provisional when peer state is not current. | Check all active bookings for overlapping intervals on the same resource, even when booking IDs differ. Preserve both events and open a domain conflict. |
-| Inventory | Check known local quantity; append a unique immutable stock movement. | Recompute from the movement ledger. Negative or conflicting balances require explicit reconciliation. |
-| Invoices | Create drafts with globally unique IDs. | Finalize legally sequential numbers only from a preallocated range or after the required online/peer authorization. |
-| Payments | Record immutable idempotent payment intents/receipts. | Distinguish locally recorded from externally settled. |
-| Tasks | Create/update offline with stable IDs and versioned events. | Merge non-conflicting fields; retain concurrent incompatible changes for resolution. |
-| Resources / buildings | Validate parent/workspace/establishment relationships locally. | Reject cross-workspace references; reconcile concurrent structural changes explicitly. |
-| Establishment configuration | Versioned offline edits. | Explicit conflict policy for singleton configuration records. |
-| CardLock device audit | Device-local unless a separate shared revocation contract is approved. | Do not replicate credentials or hardware secrets. |
+    let mut strictly_after = false;
+    for (node_id, a_sequence) in &a.clock {
+        let b_sequence = b.clock.get(node_id).copied().unwrap_or(0);
+        if b_sequence < *a_sequence {
+            return false;
+        }
+        if b_sequence > *a_sequence {
+            strictly_after = true;
+        }
+    }
+    for (node_id, b_sequence) in &b.clock {
+        if !a.clock.contains_key(node_id) && *b_sequence > 0 {
+            strictly_after = true;
+        }
+    }
+    strictly_after
+}
 
-A partitioned coordinator-free system cannot guarantee global room exclusivity, non-negative
-shared stock or globally serializable financial numbering. If a workflow requires that
-guarantee, it must remain provisional offline or consume preallocated escrow rights. No
-local success indicator may imply global confirmation.
+/// Deterministic set-union merge. A duplicate event ID with different bytes is equivocation.
+pub fn merge_events(
+    local: &[P2pEvent],
+    incoming: &[P2pEvent],
+) -> Result<Vec<P2pEvent>, &'static str> {
+    let mut merged = BTreeMap::<String, P2pEvent>::new();
+    for event in local.iter().chain(incoming.iter()) {
+        event.validate()?;
+        if let Some(existing) = merged.get(&event.event_id) {
+            if existing != event {
+                return Err("P2P event ID collision or node equivocation");
+            }
+        } else {
+            merged.insert(event.event_id.clone(), event.clone());
+        }
+    }
+    Ok(merged.into_values().collect())
+}
 
-## Target architecture
+/// Keep only causally maximal events. Concurrent writes are deliberately retained.
+pub fn maximal_events(events: &[P2pEvent]) -> Vec<P2pEvent> {
+    let mut maximal: Vec<P2pEvent> = events
+        .iter()
+        .filter(|candidate| !events.iter().any(|other| happens_before(candidate, other)))
+        .cloned()
+        .collect();
+    maximal.sort_by(|a, b| {
+        a.node_id
+            .cmp(&b.node_id)
+            .then(a.sequence.cmp(&b.sequence))
+            .then(a.event_id.cmp(&b.event_id))
+    });
+    maximal
+}
 
-1. **Discovery:** retain UDP multicast presence discovery on Windows and Android. Discovery
-   is untrusted metadata, not identity or authorization.
-2. **Pairing and trust:** explicit device pairing, workspace membership approval, device
-   revocation, key rotation and a durable trust store. Never infer workspace access from
-   a multicast announcement.
-3. **Secure transport:** authenticated encrypted peer channels (mTLS or equivalent) with
-   bounded framing, protocol negotiation, timeouts, backpressure and reconnect. Sign
-   immutable events at origin so relayed events remain attributable to their author.
-4. **Replication session:** exchange workspace-scoped event pages; persist received events,
-   projections/conflict records and peer cursors atomically; send a durable-receipt ACK only
-   after commit. ACK means durable receipt, not business conflict resolution.
-5. **Anti-entropy:** compare vector-clock summaries/checkpoints, request missing ranges,
-   recover interrupted sessions and relay events to other authorized peers. Avoid unbounded
-   event echo and define compaction only after every retained replica has crossed a checkpoint.
-6. **Domain invariant engine:** run cross-record rules in the same transaction as inbound
-   projection. Store domain conflicts separately from per-record causal frontiers.
-7. **Persistence adapters:** retain SQLite and IndexedDB but enforce the same event schema,
-   entity registry, limits, invariants and conformance tests.
-8. **Supabase adapter:** independent push/pull with idempotent ACKs, origin/provenance and
-   loop prevention. Cloud outage must not stop LAN replication.
-9. **Web participation:** browsers cannot open arbitrary UDP/TCP sockets. Use a
-   browser-compatible WebRTC/WebSocket path or a local companion transport. A companion
-   must not become a database server or coordinator.
+pub fn record_state(events: &[P2pEvent]) -> P2pRecordState {
+    if events.is_empty() {
+        return P2pRecordState::Missing;
+    }
+    let frontier = maximal_events(events);
+    if frontier.len() == 1 {
+        return P2pRecordState::Resolved(frontier.into_iter().next().expect("one event"));
+    }
+    P2pRecordState::Conflict(frontier)
+}
 
-## Delivery sequence
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
 
-### Phase 0 — contract and audit
-- Revalidate current `main` before each change.
-- Maintain the CRUD matrix across UI command, repository, transaction, event, inbound
-  projection, Supabase path, migration and tests.
-- Keep the data-contract gate and P2P mutation-boundary CI gate green.
-- Establish a versioned entity registry and a cross-platform protocol conformance suite.
+    fn event(node: &str, sequence: u64, clock: &[(&str, u64)], payload: Option<Value>) -> P2pEvent {
+        P2pEvent {
+            protocol_version: 1,
+            event_id: format!("{node}:{sequence}"),
+            node_id: node.into(),
+            sequence,
+            workspace_id: "workspace-1".into(),
+            entity: "booking".into(),
+            entity_id: "booking-1".into(),
+            operation: if payload.is_some() {
+                P2pOperation::Upsert
+            } else {
+                P2pOperation::Delete
+            },
+            payload,
+            clock: clock
+                .iter()
+                .map(|(node, seq)| ((*node).to_string(), *seq))
+                .collect(),
+            created_at: "2026-11-22T12:00:00.000Z".into(),
+        }
+    }
 
-### Phase 1 — complete local mutation boundaries
+    #[test]
+    fn enforces_supported_entities_and_rfc3339_timestamps() {
+        let mut value = event("a", 1, &[("a", 1)], Some(json!({"x": 1})));
+        assert!(value.validate().is_ok());
 
-Progress (2026-11-26): the P2P registry (13 entities) is separate from the 11-entity
-Supabase Outbox. AppContext now queues tasks, stock items/movements, suppliers, purchase
-orders, staff and establishment profiles into generic IndexedDB workspace projections,
-Outbox and P2P events. Startup restores those projections. Supabase schema/repositories,
-soft-delete tombstones and sync dispatch are present for those entities. Stock movement
-and stock balance updates are atomic on PostgreSQL via apply_stock_movement.
+        value.entity = "unknown_entity".into();
+        assert!(value.validate().is_err());
 
-This is not complete: UI enqueue calls remain fire-and-forget, local P2P identity still
-requires an active Supabase workspace, remote delete propagation and multi-device tests
-remain incomplete. Invoice and dynamic rates remain excluded from cloud Outbox.
+        for entity in [
+            "booking",
+            "resource",
+            "resource_group",
+            "establishment",
+            "task",
+            "stock_item",
+            "stock_movement",
+            "supplier",
+            "purchase_order",
+            "invoice",
+            "dynamic_rate",
+            "staff_member",
+            "establishment_profile",
+        ] {
+            value.entity = entity.into();
+            assert!(
+                value.validate().is_ok(),
+                "entity should be supported: {entity}"
+            );
+        }
 
-Remaining work:
-- Migrate tasks, stock items, stock movements, suppliers, purchase orders, invoices,
-  dynamic rates, staff and establishment profile away from direct localStorage business
-  persistence.
-- Preserve every existing ID, timestamp, owner/workspace scope and unknown field.
-- Use idempotent, resumable migration with backup/checksum verification; never clear legacy
-  data before the new copy is verified.
-- Route every Create/Update/Delete through typed repositories. Reads must hydrate from the
-  same canonical stores.
-- Ensure each local transaction commits projection + version + Outbox + tombstone + P2P
-  event, or commits none of them.
+        value.entity = "booking".into();
+        value.created_at = "2026-02-30T12:00:00Z".into();
+        assert!(value.validate().is_err());
 
-### Phase 2 — critical domain invariants
-- Add reservation overlap detection across different booking IDs and resources.
-- Add immutable stock movement ledger and derived balance reconciliation.
-- Define invoice draft/final numbering and payment settlement states.
-- Add a durable domain-conflict registry and user-facing resolution workflow.
-- Test each invariant on local commands and inbound P2P application.
+        value.created_at = "2026-11-22 12:00:00".into();
+        assert!(value.validate().is_err());
 
-### Phase 3 — Windows ↔ Android secure transport
-- Implement explicit pairing, authentication, event origin signatures and workspace
-  authorization.
-- Implement bounded paginated event exchange, durable ACK, reconnect and backpressure.
-- Keep discovery and transport state separate in the UI.
-- Never report synchronization from discovery presence alone.
+        value.created_at = "2026-11-22T12:00:00.123+01:00".into();
+        assert!(value.validate().is_ok());
+    }
 
-### Phase 4 — anti-entropy and Web
-- Add missing-range repair, checkpoints, event retention and crash recovery.
-- Add browser-compatible peer connectivity or a local companion path.
-- Verify Android/Windows/Web protocol conformance.
+    #[test]
+    fn validates_event_identity_and_clock() {
+        assert!(event("a", 1, &[("a", 1)], Some(json!({"x": 1})))
+            .validate()
+            .is_ok());
+        assert!(event("a", 1, &[("a", 2)], Some(json!({"x": 1})))
+            .validate()
+            .is_err());
+    }
 
-### Phase 5 — independent Supabase replication
-- Progress: additive tables, RLS, generated types, Realtime, repositories and push/pull/delete
-  dispatch are implemented for tasks, stock items/movements, suppliers, purchase orders,
-  staff and establishment profiles. Invoice and dynamic-rate sync are deliberately blocked
-  pending transaction-safe/conflict-aware contracts.
-- Complete schema/RLS/repository/push/pull/delete coverage for approved shared entities.
-- Preserve P2P origin metadata and prevent cloud-to-peer-to-cloud echo loops.
-- Test cloud offline/online transitions independently of LAN sessions.
+    #[test]
+    fn merges_idempotently_and_rejects_equivocation() {
+        let a = event("a", 1, &[("a", 1)], Some(json!({"x": 1})));
+        assert_eq!(
+            merge_events(std::slice::from_ref(&a), std::slice::from_ref(&a))
+                .unwrap()
+                .len(),
+            1
+        );
+        let forged = event("a", 1, &[("a", 1)], Some(json!({"x": 2})));
+        assert!(merge_events(&[a], &[forged]).is_err());
+    }
 
-### Phase 6 — production verification
-- Multi-device Windows/Android tests on a real LAN.
-- Partition, packet loss, duplicate/reordered delivery, process kill, reboot and disk-full tests.
-- Concurrent same-room booking, same-stock consumption, invoice-number and payment tests.
-- Workspace isolation, unauthorized peer, revoked peer, forged event and replay tests.
-- Backup/restore and tombstone/checkpoint drills.
-- Demonstrate deterministic convergence and explicit conflict preservation before enabling
-  business replication by default.
+    #[test]
+    fn causal_successor_replaces_older_frontier() {
+        let first = event("a", 1, &[("a", 1)], Some(json!({"x": 1})));
+        let second = event("b", 1, &[("a", 1), ("b", 1)], Some(json!({"x": 2})));
+        assert!(happens_before(&first, &second));
+        assert!(
+            matches!(record_state(&[first, second.clone()]), P2pRecordState::Resolved(found) if found == second)
+        );
+    }
 
-## Release gates
+    #[test]
+    fn concurrent_updates_remain_a_deterministic_conflict() {
+        let a = event(
+            "a",
+            2,
+            &[("a", 2), ("b", 1)],
+            Some(json!({"guest": "Alice"})),
+        );
+        let b = event("b", 2, &[("a", 1), ("b", 2)], Some(json!({"guest": "Bob"})));
+        let ab = merge_events(std::slice::from_ref(&a), std::slice::from_ref(&b)).unwrap();
+        let ba = merge_events(std::slice::from_ref(&b), std::slice::from_ref(&a)).unwrap();
+        assert_eq!(ab, ba);
+        assert!(matches!(record_state(&ab), P2pRecordState::Conflict(events) if events.len() == 2));
+    }
 
-P2P production remains disabled until all are true:
+    #[test]
+    fn causal_order_requires_every_vector_clock_component_to_be_observed() {
+        let first = event(
+            "a",
+            2,
+            &[("a", 2), ("c", 5)],
+            Some(json!({"value": "causally prior"})),
+        );
+        let inconsistent_successor = event(
+            "b",
+            2,
+            &[("a", 2), ("b", 2), ("c", 4)],
+            Some(json!({"value": "missing transitive dependency"})),
+        );
 
-- Every shared CRUD operation is repository-backed and transactionally evented.
-- Every supported entity has an inbound projection and tested parent/child integrity.
-- Windows and Android authenticate peers and authorize workspaces.
-- Event origin authenticity, replay protection and bounded payload validation are verified.
-- Peer cursor ACKs are durable and crash-safe.
-- Anti-entropy repairs missing events without loops or data loss.
-- Critical domain conflicts are persisted and resolvable.
-- Supabase is independent of LAN replication.
-- Multi-device integration tests demonstrate convergence under partitions and recovery.
-- UI distinguishes local, provisional, durably received, conflicted and reconciled states.
+        // Seeing A:2 alone is insufficient: A:2 itself had already observed C:5.
+        assert!(!happens_before(&first, &inconsistent_successor));
+        assert!(matches!(
+            record_state(&[first, inconsistent_successor]),
+            P2pRecordState::Conflict(events) if events.len() == 2
+        ));
+    }
 
-Never claim P2P operational based only on discovery, unit tests, a successful build or a
-successful event append.
+    #[test]
+    fn concurrent_delete_and_update_are_not_silently_resolved() {
+        let delete = event("a", 2, &[("a", 2), ("b", 1)], None);
+        let update = event(
+            "b",
+            2,
+            &[("a", 1), ("b", 2)],
+            Some(json!({"guest": "Updated"})),
+        );
+        assert!(matches!(
+            record_state(&[delete, update]),
+            P2pRecordState::Conflict(_)
+        ));
+    }
+}
 
 
-### Phase 3 progress — durable outbound pages (2026-11-26)
-
-IndexedDB schema v11 now maintains a durable relay queue for locally authored and
-newly received P2P events. It exposes bounded outbound page reads and per-peer durable
-ACK cursors. The ACK must match the exact page offered to that peer; arbitrary cursor
-jumps and cross-workspace acknowledgements are rejected. Incoming events are re-enqueued
-for relay to other peers in the same transaction as event/projection/cursor commit.
-Queue compaction remains disabled until trusted peer membership and revocation are
-implemented. This is a persistence/protocol layer, not a live network transport.
+Windows SQLite parity: schema v8 now provides the same bounded outbound event page and
+exact offered-page durable ACK semantics as IndexedDB. Inbound peer cursors and outbound
+peer ACK cursors remain separate. Both adapters retain events received from other peers
+for relay; neither compacts the log before trusted peer membership/checkpoint safety exists.

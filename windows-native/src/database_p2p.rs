@@ -15,6 +15,14 @@ pub struct P2pEventLogEntry {
     pub event: P2pEvent,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct P2pOutboundPage {
+    pub expected_cursor: i64,
+    pub next_cursor: i64,
+    pub events: Vec<P2pEvent>,
+    pub has_more: bool,
+}
+
 pub struct NewP2pEvent<'a> {
     pub workspace_id: &'a str,
     pub node_id: &'a str,
@@ -102,6 +110,32 @@ pub(super) fn migrate_v7(connection: &Connection) -> rusqlite::Result<()> {
            FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
          );
          INSERT OR IGNORE INTO schema_migrations(version) VALUES (7);
+         COMMIT;",
+    )?;
+    Ok(())
+}
+
+pub(super) fn migrate_v8(connection: &Connection) -> rusqlite::Result<()> {
+    let applied: bool = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=8)",
+        [],
+        |row| row.get(0),
+    )?;
+    if applied {
+        return Ok(());
+    }
+    connection.execute_batch(
+        "BEGIN IMMEDIATE;
+         CREATE TABLE p2p_peer_acks (
+           workspace_id TEXT NOT NULL,
+           peer_id TEXT NOT NULL,
+           cursor INTEGER NOT NULL DEFAULT 0 CHECK(cursor >= 0),
+           offered_cursor INTEGER CHECK(offered_cursor >= 0),
+           updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           PRIMARY KEY(workspace_id, peer_id),
+           FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+         );
+         INSERT OR IGNORE INTO schema_migrations(version) VALUES (8);
          COMMIT;",
     )?;
     Ok(())
@@ -253,6 +287,116 @@ impl PmsDatabase {
             entries.push(P2pEventLogEntry { local_order, event });
         }
         Ok(entries)
+    }
+
+    /// Read a bounded page for one peer and persist the exact cursor offered to it.
+    /// Events received from other peers are in the same append-only log and are relayed too.
+    pub fn get_p2p_outbound_page(
+        &self,
+        workspace_id: &str,
+        peer_id: &str,
+        limit: u32,
+    ) -> Result<P2pOutboundPage, String> {
+        if workspace_id.trim().is_empty() || peer_id.trim().is_empty() || !(1..=500).contains(&limit) {
+            return Err("Invalid P2P outbound page scope or limit.".into());
+        }
+        let tx = self.connection.unchecked_transaction().map_err(|e| e.to_string())?;
+        let ack: Option<(i64, Option<i64>)> = tx
+            .query_row(
+                "SELECT cursor, offered_cursor FROM p2p_peer_acks
+                 WHERE workspace_id=?1 AND peer_id=?2",
+                params![workspace_id, peer_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        let expected_cursor = ack.map(|row| row.0).unwrap_or(0);
+        let mut statement = tx
+            .prepare(
+                "SELECT local_order, event_json FROM p2p_events
+                 WHERE workspace_id=?1 AND local_order>?2
+                 ORDER BY local_order ASC LIMIT ?3",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = statement
+            .query_map(params![workspace_id, expected_cursor, i64::from(limit) + 1], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|e| e.to_string())?;
+        let mut entries = Vec::new();
+        for row in rows {
+            let (local_order, json) = row.map_err(|e| e.to_string())?;
+            let event = serde_json::from_str(&json)
+                .map_err(|error| format!("Corrupt P2P event at local order {local_order}: {error}"))?;
+            entries.push(P2pEventLogEntry { local_order, event });
+        }
+        drop(statement);
+        let has_more = entries.len() > limit as usize;
+        entries.truncate(limit as usize);
+        let next_cursor = entries.last().map(|entry| entry.local_order).unwrap_or(expected_cursor);
+        tx.execute(
+            "INSERT INTO p2p_peer_acks(workspace_id,peer_id,cursor,offered_cursor,updated_at)
+             VALUES (?1,?2,?3,?4,CURRENT_TIMESTAMP)
+             ON CONFLICT(workspace_id,peer_id) DO UPDATE SET
+               offered_cursor=excluded.offered_cursor, updated_at=CURRENT_TIMESTAMP",
+            params![workspace_id, peer_id, expected_cursor, next_cursor],
+        )
+        .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(P2pOutboundPage {
+            expected_cursor,
+            next_cursor,
+            events: entries.into_iter().map(|entry| entry.event).collect(),
+            has_more,
+        })
+    }
+
+    /// Commit a durable receipt only for the exact page previously offered to this peer.
+    pub fn acknowledge_p2p_outbound_page(
+        &self,
+        workspace_id: &str,
+        peer_id: &str,
+        expected_cursor: i64,
+        next_cursor: i64,
+    ) -> Result<(), String> {
+        if workspace_id.trim().is_empty() || peer_id.trim().is_empty()
+            || expected_cursor < 0 || next_cursor < expected_cursor {
+            return Err("Invalid P2P outbound acknowledgement.".into());
+        }
+        let tx = self.connection.unchecked_transaction().map_err(|e| e.to_string())?;
+        let ack: Option<(i64, Option<i64>)> = tx
+            .query_row(
+                "SELECT cursor, offered_cursor FROM p2p_peer_acks
+                 WHERE workspace_id=?1 AND peer_id=?2",
+                params![workspace_id, peer_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        let (current_cursor, offered_cursor) = ack.unwrap_or((0, None));
+        if current_cursor != expected_cursor || offered_cursor != Some(next_cursor) {
+            return Err("P2P acknowledgement does not match the current offered page.".into());
+        }
+        if next_cursor > expected_cursor {
+            let exists: bool = tx
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM p2p_events WHERE workspace_id=?1 AND local_order=?2)",
+                    params![workspace_id, next_cursor],
+                    |row| row.get(0),
+                )
+                .map_err(|e| e.to_string())?;
+            if !exists {
+                return Err("P2P acknowledgement cursor is not an event in this workspace.".into());
+            }
+        }
+        tx.execute(
+            "UPDATE p2p_peer_acks SET cursor=?3, offered_cursor=NULL, updated_at=CURRENT_TIMESTAMP
+             WHERE workspace_id=?1 AND peer_id=?2",
+            params![workspace_id, peer_id, next_cursor],
+        )
+        .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(())
     }
 
     pub fn p2p_event_count(&self, workspace_id: &str) -> rusqlite::Result<u64> {
@@ -625,6 +769,47 @@ mod tests {
         assert!(second_page.is_empty());
         assert_eq!(db.p2p_event_count("workspace-a").unwrap(), 1);
         assert_eq!(db.p2p_event_count("workspace-b").unwrap(), 1);
+    }
+
+    #[test]
+    fn outbound_peer_pages_require_exact_durable_ack_and_are_workspace_scoped() {
+        let db = database();
+        local_booking_event(
+            &db, "workspace-a", "node-a", "booking-1",
+            P2pOperation::Upsert, Some(json!({"guest": "Alice"})),
+            "2026-11-23T08:00:00Z",
+        );
+        local_booking_event(
+            &db, "workspace-a", "node-a", "booking-2",
+            P2pOperation::Upsert, Some(json!({"guest": "Bob"})),
+            "2026-11-23T08:01:00Z",
+        );
+        local_booking_event(
+            &db, "workspace-b", "node-b", "booking-3",
+            P2pOperation::Upsert, Some(json!({"guest": "Other workspace"})),
+            "2026-11-23T08:02:00Z",
+        );
+
+        let page = db.get_p2p_outbound_page("workspace-a", "peer-b", 1).unwrap();
+        assert_eq!(page.expected_cursor, 0);
+        assert_eq!(page.events.len(), 1);
+        assert!(page.has_more);
+        assert!(db.acknowledge_p2p_outbound_page("workspace-a", "peer-b", 0, 999).is_err());
+        db.acknowledge_p2p_outbound_page("workspace-a", "peer-b", 0, page.next_cursor).unwrap();
+
+        let second = db.get_p2p_outbound_page("workspace-a", "peer-b", 1).unwrap();
+        assert_eq!(second.expected_cursor, page.next_cursor);
+        assert_eq!(second.events.len(), 1);
+        assert!(!second.has_more);
+        assert!(db.acknowledge_p2p_outbound_page("workspace-a", "peer-b", 0, page.next_cursor).is_err());
+        db.acknowledge_p2p_outbound_page(
+            "workspace-a", "peer-b", second.expected_cursor, second.next_cursor,
+        ).unwrap();
+
+        let empty = db.get_p2p_outbound_page("workspace-a", "peer-b", 10).unwrap();
+        assert!(empty.events.is_empty());
+        assert_eq!(empty.expected_cursor, empty.next_cursor);
+        assert_eq!(db.get_p2p_outbound_page("workspace-b", "peer-b", 10).unwrap().events.len(), 1);
     }
 
     #[test]
