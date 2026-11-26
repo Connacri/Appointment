@@ -74,3 +74,23 @@ test('repositories and application mutation paths are connected to the new entit
   for (const table of ['stock_suppliers', 'purchase_orders', 'staff_members']) assert.ok(types.includes(table + ':'));
   assert.ok(types.includes('apply_stock_movement'));
 });
+
+test('workspace task and establishment UI projections wait for durable outbox commits', () => {
+  const appContext = read('../src/context/AppContext.tsx');
+  const upsertHelper = appContext.slice(
+    appContext.indexOf('const commitBusinessUpsert ='),
+    appContext.indexOf('const commitBusinessDelete ='),
+  );
+  const deleteHelper = appContext.slice(
+    appContext.indexOf('const commitBusinessDelete ='),
+    appContext.indexOf('const reportQueueFailure ='),
+  );
+
+  assert.match(upsertHelper, /queueBusinessUpsert\\([\\s\\S]*?\\.then\\(\\(\\) => \\{\\s*commit\\(\\)/);
+  assert.match(deleteHelper, /queueBusinessDelete\\([\\s\\S]*?\\.then\\(\\(\\) => \\{\\s*commit\\(\\)/);
+  assert.match(appContext, /commitBusinessUpsert\\('task'/);
+  assert.match(appContext, /commitBusinessDelete\\('task'/);
+  assert.match(appContext, /commitBusinessUpsert\\('establishment_profile'/);
+  assert.doesNotMatch(appContext, /localStorage\\.setItem\\('omnibook_pms_tasks'/);
+  assert.doesNotMatch(appContext, /localStorage\\.setItem\\('omnibook_establishment_profile'/);
+});
