@@ -11,6 +11,7 @@ import {
   validateP2pCursorAdvance,
   validateP2pAckAdvance,
   validateP2pBatchSize,
+  isP2pEventAuthoredByPeer,
   MAX_P2P_BATCH_BYTES,
   P2P_SUPPORTED_ENTITIES,
   SUPABASE_OUTBOX_ENTITIES,
@@ -372,4 +373,10 @@ test('P2P batches are bounded by both event count and serialized byte size', () 
   assert.equal(validateP2pBatchSize(501, 1), false);
   assert.equal(validateP2pBatchSize(1, MAX_P2P_BATCH_BYTES + 1), false);
   assert.equal(validateP2pBatchSize(-1, 1), false);
+});
+
+test('a connected peer may only submit events carrying its authenticated node identity', () => {
+  assert.equal(isP2pEventAuthoredByPeer('node-a', { nodeId: 'node-a' }), true);
+  assert.equal(isP2pEventAuthoredByPeer('node-a', { nodeId: 'node-b' }), false);
+  assert.equal(isP2pEventAuthoredByPeer('', { nodeId: 'node-a' }), false);
 });

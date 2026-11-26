@@ -290,16 +290,18 @@ impl PmsDatabase {
         Ok(entries)
     }
 
-    /// Read a bounded page for one peer and persist the exact cursor offered to it.
-    /// Events received from other peers are in the same append-only log and are relayed too.
+    /// Read locally authored events for one peer and persist the exact cursor offered to it.
+    /// Foreign-origin events are skipped until immutable origin signatures enable safe relaying.
     pub fn get_p2p_outbound_page(
         &self,
         workspace_id: &str,
         peer_id: &str,
+        local_node_id: &str,
         limit: u32,
     ) -> Result<P2pOutboundPage, String> {
         if workspace_id.trim().is_empty()
             || peer_id.trim().is_empty()
+            || local_node_id.trim().is_empty()
             || !(1..=500).contains(&limit)
         {
             return Err("Invalid P2P outbound page scope or limit.".into());
@@ -333,32 +335,38 @@ impl PmsDatabase {
             .map_err(|e| e.to_string())?;
         let mut entries = Vec::new();
         let mut page_bytes = 0usize;
+        let mut scanned_count = 0usize;
         let mut has_more = false;
+        let mut next_cursor = expected_cursor;
         for row in rows {
             let (local_order, json) = row.map_err(|e| e.to_string())?;
-            let event_bytes = json.len();
-            let event = serde_json::from_str(&json).map_err(|error| {
-                format!("Corrupt P2P event at local order {local_order}: {error}")
-            })?;
-            if entries.len() >= limit as usize
-                || (!entries.is_empty() && page_bytes + event_bytes > MAX_P2P_BATCH_BYTES)
-            {
+            if scanned_count >= limit as usize {
                 has_more = true;
                 break;
             }
+            scanned_count += 1;
+            let event_bytes = json.len();
             if event_bytes > MAX_P2P_EVENT_BYTES {
                 return Err(format!(
                     "Stored P2P event exceeds the size limit at local order {local_order}."
                 ));
             }
+            let event: P2pEvent = serde_json::from_str(&json).map_err(|error| {
+                format!("Corrupt P2P event at local order {local_order}: {error}")
+            })?;
+            if event.node_id != local_node_id {
+                next_cursor = local_order;
+                continue;
+            }
+            if !entries.is_empty() && page_bytes + event_bytes > MAX_P2P_BATCH_BYTES {
+                has_more = true;
+                break;
+            }
             page_bytes += event_bytes;
+            next_cursor = local_order;
             entries.push(P2pEventLogEntry { local_order, event });
         }
         drop(statement);
-        let next_cursor = entries
-            .last()
-            .map(|entry| entry.local_order)
-            .unwrap_or(expected_cursor);
         tx.execute(
             "INSERT INTO p2p_peer_acks(workspace_id,peer_id,cursor,offered_cursor,updated_at)
              VALUES (?1,?2,?3,?4,CURRENT_TIMESTAMP)
@@ -836,7 +844,7 @@ mod tests {
         );
 
         let page = db
-            .get_p2p_outbound_page("workspace-a", "peer-b", 1)
+            .get_p2p_outbound_page("workspace-a", "peer-b", "node-a", 1)
             .unwrap();
         assert_eq!(page.expected_cursor, 0);
         assert_eq!(page.events.len(), 1);
@@ -848,7 +856,7 @@ mod tests {
             .unwrap();
 
         let second = db
-            .get_p2p_outbound_page("workspace-a", "peer-b", 1)
+            .get_p2p_outbound_page("workspace-a", "peer-b", "node-a", 1)
             .unwrap();
         assert_eq!(second.expected_cursor, page.next_cursor);
         assert_eq!(second.events.len(), 1);
@@ -865,12 +873,12 @@ mod tests {
         .unwrap();
 
         let empty = db
-            .get_p2p_outbound_page("workspace-a", "peer-b", 10)
+            .get_p2p_outbound_page("workspace-a", "peer-b", "node-a", 10)
             .unwrap();
         assert!(empty.events.is_empty());
         assert_eq!(empty.expected_cursor, empty.next_cursor);
         assert_eq!(
-            db.get_p2p_outbound_page("workspace-b", "peer-b", 10)
+            db.get_p2p_outbound_page("workspace-b", "peer-b", "node-b", 10)
                 .unwrap()
                 .events
                 .len(),
@@ -894,7 +902,7 @@ mod tests {
             );
         }
         let page = db
-            .get_p2p_outbound_page("workspace-a", "peer-b", 100)
+            .get_p2p_outbound_page("workspace-a", "peer-b", "node-a", 100)
             .unwrap();
         assert_eq!(page.events.len(), 4);
         assert!(page.has_more);

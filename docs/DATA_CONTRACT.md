@@ -182,3 +182,5 @@ P2P inbound and outbound pages are also byte-bounded: a maximum of 500 events an
 The Windows SQLite regression suite additionally verifies that a page containing large event payloads stops before exceeding the 4 MiB serialized-byte budget, while preserving the next event for a subsequent page.
 
 The Windows schema migration regression now asserts schema version 8 and verifies that `p2p_peer_acks` is present alongside the v7 inbound cursor and record-frontier tables.
+
+IndexedDB schema v12 removes non-local events from any queue created by the earlier relay prototype. The SQLite outbound page API also requires the local node ID and skips events authored by other nodes. Multi-hop relay remains disabled until immutable event-origin signatures and verification are in place.

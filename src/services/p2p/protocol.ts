@@ -67,6 +67,10 @@ export const MAX_P2P_CLOCK_NODES = 256;
 export const MAX_P2P_BATCH_EVENTS = 500;
 export const MAX_P2P_BATCH_BYTES = 4 * 1024 * 1024;
 
+export function isP2pEventAuthoredByPeer(peerId: string, event: Pick<P2pEvent, 'nodeId'>): boolean {
+  return Boolean(peerId.trim()) && event.nodeId === peerId;
+}
+
 export function validateP2pBatchSize(eventCount: number, totalBytes: number): boolean {
   return Number.isSafeInteger(eventCount)
     && Number.isSafeInteger(totalBytes)

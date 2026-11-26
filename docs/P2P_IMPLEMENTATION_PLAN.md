@@ -423,3 +423,5 @@ Windows SQLite schema v8 adds a tested outbound peer cursor and exact-offered-pa
 P2P page transfer now has a 4 MiB serialized-byte budget in addition to the 500-event inbound cap and 1 MiB per-event ceiling. Both IndexedDB and SQLite stop a page before exceeding the byte budget, so large payloads cannot create unbounded transport buffers.
 
 Windows SQLite migration tests now verify schema v8 and the outbound ACK table, alongside the existing inbound cursor and record-frontier checks.
+
+IndexedDB schema v12 cleans any third-party events left in the outbound queue by the earlier prototype. SQLite outbound page selection likewise requires the local node identity and skips foreign-origin events. Multi-hop relay stays disabled until immutable origin signatures can be verified end to end.

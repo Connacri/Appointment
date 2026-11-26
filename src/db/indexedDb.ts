@@ -24,6 +24,7 @@ import {
   validateP2pCursorAdvance,
   validateP2pAckAdvance,
   validateP2pBatchSize,
+  isP2pEventAuthoredByPeer,
   MAX_P2P_BATCH_BYTES,
   P2P_SUPPORTED_ENTITIES,
   type OutboxEntity,
@@ -150,7 +151,7 @@ export interface OutboxSummary {
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 11;
+  private dbVersion = 12;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -336,14 +337,40 @@ class IndexedDbStore {
           const upgradeTx = (e.target as IDBOpenDBRequest).transaction;
           const legacyEvents = upgradeTx?.objectStore('p2pEvents');
           const relayQueue = upgradeTx?.objectStore('p2pTransportQueue');
-          if (legacyEvents && relayQueue) {
-            const cursorRequest = legacyEvents.openCursor();
-            cursorRequest.onsuccess = () => {
-              const cursor = cursorRequest.result;
-              if (!cursor) return;
-              const event = cursor.value as P2pEvent;
-              relayQueue.add({ workspaceId: event.workspaceId, event });
-              cursor.continue();
+          const meta = upgradeTx?.objectStore('p2pMeta');
+          if (legacyEvents && relayQueue && meta) {
+            const identityRequest = meta.get('nodeId');
+            identityRequest.onsuccess = () => {
+              const localNodeId = (identityRequest.result as { value?: string } | undefined)?.value;
+              if (!localNodeId) return;
+              const cursorRequest = legacyEvents.openCursor();
+              cursorRequest.onsuccess = () => {
+                const cursor = cursorRequest.result;
+                if (!cursor) return;
+                const event = cursor.value as P2pEvent;
+                if (event.nodeId === localNodeId) relayQueue.add({ workspaceId: event.workspaceId, event });
+                cursor.continue();
+              };
+            };
+          }
+        }
+        // v12 removes third-party events queued by the earlier relay-only prototype.
+        if (e.oldVersion >= 11 && e.oldVersion < 12) {
+          const upgradeTx = (e.target as IDBOpenDBRequest).transaction;
+          const relayQueue = upgradeTx?.objectStore('p2pTransportQueue');
+          const meta = upgradeTx?.objectStore('p2pMeta');
+          if (relayQueue && meta) {
+            const identityRequest = meta.get('nodeId');
+            identityRequest.onsuccess = () => {
+              const localNodeId = (identityRequest.result as { value?: string } | undefined)?.value;
+              const cursorRequest = relayQueue.openCursor();
+              cursorRequest.onsuccess = () => {
+                const cursor = cursorRequest.result;
+                if (!cursor) return;
+                const row = cursor.value as { event?: P2pEvent };
+                if (!localNodeId || row.event?.nodeId !== localNodeId) cursor.delete();
+                cursor.continue();
+              };
             };
           }
         }
@@ -826,6 +853,9 @@ class IndexedDbStore {
       if (event.workspaceId !== batch.workspaceId) {
         throw new Error('P2P inbound batch contains an event from another workspace.');
       }
+      if (!isP2pEventAuthoredByPeer(batch.peerId, event)) {
+        throw new Error('P2P peer may only submit events authored by its authenticated node identity.');
+      }
       const eventBytes = new TextEncoder().encode(JSON.stringify(event)).byteLength;
       if (eventBytes > 1024 * 1024) {
         throw new Error('P2P event exceeds the 1 MiB persistence limit.');
@@ -876,7 +906,6 @@ class IndexedDbStore {
               mergeP2pEvents([existing], [event]);
             } else {
               eventStore.add(event);
-              tx.objectStore('p2pTransportQueue').add({ workspaceId: batch.workspaceId, event });
               report.appendedEvents += 1;
             }
             affected.set(`${event.entity}\u0000${event.entityId}`, {
@@ -1155,6 +1184,7 @@ class IndexedDbStore {
     }
     await this.openStore();
     if (!this.idb) throw new Error('P2P outbound paging requires IndexedDB.');
+    const localNodeId = await this.getP2pNodeId();
     const tx = this.createStrictTransaction(['p2pPeerAcks', 'p2pTransportQueue']);
     const ackStore = tx.objectStore('p2pPeerAcks');
     const queueIndex = tx.objectStore('p2pTransportQueue').index('workspaceOrder');
@@ -1167,6 +1197,14 @@ class IndexedDbStore {
       let nextCursor = expectedCursor;
       let hasMore = false;
       let pageBytes = 0;
+      let scannedCount = 0;
+      const finish = () => {
+        ackStore.put({
+          workspaceId, peerId, cursor: expectedCursor,
+          offeredCursor: nextCursor, updatedAt: new Date().toISOString(),
+        });
+        result = { workspaceId, peerId, expectedCursor, nextCursor, events, hasMore };
+      };
       const range = IDBKeyRange.bound(
         [workspaceId, expectedCursor + 1],
         [workspaceId, Number.MAX_SAFE_INTEGER],
@@ -1175,14 +1213,21 @@ class IndexedDbStore {
       cursorRequest.onsuccess = () => {
         const cursor = cursorRequest.result;
         if (!cursor) {
-          ackStore.put({
-            workspaceId, peerId, cursor: expectedCursor,
-            offeredCursor: nextCursor, updatedAt: new Date().toISOString(),
-          });
-          result = { workspaceId, peerId, expectedCursor, nextCursor, events, hasMore };
+          finish();
           return;
         }
+        if (scannedCount >= 1000) {
+          hasMore = true;
+          finish();
+          return;
+        }
+        scannedCount += 1;
         const row = cursor.value as { workspaceId: string; event: P2pEvent };
+        if (row.event.nodeId !== localNodeId) {
+          nextCursor = Number((cursor.key as IDBValidKey[])[1]);
+          cursor.continue();
+          return;
+        }
         const eventBytes = new TextEncoder().encode(JSON.stringify(row.event)).byteLength;
         if (eventBytes > 1024 * 1024) {
           tx.abort();
@@ -1190,11 +1235,7 @@ class IndexedDbStore {
         }
         if (events.length >= limit || (events.length > 0 && pageBytes + eventBytes > MAX_P2P_BATCH_BYTES)) {
           hasMore = true;
-          ackStore.put({
-            workspaceId, peerId, cursor: expectedCursor,
-            offeredCursor: nextCursor, updatedAt: new Date().toISOString(),
-          });
-          result = { workspaceId, peerId, expectedCursor, nextCursor, events, hasMore };
+          finish();
           return;
         }
         events.push(row.event);
