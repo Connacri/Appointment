@@ -289,8 +289,8 @@ impl PmsDatabase {
             .connection
             .prepare(
                 "SELECT local_order, event_json FROM p2p_events
-                 WHERE workspace_id=?1 AND node_id=?3 AND local_order>?2
-                 ORDER BY local_order ASC LIMIT ?4",
+                 WHERE workspace_id=?1 AND local_order>?2
+                 ORDER BY local_order ASC LIMIT ?3",
             )
             .map_err(|e| e.to_string())?;
         let rows = statement
@@ -342,8 +342,8 @@ impl PmsDatabase {
         let mut statement = tx
             .prepare(
                 "SELECT local_order, event_json FROM p2p_events
-                 WHERE workspace_id=?1 AND local_order>?2
-                 ORDER BY local_order ASC LIMIT ?3",
+                 WHERE workspace_id=?1 AND node_id=?3 AND local_order>?2
+                 ORDER BY local_order ASC LIMIT ?4",
             )
             .map_err(|e| e.to_string())?;
         let rows = statement

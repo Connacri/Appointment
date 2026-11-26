@@ -201,3 +201,5 @@ Windows SQLite schema v9 adds a covering workspace/node/local-order index. Outbo
 The outbound paging regression also includes a foreign-origin event in the same workspace and verifies that a node-a page contains only node-a events.
 
 The general SQLite event-log inspection API remains workspace-wide and includes all origins; only the peer-specific outbound page API filters by the local node identity. The workspace event history must not be narrowed by transport-specific sender filtering.
+
+Regression coverage retains a workspace-wide event-log reader while restricting the outbound page query to the authenticated local origin.
