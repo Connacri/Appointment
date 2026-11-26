@@ -551,3 +551,53 @@ The React Web and Android Capacitor runtimes subscribe to workspace-filtered Sup
 - Existing business model gaps remain: localStorage-only and UI-state-only panels documented in `docs/CRUD_SYNC_AUDIT.md` do not become synchronized merely because their neighboring tables emit Realtime events.
 
 Realtime acceptance requires a remote mutation on one client to appear on a second Web/Android client without waiting for the watchdog, while an offline local mutation remains durable and wins over stale remote state until its server ACK is verified. Native Windows requires the same acceptance test before parity can be claimed.
+## Supabase alignment progress — 2026-11-26
+
+Supabase is an independent remote replica. It is not the P2P coordinator and must not be
+required for local P2P writes. A local mutation is eligible for cloud push only when the
+authenticated workspace and target establishment are verified.
+
+The peer-event registry contains 13 entity types. The Supabase Outbox currently contains
+11 dispatched types: booking, resource, resource_group, establishment, task, stock_item,
+stock_movement, supplier, purchase_order, staff_member and establishment_profile.
+Invoice and dynamic_rate remain P2P protocol entities but are not Supabase Outbox entities
+until invoice header/lines can be committed atomically and dynamic-rate concurrent updates
+have an explicit conflict policy.
+
+The November 26 schema migrations are additive and versioned under supabase/migrations:
+- 20261126153000_add_suppliers_purchase_orders_staff.sql: adds workspace-scoped suppliers,
+  purchase orders and staff records with soft-delete columns, tenant foreign keys, version
+  triggers, RLS and authenticated-only grants.
+- 20261126153100_enable_procurement_staff_realtime.sql: adds these tables to
+  supabase_realtime; Realtime messages are invalidation signals, not trusted row payloads.
+- 20261126153200_enforce_supplier_establishment_scope.sql: prevents a purchase order from
+  referencing a supplier from another establishment in the same workspace.
+- 20261126153300_apply_stock_movement_atomically.sql: adds apply_stock_movement, a
+  security-invoker PostgreSQL transaction that locks the stock row, rejects negative
+  balances, verifies movement idempotency, appends the ledger row and updates the stock
+  projection atomically.
+- 20261126153400_align_stock_preferred_supplier_reference.sql: persists the optional
+  preferred supplier reference with workspace/establishment-scoped referential integrity.
+
+Generated Supabase types are regenerated from the live project after schema changes.
+Repositories now read/write suppliers, purchase orders and staff members; stock movement
+reads are paginated (500 rows/page) and use one relationship join for item names.
+AppContext queues task, stock-item, stock-movement, supplier, purchase-order, staff-member
+and establishment-profile mutations through the IndexedDB generic workspace projection,
+Outbox and P2P event transaction. The generic projection is restored on startup and local
+tombstones are respected during restoration. Stock quantity adjustments are represented by
+append-only movements; a new item's initial quantity is represented by an opening movement.
+
+This is an integration milestone, not proof of complete convergence. Remaining gates:
+1. Make P2P workspace identity independent of the Supabase workspace; current cloud Outbox
+   creation still requires a verified Supabase workspace and establishment.
+2. Propagate Supabase tombstones for supplier, purchase-order, staff and stock-item deletes
+   to every peer, and test replay/restart behavior.
+3. Replace fire-and-forget UI enqueue calls with awaited repository mutation results so a
+   failed IndexedDB transaction cannot be presented as a committed business mutation.
+4. Add conflict-aware dynamic-rate and invoice RPCs, including atomic invoice line writes
+   and an offline-safe invoice-number strategy.
+5. Add live PostgreSQL RLS tests, two-device convergence tests, and failure/restart tests.
+6. Implement secure peer transport and pairing. LAN discovery remains discovery only.
+
+Do not claim all business CRUD is synchronized or production-ready until these gates pass.
