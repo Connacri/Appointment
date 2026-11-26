@@ -607,3 +607,5 @@ Do not claim all business CRUD is synchronized or production-ready until these g
 
 
 Supabase pull ordering is guarded against resurrection: before pushing upserts for soft-delete-capable entities, the sync engine reads server tombstones. Matching upserts are held for explicit resolution; if tombstone lookup is unavailable, those upserts are suspended. The normal pull reuses the preflight result instead of querying tombstones twice and retries lookup only if preflight failed. Repository page size is centralized at 500 rows for supplier, order, staff, movement and tombstone reads.
+
+Remote tombstone application is chunked into pages of 500 before entering IndexedDB, so a workspace with a large deletion history does not exceed the local transaction safety limit.

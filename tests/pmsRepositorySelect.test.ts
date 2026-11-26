@@ -49,7 +49,7 @@ test('listBookings paginates every remote page instead of truncating at the Post
   );
 
   assert.ok(listSource, 'listBookings must exist');
-  assert.match(listSource, /pageSize = 500/);
+  assert.match(listSource, /pageSize = SUPABASE_PAGE_SIZE/);
   assert.match(listSource, /while \(first\.data\.length === pageSize\)/);
   assert.match(listSource, /withCount: false/);
   assert.match(listSource, /offset \+= page\.data\.length/);

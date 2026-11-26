@@ -1750,8 +1750,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           getTombstones: (targetWsId) => indexedDb.getTombstones(targetWsId),
           applyRemoteBookingTombstones: (targetWsId, tombstones) =>
             indexedDb.applyRemoteBookingTombstones(targetWsId, tombstones),
-          applyRemoteWorkspaceTombstones: (targetWsId, tombstones) =>
-            indexedDb.applyRemoteWorkspaceTombstones(targetWsId, tombstones),
+          applyRemoteWorkspaceTombstones: async (targetWsId, tombstones) => {
+            const report = { applied: [] as Array<{ entity: P2pEntity; entityId: string }>, conflicts: [] as Array<{ entity: P2pEntity; entityId: string }> };
+            for (let offset = 0; offset < tombstones.length; offset += 500) {
+              const page = await indexedDb.applyRemoteWorkspaceTombstones(targetWsId, tombstones.slice(offset, offset + 500));
+              report.applied.push(...page.applied);
+              report.conflicts.push(...page.conflicts);
+            }
+            return report;
+          },
           getRemoteWorkspaceTombstones: (targetWsId) => listWorkspaceEntityTombstones(targetWsId),
           markOutboxSynced: (id) => indexedDb.markOutboxSynced(id),
           markOutboxFailed: (id, error, nextAttemptAt) =>
