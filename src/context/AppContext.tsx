@@ -3475,8 +3475,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const markPurchaseOrderReceived = (id: string) => {
     const target = purchaseOrders.find((order) => order.id === id);
     if (!target || target.status === 'received') return;
-    updatePurchaseOrder({ ...target, status: 'received', receivedAt: new Date().toISOString() });
-    // Stock receipt is not applied here until item + movements + order can commit atomically.
+    // Fail closed: never mark an order received while its stock ledger and item
+    // projections cannot be committed in the same local transaction.
+    reportQueueFailure(
+      'purchase_order',
+      id,
+      new Error('Réception bloquée : la transaction atomique commande + mouvements + quantités de stock n’est pas encore disponible.'),
+    );
   };
 
     const setDynamicRate = (roomType: string, date: string, price: number) => {
