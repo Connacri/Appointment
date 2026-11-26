@@ -2122,15 +2122,13 @@ export const BookingModal: React.FC = () => {
 
               <div className="min-w-0">
                 <label htmlFor="booking-primary-phone" className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {language === 'fr' ? 'Téléphone (Rappel / SMS)' : language === 'ar' ? 'رقم الهاتف للاتصال' : 'Phone Number'}
-                  {occupantCount > 1 ? ' *' : ' :'}
+                  {language === 'fr' ? 'Téléphone (facultatif)' : language === 'ar' ? 'رقم الهاتف (اختياري)' : 'Phone Number (optional)'}
                 </label>
                 <div className="relative">
                   <Phone size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     id="booking-primary-phone"
                     type="tel"
-                    required={occupantCount > 1}
                     value={guestPhone}
                     onChange={(e) => setGuestPhone(e.target.value)}
                     aria-invalid={Boolean(getFieldError(0, 'phone'))}
