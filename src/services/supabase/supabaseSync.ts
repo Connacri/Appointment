@@ -79,6 +79,7 @@ export interface SupabaseSyncAdapter {
     workspaceId: string,
     tombstones: RemoteWorkspaceTombstone[],
   ) => Promise<AppliedRemoteTombstones>;
+  getRemoteWorkspaceTombstones?: (workspaceId: string) => Promise<RemoteWorkspaceTombstone[]>;
   markOutboxSynced: (id: string) => Promise<void>;
   markOutboxFailed: (id: string, error: string, nextAttemptAt: string) => Promise<void>;
   pushEstablishmentUpsert?: (
@@ -512,6 +513,9 @@ export async function runSupabaseSync({
   let prefetchedRemote: PulledSupabaseSnapshot | null = null;
   let mergePendingOutbox: OutboxRecord[] = [];
   let mergeLocalTombstones: TombstoneRecord[] = [];
+  let appliedRemoteTombstones: AppliedRemoteTombstones = { applied: [], conflicts: [] };
+  let remoteTombstoneLookupAvailable = false;
+  const remoteTombstoneKeys = new Set<string>();
 
   const acknowledgePush = async (record: OutboxRecord): Promise<void> => {
     await adapter.markOutboxSynced(record.id);
@@ -561,7 +565,40 @@ export async function runSupabaseSync({
       }
     }
 
+    if (adapter.getRemoteWorkspaceTombstones && adapter.applyRemoteWorkspaceTombstones) {
+      try {
+        const remoteTombstones = await adapter.getRemoteWorkspaceTombstones(workspaceId);
+        remoteTombstoneLookupAvailable = true;
+        for (const tombstone of remoteTombstones) {
+          remoteTombstoneKeys.add(`${tombstone.entity}:${tombstone.entityId}`);
+        }
+        const earlyApply = await adapter.applyRemoteWorkspaceTombstones(workspaceId, remoteTombstones);
+        appliedRemoteTombstones = {
+          applied: [...appliedRemoteTombstones.applied, ...earlyApply.applied],
+          conflicts: [...appliedRemoteTombstones.conflicts, ...earlyApply.conflicts],
+        };
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : 'lecture des tombstones distants impossible';
+        warnings.push(`Protection des suppressions cloud indisponible : ${detail}`);
+      }
+    }
+
     for (const record of dueRecords) {
+      const tombstoneSensitive = ['task', 'stock_item', 'supplier', 'purchase_order', 'staff_member'].includes(record.entity);
+      const tombstoneKey = `${record.entity}:${record.entityId}`;
+      if (record.operation === 'upsert' && tombstoneSensitive
+        && (!remoteTombstoneLookupAvailable || remoteTombstoneKeys.has(tombstoneKey))) {
+        const detail = remoteTombstoneLookupAvailable
+          ? 'Mutation locale en conflit avec un tombstone Supabase; résolution explicite requise.'
+          : 'Lecture des tombstones Supabase indisponible; upsert suspendu pour éviter une résurrection.';
+        pushFailedCount += 1;
+        if (!firstPushError) firstPushError = detail;
+        warnings.push(`Push ${record.entity}/${record.entityId} suspendu : ${detail}`);
+        const nextAttempt = computeBackoffIso(record.attempts, now().getTime());
+        await adapter.markOutboxFailed(record.id, detail, nextAttempt).catch(() => undefined);
+        continue;
+      }
+
       const isDemoBooking = record.entity === 'booking' && demoBookingIds.has(record.entityId);
       const isDemoResource = record.entity === 'resource' && demoResourceIds.has(record.entityId);
       if (isDemoBooking || isDemoResource) {
@@ -826,7 +863,6 @@ export async function runSupabaseSync({
   let mergedGroups: ResourceGroup[] | null = null;
   let mergedBookings: TimelineBooking[] | null = null;
   let recoveredProfile: Partial<EstablishmentProfile> | null = null;
-  let appliedRemoteTombstones: AppliedRemoteTombstones = { applied: [], conflicts: [] };
 
   if (pulledSnapshot) {
     try {
@@ -840,12 +876,16 @@ export async function runSupabaseSync({
         if (!adapter.applyRemoteWorkspaceTombstones) {
           throw new Error('Remote workspace tombstones have no local transactional adapter.');
         }
-        appliedRemoteTombstones = await adapter.applyRemoteWorkspaceTombstones(
+        const lateApply = await adapter.applyRemoteWorkspaceTombstones(
           workspaceId,
           pulledSnapshot.tombstones ?? [],
         );
-        if (appliedRemoteTombstones.conflicts.length > 0) {
-          warnings.push(`${appliedRemoteTombstones.conflicts.length} suppression(s) cloud en conflit avec une mutation locale en attente.`);
+        appliedRemoteTombstones = {
+          applied: [...appliedRemoteTombstones.applied, ...lateApply.applied],
+          conflicts: [...appliedRemoteTombstones.conflicts, ...lateApply.conflicts],
+        };
+        if (lateApply.conflicts.length > 0) {
+          warnings.push(`${lateApply.conflicts.length} suppression(s) cloud en conflit avec une mutation locale en attente.`);
         }
       }
 
