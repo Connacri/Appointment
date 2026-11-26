@@ -111,7 +111,7 @@ test('buildNormalizedOccupantList synchronizes Person #1, additional adults, chi
   assert.equal(legacySummary.children[0].documentType, 'family_book');
 });
 
-test('validateBookingOccupants requires identity for every occupant and primary phone when total occupants > 1, while emails and companion phones remain optional', () => {
+test('validateBookingOccupants requires identity for every occupant while all phone numbers and emails remain optional', () => {
   // Incomplete second adult & missing child: missing companion phone is allowed, malformed email & missing identity fail
   const missingResult = validateBookingOccupants(
     {
@@ -174,7 +174,7 @@ test('validateBookingOccupants requires identity for every occupant and primary 
   assert.equal(resortInvalid.totalPeople, 3);
   assert.match(resortInvalid.summaryError ?? '', /3/);
 
-  // Primary guest without phone in multi-person booking still fails
+  // Primary guest without phone in multi-person booking is valid
   const missingPrimaryPhone = validateBookingOccupants(
     {
       ...baseBooking,
@@ -208,8 +208,29 @@ test('validateBookingOccupants requires identity for every occupant and primary 
     },
     'fr'
   );
-  assert.equal(missingPrimaryPhone.valid, false);
-  assert.ok(missingPrimaryPhone.errors.some((e) => e.personIndex === 0 && e.field === 'phone'));
+  assert.equal(missingPrimaryPhone.valid, true, missingPrimaryPhone.summaryError);
+  assert.equal(missingPrimaryPhone.errors.some((e) => e.field === 'phone'), false);
+
+  const malformedOptionalPhone = validateBookingOccupants({
+    ...baseBooking,
+    guestPhone: 'not-a-phone',
+    adults: 2,
+    children: 0,
+    occupantsList: [
+      {
+        id: 'adult-1', role: 'adult', isAdult: true, isPrimary: true,
+        fullName: 'Karim Benali', phone: 'not-a-phone', email: '',
+        documentType: 'cni', documentNumber: '1002003004',
+      },
+      {
+        id: 'adult-2', role: 'adult', isAdult: true, isPrimary: false,
+        fullName: 'Salima Benali', phone: '', email: '',
+        documentType: 'cni', documentNumber: '2003004005',
+      },
+    ],
+  });
+  assert.equal(malformedOptionalPhone.valid, false);
+  assert.ok(malformedOptionalPhone.errors.some((e) => e.personIndex === 0 && e.field === 'phone'));
 
   // Complete 1-adult + 1-child booking succeeds WITHOUT any email or child phone
   const validHotelFamily = validateBookingOccupants(
