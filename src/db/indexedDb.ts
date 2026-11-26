@@ -41,6 +41,7 @@ function expectedOutboxEntityForStore(
     case 'bookings': return 'booking';
     case 'resources': return 'resource';
     case 'resourceGroups': return 'resource_group';
+    default: throw new Error(`Unsupported Outbox store: ${String(storeName)}`);
   }
 }
 
