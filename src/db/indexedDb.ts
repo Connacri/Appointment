@@ -104,6 +104,18 @@ export interface TombstoneRecord {
   remoteVersion?: number;
 }
 export interface OutboxMutationContext { workspaceId: string; establishmentId?: string; }
+export interface RemoteWorkspaceTombstone {
+  entity: P2pEntity;
+  entityId: string;
+  establishmentId?: string;
+  deletedAt: string;
+  remoteVersion: number;
+}
+export interface AppliedRemoteTombstones {
+  applied: Array<{ entity: P2pEntity; entityId: string }>;
+  conflicts: Array<{ entity: P2pEntity; entityId: string }>;
+}
+
 export interface P2pInboundBatch {
   workspaceId: string;
   peerId: string;
@@ -1755,6 +1767,82 @@ class IndexedDbStore {
       throw error;
     }
     this.emitOutboxChange();
+  }
+
+  /** Apply cloud tombstones without resurrecting a locally pending mutation. */
+  public async applyRemoteWorkspaceTombstones(
+    workspaceId: string,
+    remoteTombstones: readonly RemoteWorkspaceTombstone[],
+  ): Promise<AppliedRemoteTombstones> {
+    if (!workspaceId.trim()) throw new Error('Workspace is required for remote tombstones.');
+    if (remoteTombstones.length > 500) throw new Error('Remote tombstone page exceeds the 500-row limit.');
+    await this.openStore();
+    if (!this.idb) throw new Error('Remote tombstones require IndexedDB.');
+    await this.getP2pNodeId();
+    const report: AppliedRemoteTombstones = { applied: [], conflicts: [] };
+
+    for (const remote of remoteTombstones) {
+      if (!P2P_SUPPORTED_ENTITIES.includes(remote.entity) || !remote.entityId.trim()
+        || !Number.isSafeInteger(remote.remoteVersion) || remote.remoteVersion < 1
+        || !Number.isFinite(Date.parse(remote.deletedAt))) {
+        throw new Error('Invalid remote workspace tombstone.');
+      }
+      const tx = this.createStrictTransaction([
+        'outbox', 'workspaceEntities', 'tombstones', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pRecordFrontiers',
+      ]);
+      const outbox = tx.objectStore('outbox');
+      const workspaceEntities = tx.objectStore('workspaceEntities');
+      const tombstones = tx.objectStore('tombstones');
+      const id = `${workspaceId}:${remote.entity}:${remote.entityId}`;
+      const pendingRequest = outbox.index('workspaceEntity').getAll([workspaceId, remote.entity, remote.entityId]);
+      const currentRequest = workspaceEntities.get([workspaceId, remote.entity, remote.entityId]);
+      const tombstoneRequest = tombstones.get(id);
+      let pending: OutboxRecord[] = [];
+      let current: { version?: number } | undefined;
+      let existing: TombstoneRecord | undefined;
+      let ready = 0;
+      let action: 'apply' | 'skip' | 'conflict' = 'skip';
+      const commit = () => {
+        if (++ready !== 3) return;
+        const activePending = pending.filter((row) => row.status !== 'synced');
+        if (existing?.origin === 'local' || existing?.origin === 'p2p') {
+          action = 'conflict';
+          return;
+        }
+        if (activePending.some((row) => row.operation === 'upsert')) {
+          action = 'conflict';
+          return;
+        }
+        if (existing?.origin === 'supabase') {
+          if ((existing.remoteVersion ?? 0) < remote.remoteVersion) {
+            tombstones.put({ ...existing, deletedAt: remote.deletedAt, remoteVersion: remote.remoteVersion });
+          }
+          action = 'skip';
+          return;
+        }
+        const createdAt = new Date().toISOString();
+        const version = (current?.version ?? 0) + 1;
+        workspaceEntities.delete([workspaceId, remote.entity, remote.entityId]);
+        tombstones.put({
+          id, workspaceId, establishmentId: remote.establishmentId,
+          entity: remote.entity, entityId: remote.entityId, version,
+          deletedAt: remote.deletedAt, origin: 'supabase', remoteVersion: remote.remoteVersion,
+        } satisfies TombstoneRecord);
+        this.appendLocalP2pEvent(tx, workspaceId, remote.entity, remote.entityId, 'delete', null, createdAt);
+        action = 'apply';
+      };
+      pendingRequest.onsuccess = () => { pending = pendingRequest.result as OutboxRecord[]; commit(); };
+      currentRequest.onsuccess = () => { current = currentRequest.result as typeof current; commit(); };
+      tombstoneRequest.onsuccess = () => { existing = tombstoneRequest.result as TombstoneRecord | undefined; commit(); };
+      pendingRequest.onerror = () => tx.abort();
+      currentRequest.onerror = () => tx.abort();
+      tombstoneRequest.onerror = () => tx.abort();
+      await waitForTransactionCompletion(tx, `applyRemoteWorkspaceTombstone ${remote.entity}/${remote.entityId}`);
+      const entry = { entity: remote.entity, entityId: remote.entityId };
+      if (action === 'apply') report.applied.push(entry);
+      if (action === 'conflict') report.conflicts.push(entry);
+    }
+    return report;
   }
 
   /** Read one entity family from the workspace-scoped generic materialized projection. */
