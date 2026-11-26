@@ -17,6 +17,7 @@ import { waitForTransactionCompletion } from './indexedDbTransaction';
 import { runSerialQueue } from './serialQueue';
 import { migrateBookingRecordV7 } from './bookingMigration';
 import { hasBookingScheduleConflict } from '../utils/bookingValidation';
+import { detectP2pBookingConflicts, type BookingConflictSnapshot } from '../services/p2p/bookingConflictDetection';
 import {
   createP2pEvent,
   getP2pRecordState,
@@ -152,7 +153,7 @@ export interface OutboxSummary {
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 12;
+  private dbVersion = 14;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -284,6 +285,12 @@ class IndexedDbStore {
           const entities = db.createObjectStore('workspaceEntities', { keyPath: ['workspaceId', 'entity', 'entityId'] });
           entities.createIndex('workspaceEntityId', ['workspaceId', 'entityId'], { unique: false });
           entities.createIndex('workspaceUpdatedAt', ['workspaceId', 'updatedAt'], { unique: false });
+          entities.createIndex('workspaceResource', ['workspaceId', 'payload.resourceId'], { unique: false });
+        }
+        const upgradeTxForIndexes = (e.target as IDBOpenDBRequest).transaction;
+        const workspaceEntitiesStore = upgradeTxForIndexes?.objectStore('workspaceEntities');
+        if (workspaceEntitiesStore && !workspaceEntitiesStore.indexNames.contains('workspaceResource')) {
+          workspaceEntitiesStore.createIndex('workspaceResource', ['workspaceId', 'payload.resourceId'], { unique: false });
         }
         // Local-only business records are durable but deliberately excluded from
         // workspace Outbox/P2P until a verified workspace identity is available.
@@ -333,6 +340,12 @@ class IndexedDbStore {
         }
         if (!db.objectStoreNames.contains('p2pPeerAcks')) {
           db.createObjectStore('p2pPeerAcks', { keyPath: ['workspaceId', 'peerId'] });
+        }
+        // v13: durable business-level conflicts across distinct booking IDs.
+        if (!db.objectStoreNames.contains('p2pBookingConflicts')) {
+          const conflicts = db.createObjectStore('p2pBookingConflicts', { keyPath: 'id' });
+          conflicts.createIndex('workspaceStatus', ['workspaceId', 'status'], { unique: false });
+          conflicts.createIndex('workspaceDetectedAt', ['workspaceId', 'detectedAt'], { unique: false });
         }
         if (e.oldVersion > 0 && e.oldVersion < 11 && db.objectStoreNames.contains('p2pEvents')) {
           const upgradeTx = (e.target as IDBOpenDBRequest).transaction;
@@ -873,7 +886,7 @@ class IndexedDbStore {
     await this.openStore();
     if (!this.idb) throw new Error('P2P replication requires IndexedDB; localStorage fallback is unsafe.');
     const tx = this.createStrictTransaction(
-      ['p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pPeerCursors', 'p2pRecordFrontiers', 'outbox',
+      ['p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pPeerCursors', 'p2pRecordFrontiers', 'p2pBookingConflicts', 'outbox',
         'tombstones', 'workspaceEntities', 'bookings', 'resources', 'invoices', 'resourceGroups'],
     );
     const report: P2pApplyReport = {
@@ -948,12 +961,205 @@ class IndexedDbStore {
 
       const applyNext = (records: Array<{ entity: string; entityId: string }>, index: number): void => {
         if (index >= records.length) {
-          tx.objectStore('p2pPeerCursors').put({
-            workspaceId: batch.workspaceId,
-            peerId: batch.peerId,
-            cursor: batch.nextCursor,
-            updatedAt: new Date().toISOString(),
-          });
+          // Persist booking overlap conflicts in the same transaction as the inbound
+          // events and peer cursor. The transport may ACK only after this transaction commits.
+          const resourceIds = [...new Set(batch.events
+            .filter((event) => event.entity === 'booking' && event.operation === 'upsert'
+              && typeof event.payload?.resourceId === 'string')
+            .map((event) => String(event.payload?.resourceId)))];
+          const eventById = new Map<string, P2pEvent>();
+                const conflictStore = tx.objectStore('p2pBookingConflicts');
+          const finishConflictScan = (): void => {
+            const conflicts = detectP2pBookingConflicts([...eventById.values()]);
+            const applyResolution = (conflictId: string, done: () => void): void => {
+              const conflictRequest = conflictStore.get(conflictId);
+              conflictRequest.onsuccess = () => {
+                const conflict = conflictRequest.result as BookingConflictSnapshot | undefined;
+                if (!conflict || conflict.status !== 'pending') { done(); return; }
+                const resolutionRequest = tx.objectStore('p2pEvents').index('workspaceEntity')
+                  .getAll(IDBKeyRange.only([batch.workspaceId, 'booking_conflict', conflictId]));
+                resolutionRequest.onsuccess = () => {
+                  const state = getP2pRecordState(resolutionRequest.result as P2pEvent[]);
+                  if (state.kind !== 'resolved') { done(); return; }
+                  const event = state.event;
+                  const payload = event.payload as Record<string, unknown>;
+                  const expectedSourceIds = [conflict.firstEventId, conflict.secondEventId].sort();
+                  const suppliedSourceIds = Array.isArray(payload.sourceEventIds)
+                    ? (payload.sourceEventIds as unknown[]).filter((value): value is string => typeof value === 'string').sort()
+                    : [];
+                  const cancelledIds = Array.isArray(payload.cancelledBookingIds)
+                    ? (payload.cancelledBookingIds as unknown[]).filter((value): value is string => typeof value === 'string')
+                    : [];
+                  const cancellationIds = Array.isArray(payload.cancellationEventIds)
+                    ? (payload.cancellationEventIds as unknown[]).filter((value): value is string => typeof value === 'string')
+                    : [];
+                  const expectedCancelledIds = payload.decision === 'reject_both'
+                    ? [conflict.firstBookingId, conflict.secondBookingId].sort()
+                    : [conflict.firstBookingId === payload.chosenBookingId ? conflict.secondBookingId : conflict.firstBookingId];
+                  const causallyIncludes = (sourceId: string): boolean => {
+                    const separator = sourceId.lastIndexOf(':');
+                    if (separator <= 0) return false;
+                    const sourceNode = sourceId.slice(0, separator);
+                    const sourceSequence = Number(sourceId.slice(separator + 1));
+                    return Number.isSafeInteger(sourceSequence) && sourceSequence > 0
+                      && (event.clock[sourceNode] ?? 0) >= sourceSequence;
+                  };
+                  const decision = payload.decision;
+                  const chosenBookingId = payload.chosenBookingId;
+                  const validDecision = decision === 'keep_booking'
+                    ? (chosenBookingId === conflict.firstBookingId || chosenBookingId === conflict.secondBookingId)
+                    : decision === 'reject_both' && chosenBookingId === null;
+                  if (
+                    payload.id !== conflict.id
+                    || payload.conflictId !== conflict.id
+                    || payload.actorNodeId !== event.nodeId
+                    || typeof payload.reason !== 'string' || !payload.reason.trim() || payload.reason.length > 1000
+                    || typeof payload.resolvedAt !== 'string'
+                    || !validDecision
+                    || suppliedSourceIds.length !== 2
+                    || suppliedSourceIds[0] !== expectedSourceIds[0]
+                    || suppliedSourceIds[1] !== expectedSourceIds[1]
+                    || cancelledIds.length !== expectedCancelledIds.length
+                    || expectedCancelledIds.some((id) => !cancelledIds.includes(id))
+                    || cancellationIds.length !== expectedCancelledIds.length
+                    || !expectedSourceIds.every(causallyIncludes)
+                    || !cancellationIds.every(causallyIncludes)
+                  ) { done(); return; }
+                  let cancellationRemaining = cancellationIds.length;
+                  let cancellationValid = true;
+                  const commitResolution = (): void => {
+                    if (cancellationRemaining !== 0) return;
+                    if (!cancellationValid) { done(); return; }
+                    conflictStore.put({
+                      ...conflict,
+                      status: decision === 'keep_booking' ? 'resolved' : 'rejected',
+                      resolution: {
+                        decision: decision as 'keep_booking' | 'reject_both',
+                        chosenBookingId: chosenBookingId as string | null,
+                        actorNodeId: event.nodeId,
+                        reason: payload.reason as string,
+                        resolvedAt: payload.resolvedAt as string,
+                        eventId: event.eventId,
+                      },
+                    } satisfies BookingConflictSnapshot);
+                    done();
+                  };
+                  for (let index = 0; index < cancellationIds.length; index += 1) {
+                    const cancellationRequest = tx.objectStore('p2pEvents')
+                      .get([batch.workspaceId, cancellationIds[index]]);
+                    cancellationRequest.onsuccess = () => {
+                      const cancellation = cancellationRequest.result as P2pEvent | undefined;
+                      const expectedBookingId = expectedCancelledIds[index];
+                      if (
+                        !cancellation || cancellation.entity !== 'booking'
+                        || cancellation.entityId !== expectedBookingId
+                        || cancellation.operation !== 'upsert'
+                        || cancellation.payload?.status !== 'cancelled'
+                      ) cancellationValid = false;
+                      const frontierRequest = tx.objectStore('p2pRecordFrontiers')
+                        .get([batch.workspaceId, 'booking', expectedBookingId]);
+                      frontierRequest.onsuccess = () => {
+                        const frontier = frontierRequest.result as { status?: string; frontier?: P2pEvent[] } | undefined;
+                        if (frontier?.status !== 'resolved'
+                          || !frontier.frontier?.some((item) => item.eventId === cancellationIds[index])) {
+                          cancellationValid = false;
+                        }
+                        cancellationRemaining -= 1;
+                        commitResolution();
+                      };
+                      frontierRequest.onerror = abort;
+                    };
+                    cancellationRequest.onerror = abort;
+                  }
+                };
+                resolutionRequest.onerror = abort;
+              };
+              conflictRequest.onerror = abort;
+            };
+            const applyPendingConflicts = (): void => {
+              const pendingRequest = conflictStore.index('workspaceStatus')
+                .getAll(IDBKeyRange.only([batch.workspaceId, 'pending']));
+              pendingRequest.onsuccess = () => {
+                const pendingIds = (pendingRequest.result as BookingConflictSnapshot[]).map((item) => item.id);
+                const conflictIds = [...new Set([
+                  ...conflicts.map((conflict) => conflict.id),
+                  ...pendingIds,
+                  ...batch.events.filter((event) => event.entity === 'booking_conflict').map((event) => event.entityId),
+                ])];
+                const applyResolutionNext = (index: number): void => {
+                  if (index >= conflictIds.length) {
+                    tx.objectStore('p2pPeerCursors').put({
+                      workspaceId: batch.workspaceId,
+                      peerId: batch.peerId,
+                      cursor: batch.nextCursor,
+                      updatedAt: new Date().toISOString(),
+                    });
+                    return;
+                  }
+                  applyResolution(conflictIds[index], () => applyResolutionNext(index + 1));
+                };
+                applyResolutionNext(0);
+              };
+              pendingRequest.onerror = abort;
+            };
+            const persistNext = (conflictIndex: number): void => {
+              if (conflictIndex >= conflicts.length) {
+                applyPendingConflicts();
+                return;
+              }
+              const conflict = conflicts[conflictIndex];
+              const existingRequest = conflictStore.get(conflict.id);
+              existingRequest.onsuccess = () => {
+                // Preserve any explicit resolution already recorded for this exact pair.
+                if (!existingRequest.result) conflictStore.put(conflict);
+                persistNext(conflictIndex + 1);
+              };
+              existingRequest.onerror = abort;
+            };
+            persistNext(0);
+          };
+          const pendingFrontiers: Array<{ entityId: string }> = [];
+          const loadFrontier = (entityId: string, done: () => void): void => {
+            const request = tx.objectStore('p2pRecordFrontiers').get([batch.workspaceId, 'booking', entityId]);
+            request.onsuccess = () => {
+              const row = request.result as { frontier?: P2pEvent[] } | undefined;
+              for (const event of row?.frontier ?? []) eventById.set(event.eventId, event);
+              done();
+            };
+            request.onerror = abort;
+          };
+          const loadRowsForResource = (index: number): void => {
+            if (index >= resourceIds.length) {
+              let remaining = pendingFrontiers.length;
+              if (remaining === 0) { finishConflictScan(); return; }
+              for (const row of pendingFrontiers) {
+                loadFrontier(row.entityId, () => {
+                  remaining -= 1;
+                  if (remaining === 0) finishConflictScan();
+                });
+              }
+              return;
+            }
+            const resourceId = resourceIds[index];
+            const request = tx.objectStore('workspaceEntities').index('workspaceResource')
+              .getAll(IDBKeyRange.only([batch.workspaceId, resourceId]));
+            request.onsuccess = () => {
+              for (const row of request.result as Array<{ entity: string; entityId: string }>) {
+                if (row.entity === 'booking' && !pendingFrontiers.some((item) => item.entityId === row.entityId)) {
+                  pendingFrontiers.push({ entityId: row.entityId });
+                }
+              }
+              loadRowsForResource(index + 1);
+            };
+            request.onerror = abort;
+          };
+          for (const event of batch.events) {
+            if (event.entity === 'booking') eventById.set(event.eventId, event);
+            if (event.entity === 'booking' && !pendingFrontiers.some((item) => item.entityId === event.entityId)) {
+              pendingFrontiers.push({ entityId: event.entityId });
+            }
+          }
+          loadRowsForResource(0);
           return;
         }
         const record = records[index];
@@ -1036,6 +1242,233 @@ class IndexedDbStore {
 
     await waitForTransactionCompletion(tx, 'applyReceivedP2pBatch');
     return report;
+  }
+
+  /** Resolve one cross-device booking conflict and replicate the decision as an immutable P2P event. */
+  public async resolveP2pBookingConflict(
+    workspaceId: string,
+    conflictId: string,
+    decision: 'keep_booking' | 'reject_both',
+    chosenBookingId: string | null,
+    actorId: string,
+    reason: string,
+  ): Promise<BookingConflictSnapshot> {
+    if (!workspaceId.trim() || !conflictId.trim() || !actorId.trim() || !reason.trim() || reason.length > 1000) {
+      throw new Error('Workspace, conflict, actor and a resolution reason are required.');
+    }
+    if (decision === 'keep_booking' && !chosenBookingId) {
+      throw new Error('A booking must be selected when resolving with keep_booking.');
+    }
+    if (decision === 'reject_both' && chosenBookingId !== null) {
+      throw new Error('reject_both must not select a booking.');
+    }
+    await this.openStore();
+    if (!this.idb) throw new Error('P2P conflict resolution requires IndexedDB.');
+    const nodeId = await this.getP2pNodeId();
+    const tx = this.createStrictTransaction([
+      'p2pBookingConflicts', 'p2pMeta', 'p2pClock', 'p2pEvents',
+      'p2pTransportQueue', 'p2pRecordFrontiers', 'bookings', 'workspaceEntities', 'outbox',
+    ]);
+    let validationError: Error | null = null;
+    let resolved: BookingConflictSnapshot | undefined;
+    const store = tx.objectStore('p2pBookingConflicts');
+    const request = store.get(conflictId);
+    request.onsuccess = () => {
+      const conflict = request.result as BookingConflictSnapshot | undefined;
+      if (!conflict || conflict.workspaceId !== workspaceId) {
+        validationError = new Error('Booking conflict was not found in this workspace.');
+        tx.abort();
+        return;
+      }
+      if (conflict.status !== 'pending') {
+        validationError = new Error('Booking conflict has already been resolved.');
+        tx.abort();
+        return;
+      }
+      if (decision === 'keep_booking'
+        && chosenBookingId !== conflict.firstBookingId && chosenBookingId !== conflict.secondBookingId) {
+        validationError = new Error('Selected booking is not part of this conflict.');
+        tx.abort();
+        return;
+      }
+      const sourceIds = [conflict.firstEventId, conflict.secondEventId];
+      let remaining = sourceIds.length;
+      let sourceMissing = false;
+      const sourceEvents: P2pEvent[] = [];
+      const createResolution = (): void => {
+        if (remaining !== 0) return;
+        if (sourceMissing || sourceEvents.length !== 2) {
+          validationError = new Error('Both source booking events must be present before resolving the conflict.');
+          tx.abort();
+          return;
+        }
+        const resolvedAt = new Date().toISOString();
+        const cancellationEventIds: string[] = [];
+        const appendResolutionEvent = (): void => {
+          const payload = {
+            id: conflict.id,
+            conflictId: conflict.id,
+            decision,
+            chosenBookingId,
+            actorNodeId: nodeId,
+            actorId,
+            reason: reason.trim(),
+            resolvedAt,
+            sourceEventIds: sourceIds,
+            cancellationEventIds,
+            cancelledBookingIds: bookingsToCancel,
+          };
+          this.appendLocalP2pEvent(
+            tx, workspaceId, 'booking_conflict', conflict.id, 'upsert', payload, resolvedAt,
+            (event) => {
+              if (!event) { tx.abort(); return; }
+              resolved = {
+                ...conflict,
+                status: decision === 'keep_booking' ? 'resolved' : 'rejected',
+                resolution: {
+                  decision,
+                  chosenBookingId,
+                  actorNodeId: nodeId,
+                  reason: reason.trim(),
+                  resolvedAt,
+                  eventId: event.eventId,
+                },
+              };
+              store.put(resolved);
+            },
+          );
+        };
+        const bookingsToCancel = decision === 'reject_both'
+          ? [conflict.firstBookingId, conflict.secondBookingId]
+          : [conflict.firstBookingId === chosenBookingId ? conflict.secondBookingId : conflict.firstBookingId];
+        const cancelNext = (index: number): void => {
+          if (index >= bookingsToCancel.length) { appendResolutionEvent(); return; }
+          const bookingId = bookingsToCancel[index];
+          const bookingRequest = tx.objectStore('bookings').get(bookingId);
+          const entityRequest = tx.objectStore('workspaceEntities').get([workspaceId, 'booking', bookingId]);
+          const frontierRequest = tx.objectStore('p2pRecordFrontiers').get([workspaceId, 'booking', bookingId]);
+          let bookingRecord: Record<string, unknown> | undefined;
+          let entityRecord: { version?: number; establishmentId?: string } | undefined;
+          let frontierRecord: { status?: string; frontier?: P2pEvent[] } | undefined;
+          let ready = 0;
+          const applyCancellation = (): void => {
+            ready += 1;
+            if (ready !== 3) return;
+            if (!bookingRecord || bookingRecord.workspaceId !== workspaceId) {
+              validationError = new Error(`Booking ${bookingId} is unavailable in this workspace; conflict resolution was not applied.`);
+              tx.abort();
+              return;
+            }
+            if (frontierRecord?.status !== 'resolved') {
+              validationError = new Error(`Booking ${bookingId} has an unresolved record frontier; resolve that record first.`);
+              tx.abort();
+              return;
+            }
+            if (bookingRecord.status === 'cancelled') {
+              const existingCancellation = frontierRecord.frontier?.find((event) =>
+                event.entity === 'booking' && event.entityId === bookingId
+                && event.operation === 'upsert' && event.payload?.status === 'cancelled'
+              );
+              if (!existingCancellation) {
+                validationError = new Error(`Booking ${bookingId} is cancelled but has no durable cancellation event.`);
+                tx.abort();
+                return;
+              }
+              cancellationEventIds.push(existingCancellation.eventId);
+              cancelNext(index + 1);
+              return;
+            }
+            const version = Math.max(entityRecord?.version ?? 0, Number(bookingRecord.syncVersion ?? 0)) + 1;
+            const establishmentId = entityRecord?.establishmentId
+              ?? (typeof bookingRecord.establishmentId === 'string' ? bookingRecord.establishmentId : undefined);
+            const cancelledPayload = { ...bookingRecord, status: 'cancelled', syncVersion: version };
+            tx.objectStore('bookings').put(cancelledPayload);
+            tx.objectStore('workspaceEntities').put({
+              workspaceId, establishmentId, entity: 'booking', entityId: bookingId,
+              version, updatedAt: resolvedAt, payload: cancelledPayload,
+            });
+            tx.objectStore('outbox').add(this.createOutboxRecord(
+              { workspaceId, establishmentId }, 'booking', bookingId, 'upsert', version,
+              cancelledPayload, resolvedAt,
+            ));
+            this.appendLocalP2pEvent(
+              tx, workspaceId, 'booking', bookingId, 'upsert', cancelledPayload, resolvedAt,
+              (event) => {
+                if (!event) { tx.abort(); return; }
+                cancellationEventIds.push(event.eventId);
+                cancelNext(index + 1);
+              },
+            );
+          };
+          bookingRequest.onsuccess = () => {
+            bookingRecord = bookingRequest.result as Record<string, unknown> | undefined;
+            applyCancellation();
+          };
+          entityRequest.onsuccess = () => {
+            entityRecord = entityRequest.result as typeof entityRecord;
+            applyCancellation();
+          };
+          frontierRequest.onsuccess = () => {
+            frontierRecord = frontierRequest.result as typeof frontierRecord;
+            applyCancellation();
+          };
+          bookingRequest.onerror = () => tx.abort();
+          entityRequest.onerror = () => tx.abort();
+          frontierRequest.onerror = () => tx.abort();
+        };
+        cancelNext(0);
+      };
+      for (const sourceId of sourceIds) {
+        const sourceRequest = tx.objectStore('p2pEvents').get([workspaceId, sourceId]);
+        sourceRequest.onsuccess = () => {
+          if (!sourceRequest.result) sourceMissing = true;
+          else sourceEvents.push(sourceRequest.result as P2pEvent);
+          remaining -= 1;
+          createResolution();
+        };
+        sourceRequest.onerror = () => tx.abort();
+      }
+    };
+    request.onerror = () => tx.abort();
+    try {
+      await waitForTransactionCompletion(tx, 'resolveP2pBookingConflict');
+    } catch (error) {
+      if (validationError) throw validationError;
+      throw error;
+    }
+    if (!resolved) throw new Error('Booking conflict resolution did not commit.');
+    this.emitOutboxChange();
+    return resolved;
+  }
+
+  /** List durable cross-ID booking conflicts for the conflict-resolution UI. */
+  public async getP2pBookingConflicts(
+    workspaceId: string,
+    status?: 'pending' | 'resolved' | 'rejected',
+    limit = 200,
+  ): Promise<BookingConflictSnapshot[]> {
+    if (!workspaceId.trim()) return [];
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) {
+      throw new Error('P2P booking conflict page limit must be between 1 and 1000.');
+    }
+    await this.openStore();
+    if (!this.idb) throw new Error('P2P conflict registry requires IndexedDB.');
+    const tx = this.idb.transaction('p2pBookingConflicts', 'readonly');
+    const range = IDBKeyRange.bound([workspaceId, ''], [workspaceId, '\uffff']);
+    const request = tx.objectStore('p2pBookingConflicts').index('workspaceDetectedAt').openCursor(range, 'prev');
+    const rows = await new Promise<BookingConflictSnapshot[]>((resolve, reject) => {
+      const result: BookingConflictSnapshot[] = [];
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor || result.length >= limit) { resolve(result); return; }
+        const item = cursor.value as BookingConflictSnapshot;
+        if (!status || item.status === status) result.push(item);
+        cursor.continue();
+      };
+      request.onerror = () => reject(request.error ?? new Error('Unable to read P2P booking conflicts.'));
+    });
+    await waitForTransactionCompletion(tx, 'getP2pBookingConflicts');
+    return rows;
   }
 
   private applyIndexedDbP2pProjection(
@@ -1548,7 +1981,7 @@ class IndexedDbStore {
     operation: P2pOperation,
     payload: Record<string, unknown> | null,
     createdAt: string,
-    onQueued?: () => void,
+    onQueued?: (event?: P2pEvent) => void,
   ): void {
     const metaStore = tx.objectStore('p2pMeta');
     const clockStore = tx.objectStore('p2pClock');
@@ -1595,7 +2028,7 @@ class IndexedDbStore {
         for (const [clockNodeId, sequence] of Object.entries(event.clock)) {
           clockStore.put({ workspaceId, nodeId: clockNodeId, sequence });
         }
-        onQueued?.();
+        onQueued?.(event);
       } catch (error) {
         tx.abort();
         throw error;
