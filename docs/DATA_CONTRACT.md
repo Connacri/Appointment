@@ -654,6 +654,29 @@ is an intentional fail-closed limitation, not a completed receiving workflow.
 Regression coverage: `tests/purchaseOrderReceiptSafety.test.ts`.
 
 
+### Atomic stock command boundary
+
+Manual stock entries/exits, physical inventory adjustments, item creation (including opening
+balance), standard-catalog seeding and room replenishment MUST update the local stock projection,
+append the corresponding stock movement and persist the replication intent in one strict
+IndexedDB transaction. React state and legacy localStorage mirrors are updated only after commit.
+A failed transaction MUST leave both stock quantity and movement ledger unchanged.
+
+Every quantity mutation is calculated against the latest projection read inside the transaction.
+Negative stock is rejected; room replenishment is all-or-nothing and MUST NOT silently clamp
+insufficient stock to zero. Physical inventory counts are absolute counts: the movement delta is
+computed from the latest committed quantity, and a zero delta produces no ledger row.
+
+The local P2P/workspace projection contains the final stock quantity. The Supabase Outbox stock
+item payload deliberately retains the pre-movement quantity because the append-only stock
+movement RPC applies the delta remotely. Sending the final quantity and the movement together
+would double-apply the same stock change. Purchase-order receipt follows the same split between
+the final local projection and the pre-movement cloud stock payload.
+
+When no authenticated workspace exists, the same stock projection and movement rows are written
+atomically to local-only IndexedDB storage. This is durable local operation, not P2P replication.
+Regression coverage: `tests/stockTransactions.test.ts` and `tests/purchaseOrderReceiptSafety.test.ts`.
+
 ### Atomic purchase-order receipt command
 
 Purchase-order receipt is implemented as a single local command. The command validates every

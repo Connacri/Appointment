@@ -21,7 +21,7 @@ import {
   InvoiceItem,
   DocumentType,
 } from '../types/booking';
-import { applyStockDeductions, type StockDeductionLine } from '../utils/stockProcurement';
+import type { StockDeductionLine } from '../utils/stockProcurement';
 import { buildPurchaseOrderReceiptPlan } from '../utils/purchaseOrderReceipt';
 import {
   buildStockDeltaMutations,
@@ -852,22 +852,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): Promise<Array<{ entity: 'stock_item' | 'stock_movement'; entityId: string; payload: Record<string, unknown> }>> => {
     if (mutations.length === 0) return [];
     const workspaceId = workspace.activeWorkspaceId?.trim();
-    let committed: Array<{ entity: 'stock_item' | 'stock_movement'; entityId: string; payload: Record<string, unknown> }>;
+    let committedRows: Awaited<ReturnType<typeof indexedDb.putLocalBusinessEntitiesAtomically>>;
     if (!workspaceId) {
-      committed = await indexedDb.putLocalBusinessEntitiesAtomically(mutations);
+      committedRows = await indexedDb.putLocalBusinessEntitiesAtomically(mutations);
     } else {
       const establishmentId = resolveMutationEstablishmentId();
       if (!establishmentId || establishmentId === 'all') {
         throw new Error('Établissement réel requis pour enregistrer une opération de stock.');
       }
-      committed = await indexedDb.enqueueWorkspaceUpsertsAtomically(
+      committedRows = await indexedDb.enqueueWorkspaceUpsertsAtomically(
         { workspaceId, establishmentId },
         mutations,
         `stock-command-${createMutationId()}`,
       );
       scheduleAutoSync();
     }
-    return committed;
+    return committedRows.map((row) => ({
+      ...row,
+      entity: row.entity as 'stock_item' | 'stock_movement',
+    }));
   };
 
   const queueBusinessDelete = async (
