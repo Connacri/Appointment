@@ -12,8 +12,16 @@ export interface BookingConflictSnapshot {
   startAt: string;
   endAt: string;
   detectedAt: string;
-  status: 'pending';
+  status: 'pending' | 'resolved' | 'rejected';
   reason: 'overlapping_reservations';
+  resolution?: {
+    decision: 'keep_booking' | 'reject_both';
+    chosenBookingId: string | null;
+    actorNodeId: string;
+    reason: string;
+    resolvedAt: string;
+    eventId: string;
+  };
 }
 
 interface BookingPayload {
