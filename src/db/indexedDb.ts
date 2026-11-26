@@ -722,13 +722,14 @@ class IndexedDbStore {
         const nextNodeId = supportsNativeLanDiscovery()
           ? await resetNativeLanNodeIdentity()
           : this.createId();
-        const tx = this.createStrictTransaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'issuedCards', 'resourceGroups', 'eventLogs', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pPeerCursors', 'p2pRecordFrontiers']);
+        const tx = this.createStrictTransaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'localBusinessEntities', 'issuedCards', 'resourceGroups', 'eventLogs', 'p2pEvents', 'p2pClock', 'p2pMeta', 'p2pPeerCursors', 'p2pRecordFrontiers']);
         tx.objectStore('bookings').clear();
         tx.objectStore('invoices').clear();
         tx.objectStore('resources').clear();
         tx.objectStore('outbox').clear();
         tx.objectStore('tombstones').clear();
         tx.objectStore('workspaceEntities').clear();
+        tx.objectStore('localBusinessEntities').clear();
         tx.objectStore('issuedCards').clear();
         tx.objectStore('resourceGroups').clear();
         tx.objectStore('eventLogs').clear();
