@@ -417,3 +417,5 @@ Windows SQLite parity: schema v8 now provides the same bounded outbound event pa
 exact offered-page durable ACK semantics as IndexedDB. Inbound peer cursors and outbound
 peer ACK cursors remain separate. Both adapters retain events received from other peers
 for relay; neither compacts the log before trusted peer membership/checkpoint safety exists.
+
+Windows SQLite schema v8 adds a tested outbound peer cursor and exact-offered-page ACK API, with independent per-peer state and workspace-scoped event selection.

@@ -173,3 +173,5 @@ Outbound pages are bounded to 1–500 events. ACKs are accepted only for the exa
 previously offered and only when the cursor identifies an event in the same workspace.
 Inbound peer cursors remain separate from outbound ACK cursors. Received events share
 the append-only event log and are therefore eligible for relay to other peers.
+
+The Windows SQLite schema-v8 outbound relay implementation uses the same exact-offer ACK rule as IndexedDB; its native regression test covers pagination, stale ACK rejection, and workspace isolation.
