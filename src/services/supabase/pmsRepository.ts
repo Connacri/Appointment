@@ -1,5 +1,10 @@
 import { requireSupabase } from './supabaseClient';
-import type { TimelineBooking, ResourceGroup, ResourceItem, HotelEstablishment, EstablishmentSyncRecord, PmsTask, StockItem, StockMovement } from '../../types/booking';
+import type {
+  TimelineBooking, ResourceGroup, ResourceItem, HotelEstablishment, EstablishmentSyncRecord,
+  PmsTask, StockItem, StockMovement, StockSupplier, PurchaseOrderRecord,
+} from '../../types/booking';
+import type { StaffMemberRecord } from '../../types/roles';
+import type { EstablishmentProfile } from '../../types/establishment';
 import {
   BOOKING_SELECT_COLUMNS,
   fromSupabaseBookingRow,
@@ -438,6 +443,226 @@ export async function listDynamicRates(workspaceId: WorkspaceId, establishmentId
     matrix[row.resource_type][row.rate_date] = Number(row.price);
   }
   return matrix;
+}
+
+
+/** Workspace- and establishment-scoped supplier CRUD. Deletes are tombstones. */
+export async function listStockSuppliers(workspaceId: WorkspaceId, establishmentId: string): Promise<StockSupplier[]> {
+  if (!workspaceId.trim() || !establishmentId.trim()) throw new Error('Workspace et établissement requis.');
+  const db = requireSupabase();
+  const { data, error } = await db.from('stock_suppliers').select('*')
+    .eq('workspace_id', workspaceId).eq('establishment_id', establishmentId)
+    .is('deleted_at', null).order('name');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id, name: row.name, category: row.category,
+    contactName: row.contact_name ?? undefined, phone: row.phone ?? undefined,
+    email: row.email ?? undefined, preferredChannel: row.preferred_channel as StockSupplier['preferredChannel'],
+    notes: row.notes ?? undefined,
+  }));
+}
+
+export async function saveStockSupplier(workspaceId: WorkspaceId, establishmentId: string, supplier: StockSupplier) {
+  if (!workspaceId.trim() || !establishmentId.trim() || !supplier.id.trim() || !supplier.name.trim()) {
+    throw new Error('Workspace, établissement, identifiant et nom fournisseur obligatoires.');
+  }
+  const db = requireSupabase();
+  return unwrap(await db.from('stock_suppliers').upsert({
+    id: supplier.id, workspace_id: workspaceId, establishment_id: establishmentId,
+    name: supplier.name.trim(), category: supplier.category.trim() || 'Général',
+    contact_name: supplier.contactName ?? null, phone: supplier.phone ?? null,
+    email: supplier.email ?? null, preferred_channel: supplier.preferredChannel,
+    notes: supplier.notes ?? null, deleted_at: null,
+  }).select().single());
+}
+
+export async function deleteStockSupplier(workspaceId: WorkspaceId, supplierId: string): Promise<void> {
+  if (!workspaceId.trim() || !supplierId.trim()) throw new Error('Workspace et fournisseur requis.');
+  const db = requireSupabase();
+  const now = new Date().toISOString();
+  const { data, error } = await db.from('stock_suppliers').update({ deleted_at: now })
+    .eq('workspace_id', workspaceId).eq('id', supplierId).is('deleted_at', null).select('id').maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data) return;
+  const { data: tombstone, error: verifyError } = await db.from('stock_suppliers').select('id')
+    .eq('workspace_id', workspaceId).eq('id', supplierId).not('deleted_at', 'is', null).maybeSingle();
+  if (verifyError) throw new Error(verifyError.message);
+  if (!tombstone) throw new Error('Fournisseur absent ou inaccessible dans ce workspace.');
+}
+
+/** Purchase-order CRUD retains the complete line snapshot in JSONB. */
+export async function listPurchaseOrders(workspaceId: WorkspaceId, establishmentId: string): Promise<PurchaseOrderRecord[]> {
+  if (!workspaceId.trim() || !establishmentId.trim()) throw new Error('Workspace et établissement requis.');
+  const db = requireSupabase();
+  const { data, error } = await db.from('purchase_orders').select('*')
+    .eq('workspace_id', workspaceId).eq('establishment_id', establishmentId)
+    .is('deleted_at', null).order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id, orderNumber: row.order_number, createdAt: row.created_at,
+    confirmedAt: row.confirmed_at ?? undefined, sentAt: row.sent_at ?? undefined,
+    sentVia: (row.sent_via ?? undefined) as PurchaseOrderRecord['sentVia'],
+    receivedAt: row.received_at ?? undefined, supplierId: row.supplier_id ?? undefined,
+    supplierName: row.supplier_name, supplierPhone: row.supplier_phone ?? undefined,
+    supplierEmail: row.supplier_email ?? undefined, createdBy: row.created_by,
+    status: row.status as PurchaseOrderRecord['status'], note: row.note ?? undefined,
+    items: Array.isArray(row.items) ? row.items as unknown as PurchaseOrderRecord['items'] : [],
+  }));
+}
+
+export async function savePurchaseOrder(workspaceId: WorkspaceId, establishmentId: string, order: PurchaseOrderRecord) {
+  if (!workspaceId.trim() || !establishmentId.trim() || !order.id.trim() || !order.orderNumber.trim()) {
+    throw new Error('Workspace, établissement, commande et numéro de commande obligatoires.');
+  }
+  if (!Array.isArray(order.items) || order.items.some((item) =>
+    !item.itemId.trim() || !Number.isFinite(item.orderQty) || item.orderQty < 0
+    || !Number.isFinite(item.unitCost) || item.unitCost < 0
+  )) throw new Error('Lignes de commande invalides.');
+  const db = requireSupabase();
+  return unwrap(await db.from('purchase_orders').upsert({
+    id: order.id, workspace_id: workspaceId, establishment_id: establishmentId,
+    order_number: order.orderNumber, supplier_id: order.supplierId ?? null,
+    supplier_name: order.supplierName, supplier_phone: order.supplierPhone ?? null,
+    supplier_email: order.supplierEmail ?? null, created_by: order.createdBy,
+    status: order.status, note: order.note ?? null, items: order.items,
+    confirmed_at: order.confirmedAt ?? null, sent_at: order.sentAt ?? null,
+    sent_via: order.sentVia ?? null, received_at: order.receivedAt ?? null,
+    created_at: order.createdAt, deleted_at: null,
+  }).select().single());
+}
+
+export async function deletePurchaseOrder(workspaceId: WorkspaceId, orderId: string): Promise<void> {
+  if (!workspaceId.trim() || !orderId.trim()) throw new Error('Workspace et commande requis.');
+  const db = requireSupabase();
+  const { data, error } = await db.from('purchase_orders').update({ deleted_at: new Date().toISOString() })
+    .eq('workspace_id', workspaceId).eq('id', orderId).is('deleted_at', null).select('id').maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data) return;
+  const { data: tombstone, error: verifyError } = await db.from('purchase_orders').select('id')
+    .eq('workspace_id', workspaceId).eq('id', orderId).not('deleted_at', 'is', null).maybeSingle();
+  if (verifyError) throw new Error(verifyError.message);
+  if (!tombstone) throw new Error('Commande absente ou inaccessible dans ce workspace.');
+}
+
+/** Staff HR records are scoped to one physical establishment. */
+export async function listStaffMembers(workspaceId: WorkspaceId, establishmentId: string): Promise<StaffMemberRecord[]> {
+  if (!workspaceId.trim() || !establishmentId.trim()) throw new Error('Workspace et établissement requis.');
+  const db = requireSupabase();
+  const { data, error } = await db.from('staff_members').select('*')
+    .eq('workspace_id', workspaceId).eq('establishment_id', establishmentId)
+    .is('deleted_at', null).order('full_name');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id, fullName: row.full_name, phone: row.phone ?? undefined,
+    roleId: row.role_id as StaffMemberRecord['roleId'], assignment: row.assignment,
+    shift: row.shift as StaffMemberRecord['shift'],
+    defaultTasks: Array.isArray(row.default_tasks) ? row.default_tasks as string[] : [],
+    status: row.employment_status as StaffMemberRecord['status'],
+    hiredAt: row.hired_at,
+    history: Array.isArray(row.history) ? row.history as unknown as StaffMemberRecord['history'] : [],
+  }));
+}
+
+export async function saveStaffMember(workspaceId: WorkspaceId, establishmentId: string, member: StaffMemberRecord) {
+  if (!workspaceId.trim() || !establishmentId.trim() || !member.id.trim() || !member.fullName.trim()) {
+    throw new Error('Workspace, établissement, identifiant et nom du membre du personnel obligatoires.');
+  }
+  const db = requireSupabase();
+  return unwrap(await db.from('staff_members').upsert({
+    id: member.id, workspace_id: workspaceId, establishment_id: establishmentId,
+    full_name: member.fullName.trim(), phone: member.phone ?? null, role_id: member.roleId,
+    assignment: member.assignment, shift: member.shift, default_tasks: member.defaultTasks,
+    employment_status: member.status, hired_at: member.hiredAt, history: member.history,
+    deleted_at: null,
+  }).select().single());
+}
+
+export async function deleteStaffMember(workspaceId: WorkspaceId, memberId: string): Promise<void> {
+  if (!workspaceId.trim() || !memberId.trim()) throw new Error('Workspace et membre du personnel requis.');
+  const db = requireSupabase();
+  const { data, error } = await db.from('staff_members').update({ deleted_at: new Date().toISOString() })
+    .eq('workspace_id', workspaceId).eq('id', memberId).is('deleted_at', null).select('id').maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data) return;
+  const { data: tombstone, error: verifyError } = await db.from('staff_members').select('id')
+    .eq('workspace_id', workspaceId).eq('id', memberId).not('deleted_at', 'is', null).maybeSingle();
+  if (verifyError) throw new Error(verifyError.message);
+  if (!tombstone) throw new Error('Membre du personnel absent ou inaccessible dans ce workspace.');
+}
+
+/** Stock movements are append-only; retries must match the immutable original row. */
+export async function saveStockMovement(workspaceId: WorkspaceId, establishmentId: string, movement: StockMovement): Promise<void> {
+  if (!workspaceId.trim() || !establishmentId.trim() || !movement.id.trim() || !movement.itemId.trim()
+    || !Number.isFinite(movement.delta) || movement.delta === 0) {
+    throw new Error('Mouvement de stock invalide ou non rattaché à un établissement.');
+  }
+  const db = requireSupabase();
+  const row = {
+    id: movement.id, workspace_id: workspaceId, establishment_id: establishmentId,
+    item_id: movement.itemId, timestamp: movement.timestamp, delta: movement.delta,
+    reason: movement.reason, room: movement.room ?? null, actor_name: movement.user,
+  };
+  const readExisting = async () => {
+    const { data, error } = await db.from('stock_movements').select('id,workspace_id,establishment_id,item_id,timestamp,delta,reason,room,actor_name')
+      .eq('workspace_id', workspaceId).eq('id', movement.id).maybeSingle();
+    if (error) throw new Error(error.message);
+    return data;
+  };
+  const existing = await readExisting();
+  if (existing) {
+    const same = existing.establishment_id === establishmentId && existing.item_id === row.item_id
+      && existing.timestamp === row.timestamp && Number(existing.delta) === row.delta
+      && existing.reason === row.reason && existing.room === row.room && existing.actor_name === row.actor_name;
+    if (!same) throw new Error('Conflit d’idempotence : cet identifiant de mouvement existe avec un contenu différent.');
+    return;
+  }
+  const { error } = await db.from('stock_movements').insert(row);
+  if (!error) return;
+  if (error.code !== '23505') throw new Error(error.message);
+  const raced = await readExisting();
+  if (!raced || raced.establishment_id !== establishmentId || raced.item_id !== row.item_id
+    || raced.timestamp !== row.timestamp || Number(raced.delta) !== row.delta
+    || raced.reason !== row.reason || raced.room !== row.room || raced.actor_name !== row.actor_name) {
+    throw new Error('Conflit d’idempotence après une insertion concurrente du mouvement.');
+  }
+}
+
+/** Profile fields live in establishments.settings so there is one canonical establishment row. */
+export async function saveEstablishmentProfile(
+  workspaceId: WorkspaceId,
+  establishmentId: string,
+  profile: EstablishmentProfile,
+): Promise<void> {
+  if (!workspaceId.trim() || !establishmentId.trim() || profile.id !== establishmentId || !profile.name.trim()) {
+    throw new Error('Le profil doit référencer un établissement réel et nommé.');
+  }
+  const db = requireSupabase();
+  const { data, error } = await db.from('establishments').select('settings')
+    .eq('workspace_id', workspaceId).eq('id', establishmentId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('Établissement absent ou inaccessible dans ce workspace.');
+  const settings = data.settings && typeof data.settings === 'object' && !Array.isArray(data.settings)
+    ? data.settings as Record<string, unknown> : {};
+  const { error: updateError } = await db.from('establishments').update({
+    settings: { ...settings, appointmentProfile: profile },
+  }).eq('workspace_id', workspaceId).eq('id', establishmentId);
+  if (updateError) throw new Error(updateError.message);
+}
+
+export async function listEstablishmentProfile(
+  workspaceId: WorkspaceId,
+  establishmentId: string,
+): Promise<EstablishmentProfile | null> {
+  if (!workspaceId.trim() || !establishmentId.trim()) return null;
+  const db = requireSupabase();
+  const { data, error } = await db.from('establishments').select('settings')
+    .eq('workspace_id', workspaceId).eq('id', establishmentId).maybeSingle();
+  if (error) throw new Error(error.message);
+  const settings = data?.settings;
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null;
+  const profile = (settings as Record<string, unknown>).appointmentProfile;
+  if (!profile || typeof profile !== 'object' || Array.isArray(profile)) return null;
+  return profile as EstablishmentProfile;
 }
 
 export async function syncCardLockMdbToSupabase(
