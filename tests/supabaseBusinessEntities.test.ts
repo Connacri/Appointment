@@ -107,9 +107,9 @@ test('workspace task and establishment UI projections wait for durable outbox co
   assert.match(appContext, /await indexedDb.deleteLocalBusinessEntity\(entity, entityId\)/);
   assert.match(appContext, /getLocalBusinessEntities\(\)/);
   assert.match(appContext, /Réception bloquée : la transaction atomique commande/);
-  assert.doesNotMatch(
-    appContext.slice(appContext.indexOf('const markPurchaseOrderReceived ='), appContext.indexOf('const setDynamicRate =')),
-    /updatePurchaseOrder\\(/,
+  assert.equal(
+    appContext.slice(appContext.indexOf('const markPurchaseOrderReceived ='), appContext.indexOf('const setDynamicRate =')).includes('updatePurchaseOrder('),
+    false,
   );
   assert.equal(appContext.includes("localStorage.setItem('omnibook_pms_tasks'"), false);
   assert.equal(appContext.includes("localStorage.setItem('omnibook_establishment_profile'"), false);
