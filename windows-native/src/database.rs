@@ -2190,7 +2190,7 @@ mod tests {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(schema_version, 7);
+        assert_eq!(schema_version, 8);
     }
 
     #[test]
@@ -2513,7 +2513,7 @@ mod tests {
     }
 
     #[test]
-    fn local_schema_v7_tracks_inbound_p2p_cursors_and_conflict_frontiers() {
+    fn local_schema_v8_tracks_inbound_cursors_outbound_acks_and_conflict_frontiers() {
         let db = database();
         let outbox_sql: String = db
             .connection
@@ -2577,7 +2577,15 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(version, 7);
+        let peer_acks_exists: bool = db
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='p2p_peer_acks')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, 8);
         assert!(outbox_sql.contains("'conflict'"));
         assert!(
             entity_records_exists,
@@ -2602,6 +2610,10 @@ mod tests {
         assert!(
             record_frontiers_exists,
             "v7 must persist resolved and conflicting event frontiers"
+        );
+        assert!(
+            peer_acks_exists,
+            "v8 must persist per-peer outbound acknowledgement cursors"
         );
     }
 

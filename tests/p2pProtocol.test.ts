@@ -355,6 +355,7 @@ test('a concurrent delete and update remains a conflict, not silent resurrection
 
 test('outbound peer acknowledgements must match the exact offered cursor', () => {
   assert.equal(validateP2pAckAdvance(0, 100, 100), true);
+  assert.equal(validateP2pAckAdvance(0, 500, 500), true);
   assert.equal(validateP2pAckAdvance(100, 100, 100), true);
   assert.equal(validateP2pAckAdvance(7, 7, 7), true);
   assert.equal(validateP2pAckAdvance(0, 100, 99), false);
