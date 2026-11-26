@@ -123,10 +123,20 @@ Implemented on branch `feat/p2p-integrity-secure-transport`:
 - Regression tests cover different booking IDs, distinct rooms, cancellation,
   symmetric turnover, stale causal versions and arrival-order-independent IDs.
 
-Not yet implemented: explicit conflict decisions and their replicated resolution
-events, local UI integration, Windows SQLite parity, authenticated pairing/revocation,
-live Windows↔Android transport, anti-entropy, and physical multi-device restart tests.
-This slice is not a release gate pass and must not be described as production-ready.
+Additional progress: explicit decisions are now recorded as immutable `booking_conflict`
+P2P events. A `keep_booking` decision cancels the losing booking; `reject_both` cancels
+both. Each cancellation is committed to the local booking projection, workspace projection,
+cloud Outbox and P2P event log in the same strict IndexedDB transaction. The resolution
+event references both source event IDs and every cancellation event ID. Receiving peers
+accept the resolution only after the cancellation events are present in the current booking
+frontiers and the resolution vector clock causally includes those events. Pending conflicts
+are rechecked after subsequent inbound batches, so out-of-order resolution delivery remains
+pending until its prerequisites arrive.
+
+Not yet implemented: a user-facing conflict-resolution UI, Windows SQLite conflict registry
+and resolution parity, authenticated pairing/revocation, live Windows↔Android transport,
+anti-entropy, and physical multi-device restart tests. This slice is not a release gate pass
+and must not be described as production-ready.
 
 ### Phase 3 — Windows ↔ Android secure transport
 - Implement explicit pairing, authentication, event origin signatures and workspace
