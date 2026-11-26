@@ -431,3 +431,5 @@ IndexedDB schema v12 cleans any third-party events left in the outbound queue by
 The outbound page scanners skip third-party-origin events and advance their cursor across those rows, while sending only the local node's own events until event-origin signatures are available.
 
 The Windows SQLite inbound adapter now mirrors the IndexedDB trust boundary: event nodeId must equal the authenticated peer ID, per-event size is capped at 1 MiB, and aggregate page size at 4 MiB. A forged origin or oversized page is rejected before any event or cursor mutation.
+
+Windows SQLite schema v9 adds an index on (workspace_id, node_id, local_order); outbound paging filters at SQL level to the local installation node. This avoids scanning/forwarding third-party events and keeps cursor progression aligned with the last local event sent.

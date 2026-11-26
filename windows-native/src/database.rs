@@ -188,7 +188,7 @@ fn backup_before_migration_if_needed(
     Ok(Some(backup_path))
 }
 
-const CURRENT_SCHEMA_VERSION: i64 = 8;
+const CURRENT_SCHEMA_VERSION: i64 = 9;
 const MAX_P2P_EVENT_BYTES: usize = 1024 * 1024;
 const MAX_P2P_BATCH_BYTES: usize = 4 * 1024 * 1024;
 
@@ -350,6 +350,7 @@ impl PmsDatabase {
         database_p2p::migrate(&self.connection)?;
         database_p2p::migrate_v7(&self.connection)?;
         database_p2p::migrate_v8(&self.connection)?;
+        database_p2p::migrate_v9(&self.connection)?;
         Ok(())
     }
 
@@ -2206,7 +2207,7 @@ mod tests {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(schema_version, 8);
+        assert_eq!(schema_version, 9);
     }
 
     #[test]
@@ -2529,7 +2530,7 @@ mod tests {
     }
 
     #[test]
-    fn local_schema_v8_tracks_inbound_cursors_outbound_acks_and_conflict_frontiers() {
+    fn local_schema_v9_tracks_inbound_cursors_outbound_acks_and_node_order_index() {
         let db = database();
         let outbox_sql: String = db
             .connection
@@ -2601,7 +2602,15 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(version, 8);
+        let node_order_index_exists: bool = db
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_p2p_events_workspace_node_order')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, 9);
         assert!(outbox_sql.contains("'conflict'"));
         assert!(
             entity_records_exists,
@@ -2630,6 +2639,10 @@ mod tests {
         assert!(
             peer_acks_exists,
             "v8 must persist per-peer outbound acknowledgement cursors"
+        );
+        assert!(
+            node_order_index_exists,
+            "v9 must index locally authored events for bounded outbound paging"
         );
     }
 

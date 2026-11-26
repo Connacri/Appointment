@@ -142,6 +142,25 @@ pub(super) fn migrate_v8(connection: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+pub(super) fn migrate_v9(connection: &Connection) -> rusqlite::Result<()> {
+    let applied: bool = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=9)",
+        [],
+        |row| row.get(0),
+    )?;
+    if applied {
+        return Ok(());
+    }
+    connection.execute_batch(
+        "BEGIN IMMEDIATE;
+         CREATE INDEX idx_p2p_events_workspace_node_order
+           ON p2p_events(workspace_id, node_id, local_order);
+         INSERT OR IGNORE INTO schema_migrations(version) VALUES (9);
+         COMMIT;",
+    )?;
+    Ok(())
+}
+
 pub(super) fn append_received_event_in_transaction(
     tx: &Transaction<'_>,
     event: &P2pEvent,
@@ -270,8 +289,8 @@ impl PmsDatabase {
             .connection
             .prepare(
                 "SELECT local_order, event_json FROM p2p_events
-                 WHERE workspace_id=?1 AND local_order>?2
-                 ORDER BY local_order ASC LIMIT ?3",
+                 WHERE workspace_id=?1 AND node_id=?3 AND local_order>?2
+                 ORDER BY local_order ASC LIMIT ?4",
             )
             .map_err(|e| e.to_string())?;
         let rows = statement
@@ -329,7 +348,7 @@ impl PmsDatabase {
             .map_err(|e| e.to_string())?;
         let rows = statement
             .query_map(
-                params![workspace_id, expected_cursor, i64::from(limit) + 1],
+                params![workspace_id, expected_cursor, local_node_id, i64::from(limit) + 1],
                 |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
             )
             .map_err(|e| e.to_string())?;
@@ -337,9 +356,9 @@ impl PmsDatabase {
         let mut page_bytes = 0usize;
         let mut has_more = false;
         let mut next_cursor = expected_cursor;
-        for (scanned_count, row) in rows.enumerate() {
+        for row in rows {
             let (local_order, json) = row.map_err(|e| e.to_string())?;
-            if scanned_count >= limit as usize {
+            if entries.len() >= limit as usize {
                 has_more = true;
                 break;
             }
@@ -353,8 +372,7 @@ impl PmsDatabase {
                 format!("Corrupt P2P event at local order {local_order}: {error}")
             })?;
             if event.node_id != local_node_id {
-                next_cursor = local_order;
-                continue;
+                return Err("Outbound P2P query returned an event from a different node.".into());
             }
             if !entries.is_empty() && page_bytes + event_bytes > MAX_P2P_BATCH_BYTES {
                 has_more = true;
@@ -830,6 +848,15 @@ mod tests {
             P2pOperation::Upsert,
             Some(json!({"guest": "Bob"})),
             "2026-11-23T08:01:00Z",
+        );
+        local_booking_event(
+            &db,
+            "workspace-a",
+            "node-b",
+            "booking-foreign-origin",
+            P2pOperation::Upsert,
+            Some(json!({"guest": "Must not be sent by node-a"})),
+            "2026-11-23T08:02:00Z",
         );
         local_booking_event(
             &db,
