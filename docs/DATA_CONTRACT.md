@@ -104,6 +104,40 @@ Remaining work:
 - Add a durable domain-conflict registry and user-facing resolution workflow.
 - Test each invariant on local commands and inbound P2P application.
 
+### Phase 2 progress — cross-device booking overlap detection (2026-11-26)
+
+Implemented on branch `feat/p2p-integrity-secure-transport`:
+- A pure P2P detector groups immutable booking events by booking ID, retains each
+  booking's causal frontier, and compares different IDs sharing a resource.
+- The detector applies the existing cancelled-status rule, hotel time defaults and
+  symmetric ten-minute turnover. Wall-clock comparison is independent of the host
+  operating-system timezone.
+- IndexedDB schema v13 adds a durable `p2pBookingConflicts` registry. Schema v14 adds
+  a `workspaceResource` index to scope conflict scans to rooms affected by an inbound
+  booking batch rather than loading the full P2P event history.
+- Newly detected conflict snapshots are committed in the same strict IndexedDB
+  transaction as inbound event/projection/frontier changes and the peer cursor. The
+  inbound method resolves only after the transaction commits, so its caller can ACK
+  durable receipt afterward.
+- A paginated-by-limit read API exposes pending conflict snapshots for a future UI.
+- Regression tests cover different booking IDs, distinct rooms, cancellation,
+  symmetric turnover, stale causal versions and arrival-order-independent IDs.
+
+Additional progress: explicit decisions are now recorded as immutable `booking_conflict`
+P2P events. A `keep_booking` decision cancels the losing booking; `reject_both` cancels
+both. Each cancellation is committed to the local booking projection, workspace projection,
+cloud Outbox and P2P event log in the same strict IndexedDB transaction. The resolution
+event references both source event IDs and every cancellation event ID. Receiving peers
+accept the resolution only after the cancellation events are present in the current booking
+frontiers and the resolution vector clock causally includes those events. Pending conflicts
+are rechecked after subsequent inbound batches, so out-of-order resolution delivery remains
+pending until its prerequisites arrive.
+
+Not yet implemented: a user-facing conflict-resolution UI, Windows SQLite conflict registry
+and resolution parity, authenticated pairing/revocation, live Windows↔Android transport,
+anti-entropy, and physical multi-device restart tests. This slice is not a release gate pass
+and must not be described as production-ready.
+
 ### Phase 3 — Windows ↔ Android secure transport
 - Implement explicit pairing, authentication, event origin signatures and workspace
   authorization.
