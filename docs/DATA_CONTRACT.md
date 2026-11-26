@@ -254,3 +254,110 @@ still require a P2P cross-record conflict workflow before global confirmation.
 ### Durable booking command boundary
 
 Booking creation, editing, status transitions, QR check-in and payment confirmation await the IndexedDB transaction before changing React state or displaying success. Workspace-backed writes atomically persist the booking projection, cloud Outbox intent and P2P event. Create, schedule edits and reactivation re-read the bookings store and validate resource/time overlap inside the same read-write transaction, preventing same-device stale-state double booking across tabs. Before workspace authentication, a local-only booking is still durably stored and validated but is not yet queued for cloud or P2P replication. A failed transaction leaves the previous UI projection unchanged. Cross-device concurrent reservations still require a P2P cross-record conflict workflow and must not be silently resolved by last-write-wins.
+
+## Deployment topology and mutation availability policy
+
+The deployment mode is an explicit, versioned establishment setting. It is never inferred
+from the number of peers currently discovered, the number of active sessions, or a failed
+LAN scan.
+
+### Deployment modes
+
+- `SINGLE_DEVICE`: exactly one device is authorized to mutate shared establishment data.
+  That registered device may continue local mutations while both Supabase and P2P are
+  unavailable. Mutations remain in the local durable event log/outbox and are synchronized
+  when a remote path returns. No second device may be silently treated as a single-device
+  installation merely because it is the only visible peer.
+- `MULTI_DEVICE`: more than one device is authorized for the establishment. Mutations
+  require a live coordination authority: Supabase transactional authorization or an
+  authenticated, trusted P2P authority under the agreed coordination protocol. If neither
+  is reachable, the entire application enters read-only mode for shared business data.
+  Local drafts may be retained only if clearly marked non-authoritative and cannot be
+  promoted to confirmed records while isolated.
+
+### Runtime states
+
+- `ONLINE`: a required coordination authority is reachable and has validated the current
+  device membership/configuration epoch.
+- `LOCAL_SINGLE_DEVICE`: the establishment is explicitly configured as single-device,
+  the local device is the registered active device, and local integrity checks pass. Local
+  mutations are allowed without Supabase or P2P.
+- `RECONNECTING`: connectivity has returned, but membership/configuration refresh,
+  anti-entropy, pending-event validation and conflict checks are not complete. Shared
+  mutations remain disabled.
+- `READ_ONLY`: a multi-device installation has no reachable coordination authority, or
+  device trust/configuration cannot be verified. All shared-data mutations are rejected at
+  both UI and repository/domain-command boundaries. Reads of the last local snapshot remain
+  available.
+
+Browser/network online status and LAN discovery are hints only. A successful peer
+announcement is not an authenticated session; an authenticated session is not by itself a
+consensus/coordination grant. A health check must prove that the selected authority can
+accept and durably validate the relevant operation.
+
+### Device registry and controlled topology change
+
+The establishment device registry is versioned and contains at minimum:
+- establishment/workspace scope;
+- deployment mode (`SINGLE_DEVICE` or `MULTI_DEVICE`);
+- monotonically increasing registry/configuration epoch;
+- device ID, public-key fingerprint, authorization state and role for each registered
+  device;
+- the active single-device ID when in `SINGLE_DEVICE`;
+- update timestamp and the administrator/audit event responsible for each change.
+
+Changing `MULTI_DEVICE` to `SINGLE_DEVICE` is an authenticated, explicit administrator
+operation. The administrator selects the one device to retain and revokes all other
+registered devices. The transition is committed as a new registry epoch and an immutable,
+auditable event. The retained device must refresh and verify that epoch before entering
+`LOCAL_SINGLE_DEVICE`.
+
+A device that is partitioned at the moment of revocation cannot be notified instantly.
+Therefore revocation is authoritative at the new registry epoch and must be checked before
+a device can reconnect, pair, submit events, or regain mutation authority. A stale offline
+device may still create local-only data on its own storage, but those events must never be
+accepted as authorized shared mutations after its revocation is observed. Do not claim
+instantaneous remote erasure or instantaneous revocation across a network partition.
+
+Changing back to `MULTI_DEVICE` requires an explicit pairing/authorization flow for every
+new device. A revoked device must not regain trust by restoring an old database backup,
+reusing an installation ID, or replaying old credentials. Key rotation and re-pairing are
+required.
+
+### Enforcement requirements
+
+- Compute the effective runtime state centrally and expose it as a typed capability to UI
+  and domain commands.
+- In `READ_ONLY` and `RECONNECTING`, disable and visually gray every mutation surface,
+  including forms, context menus, keyboard shortcuts, administrative actions and bulk
+  operations. Keep navigation and local reads available.
+- Enforce the same policy below the UI: every shared-data write command/repository must
+  reject mutations unless the current state and registry epoch authorize them. UI disabling
+  alone is not a security or consistency boundary.
+- Recheck authorization inside the same durable transaction that appends the business
+  projection, P2P event and cloud outbox entry. Fail closed if the registry epoch or local
+  trust record is missing, stale, revoked or inconsistent.
+- On reconnect, stay in `RECONNECTING` until the registry epoch is refreshed, trusted peers
+  are authenticated, missing events are repaired, inbound events are validated, and
+  business conflicts are reconciled. Only then restore mutation capabilities.
+- Never infer `SINGLE_DEVICE` from peer absence, network-interface count, or a timeout.
+- Keep CardLock credentials and hardware secrets outside the replicated device registry.
+
+### Required verification
+
+- A genuine single-device installation can create and edit locally while both network paths
+  are unavailable, then sync idempotently after reconnect.
+- A multi-device installation with all peers and Supabase unavailable becomes read-only,
+  even if only one device remains powered on.
+- A multi-device installation does not become single-device after peer discovery timeout,
+  Wi-Fi client isolation, VLAN separation, firewall filtering or a crashed peer.
+- A revoked device cannot pair or submit accepted shared events after it observes the newer
+  registry epoch; stale events from an older epoch are rejected by the authority.
+- A retained device cannot leave `RECONNECTING` before membership refresh, anti-entropy
+  and conflict validation complete.
+- UI and repository/domain-command tests prove that every mutation class is blocked in
+  `READ_ONLY` and `RECONNECTING`, not merely the reservation confirmation button.
+
+This policy defines topology and availability; it does not by itself implement a distributed
+consensus protocol, secure transport, cryptographic device identity, or global room locks.
+Those remain separate release-gated engineering work.
