@@ -17,6 +17,7 @@ import { waitForTransactionCompletion } from './indexedDbTransaction';
 import { runSerialQueue } from './serialQueue';
 import { migrateBookingRecordV7 } from './bookingMigration';
 import { hasBookingScheduleConflict } from '../utils/bookingValidation';
+import { detectP2pBookingConflicts, type BookingConflictSnapshot } from '../services/p2p/bookingConflictDetection';
 import {
   createP2pEvent,
   getP2pRecordState,
@@ -152,7 +153,7 @@ export interface OutboxSummary {
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 12;
+  private dbVersion = 13;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -333,6 +334,12 @@ class IndexedDbStore {
         }
         if (!db.objectStoreNames.contains('p2pPeerAcks')) {
           db.createObjectStore('p2pPeerAcks', { keyPath: ['workspaceId', 'peerId'] });
+        }
+        // v13: durable business-level conflicts across distinct booking IDs.
+        if (!db.objectStoreNames.contains('p2pBookingConflicts')) {
+          const conflicts = db.createObjectStore('p2pBookingConflicts', { keyPath: 'id' });
+          conflicts.createIndex('workspaceStatus', ['workspaceId', 'status'], { unique: false });
+          conflicts.createIndex('workspaceDetectedAt', ['workspaceId', 'detectedAt'], { unique: false });
         }
         if (e.oldVersion > 0 && e.oldVersion < 11 && db.objectStoreNames.contains('p2pEvents')) {
           const upgradeTx = (e.target as IDBOpenDBRequest).transaction;
@@ -873,7 +880,7 @@ class IndexedDbStore {
     await this.openStore();
     if (!this.idb) throw new Error('P2P replication requires IndexedDB; localStorage fallback is unsafe.');
     const tx = this.createStrictTransaction(
-      ['p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pPeerCursors', 'p2pRecordFrontiers', 'outbox',
+      ['p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pPeerCursors', 'p2pRecordFrontiers', 'p2pBookingConflicts', 'outbox',
         'tombstones', 'workspaceEntities', 'bookings', 'resources', 'invoices', 'resourceGroups'],
     );
     const report: P2pApplyReport = {
@@ -948,12 +955,38 @@ class IndexedDbStore {
 
       const applyNext = (records: Array<{ entity: string; entityId: string }>, index: number): void => {
         if (index >= records.length) {
-          tx.objectStore('p2pPeerCursors').put({
-            workspaceId: batch.workspaceId,
-            peerId: batch.peerId,
-            cursor: batch.nextCursor,
-            updatedAt: new Date().toISOString(),
-          });
+          // Persist booking overlap conflicts in the same transaction as the inbound
+          // events and peer cursor. The transport may ACK only after this transaction commits.
+          const bookingEventsRequest = tx.objectStore('p2pEvents').index('workspaceEntity').getAll(
+            IDBKeyRange.bound([batch.workspaceId, 'booking', ''], [batch.workspaceId, 'booking', '\\uffff']),
+          );
+          bookingEventsRequest.onsuccess = () => {
+            const conflicts = detectP2pBookingConflicts(
+              bookingEventsRequest.result as P2pEvent[],
+            );
+            const conflictStore = tx.objectStore('p2pBookingConflicts');
+            const persistNext = (conflictIndex: number): void => {
+              if (conflictIndex >= conflicts.length) {
+                tx.objectStore('p2pPeerCursors').put({
+                  workspaceId: batch.workspaceId,
+                  peerId: batch.peerId,
+                  cursor: batch.nextCursor,
+                  updatedAt: new Date().toISOString(),
+                });
+                return;
+              }
+              const conflict = conflicts[conflictIndex];
+              const existingRequest = conflictStore.get(conflict.id);
+              existingRequest.onsuccess = () => {
+                // Preserve any explicit resolution already recorded for this exact pair.
+                if (!existingRequest.result) conflictStore.put(conflict);
+                persistNext(conflictIndex + 1);
+              };
+              existingRequest.onerror = abort;
+            };
+            persistNext(0);
+          };
+          bookingEventsRequest.onerror = abort;
           return;
         }
         const record = records[index];
@@ -1036,6 +1069,31 @@ class IndexedDbStore {
 
     await waitForTransactionCompletion(tx, 'applyReceivedP2pBatch');
     return report;
+  }
+
+  /** List durable cross-ID booking conflicts for the conflict-resolution UI. */
+  public async getP2pBookingConflicts(
+    workspaceId: string,
+    status?: 'pending' | 'resolved' | 'rejected',
+    limit = 200,
+  ): Promise<BookingConflictSnapshot[]> {
+    if (!workspaceId.trim()) return [];
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) {
+      throw new Error('P2P booking conflict page limit must be between 1 and 1000.');
+    }
+    await this.openStore();
+    if (!this.idb) throw new Error('P2P conflict registry requires IndexedDB.');
+    const tx = this.idb.transaction('p2pBookingConflicts', 'readonly');
+    const request = tx.objectStore('p2pBookingConflicts').getAll();
+    const rows = await new Promise<BookingConflictSnapshot[]>((resolve, reject) => {
+      request.onsuccess = () => resolve((request.result as BookingConflictSnapshot[])
+        .filter((item) => item.workspaceId === workspaceId && (!status || item.status === status))
+        .sort((a, b) => b.detectedAt.localeCompare(a.detectedAt))
+        .slice(0, limit));
+      request.onerror = () => reject(request.error ?? new Error('Unable to read P2P booking conflicts.'));
+    });
+    await waitForTransactionCompletion(tx, 'getP2pBookingConflicts');
+    return rows;
   }
 
   private applyIndexedDbP2pProjection(
