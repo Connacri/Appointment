@@ -6,9 +6,13 @@ import type {
   ResourceGroup,
   ResourceItem,
   StockItem,
+  StockMovement,
+  StockSupplier,
+  PurchaseOrderRecord,
   TimelineBooking,
 } from '../../types/booking';
 import type { EstablishmentProfile } from '../../types/establishment';
+import type { StaffMemberRecord } from '../../types/roles';
 import { mergeCloudStateWithLocal, type RemoteBookingTombstone } from './cloudRecovery';
 import type { SyncProgressEvent } from './syncLog';
 
@@ -45,6 +49,11 @@ export interface PulledSupabaseSnapshot {
   tasks: PmsTask[];
   stockItems: StockItem[];
   dynamicRates: Record<string, Record<string, number>>;
+  stockMovements: StockMovement[];
+  suppliers: StockSupplier[];
+  purchaseOrders: PurchaseOrderRecord[];
+  staffMembers: StaffMemberRecord[];
+  establishmentProfile: EstablishmentProfile | null;
 }
 
 export interface SupabaseSyncAdapter {
@@ -90,6 +99,16 @@ export interface SupabaseSyncAdapter {
     establishmentId: string,
     item: StockItem,
   ) => Promise<void>;
+  pushStockItemDelete?: (workspaceId: string, itemId: string) => Promise<void>;
+  pushTaskDelete?: (workspaceId: string, taskId: string) => Promise<void>;
+  pushStockMovementUpsert?: (workspaceId: string, establishmentId: string, movement: StockMovement) => Promise<void>;
+  pushSupplierUpsert?: (workspaceId: string, establishmentId: string, supplier: StockSupplier) => Promise<void>;
+  pushSupplierDelete?: (workspaceId: string, supplierId: string) => Promise<void>;
+  pushPurchaseOrderUpsert?: (workspaceId: string, establishmentId: string, order: PurchaseOrderRecord) => Promise<void>;
+  pushPurchaseOrderDelete?: (workspaceId: string, orderId: string) => Promise<void>;
+  pushStaffMemberUpsert?: (workspaceId: string, establishmentId: string, member: StaffMemberRecord) => Promise<void>;
+  pushStaffMemberDelete?: (workspaceId: string, memberId: string) => Promise<void>;
+  pushEstablishmentProfileUpsert?: (workspaceId: string, establishmentId: string, profile: EstablishmentProfile) => Promise<void>;
   pullRemoteState: (workspaceId: string) => Promise<PulledSupabaseSnapshot>;
 }
 
@@ -127,6 +146,10 @@ export interface RunSupabaseSyncResult {
   remoteTasks: PmsTask[];
   remoteStockItems: StockItem[];
   remoteDynamicRates: Record<string, Record<string, number>>;
+  remoteStockMovements: StockMovement[];
+  remoteSuppliers: StockSupplier[];
+  remotePurchaseOrders: PurchaseOrderRecord[];
+  remoteStaffMembers: StaffMemberRecord[];
   recoveredProfile: Partial<EstablishmentProfile> | null;
   warnings: string[];
   skippedReason?: 'offline' | 'unconfigured' | 'unauthenticated' | 'no_workspace';
@@ -152,6 +175,11 @@ const ENTITY_PUSH_PRIORITY: Record<OutboxEntity, number> = {
   booking: 3,
   task: 4,
   stock_item: 5,
+  stock_movement: 6,
+  supplier: 7,
+  purchase_order: 8,
+  staff_member: 9,
+  establishment_profile: 10,
 };
 
 export function computeBackoffIso(attempts: number, nowMs = Date.now()): string {
@@ -337,6 +365,10 @@ export async function runSupabaseSync({
     remoteTasks: [],
     remoteStockItems: [],
     remoteDynamicRates: {},
+    remoteStockMovements: [],
+    remoteSuppliers: [],
+    remotePurchaseOrders: [],
+    remoteStaffMembers: [],
     recoveredProfile: null,
   };
 
@@ -660,8 +692,63 @@ export async function runSupabaseSync({
           }
           await adapter.pushStockItemUpsert(workspaceId, establishmentId, payload);
           await acknowledgePush(record);
+        } else if (record.entity === 'task' && record.operation === 'delete') {
+          if (!adapter.pushTaskDelete) throw new Error('Suppression des tâches cloud non configurée.');
+          await adapter.pushTaskDelete(workspaceId, record.entityId);
+          await acknowledgePush(record);
+        } else if (record.entity === 'stock_item' && record.operation === 'delete') {
+          if (!adapter.pushStockItemDelete) throw new Error('Suppression des articles stock cloud non configurée.');
+          await adapter.pushStockItemDelete(workspaceId, record.entityId);
+          await acknowledgePush(record);
+        } else if (record.entity === 'stock_movement') {
+          if (record.operation !== 'upsert') throw new Error('Les mouvements de stock sont append-only.');
+          const payload = record.payload as unknown as StockMovement | null;
+          const establishmentId = resolveEstablishmentId({ record, selectedEstablishmentId, localGroups, remoteGroups: prefetchedRemote?.groups ?? [], remoteEstablishments: prefetchedRemote?.establishments ?? [], defaultEstablishmentId });
+          if (!payload || !establishmentId || !adapter.pushStockMovementUpsert) throw new Error('Mouvement stock ou dispatcher cloud manquant.');
+          await adapter.pushStockMovementUpsert(workspaceId, establishmentId, payload);
+          await acknowledgePush(record);
+        } else if (record.entity === 'supplier') {
+          const establishmentId = resolveEstablishmentId({ record, selectedEstablishmentId, localGroups, remoteGroups: prefetchedRemote?.groups ?? [], remoteEstablishments: prefetchedRemote?.establishments ?? [], defaultEstablishmentId });
+          if (record.operation === 'delete') {
+            if (!adapter.pushSupplierDelete) throw new Error('Suppression fournisseur cloud non configurée.');
+            await adapter.pushSupplierDelete(workspaceId, record.entityId);
+          } else {
+            const payload = record.payload as unknown as StockSupplier | null;
+            if (!payload || !establishmentId || !adapter.pushSupplierUpsert) throw new Error('Fournisseur ou dispatcher cloud manquant.');
+            await adapter.pushSupplierUpsert(workspaceId, establishmentId, payload);
+          }
+          await acknowledgePush(record);
+        } else if (record.entity === 'purchase_order') {
+          const establishmentId = resolveEstablishmentId({ record, selectedEstablishmentId, localGroups, remoteGroups: prefetchedRemote?.groups ?? [], remoteEstablishments: prefetchedRemote?.establishments ?? [], defaultEstablishmentId });
+          if (record.operation === 'delete') {
+            if (!adapter.pushPurchaseOrderDelete) throw new Error('Suppression commande cloud non configurée.');
+            await adapter.pushPurchaseOrderDelete(workspaceId, record.entityId);
+          } else {
+            const payload = record.payload as unknown as PurchaseOrderRecord | null;
+            if (!payload || !establishmentId || !adapter.pushPurchaseOrderUpsert) throw new Error('Commande achat ou dispatcher cloud manquant.');
+            await adapter.pushPurchaseOrderUpsert(workspaceId, establishmentId, payload);
+          }
+          await acknowledgePush(record);
+        } else if (record.entity === 'staff_member') {
+          const establishmentId = resolveEstablishmentId({ record, selectedEstablishmentId, localGroups, remoteGroups: prefetchedRemote?.groups ?? [], remoteEstablishments: prefetchedRemote?.establishments ?? [], defaultEstablishmentId });
+          if (record.operation === 'delete') {
+            if (!adapter.pushStaffMemberDelete) throw new Error('Suppression RH cloud non configurée.');
+            await adapter.pushStaffMemberDelete(workspaceId, record.entityId);
+          } else {
+            const payload = record.payload as unknown as StaffMemberRecord | null;
+            if (!payload || !establishmentId || !adapter.pushStaffMemberUpsert) throw new Error('Membre du personnel ou dispatcher cloud manquant.');
+            await adapter.pushStaffMemberUpsert(workspaceId, establishmentId, payload);
+          }
+          await acknowledgePush(record);
+        } else if (record.entity === 'establishment_profile') {
+          if (record.operation !== 'upsert' || !adapter.pushEstablishmentProfileUpsert) throw new Error('Profil établissement cloud non configuré.');
+          const payload = record.payload as unknown as EstablishmentProfile | null;
+          const establishmentId = resolveEstablishmentId({ record, selectedEstablishmentId, localGroups, remoteGroups: prefetchedRemote?.groups ?? [], remoteEstablishments: prefetchedRemote?.establishments ?? [], defaultEstablishmentId }) ?? payload?.id;
+          if (!payload || !establishmentId || payload.id !== establishmentId) throw new Error('Profil établissement invalide.');
+          await adapter.pushEstablishmentProfileUpsert(workspaceId, establishmentId, payload);
+          await acknowledgePush(record);
         } else {
-          throw new Error(`Type d’opération Outbox non pris en charge : ${record.entity}/${record.operation}`);
+          throw new Error(`Type d’opération Outbox non prise en charge : ${record.entity}/${record.operation}`);
         }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : 'Échec d’envoi vers Supabase';
