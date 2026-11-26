@@ -629,7 +629,10 @@ Do not treat the callback's synchronous return value as a persistence
 acknowledgement: the legacy context API still returns created records
 synchronously for compatibility, while the UI state commit is asynchronous.
 Callers requiring a user-visible completion result must be migrated to an
-explicit Promise-returning command API before presenting a success toast.
+explicit Promise-returning command API before presenting a success toast. The
+current AppContext boundary covers tasks, suppliers, purchase orders, staff
+records and the establishment profile. It does not yet provide an awaited
+completion result to the calling component.
 
 Stock quantity changes, stock movement batches, purchase-order receiving,
 resource/booking mutations and invoice/dynamic-rate persistence are not covered
