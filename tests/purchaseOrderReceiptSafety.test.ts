@@ -22,7 +22,8 @@ const order: PurchaseOrderRecord = {
 };
 
 test('purchase receipt aggregates duplicate lines and emits matching stock movements', () => {
-  const plan = buildPurchaseOrderReceiptPlan(order, stock, 'Admin', '2026-11-26T12:00:00.000Z', () => 'movement-id');
+  let movementSequence = 0;
+  const plan = buildPurchaseOrderReceiptPlan(order, stock, 'Admin', '2026-11-26T12:00:00.000Z', () => `movement-${++movementSequence}`);
   assert.equal(plan.purchaseOrder.status, 'received');
   assert.equal(plan.purchaseOrder.receivedAt, '2026-11-26T12:00:00.000Z');
   assert.equal(plan.stockItems.find((item) => item.id === 'soap')?.quantity, 11);
