@@ -662,6 +662,7 @@ append the corresponding stock movement and persist the replication intent in on
 IndexedDB transaction. React state and legacy localStorage mirrors are updated only after commit.
 A failed transaction MUST leave both stock quantity and movement ledger unchanged.
 
+Stock command builders also reject missing item identity, blank item name/unit, invalid monetary/threshold values, and missing operator/timestamp data before opening a transaction.
 Every quantity mutation is calculated against the latest projection read inside the transaction.
 Negative stock is rejected; room replenishment is all-or-nothing and MUST NOT silently clamp
 insufficient stock to zero. Physical inventory counts are absolute counts: the movement delta is

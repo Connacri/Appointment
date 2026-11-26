@@ -56,6 +56,15 @@ test('physical inventory adjustment uses latest quantity and skips a zero-delta 
   assert.equal(movementMutation.skipIfCurrent?.(undefined, new Map([['stock_item:soap', { id: 'soap', quantity: 12 }] ])), true);
 });
 
+test('stock command builders reject missing audit identity and invalid item metadata', () => {
+  assert.throws(() => buildStockItemCreationMutations(
+    { ...soap, id: 'new-soap' }, '', '2026-11-26T12:00:00.000Z', 'movement-invalid',
+  ), /Opérateur, horodatage/);
+  assert.throws(() => buildStockItemCreationMutations(
+    { ...soap, id: 'new-soap', unit: '' }, 'Admin', '2026-11-26T12:00:00.000Z', 'movement-invalid',
+  ), /Données du nouvel article invalides/);
+});
+
 test('new stock item and opening movement use separate local and cloud quantities', () => {
   const item = { ...soap, id: 'new-soap', quantity: 5 };
   const [itemMutation, movementMutation] = buildStockItemCreationMutations(

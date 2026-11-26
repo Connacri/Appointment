@@ -49,7 +49,10 @@ export function buildStockDeltaMutations(input: {
   item: StockItem; delta: number; reason: string; actor: string; timestamp: string; movementId: string; room?: string;
 }): StockAtomicMutation[] {
   const { item, delta, reason, actor, timestamp, movementId, room } = input;
-  if (!Number.isFinite(delta) || delta === 0) throw new Error('La variation de stock doit être un nombre non nul.');
+  if (!item.id.trim() || !item.name.trim() || !Number.isFinite(item.quantity) || item.quantity < 0) {
+    throw new Error('Article ou projection de stock invalide.');
+  }
+  if (!movementId.trim() || !Number.isFinite(delta) || delta === 0) throw new Error('Identifiant ou variation de stock invalide.');
   if (!reason.trim() || !actor.trim() || !Number.isFinite(Date.parse(timestamp))) {
     throw new Error('Motif, opérateur et horodatage sont obligatoires pour un mouvement de stock.');
   }
@@ -80,7 +83,8 @@ export function buildStockItemUpdateMutations(input: {
   updatedItem: StockItem; currentItem: StockItem; actor: string; timestamp: string; movementId: string;
 }): StockAtomicMutation[] {
   const { updatedItem, currentItem, actor, timestamp, movementId } = input;
-  if (!updatedItem.id || updatedItem.quantity < 0 || !Number.isFinite(updatedItem.quantity)
+  if (!updatedItem.id.trim() || !updatedItem.name.trim() || !updatedItem.unit.trim()
+    || updatedItem.quantity < 0 || !Number.isFinite(updatedItem.quantity)
     || updatedItem.minThreshold < 0 || !Number.isFinite(updatedItem.minThreshold)
     || updatedItem.unitCost < 0 || !Number.isFinite(updatedItem.unitCost)) {
     throw new Error('Données article ou quantités invalides.');
@@ -111,10 +115,14 @@ export function buildStockItemUpdateMutations(input: {
 
 /** New item and opening movement are atomic; remote stock starts at zero before the movement RPC. */
 export function buildStockItemCreationMutations(item: StockItem, actor: string, timestamp: string, movementId: string): StockAtomicMutation[] {
-  if (!item.id.trim() || !item.name.trim() || !Number.isFinite(item.quantity) || item.quantity < 0
+  if (!item.id.trim() || !item.name.trim() || !item.unit.trim()
+    || !Number.isFinite(item.quantity) || item.quantity < 0
     || !Number.isFinite(item.minThreshold) || item.minThreshold < 0
     || !Number.isFinite(item.unitCost) || item.unitCost < 0) {
     throw new Error('Données du nouvel article invalides.');
+  }
+  if (!actor.trim() || !Number.isFinite(Date.parse(timestamp)) || !movementId.trim()) {
+    throw new Error('Opérateur, horodatage et identifiant du mouvement initial sont obligatoires.');
   }
   const base = { ...item, quantity: 0 };
   const rows: StockAtomicMutation[] = [{
