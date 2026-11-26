@@ -777,6 +777,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setEstablishmentProfile = (profile: EstablishmentProfile) => {
     const normalized = { ...DEFAULT_ESTABLISHMENT_PROFILE, ...profile };
+    if (normalized.id === 'establishment-draft') {
+      const resolvedId = resolveMutationEstablishmentId();
+      if (resolvedId) normalized.id = resolvedId;
+    }
     const prev = establishmentProfile;
     const changes: Array<{ field: string; before?: string; after?: string }> = [];
     if (prev.name !== normalized.name) changes.push({ field: 'Nom établissement', before: prev.name || '—', after: normalized.name || '—' });
@@ -796,6 +800,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setEstablishmentProfileState(normalized);
     localStorage.setItem('omnibook_establishment_profile', JSON.stringify(normalized));
+    void queueBusinessUpsert('establishment_profile', normalized.id, normalized as unknown as Record<string, unknown>, normalized.id)
+      .catch((error) => reportQueueFailure('establishment_profile', normalized.id, error));
   };
 
   const resolveMutationEstablishmentId = (): string => {
