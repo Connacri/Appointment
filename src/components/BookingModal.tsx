@@ -79,6 +79,7 @@ export const BookingModal: React.FC = () => {
     addBooking,
     checkConflict,
     updateBooking,
+    reassignBookingRoom,
     updateBookingStatus,
     deleteBooking,
     currentBaseDate,
@@ -888,7 +889,7 @@ export const BookingModal: React.FC = () => {
     submitInFlightRef.current = true;
     try {
     const isChangingRoom = !isEditing || selectedBooking?.resourceId !== resourceId;
-    if (activeDomain === 'hotel' && isChangingRoom && (!currentResource || !isRoomReadyForBooking(currentResource.housekeepingStatus))) {
+    if (activeDomain === 'hotel' && !isEditing && isChangingRoom && (!currentResource || !isRoomReadyForBooking(currentResource.housekeepingStatus))) {
       setRoomStatusAlert({ roomName: currentResource?.name ?? '—', status: currentResource?.housekeepingStatus });
       return;
     }
@@ -926,7 +927,7 @@ export const BookingModal: React.FC = () => {
       return;
     }
 
-    if (activeDomain === 'hotel' && checkConflict(resourceId, startDate, effectiveEndDate, selectedBooking?.id, checkInTime, checkOutTime)) {
+    if (!isEditing && activeDomain === 'hotel' && checkConflict(resourceId, startDate, effectiveEndDate, undefined, checkInTime, checkOutTime)) {
       setConflictError('Cette chambre n’est pas disponible sur ce créneau. Vérifiez les heures ou choisissez une autre chambre.');
       return;
     }
@@ -1001,7 +1002,16 @@ export const BookingModal: React.FC = () => {
       };
       const updatedHistory = [...(selectedBooking.modificationHistory || []), historyEntry];
 
-      const updateRes = await updateBooking(selectedBooking.id, {
+      const roomSwapRequired = selectedBooking.resourceId !== resourceId
+        && checkConflict(resourceId, startDate, effectiveEndDate, selectedBooking.id, checkInTime, checkOutTime);
+      if (roomSwapRequired && !window.confirm(
+        language === 'fr'
+          ? 'Cette chambre est déjà attribuée à un autre séjour. Voulez-vous permuter les deux chambres ? Les deux réservations seront contrôlées et enregistrées ensemble.'
+          : language === 'ar'
+            ? 'هذه الغرفة مخصصة لإقامة أخرى. هل تريد تبديل الغرفتين؟ سيتم التحقق من الحجزين وحفظهما معًا.'
+            : 'This room is assigned to another stay. Swap the two rooms? Both bookings will be validated and saved together.'
+      )) return;
+      const updateRes = await reassignBookingRoom(selectedBooking.id, {
         resourceId,
         resourceName: currentResource?.name || selectedBooking.resourceName,
         guestName: guestName.trim(),
