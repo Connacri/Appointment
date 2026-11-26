@@ -44,7 +44,7 @@ test('rejects a swap if a third reservation conflicts with either final assignme
   const b = booking('b', 'r2', '2026-11-26', '2026-11-27');
   const third = booking('c', 'r1', '2026-11-26', '2026-11-27');
   const result = planRoomReassignment([a, b, third], resources, 'a', 'r2');
-  assert.deepEqual(result, { ok: false, reason: 'multiple_occupants' });
+  assert.deepEqual(result, { ok: false, reason: 'target_conflict' });
 });
 
 test('rejects out-of-order rooms and resources from another sector', () => {
