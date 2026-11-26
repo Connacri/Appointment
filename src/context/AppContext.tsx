@@ -2921,6 +2921,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...taskData,
       id: `tsk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     };
+    void queueBusinessUpsert('task', newTask.id, newTask as unknown as Record<string, unknown>)
+      .catch((error) => reportQueueFailure('task', newTask.id, error));
     playSuccessFeedback();
     setTasks((prev) => {
       const updated = [newTask, ...prev];
@@ -2954,6 +2956,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       resolveActorLabel(currentRoleRef.current);
 
     if (targetTask) {
+      const statusTimestamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+      const nextTask: PmsTask = {
+        ...targetTask,
+        status,
+        completedAt: status === 'done' ? statusTimestamp : undefined,
+        completedBy: status === 'done' ? resolvedExecutor : undefined,
+      };
+      void queueBusinessUpsert('task', id, nextTask as unknown as Record<string, unknown>)
+        .catch((error) => reportQueueFailure('task', id, error));
       logEvent({
         category: 'task',
         action: 'task.status_changed',
@@ -3009,6 +3020,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetTask = tasks.find((t) => t.id === taskId);
     const targetSub = targetTask?.subtasks?.find((st) => st.id === subtaskId);
     if (targetTask && targetSub) {
+      const nextTask: PmsTask = {
+        ...targetTask,
+        subtasks: targetTask.subtasks?.map((subtask) =>
+          subtask.id === subtaskId ? { ...subtask, completed: !subtask.completed } : subtask
+        ),
+      };
+      void queueBusinessUpsert('task', taskId, nextTask as unknown as Record<string, unknown>)
+        .catch((error) => reportQueueFailure('task', taskId, error));
       logEvent({
         category: 'task',
         action: 'task.subtask_toggled',
@@ -3035,6 +3054,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteTask = (id: string) => {
+    void queueBusinessDelete('task', id).catch((error) => reportQueueFailure('task', id, error));
     playClickFeedback();
     const targetTask = tasks.find((t) => t.id === id);
     if (targetTask) {
