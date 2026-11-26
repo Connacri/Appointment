@@ -30,7 +30,7 @@ export const isValidBookingDateRange = (startDate: string, endDate: string): boo
   isValidCalendarDate(startDate) && isValidCalendarDate(endDate) && endDate >= startDate;
 
 const bookingTimestamp = (date: string, time: string): number => {
-  if (!isValidCalendarDate(date) || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(time)) {
+  if (!isValidCalendarDate(date) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
     return Number.NaN;
   }
   const [year, month, day] = date.split('-').map(Number);
