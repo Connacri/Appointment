@@ -1818,7 +1818,7 @@ class IndexedDbStore {
       payload: Record<string, unknown>;
       applyToCurrent?: (currentPayload?: Record<string, unknown>) => Record<string, unknown>;
     }>,
-    rejectIfCurrentFieldEquals?:
+    rejectIfCurrentFieldEquals?: {
       entity: OutboxEntity;
       entityId: string;
       field: string;
