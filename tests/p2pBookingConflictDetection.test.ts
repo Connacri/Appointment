@@ -74,7 +74,11 @@ test('uses only the causal frontier of each booking and ignores stale versions',
 test('produces stable conflict identifiers independent of event arrival order', () => {
   const a = stay('A', '2026-12-01', '2026-12-04');
   const b = stay('B', '2026-12-03', '2026-12-05');
-  assert.deepEqual(detectP2pBookingConflicts([a, b]), detectP2pBookingConflicts([b, a]));
+  const detectedAt = '2026-11-26T12:00:00.000Z';
+  assert.deepEqual(
+    detectP2pBookingConflicts([a, b], detectedAt),
+    detectP2pBookingConflicts([b, a], detectedAt),
+  );
 });
 
 test('does not compare bookings across workspace boundaries', () => {
