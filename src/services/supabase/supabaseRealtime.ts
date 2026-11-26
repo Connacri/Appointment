@@ -9,6 +9,9 @@ export const WORKSPACE_REALTIME_TABLES = [
   'pms_tasks',
   'stock_items',
   'dynamic_rates',
+  'stock_suppliers',
+  'purchase_orders',
+  'staff_members',
 ] as const;
 
 /** Subscribe to workspace-scoped business changes. Payloads are deliberately
