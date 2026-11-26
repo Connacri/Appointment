@@ -1454,7 +1454,7 @@ class IndexedDbStore {
     await this.openStore();
     if (!this.idb) throw new Error('P2P conflict registry requires IndexedDB.');
     const tx = this.idb.transaction('p2pBookingConflicts', 'readonly');
-    const range = IDBKeyRange.bound([workspaceId, ''], [workspaceId, '\\uffff']);
+    const range = IDBKeyRange.bound([workspaceId, ''], [workspaceId, '\uffff']);
     const request = tx.objectStore('p2pBookingConflicts').index('workspaceDetectedAt').openCursor(range, 'prev');
     const rows = await new Promise<BookingConflictSnapshot[]>((resolve, reject) => {
       const result: BookingConflictSnapshot[] = [];
