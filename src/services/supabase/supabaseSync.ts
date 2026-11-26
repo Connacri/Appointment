@@ -152,7 +152,6 @@ const ENTITY_PUSH_PRIORITY: Record<OutboxEntity, number> = {
   booking: 3,
   task: 4,
   stock_item: 5,
-  invoice: 6,
 };
 
 export function computeBackoffIso(attempts: number, nowMs = Date.now()): string {
