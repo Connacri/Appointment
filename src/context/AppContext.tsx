@@ -879,41 +879,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       indexedDb.getWorkspaceEntities<PurchaseOrderRecord>(workspaceId, 'purchase_order'),
       indexedDb.getWorkspaceEntities<StaffMemberRecord>(workspaceId, 'staff_member'),
       indexedDb.getWorkspaceEntities<EstablishmentProfile>(workspaceId, 'establishment_profile'),
-    ]).then(([tasksRows, stockRows, movementRows, supplierRows, orderRows, staffRows, profileRows]) => {
+      indexedDb.getTombstones(workspaceId),
+    ]).then(([tasksRows, stockRows, movementRows, supplierRows, orderRows, staffRows, profileRows, tombstones]) => {
       if (cancelled) return;
-      const mergeById = <T extends { id: string }>(local: T[], durable: T[]): T[] => {
-        const rows = new Map(local.map((item) => [item.id, item]));
-        for (const item of durable) rows.set(item.id, item);
+      const mergeById = <T extends { id: string }>(local: T[], durable: T[], entity: string): T[] => {
+        const deletedIds = new Set(tombstones.filter((item) => item.entity === entity).map((item) => item.entityId));
+        const rows = new Map(local.filter((item) => !deletedIds.has(item.id)).map((item) => [item.id, item]));
+        for (const item of durable) if (!deletedIds.has(item.id)) rows.set(item.id, item);
         return [...rows.values()];
       };
       if (tasksRows.length) setTasks((prev) => {
-        const next = mergeById(prev, tasksRows);
+        const next = mergeById(prev, tasksRows, 'task');
         localStorage.setItem('omnibook_pms_tasks', JSON.stringify(next));
         return next;
       });
       if (stockRows.length) setStockItems((prev) => {
-        const next = mergeById(prev, stockRows);
+        const next = mergeById(prev, stockRows, 'stock_item');
         stockItemsRef.current = next;
         localStorage.setItem('omnibook_stock_items', JSON.stringify(next));
         return next;
       });
       if (movementRows.length) setStockMovements((prev) => {
-        const next = mergeById(prev, movementRows).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        const next = mergeById(prev, movementRows, 'stock_movement').sort((a, b) => b.timestamp.localeCompare(a.timestamp));
         localStorage.setItem('omnibook_stock_movements', JSON.stringify(next.slice(0, 200)));
         return next.slice(0, 200);
       });
       if (supplierRows.length) setSuppliers((prev) => {
-        const next = mergeById(prev, supplierRows);
+        const next = mergeById(prev, supplierRows, 'supplier');
         localStorage.setItem('omnibook_stock_suppliers', JSON.stringify(next));
         return next;
       });
       if (orderRows.length) setPurchaseOrders((prev) => {
-        const next = mergeById(prev, orderRows);
+        const next = mergeById(prev, orderRows, 'purchase_order');
         localStorage.setItem('omnibook_purchase_orders', JSON.stringify(next));
         return next;
       });
       if (staffRows.length) setStaffMembers((prev) => {
-        const next = mergeById(prev, staffRows);
+        const next = mergeById(prev, staffRows, 'staff_member');
         localStorage.setItem('omnibook_staff_members', JSON.stringify(next));
         return next;
       });
