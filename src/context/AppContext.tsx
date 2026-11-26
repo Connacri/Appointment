@@ -36,6 +36,7 @@ import {
   initialPmsTasks,
 } from '../data/mockData';
 import { EstablishmentProfile, DEFAULT_ESTABLISHMENT_PROFILE } from '../types/establishment';
+import { mergeRecoveredEstablishmentProfile } from '../utils/establishmentProfileRecovery';
 import { indexedDb } from '../db/indexedDb';
 import { useWorkspace } from '../services/supabase/WorkspaceContext';
 import { isSupabaseConfigured, onSupabaseConfigChange, supabase } from '../services/supabase/supabaseClient';
@@ -2078,20 +2079,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       }
 
-      if (
-        result.recoveredProfile &&
-        !(latestProfileRef.current.name ?? '').trim() &&
-        result.recoveredProfile.name?.trim()
-      ) {
-        const hydratedProfile: EstablishmentProfile = {
-          ...latestProfileRef.current,
-          ...result.recoveredProfile,
-          id: latestProfileRef.current.id === 'establishment-draft'
-            ? (result.remoteEstablishments?.[0]?.id ?? 'establishment-cloud')
-            : latestProfileRef.current.id,
-          updatedAt: new Date().toISOString(),
-        };
-        setEstablishmentProfile(hydratedProfile);
+      if (result.recoveredProfile) {
+        const hydratedProfile = mergeRecoveredEstablishmentProfile(
+          latestProfileRef.current,
+          result.recoveredProfile,
+          result.remoteEstablishments?.[0]?.id,
+          new Date().toISOString(),
+        );
+        if (hydratedProfile) setEstablishmentProfile(hydratedProfile);
       }
 
       return {
