@@ -119,22 +119,22 @@ export const QrPassModal: React.FC<QrPassModalProps> = ({ booking, onClose }) =>
 
   const DomainIcon = getDomainIcon();
 
-  const handleSelfCheckIn = () => {
+  const handleSelfCheckIn = async () => {
     if (isCashPaymentPending) {
       setIsCashFlowOpen(true);
     } else {
-      const res = confirmCheckInAndCashPayment(booking.id, false);
+      const res = await confirmCheckInAndCashPayment(booking.id, false);
       setConfirmationNotice(res.message);
     }
   };
 
-  const handleFinalizeCashPayment = () => {
+  const handleFinalizeCashPayment = async () => {
     if (!Number.isFinite(cashAmountGiven) || cashAmountGiven < booking.totalPrice) {
       setCashAmountInvalid(true);
       return;
     }
     setCashAmountInvalid(false);
-    const res = confirmCheckInAndCashPayment(booking.id, true);
+    const res = await confirmCheckInAndCashPayment(booking.id, true);
     setConfirmationNotice(res.message);
     if (res.success) setIsCashFlowOpen(false);
   };

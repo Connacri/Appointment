@@ -117,12 +117,15 @@ export const MyBookingsView: React.FC = () => {
   };
 
   // Batch 1: Cancel selected bookings
-  const handleBatchCancel = () => {
+  const handleBatchCancel = async () => {
     if (selectedIds.length === 0) return;
     const count = selectedIds.length;
-    selectedIds.forEach((id) => {
-      updateBookingStatus(id, 'cancelled');
-    });
+    const results = await Promise.all(selectedIds.map((id) => updateBookingStatus(id, 'cancelled')));
+    const failed = results.filter((result) => !result.success).length;
+    if (failed > 0) {
+      setBulkNotice(language === 'fr' ? failed + ' réservation(s) n’ont pas pu être annulée(s).' : failed + ' booking(s) could not be cancelled.');
+      return;
+    }
     setSelectedIds([]);
     setIsCancelConfirmOpen(false);
     setBulkNotice(
@@ -200,26 +203,31 @@ export const MyBookingsView: React.FC = () => {
   };
 
   // Batch 3: Apply Discount to selected bookings
-  const handleApplyDiscount = () => {
+  const handleApplyDiscount = async () => {
     if (selectedIds.length === 0 || discountValue <= 0) return;
     const count = selectedIds.length;
-    selectedIds.forEach((id) => {
+    const results = await Promise.all(selectedIds.map(async (id) => {
       const bkg = bookings.find((b) => b.id === id);
-      if (!bkg) return;
+      if (!bkg) return { success: false, error: 'Booking not found.' };
       let newPrice = bkg.totalPrice;
       if (discountType === 'percent') {
         newPrice = Math.max(0, Math.round(bkg.totalPrice * (1 - discountValue / 100)));
       } else {
         newPrice = Math.max(0, Math.round(bkg.totalPrice - discountValue));
       }
-      updateBooking(id, {
+      return updateBooking(id, {
         totalPrice: newPrice,
         notes:
           (bkg.notes || '') +
           (bkg.notes ? ' | ' : '') +
           `[Remise ${discountValue}${discountType === 'percent' ? '%' : ` ${currency}`}]`,
       });
-    });
+    }));
+    const failed = results.filter((result) => !result.success).length;
+    if (failed > 0) {
+      setBulkNotice(language === 'fr' ? failed + ' réservation(s) n’ont pas reçu la remise.' : failed + ' booking(s) could not be updated.');
+      return;
+    }
     setSelectedIds([]);
     setIsDiscountModalOpen(false);
     setBulkNotice(

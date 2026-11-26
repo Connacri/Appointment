@@ -881,8 +881,12 @@ export const BookingModal: React.FC = () => {
   const priceInDzd = Math.round(totalPrice * (ratesFromEur['DA'] || 145.5));
 
   // Submitting form
-  const handleSubmit = (e: React.FormEvent) => {
+  const submitInFlightRef = useRef(false);
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
+    try {
     const isChangingRoom = !isEditing || selectedBooking?.resourceId !== resourceId;
     if (activeDomain === 'hotel' && isChangingRoom && (!currentResource || !isRoomReadyForBooking(currentResource.housekeepingStatus))) {
       setRoomStatusAlert({ roomName: currentResource?.name ?? '—', status: currentResource?.housekeepingStatus });
@@ -997,7 +1001,7 @@ export const BookingModal: React.FC = () => {
       };
       const updatedHistory = [...(selectedBooking.modificationHistory || []), historyEntry];
 
-      const updateRes = updateBooking(selectedBooking.id, {
+      const updateRes = await updateBooking(selectedBooking.id, {
         resourceId,
         resourceName: currentResource?.name || selectedBooking.resourceName,
         guestName: guestName.trim(),
@@ -1059,7 +1063,7 @@ export const BookingModal: React.FC = () => {
         },
       ];
 
-      const res = addBooking({
+      const res = await addBooking({
         resourceId: resourceId || domainResources[0]?.id || 'res_1',
         resourceName: currentResource?.name || 'Ressource',
         sector: activeDomain,
@@ -1122,6 +1126,9 @@ export const BookingModal: React.FC = () => {
         setRequestedCardCount(2);
         setBookingStep(2);
       } else setIsNewBookingModalOpen(false);
+    }
+    } finally {
+      submitInFlightRef.current = false;
     }
   };
 
@@ -1474,7 +1481,7 @@ export const BookingModal: React.FC = () => {
               (language === 'fr' ? 'Client' : language === 'ar' ? 'النزيل' : 'Guest');
             const heldValuables = (selectedBooking.valuablesAtReception || []).filter((item) => item.status === 'held');
 
-            const executeCheckoutAction = (
+            const executeCheckoutAction = async (
               mode: 'checkout' | 'guest_left',
               returnedById?: Record<string, boolean>
             ) => {
@@ -1487,13 +1494,17 @@ export const BookingModal: React.FC = () => {
 
               if (mode === 'guest_left') {
                 const payload = buildGuestCheckoutPayload(now);
-                updateBooking(selectedBooking.id, {
+                const result = await updateBooking(selectedBooking.id, {
                   endDate: payload.endDate,
                   checkOutTime: payload.checkOutTime,
                   actualCheckOutAt: payload.actualCheckOutAt,
                   status: 'checked_out',
                   ...(updatedValuables ? { valuablesAtReception: updatedValuables } : {}),
                 });
+                if (!result.success) {
+                  setConflictError(result.error || 'Impossible d’enregistrer le départ.');
+                  return;
+                }
                 setEndDate(payload.endDate);
                 setCheckOutTime(payload.checkOutTime);
                 setStatus('checked_out');
@@ -1514,18 +1525,22 @@ export const BookingModal: React.FC = () => {
                       : `Checkout for ${resolvedGuestName} recorded at ${payload.checkOutTime}. Room ${resolvedRoomName} available from ${payload.turnoverReadyAt} after the 10-minute turnover.`,
                 });
               } else {
-                updateBooking(selectedBooking.id, {
+                const result = await updateBooking(selectedBooking.id, {
                   status: 'checked_out',
                   actualCheckOutAt: nowIso,
                   ...(updatedValuables ? { valuablesAtReception: updatedValuables } : {}),
                 });
+                if (!result.success) {
+                  setConflictError(result.error || 'Impossible d’enregistrer le départ.');
+                  return;
+                }
                 generateTurnoverTasksForCheckout(resolvedRoomName);
                 setPendingCheckoutPrompt(null);
                 closeModal();
               }
             };
 
-            const requestCheckoutAction = (mode: 'checkout' | 'guest_left') => {
+            const requestCheckoutAction = async (mode: 'checkout' | 'guest_left') => {
               if (heldValuables.length > 0) {
                 const defaults: Record<string, boolean> = {};
                 heldValuables.forEach((item) => {
@@ -1534,7 +1549,7 @@ export const BookingModal: React.FC = () => {
                 setPendingCheckoutPrompt({ mode, returnedById: defaults });
                 return;
               }
-              executeCheckoutAction(mode);
+              await executeCheckoutAction(mode);
             };
 
             const paymentStatusLabel =
@@ -1779,8 +1794,10 @@ export const BookingModal: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      updateBookingStatus(selectedBooking.id, 'checked_in');
-                      closeModal();
+                      void updateBookingStatus(selectedBooking.id, 'checked_in').then((result) => {
+                        if (result.success) closeModal();
+                        else setConflictError(result.error || 'Impossible d’enregistrer le check-in.');
+                      });
                     }}
                     className="min-h-11 justify-center px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
@@ -1789,7 +1806,7 @@ export const BookingModal: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => requestCheckoutAction('checkout')}
+                    onClick={() => { void requestCheckoutAction('checkout'); }}
                     className="min-h-11 justify-center px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                     title={language === 'fr' ? 'Effectue le départ et génère les tâches de remise en état chambre' : 'Check out and generate turnover tasks'}
                   >
@@ -1799,7 +1816,7 @@ export const BookingModal: React.FC = () => {
                   {activeDomain === 'hotel' && !['checked_out', 'cancelled'].includes(selectedBooking.status) && (
                     <button
                       type="button"
-                      onClick={() => requestCheckoutAction('guest_left')}
+                      onClick={() => { void requestCheckoutAction('guest_left'); }}
                       className="min-h-11 justify-center px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                       title={
                         language === 'fr'
