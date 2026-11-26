@@ -49,11 +49,11 @@ export interface PulledSupabaseSnapshot {
   tasks: PmsTask[];
   stockItems: StockItem[];
   dynamicRates: Record<string, Record<string, number>>;
-  stockMovements: StockMovement[];
-  suppliers: StockSupplier[];
-  purchaseOrders: PurchaseOrderRecord[];
-  staffMembers: StaffMemberRecord[];
-  establishmentProfile: EstablishmentProfile | null;
+  stockMovements?: StockMovement[];
+  suppliers?: StockSupplier[];
+  purchaseOrders?: PurchaseOrderRecord[];
+  staffMembers?: StaffMemberRecord[];
+  establishmentProfile?: EstablishmentProfile | null;
 }
 
 export interface SupabaseSyncAdapter {
@@ -945,6 +945,10 @@ export async function runSupabaseSync({
     remoteTasks: pulledSnapshot?.tasks ?? [],
     remoteStockItems: pulledSnapshot?.stockItems ?? [],
     remoteDynamicRates: pulledSnapshot?.dynamicRates ?? {},
+    remoteStockMovements: pulledSnapshot?.stockMovements ?? [],
+    remoteSuppliers: pulledSnapshot?.suppliers ?? [],
+    remotePurchaseOrders: pulledSnapshot?.purchaseOrders ?? [],
+    remoteStaffMembers: pulledSnapshot?.staffMembers ?? [],
     recoveredProfile,
     warnings,
   };
