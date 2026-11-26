@@ -9,6 +9,7 @@ export interface StockAtomicMutation {
   applyToCurrent?: (currentPayload?: Record<string, unknown>, currentBatch?: StockCurrentBatch) => Record<string, unknown>;
   toOutboxPayload?: (currentPayload?: Record<string, unknown>, currentBatch?: StockCurrentBatch) => Record<string, unknown>;
   skipIfCurrent?: (currentPayload?: Record<string, unknown>, currentBatch?: StockCurrentBatch) => boolean;
+  skipOutbox?: boolean;
 }
 
 export const stockMutationKey = (entity: StockAtomicMutation['entity'], entityId: string) =>

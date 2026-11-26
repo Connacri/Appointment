@@ -649,8 +649,8 @@ has committed all three effects together: the purchase-order status/receipt time
 the affected stock-item quantity projections, and the corresponding stock-movement
 ledger entries. The same transaction must include the Outbox/P2P replication intent.
 A failure must leave all effects unchanged and must not enqueue a partial mutation.
-The UI currently blocks receipt because this atomic command is not implemented; this
-is an intentional fail-closed limitation, not a completed receiving workflow.
+Receipt is implemented by the atomic command described below; it remains fail-closed if any
+part of the local transaction cannot be committed.
 Regression coverage: `tests/purchaseOrderReceiptSafety.test.ts`.
 
 

@@ -10,6 +10,7 @@ export interface PurchaseOrderReceiptMutation {
   payload: Record<string, unknown>;
   applyToCurrent?: (currentPayload?: Record<string, unknown>, currentBatch?: ReadonlyMap<string, Record<string, unknown>>) => Record<string, unknown>;
   toOutboxPayload?: (currentPayload?: Record<string, unknown>, currentBatch?: ReadonlyMap<string, Record<string, unknown>>) => Record<string, unknown>;
+  skipOutbox?: boolean;
 }
 
 export interface PurchaseOrderReceiptPlan {
