@@ -982,11 +982,11 @@ export type Database = {
             referencedColumns: ["id", "workspace_id"]
           },
           {
-            foreignKeyName: "purchase_orders_supplier_tenant_fk"
-            columns: ["supplier_id", "workspace_id"]
+            foreignKeyName: "purchase_orders_supplier_establishment_fk"
+            columns: ["supplier_id", "workspace_id", "establishment_id"]
             isOneToOne: false
             referencedRelation: "stock_suppliers"
-            referencedColumns: ["id", "workspace_id"]
+            referencedColumns: ["id", "workspace_id", "establishment_id"]
           },
           {
             foreignKeyName: "purchase_orders_workspace_id_fkey"
@@ -1516,7 +1516,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      apply_stock_movement: {
+        Args: {
+          p_actor_name?: string
+          p_delta: number
+          p_establishment_id: string
+          p_item_id: string
+          p_movement_id: string
+          p_reason: string
+          p_room?: string
+          p_timestamp: string
+          p_workspace_id: string
+        }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never
