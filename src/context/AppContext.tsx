@@ -88,6 +88,7 @@ import {
   type SyncProgressEvent,
 } from '../services/supabase/syncLog';
 import { hasBookingScheduleConflict, isValidCalendarDate, shouldMarkPaymentAsPaid, validateBookingOccupants } from '../utils/bookingValidation';
+import { planRoomReassignment } from '../utils/roomReassignment';
 import { normalizeBookingForPersistence } from '../utils/bookingOccupants';
 import { isDemoBookingId } from '../utils/bookingPersistence';
 import { isRoomReadyForBooking } from '../utils/roomReadiness';
@@ -265,6 +266,7 @@ interface AppContextType {
   checkConflict: (resourceId: string, startDate: string, endDate: string, excludeBookingId?: string, checkInTime?: string, checkOutTime?: string) => boolean;
   addBooking: (booking: Omit<TimelineBooking, 'id'>) => Promise<{ success: boolean; error?: string; code?: 'room_not_ready'; roomName?: string; roomStatus?: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'; booking?: TimelineBooking }>;
   updateBooking: (id: string, updates: Partial<TimelineBooking>) => Promise<{ success: boolean; error?: string }>;
+  reassignBookingRoom: (id: string, updates: Partial<TimelineBooking>) => Promise<{ success: boolean; error?: string; mode?: 'move' | 'swap' }>;
   updateBookingStatus: (id: string, status: BookingStatus) => Promise<{ success: boolean; error?: string }>;
   deleteBooking: (id: string) => Promise<void>;
   confirmCheckInAndCashPayment: (
@@ -2836,6 +2838,109 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true };
   };
 
+  const reassignBookingRoom = async (
+    id: string,
+    updates: Partial<TimelineBooking>,
+  ): Promise<{ success: boolean; error?: string; mode?: 'move' | 'swap' }> => {
+    const existing = bookings.find((booking) => booking.id === id);
+    if (!existing) return { success: false, error: 'Réservation introuvable.' };
+    const proposed = normalizeBookingForPersistence({ ...existing, ...updates });
+    const resources = latestGroupsRef.current.flatMap((group) => group.resources);
+    const plan = planRoomReassignment(
+      bookings.map((booking) => booking.id === id ? proposed : booking),
+      resources,
+      id,
+      proposed.resourceId,
+    );
+    if (!plan.ok) {
+      const messages: Record<typeof plan.reason, string> = {
+        booking_not_found: 'Réservation introuvable.',
+        resource_not_found: 'Chambre cible introuvable.',
+        sector_mismatch: 'La chambre cible appartient à un autre domaine.',
+        room_out_of_order: 'La chambre est hors service et ne peut pas être attribuée.',
+        multiple_occupants: 'Plusieurs séjours occupent la chambre cible sur cette période. La permutation automatique est impossible.',
+        target_conflict: 'La permutation créerait un chevauchement avec une autre réservation.',
+      };
+      return { success: false, error: messages[plan.reason] };
+    }
+
+    if (plan.mode === 'move') {
+      const result = await updateBooking(id, updates);
+      return { ...result, mode: result.success ? 'move' : undefined };
+    }
+
+    const [movedBooking, swappedBooking] = plan.bookings;
+    const sourceResource = resources.find((resource) => resource.id === existing.resourceId);
+    const targetResource = resources.find((resource) => resource.id === proposed.resourceId);
+    if (
+      sourceResource?.establishmentId
+      && targetResource?.establishmentId
+      && sourceResource.establishmentId !== targetResource.establishmentId
+    ) {
+      return { success: false, error: 'La permutation entre deux établissements différents est interdite.' };
+    }
+    if (
+      isDemoBookingId(movedBooking.id, DEMO_BOOKING_IDS)
+      || isDemoBookingId(swappedBooking.id, DEMO_BOOKING_IDS)
+    ) {
+      return { success: false, error: 'Les réservations de démonstration ne peuvent pas être permutées.' };
+    }
+
+    const validateFinalSchedule = (rows: TimelineBooking[]) => {
+      for (const candidate of [movedBooking, swappedBooking]) {
+        if (candidate.status !== 'cancelled' && hasBookingScheduleConflict(rows, candidate, candidate.id)) {
+          throw new Error('La disponibilité a changé : la permutation créerait un chevauchement.');
+        }
+      }
+    };
+    try {
+      const workspaceId = workspace.activeWorkspaceId?.trim();
+      const resolvedEstablishmentId = selectedEstablishmentId !== 'all'
+        ? selectedEstablishmentId
+        : targetResource?.establishmentId || sourceResource?.establishmentId || stableEstablishmentId(establishmentProfile);
+      if (workspaceId) {
+        await indexedDb.putBookingsAtomicallyWithOutbox(
+          [movedBooking, swappedBooking],
+          { workspaceId, establishmentId: resolvedEstablishmentId },
+          validateFinalSchedule,
+        );
+        scheduleAutoSync();
+      } else {
+        await indexedDb.putLocalBookingsAtomically(
+          [movedBooking, swappedBooking],
+          validateFinalSchedule,
+        );
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Impossible d’enregistrer la permutation des chambres.',
+      };
+    }
+
+    for (const [before, after] of [[existing, movedBooking], [plan.bookings[1], swappedBooking]] as const) {
+      const changes = computeBookingDiff(before, after);
+      logEvent({
+        category: 'booking',
+        action: 'booking.room_swapped',
+        severity: 'info',
+        title: `Chambre permutée · ${after.guestName}`,
+        description: `${before.resourceName} → ${after.resourceName} · ${after.startDate} → ${after.endDate}`,
+        target: { type: 'booking', id: after.id, label: after.guestName, secondaryLabel: after.resourceName },
+        changes,
+        bookingId: after.id,
+        resourceId: after.resourceId,
+      });
+    }
+    setBookings((previous) => previous.map((booking) =>
+      booking.id === movedBooking.id ? movedBooking
+        : booking.id === swappedBooking.id ? swappedBooking
+          : booking
+    ));
+    if (selectedBooking?.id === movedBooking.id) setSelectedBooking(movedBooking);
+    return { success: true, mode: 'swap' };
+  };
+
   const updateBookingStatus = async (id: string, status: BookingStatus): Promise<{ success: boolean; error?: string }> => {
     const existing = bookings.find((booking) => booking.id === id);
     if (!existing) return { success: false, error: 'Booking not found.' };
@@ -3949,6 +4054,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         checkConflict,
         addBooking,
         updateBooking,
+        reassignBookingRoom,
         updateBookingStatus,
         deleteBooking,
         confirmCheckInAndCashPayment,
