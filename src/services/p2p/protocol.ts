@@ -39,6 +39,11 @@ export const SUPABASE_OUTBOX_ENTITIES = [
   'establishment',
   'task',
   'stock_item',
+  'stock_movement',
+  'supplier',
+  'purchase_order',
+  'staff_member',
+  'establishment_profile',
 ] as const;
 export type OutboxEntity = typeof SUPABASE_OUTBOX_ENTITIES[number];
 
