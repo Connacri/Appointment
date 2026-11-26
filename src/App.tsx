@@ -217,7 +217,24 @@ const MainLayout: React.FC = () => {
     refreshWorkspaces,
     establishmentProfile,
     activeRoleDefinition,
+    deviceMutationAvailability,
+    configureSingleDeviceTopology,
   } = useApp();
+
+  const [deviceSetupError, setDeviceSetupError] = React.useState('');
+  const [isConfiguringDevice, setIsConfiguringDevice] = React.useState(false);
+
+  const handleConfigureSingleDevice = async () => {
+    setDeviceSetupError('');
+    setIsConfiguringDevice(true);
+    try {
+      await configureSingleDeviceTopology();
+    } catch (error) {
+      setDeviceSetupError(error instanceof Error ? error.message : 'Échec de la configuration du registre.');
+    } finally {
+      setIsConfiguringDevice(false);
+    }
+  };
 
   useBrandIconSync(establishmentProfile?.logoUrl, establishmentProfile?.name);
 
@@ -291,6 +308,37 @@ const MainLayout: React.FC = () => {
     >
       {/* Top Full-Width Unified Header matching szsz.png */}
       <TopBar />
+
+      {!deviceMutationAvailability.canMutate && (
+        <section
+          role="alert"
+          className="shrink-0 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+        >
+          <div className="mx-auto flex max-w-screen-2xl flex-wrap items-center justify-between gap-2">
+            <div>
+              <strong>Mode lecture seule — opérations de réservation bloquées.</strong>{' '}
+              {deviceMutationAvailability.reason === 'registry_missing'
+                ? 'Cet établissement ne possède pas encore de registre d’appareils.'
+                : deviceMutationAvailability.reason === 'no_coordination_authority'
+                  ? 'Le mode multi-appareils exige une autorité de coordination authentifiée.'
+                  : deviceMutationAvailability.reason === 'data_not_ready'
+                    ? 'Les données locales sont encore en cours de chargement.'
+                    : 'L’identité ou les autorisations de cet appareil ne peuvent pas être vérifiées.'}
+              {deviceSetupError && <span className="ml-2 block text-rose-700 dark:text-rose-300">{deviceSetupError}</span>}
+            </div>
+            {deviceMutationAvailability.reason === 'registry_missing' && (
+              <button
+                type="button"
+                disabled={isConfiguringDevice}
+                onClick={() => void handleConfigureSingleDevice()}
+                className="min-h-9 rounded-lg bg-amber-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60 dark:bg-amber-200 dark:text-amber-950"
+              >
+                {isConfiguringDevice ? 'Configuration…' : 'Enregistrer cet appareil comme appareil unique'}
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Left Navigation Sidebar */}
