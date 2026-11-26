@@ -137,6 +137,7 @@ test('uses one explicit versioned entity registry across storage adapters', () =
     'dynamic_rate',
     'staff_member',
     'establishment_profile',
+    'booking_conflict',
   ]);
   assert.deepEqual(SUPABASE_OUTBOX_ENTITIES, [
     'booking',
