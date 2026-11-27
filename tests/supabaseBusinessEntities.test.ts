@@ -73,6 +73,16 @@ test('repositories and application mutation paths are connected to the new entit
   assert.ok(indexedDb.includes("activePending.some((row) => row.operation === 'upsert')"));
   for (const table of ['stock_suppliers', 'purchase_orders', 'staff_members']) assert.ok(types.includes(table + ':'));
   assert.ok(types.includes('apply_stock_movement'));
+  assert.ok(types.includes('apply_purchase_order_receipt'));
+  assert.match(repository, /export async function applyPurchaseOrderReceipt/);
+  assert.match(repository, /db\.rpc\('apply_purchase_order_receipt'/);
+  const receiptSql = read('../supabase/migrations/20261127180000_apply_purchase_order_receipt_atomically.sql');
+  assert.match(receiptSql, /for update/i);
+  assert.match(receiptSql, /status = 'received'/i);
+  assert.match(receiptSql, /stock_movements/i);
+  assert.match(receiptSql, /stock_items/i);
+  assert.match(receiptSql, /idempotent/i);
+  assert.match(sync, /pushPurchaseOrderReceipt/);
 });
 
 test('workspace task and establishment UI projections wait for durable outbox commits', () => {
