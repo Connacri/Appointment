@@ -624,6 +624,9 @@ export const HelpCenterView: React.FC = () => {
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-200">Appointment Academy</p>
               <h1 className="mt-1 text-2xl font-bold tracking-tight">{t.heading}</h1>
               <p className="mt-1 text-sm text-slate-300">{t.subtitle}</p>
+              <a href="https://github.com/Connacri/Appointment/blob/main/docs/USER_GUIDE_FR.md" target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-10 items-center rounded-lg border border-white/25 bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+                {locale === 'fr' ? 'Ouvrir le guide utilisateur complet' : locale === 'ar' ? 'فتح دليل المستخدم الكامل' : 'Open the complete user guide'}
+              </a>
             </div>
             <GraduationCap className="hidden sm:block text-blue-200" size={34}/>
           </div>

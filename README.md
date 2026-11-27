@@ -172,6 +172,8 @@ Les artefacts de release utilisent le préfixe `Appointment-PMS` et la version d
 
 ## Documentation du dépôt
 
+- [Guide utilisateur complet — installation, mono/multi-postes et modules métier](./docs/USER_GUIDE_FR.md)
+
 - [Contrat et consignes de développement](./AGENTS.md)
 - [Architecture applicative](./docs/ARCHITECTURE.md)
 - [Internationalisation et RTL](./docs/I18N.md)
