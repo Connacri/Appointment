@@ -21,6 +21,8 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 
 ### Changed
 
+- **Cycle de vie du personnel sécurisé hors ligne** : création de la fiche et de ses tâches initiales dans une transaction IndexedDB unique (Outbox et événements P2P inclus en mode Workspace) ; affectation, promotion, transfert et suppression attendent la persistance durable avant mise à jour de l’interface ou confirmation de succès.
+
 - **Pages légales réécrites à partir d'un audit du code** : `/privacy/` et `/delete-account/` (fr / en / ar) décrivaient un autre produit (« AgentOps », Firebase/FCM, Google Sign-In, données patients, Play Integrity, télémétrie) qui n'existe pas dans ce dépôt, et le formulaire de suppression affichait un faux message « lien de vérification envoyé » sans rien envoyer. Les textes sont désormais alignés sur le code réel : données locales IndexedDB `OmniBook_ObjectBox_Store`, compte Supabase optionnel, WebHID et caméra, Google Fonts et GitHub Pages comme seuls tiers, liste explicite « ce que nous ne collectons pas ». La page de suppression donne les étapes exactes de la purge intégrée et ouvre un `mailto:` pré-rempli réellement envoyable, avec délai de 72 h ouvrées. Titres racine corrigés (`Appointment AGENTS.md` → `Appointment PMS`).
 - **CI légale durcie** : l'étape « Verify Legal Pages » échoue maintenant si un fichier manque, si les pages arabes ne déclarent pas `dir="rtl"`, si un placeholder ou une marque obsolète reste (`TODO`, `example.com`, `AgentOps`, …), ou si le README ne lie plus la politique de confidentialité et la page de suppression.
 
