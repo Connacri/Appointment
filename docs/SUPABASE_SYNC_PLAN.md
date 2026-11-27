@@ -3,6 +3,19 @@
 Dernière revue documentaire : 2026-11-27. Référence de code : branche `main`.
 Ce document décrit l'état du code et les limites observées ; il ne constitue pas une certification de réplication en production.
 
+## Migration history — blocking prerequisite (2026-11-27)
+
+The live Supabase project reports 17 applied migrations, while the repository tracks 13 SQL migration files. Four applied remote migrations are absent locally, and the repository's `allow_same_day_bookings` migration filename has a different version timestamp from the remote history. This drift prevents a reproducible local reset and makes a new production migration unsafe until reconciled.
+
+Before adding invoice header/items RPCs, atomic purchase-order receipt, or foreign-key indexes:
+1. Reconcile every remote migration with its exact tracked SQL and version.
+2. Establish a reproducible local baseline using the supported Supabase CLI workflow.
+3. Run the migration set on a disposable local/test database and verify schema parity.
+4. Run Security and Performance Advisors after the eventual schema change.
+5. Only then deploy the tracked migration to production.
+
+No schema changes were made as part of this audit.
+
 ## Architecture et responsabilités
 
 - **IndexedDB** conserve les projections métier locales dans les builds Web/Android.

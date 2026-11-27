@@ -120,3 +120,10 @@ Audit status: **NOT READY for full CRUD replication or production P2P**. This is
 - Performance: five foreign-key index gaps need a tracked migration and query-plan validation. The 68 unused-index notices are observational only; evaluate them against real workload before dropping anything.
 - The database currently exposes 21 public tables, all with RLS enabled.
 - No production SQL, policies, indexes or Auth settings were modified by this advisor review.
+
+
+## Migration history consistency check (2026-11-27)
+
+The live Supabase project reports 17 applied migrations. The repository currently tracks 13 SQL migration files. The following remote versions have no matching tracked file: `20261103172324 initial_pms_multi_tenant_schema`, `20261103172339 tenant_integrity_and_membership_hardening`, `20261103172454 foreign_key_indexes_and_policy_cleanup`, and `20261120184245 pms_mdb_imports_sync`. In addition, the repository file `20261120122449_allow_same_day_bookings.sql` does not match the remote applied version `20261120131109 allow_same_day_bookings`.
+
+**This is migration drift.** Do not add invoice RPCs, PO receipt RPCs, indexes or other production DDL until the local migration history is reconciled with the live project and a reproducible baseline is established. No migration or production schema change was made during this check.
