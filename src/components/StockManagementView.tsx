@@ -1057,7 +1057,6 @@ export const StockManagementView: React.FC = () => {
                 type="button"
                 disabled={!deviceMutationAvailability.canMutate || !addItemPickerId}
                 onClick={handleAddStockLineToPo}
-                disabled={!deviceMutationAvailability.canMutate || !addItemPickerId}
                 className="min-h-[40px] px-3 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 disabled:opacity-40 text-xs font-bold cursor-pointer"
               >
                 {t('Ajouter ligne', 'Add Line', 'إضافة')}
@@ -1264,6 +1263,7 @@ export const StockManagementView: React.FC = () => {
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={() => {
+                              if (!deviceMutationAvailability.canMutate) return;
                               const po = activeSavedPo || persistOrder('confirmed');
                               if (po) markOrderDispatched(po, 'whatsapp');
                             }}
@@ -1278,6 +1278,7 @@ export const StockManagementView: React.FC = () => {
                           <a
                             href={mailUrl}
                             onClick={() => {
+                              if (!deviceMutationAvailability.canMutate) return;
                               const po = activeSavedPo || persistOrder('confirmed');
                               if (po) markOrderDispatched(po, 'email');
                             }}
@@ -1296,6 +1297,7 @@ export const StockManagementView: React.FC = () => {
                           <a
                             href={smsUrl}
                             onClick={() => {
+                              if (!deviceMutationAvailability.canMutate) return;
                               const po = activeSavedPo || persistOrder('confirmed');
                               if (po) markOrderDispatched(po, 'sms');
                             }}
@@ -1441,6 +1443,7 @@ export const StockManagementView: React.FC = () => {
                                 confirmedAt: new Date().toISOString(),
                               })
                             }
+                            disabled={!deviceMutationAvailability.canMutate}
                             className="min-h-[34px] px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold cursor-pointer"
                           >
                             {t('Confirmer', 'Confirm', 'تأكيد')}
@@ -1452,7 +1455,9 @@ export const StockManagementView: React.FC = () => {
                             href={waUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            onClick={() => markOrderDispatched(po, 'whatsapp')}
+                            onClick={() => {
+                              if (deviceMutationAvailability.canMutate) markOrderDispatched(po, 'whatsapp');
+                            }}
                             aria-disabled={!deviceMutationAvailability.canMutate}
                             tabIndex={deviceMutationAvailability.canMutate ? 0 : -1}
                             className="min-h-[34px] px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold inline-flex items-center gap-1"
