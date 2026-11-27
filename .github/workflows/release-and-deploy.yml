@@ -413,10 +413,13 @@ jobs:
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
           Copy-Item "windows-native\target\release\appointment-pms-native.exe" $stage
           Copy-Item "windows-native\dist\Appointment-PMS-Setup-v$version.exe" $stage
+          Copy-Item "windows-native\installer\Install-Portable.ps1" $stage
           @(
             "Appointment PMS — Native Windows x64",
             "Independent Rust/Win32 executable. No WebView2, Edge, Chrome, Electron or Node runtime.",
-            "Install with Appointment-PMS-Setup-v$version.exe or run appointment-pms-native.exe.",
+            "Standard install: Appointment-PMS-Setup-v$version.exe.",
+            "If Setup reports Error 5 while creating an IS-*.tmp directory, extract this ZIP and run Install-Portable.ps1. This fallback does not use the Inno Setup bootstrapper temporary directory.",
+            "The portable installer copies only the executable. It preserves user data under %LOCALAPPDATA%\Connacri\Appointment.",
             "Release version: $version",
             "Source commit: ${{ github.sha }}"
           ) | Set-Content -Encoding utf8 (Join-Path $stage "README.txt")
