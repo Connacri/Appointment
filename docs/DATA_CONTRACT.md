@@ -460,7 +460,11 @@ standalone paths now use the same gate: proUSB card issuance/revocation/lock set
 CardLock import and destructive cache actions; OTA Channel Manager transitions; Spa
 appointments, cabin and therapist state; Supabase runtime configuration; and local event-log
 deletion. High-risk controls in those views are disabled when write authority is absent.
-Customer profile writes and onboarding completion are also guarded.
+Customer profile writes and onboarding completion are also guarded. The principal mutation
+controls are also disabled in BookingModal/MyBookings, Billing, Stock and purchase orders,
+Room Replenishment, Staff HR, Tasks, Housekeeping, Role Management, Dynamic Pricing and
+Lost Property. This is targeted UI coverage, not a claim that every interactive surface is
+already disabled.
 
 Important limits remain:
 - Invoice creation is blocked in read-only mode, but invoice records are still stored by the
