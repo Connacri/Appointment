@@ -193,6 +193,7 @@ export const RoleManagementView: React.FC = () => {
     activeRoleDefinition,
     staffMembers,
     playFeedback,
+    deviceMutationAvailability,
   } = useApp();
 
   const isRtl = language === 'ar';
@@ -497,6 +498,7 @@ export const RoleManagementView: React.FC = () => {
                     : 'Built-in roles restored to defaults.'
                 );
               }}
+              disabled={!deviceMutationAvailability.canMutate}
               className="min-h-10 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
             >
               <RotateCcw size={14} />
@@ -790,6 +792,7 @@ export const RoleManagementView: React.FC = () => {
                                     : `Role "${role.label.en}" deleted.`
                                 );
                               }}
+                              disabled={!deviceMutationAvailability.canMutate}
                               className="min-h-9 px-2.5 rounded-lg bg-rose-600 text-white text-[11px] font-bold cursor-pointer hover:bg-rose-500"
                             >
                               {language === 'fr' ? 'Confirmer' : language === 'ar' ? 'تأكيد' : 'Confirm'}
@@ -1164,6 +1167,7 @@ export const RoleManagementView: React.FC = () => {
             <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-2">
               <button
                 type="submit"
+                disabled={!deviceMutationAvailability.canMutate}
                 className="flex-1 min-h-11 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <Save size={15} />
@@ -1177,6 +1181,7 @@ export const RoleManagementView: React.FC = () => {
               <button
                 type="button"
                 onClick={(e) => handleSaveRole(e, true)}
+                disabled={!deviceMutationAvailability.canMutate}
                 className="min-h-11 px-3.5 rounded-xl border border-emerald-500/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
               >
                 <Eye size={14} />

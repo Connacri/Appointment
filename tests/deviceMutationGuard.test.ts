@@ -13,6 +13,10 @@ const channelManager = readFileSync(new URL('../src/components/ChannelManagerVie
 const spaManagement = readFileSync(new URL('../src/components/SpaManagementView.tsx', import.meta.url), 'utf8');
 const cloudConfig = readFileSync(new URL('../src/components/CloudConfigPanel.tsx', import.meta.url), 'utf8');
 const eventLogView = readFileSync(new URL('../src/components/EventLogView.tsx', import.meta.url), 'utf8');
+const staffHr = readFileSync(new URL('../src/components/StaffHrPanel.tsx', import.meta.url), 'utf8');
+const tasksView = readFileSync(new URL('../src/components/TasksManagementView.tsx', import.meta.url), 'utf8');
+const housekeepingView = readFileSync(new URL('../src/components/HousekeepingView.tsx', import.meta.url), 'utf8');
+const roleManagement = readFileSync(new URL('../src/components/RoleManagementView.tsx', import.meta.url), 'utf8');
 
 function sectionProUsb(start: string, end: string): string {
   const from = proUsb.indexOf(start);
@@ -113,4 +117,13 @@ test('Supabase runtime configuration remains editable only during explicit first
 test('audit-log deletion is a guarded mutation and disabled without write authority', () => {
   assert.match(section('const clearEventLogs = async', 'const createMutationId'), /assertBusinessMutationAllowed\(\)/);
   assert.match(eventLogView, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
+});
+
+
+test('staff, task, housekeeping and role mutation controls are disabled without write authority', () => {
+  assert.match(staffHr, /deviceMutationAvailability\.canMutate/);
+  assert.match(staffHr, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
+  assert.match(tasksView, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
+  assert.match(housekeepingView, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
+  assert.match(roleManagement, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
 });

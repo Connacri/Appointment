@@ -47,6 +47,7 @@ export const StaffHrPanel: React.FC<{ onToast: (msg: string) => void }> = ({ onT
     currentDomain,
     tasks,
     playFeedback,
+    deviceMutationAvailability,
   } = useApp();
 
   const isFr = language === 'fr';
@@ -635,6 +636,7 @@ export const StaffHrPanel: React.FC<{ onToast: (msg: string) => void }> = ({ onT
 
             <button
               type="submit"
+              disabled={!deviceMutationAvailability.canMutate}
               className="w-full min-h-[46px] rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
             >
               <UserPlus size={16} />
@@ -895,6 +897,7 @@ export const StaffHrPanel: React.FC<{ onToast: (msg: string) => void }> = ({ onT
                               setConfirmDeleteId(null);
                               onToast(t(`Fiche de ${member.fullName} supprimée.`, `${member.fullName} removed.`, `تم حذف ملف ${member.fullName}.`));
                             }}
+                            disabled={!deviceMutationAvailability.canMutate}
                             className="min-h-[38px] px-2.5 rounded-xl bg-rose-600 text-white text-[11px] font-bold cursor-pointer"
                           >
                             {t('Confirmer', 'Confirm', 'تأكيد')}
@@ -1019,6 +1022,7 @@ export const StaffHrPanel: React.FC<{ onToast: (msg: string) => void }> = ({ onT
               </button>
               <button
                 type="submit"
+                disabled={!deviceMutationAvailability.canMutate}
                 className="flex-1 min-h-[44px] rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold cursor-pointer"
               >
                 {t('Valider l’affectation', 'Save Assignment', 'حفظ التعيين')}
@@ -1203,6 +1207,7 @@ export const StaffHrPanel: React.FC<{ onToast: (msg: string) => void }> = ({ onT
               </button>
               <button
                 type="submit"
+                disabled={!deviceMutationAvailability.canMutate}
                 className="flex-1 min-h-[44px] rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold cursor-pointer"
               >
                 {t('Enregistrer la décision', 'Confirm Change', 'تأكيد القرار')}
@@ -1315,6 +1320,7 @@ export const StaffHrPanel: React.FC<{ onToast: (msg: string) => void }> = ({ onT
               </button>
               <button
                 type="submit"
+                disabled={!deviceMutationAvailability.canMutate}
                 className="flex-1 min-h-[44px] rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <CheckCircle2 size={15} />

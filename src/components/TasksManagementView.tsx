@@ -56,6 +56,7 @@ export const TasksManagementView: React.FC = () => {
     setActiveView,
     setFocusedStockTab,
     staffMembers: hrStaffMembers,
+    deviceMutationAvailability,
   } = useApp();
 
   const isFr = language === 'fr';
@@ -389,6 +390,7 @@ export const TasksManagementView: React.FC = () => {
             <button
               type="button"
               onClick={() => openReplenishmentForTask(selectedTask?.room, selectedTask?.consumedItems)}
+              disabled={!deviceMutationAvailability.canMutate}
               className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white min-h-[40px] px-3 rounded-xl font-bold text-xs shadow-xs transition-colors cursor-pointer"
             >
               <PackageCheck size={15} />
@@ -399,6 +401,7 @@ export const TasksManagementView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsNewTaskOpen(true)}
+                disabled={!deviceMutationAvailability.canMutate}
                 className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white min-h-[40px] px-3.5 rounded-xl font-bold text-xs shadow-xs transition-colors cursor-pointer"
               >
                 <Plus size={15} />
@@ -794,6 +797,7 @@ export const TasksManagementView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => updateTaskStatus(task.id, 'doing')}
+                          disabled={!deviceMutationAvailability.canMutate}
                           className="min-h-[36px] px-2.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer transition-colors"
                         >
                           <Play size={12} />
@@ -804,6 +808,7 @@ export const TasksManagementView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleCompleteTask(task.id)}
+                          disabled={!deviceMutationAvailability.canMutate}
                           className="min-h-[36px] px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] inline-flex items-center gap-1 shadow-xs cursor-pointer transition-colors"
                         >
                           <CheckCircle2 size={13} />
@@ -922,6 +927,7 @@ export const TasksManagementView: React.FC = () => {
                     key={st.id}
                     type="button"
                     onClick={() => toggleSubtask(selectedTask.id, st.id)}
+                    disabled={!deviceMutationAvailability.canMutate}
                     className={`w-full min-h-[44px] flex items-center justify-between p-2.5 rounded-xl border text-start text-xs transition-colors cursor-pointer ${
                       st.completed
                         ? 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/40 text-blue-700 dark:text-blue-300'
@@ -948,6 +954,7 @@ export const TasksManagementView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => openReplenishmentForTask(selectedTask.room, selectedTask.consumedItems)}
+                disabled={!deviceMutationAvailability.canMutate}
                 className="w-full min-h-[44px] flex items-center justify-center gap-2 border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 py-2 rounded-xl font-bold text-xs transition cursor-pointer"
               >
                 <PackageCheck size={16} />
@@ -958,6 +965,7 @@ export const TasksManagementView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleCompleteTask(selectedTask.id)}
+                  disabled={!deviceMutationAvailability.canMutate}
                   className="w-full min-h-[44px] flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl font-bold text-xs shadow-md shadow-emerald-500/20 transition cursor-pointer"
                 >
                   <CheckCircle2 size={16} />
@@ -973,6 +981,7 @@ export const TasksManagementView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => updateTaskStatus(selectedTask.id, 'doing')}
+                  disabled={!deviceMutationAvailability.canMutate}
                   className="w-full min-h-[44px] flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-white py-2 rounded-xl font-semibold text-xs shadow-xs transition cursor-pointer"
                 >
                   <Clock size={16} />
@@ -984,6 +993,7 @@ export const TasksManagementView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => updateTaskStatus(selectedTask.id, 'pending')}
+                  disabled={!deviceMutationAvailability.canMutate}
                   className="w-full min-h-[44px] flex items-center justify-center gap-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-xl font-semibold text-xs transition cursor-pointer"
                 >
                   <RefreshCw size={14} />
@@ -995,6 +1005,7 @@ export const TasksManagementView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => deleteTask(selectedTask.id)}
+                  disabled={!deviceMutationAvailability.canMutate}
                   className="w-full min-h-[40px] flex items-center justify-center gap-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 py-2 rounded-xl font-semibold text-xs transition cursor-pointer"
                 >
                   <Trash2 size={14} />
@@ -1164,6 +1175,7 @@ export const TasksManagementView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={!deviceMutationAvailability.canMutate}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-500/20 cursor-pointer"
                 >
                   {t('Créer la demande', 'Create Task', 'إنشاء المهمة')}

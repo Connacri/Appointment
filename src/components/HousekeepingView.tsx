@@ -32,6 +32,7 @@ export const HousekeepingView: React.FC = () => {
     setActiveView,
     setFocusedTaskId,
     activeRoleDefinition,
+    deviceMutationAvailability,
   } = useApp();
 
   const isFr = language === 'fr';
@@ -277,6 +278,7 @@ export const HousekeepingView: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => updateHousekeepingStatus(res.id, 'clean')}
+                        disabled={!deviceMutationAvailability.canMutate}
                         className={`min-h-[44px] sm:min-h-[36px] rounded-lg text-center font-bold transition-colors cursor-pointer ${
                           status === 'clean'
                             ? 'bg-emerald-600 text-white shadow-2xs'
@@ -289,6 +291,7 @@ export const HousekeepingView: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => updateHousekeepingStatus(res.id, 'cleaning')}
+                        disabled={!deviceMutationAvailability.canMutate}
                         className={`min-h-[44px] sm:min-h-[36px] rounded-lg text-center font-bold transition-colors cursor-pointer ${
                           status === 'cleaning'
                             ? 'bg-amber-500 text-white shadow-2xs'
@@ -301,6 +304,7 @@ export const HousekeepingView: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => updateHousekeepingStatus(res.id, 'dirty')}
+                        disabled={!deviceMutationAvailability.canMutate}
                         className={`min-h-[44px] sm:min-h-[36px] rounded-lg text-center font-bold transition-colors cursor-pointer ${
                           status === 'dirty'
                             ? 'bg-rose-600 text-white shadow-2xs'
@@ -313,6 +317,7 @@ export const HousekeepingView: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => updateHousekeepingStatus(res.id, 'out_of_order')}
+                        disabled={!deviceMutationAvailability.canMutate}
                         className={`min-h-[44px] sm:min-h-[36px] rounded-lg text-center font-bold transition-colors cursor-pointer ${
                           status === 'out_of_order'
                             ? 'bg-slate-700 text-white shadow-2xs'
