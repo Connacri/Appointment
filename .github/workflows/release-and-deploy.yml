@@ -414,11 +414,13 @@ jobs:
           Copy-Item "windows-native\target\release\appointment-pms-native.exe" $stage
           Copy-Item "windows-native\dist\Appointment-PMS-Setup-v$version.exe" $stage
           Copy-Item "windows-native\installer\Install-Portable.ps1" $stage
+          Copy-Item "windows-native\installer\Install-With-Temp-Fallback.ps1" $stage
           @(
             "Appointment PMS — Native Windows x64",
             "Independent Rust/Win32 executable. No WebView2, Edge, Chrome, Electron or Node runtime.",
             "Standard install: Appointment-PMS-Setup-v$version.exe.",
-            "If Setup reports Error 5 while creating an IS-*.tmp directory, extract this ZIP and run Install-Portable.ps1. This fallback does not use the Inno Setup bootstrapper temporary directory.",
+            "If Setup reports Error 5 while creating an IS-*.tmp directory, extract this ZIP and run Install-With-Temp-Fallback.ps1 first. It validates a private writable temp directory and launches Setup with TMP/TEMP redirected.",
+            "If Windows security policy still blocks Setup, run Install-Portable.ps1. This fallback copies the native executable without using Inno Setup.",
             "The portable installer copies only the executable. It preserves user data under %LOCALAPPDATA%\Connacri\Appointment.",
             "Release version: $version",
             "Source commit: ${{ github.sha }}"
