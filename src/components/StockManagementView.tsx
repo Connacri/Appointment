@@ -1274,13 +1274,13 @@ export const StockManagementView: React.FC = () => {
                             href={waUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            onClick={(event) => {
+                            onClick={async (event) => {
                               if (!deviceMutationAvailability.canMutate) {
                                 event.preventDefault();
                                 return;
                               }
-                              const po = activeSavedPo || persistOrder('confirmed');
-                              if (po) markOrderDispatched(po, 'whatsapp');
+                              const po = activeSavedPo || await persistOrder('confirmed');
+                              if (po) await markOrderDispatched(po, 'whatsapp');
                             }}
                             aria-disabled={!deviceMutationAvailability.canMutate}
                             tabIndex={deviceMutationAvailability.canMutate ? 0 : -1}
@@ -1294,13 +1294,13 @@ export const StockManagementView: React.FC = () => {
                         {mailUrl ? (
                           <a
                             href={mailUrl}
-                            onClick={(event) => {
+                            onClick={async (event) => {
                               if (!deviceMutationAvailability.canMutate) {
                                 event.preventDefault();
                                 return;
                               }
-                              const po = activeSavedPo || persistOrder('confirmed');
-                              if (po) markOrderDispatched(po, 'email');
+                              const po = activeSavedPo || await persistOrder('confirmed');
+                              if (po) await markOrderDispatched(po, 'email');
                             }}
                             aria-disabled={!deviceMutationAvailability.canMutate}
                             tabIndex={deviceMutationAvailability.canMutate ? 0 : -1}
@@ -1318,13 +1318,13 @@ export const StockManagementView: React.FC = () => {
                         {smsUrl && (
                           <a
                             href={smsUrl}
-                            onClick={(event) => {
+                            onClick={async (event) => {
                               if (!deviceMutationAvailability.canMutate) {
                                 event.preventDefault();
                                 return;
                               }
-                              const po = activeSavedPo || persistOrder('confirmed');
-                              if (po) markOrderDispatched(po, 'sms');
+                              const po = activeSavedPo || await persistOrder('confirmed');
+                              if (po) await markOrderDispatched(po, 'sms');
                             }}
                             aria-disabled={!deviceMutationAvailability.canMutate}
                             tabIndex={deviceMutationAvailability.canMutate ? 0 : -1}
@@ -1337,9 +1337,9 @@ export const StockManagementView: React.FC = () => {
 
                         <button
                           type="button"
-                          onClick={() => {
-                            const po = activeSavedPo || persistOrder('confirmed');
-                            void handleCopyPoMessage(po, activeOrderPreviewMessage);
+                          onClick={async () => {
+                            const po = activeSavedPo || await persistOrder('confirmed');
+                            await handleCopyPoMessage(po, activeOrderPreviewMessage);
                           }}
                           className="min-h-[44px] px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
                         >

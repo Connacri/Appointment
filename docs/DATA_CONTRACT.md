@@ -610,3 +610,8 @@ The staff lifecycle command boundary is now covered by `tests/indexedDbMutationA
 ## Awaited supplier and purchase-order CRUD (2026-11-27)
 
 Supplier create/update/delete and purchase-order create/update/delete now await the local IndexedDB Outbox/tombstone command before updating React projections. The stock UI routes these commands through a single pending/error boundary, preserves supplier form values after failed saves, and waits for order persistence before treating it as dispatched. Purchase-order receipt remains a separate atomic stock/PO command; this change does not convert the server-side multi-line receipt into one Supabase RPC.
+
+
+## Purchase-order dispatch persistence ordering (2026-11-27)
+
+The stock UI now awaits draft/confirmed purchase-order persistence before marking a dispatch as sent through WhatsApp, email, SMS or copy. A failed local save prevents the sent-status update; the shared stock mutation error surface reports the failure.

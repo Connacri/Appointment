@@ -279,3 +279,13 @@ test('supplier and purchase-order CRUD await durable Outbox/tombstone commands b
   assert.match(panel, /await deletePurchaseOrder\(/);
   assert.match(panel, /await deleteSupplier\(/);
 });
+
+
+test('purchase-order dispatch actions await order persistence before changing sent status', () => {
+  const panel = readFileSync(new URL('../src/components/StockManagementView.tsx', import.meta.url), 'utf8');
+  assert.equal((panel.match(/activeSavedPo \|\| await persistOrder\('confirmed'\)/g) || []).length, 4);
+  assert.match(panel, /await markOrderDispatched\(po, 'whatsapp'\)/);
+  assert.match(panel, /await markOrderDispatched\(po, 'email'\)/);
+  assert.match(panel, /await markOrderDispatched\(po, 'sms'\)/);
+  assert.match(panel, /await handleCopyPoMessage\(po, activeOrderPreviewMessage\)/);
+});

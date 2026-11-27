@@ -161,3 +161,8 @@ Staff assignment updates, promotions/transfers and deletion now await their Inde
 ## Supplier and purchase-order CRUD command boundary (2026-11-27)
 
 The supplier and purchase-order CRUD callbacks no longer use the generic fire-and-forget commit wrappers. They await durable IndexedDB writes/deletes, schedule cloud synchronization only after local commit, and update React state afterward. The stock-management UI awaits these operations and exposes failures through its shared mutation error surface. Multi-line purchase-order receipt still uses its existing local atomic command and separate remote dispatch calls.
+
+
+### Purchase-order dispatch ordering (2026-11-27)
+
+Dispatch actions now await local purchase-order persistence before writing the sent status and channel. This avoids marking an order as sent when its preceding draft/confirmation command has not committed locally.
