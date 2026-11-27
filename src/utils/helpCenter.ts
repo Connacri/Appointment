@@ -16,9 +16,9 @@ export const LEGACY_ACADEMY_PROGRESS_KEY = 'omnibook_help_completed';
 export function normalizeHelpSearchText(value: string): string {
   return value
     .normalize('NFKD')
-    .replace(/\\p{M}/gu, '')
+    .replace(/\p{M}/gu, '')
     .toLocaleLowerCase()
-    .replace(/\\s+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
