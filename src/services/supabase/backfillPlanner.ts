@@ -109,7 +109,12 @@ export function stableEstablishmentId(profile: Partial<EstablishmentProfile> | n
     profile?.id && profile.id !== 'establishment-draft' && profile.id !== 'establishment-cloud'
       ? safeTrim(profile.id)
       : safeTrim(profile?.name);
-  return `est-${stableSlug(source || 'establishment')}`;
+  const slug = stableSlug(source || 'establishment');
+  // Profiles already persist canonical ids such as "est-hotel-oasis".
+  // Prefixing them again created empty duplicate establishments like
+  // "est-est-etablissement" during later backfills.
+  const normalizedSlug = slug.replace(/^(?:est-)+/, '');
+  return `est-${normalizedSlug || 'establishment'}`;
 }
 
 /**

@@ -545,3 +545,14 @@ will not see its data until they are explicitly added.
 The browser IndexedDB and Windows Native SQLite stores remain separate physical stores.
 The current native Windows companion syncs bookings only; full PMS domain parity is still
 open. Do not claim cross-platform database identity or complete Windows replication.
+
+## Canonical establishment identifiers
+
+`stableEstablishmentId` canonicalizes the `est-` prefix. A profile that already
+persists an identifier such as `est-hotel-oasis` must resolve to that same identifier;
+it must never generate `est-est-hotel-oasis`. This is required for idempotent
+backfill and to prevent a second empty establishment from being created when a
+profile id is reused as the source slug. Regression coverage exists in
+`tests/backfillPlanner.test.ts`. Existing duplicate rows are not automatically
+deleted or deactivated by this normalization; they require a separate, verified
+data-cleanup decision.

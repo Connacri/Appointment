@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { planBackfill } from '../src/services/supabase/backfillPlanner';
+import { planBackfill, stableEstablishmentId } from '../src/services/supabase/backfillPlanner';
 import { DEFAULT_ESTABLISHMENT_PROFILE } from '../src/types/establishment';
 import type { HotelEstablishment, ResourceGroup, TimelineBooking } from '../src/types/booking';
 
@@ -463,4 +463,10 @@ test('backfill idempotency keys change with payload revisions and establishment 
   assert.notEqual(getKey(base, 'establishment'), getKey(otherEstablishment, 'establishment'));
   assert.notEqual(getKey(base, 'booking'), getKey(editedBooking, 'booking'));
   assert.equal(getKey(base, 'resource'), getKey(editedInventory, 'resource'));
+});
+
+test('stable establishment ids do not double-prefix persisted canonical ids', () => {
+  assert.equal(stableEstablishmentId({ id: 'est-etablissement' }), 'est-etablissement');
+  assert.equal(stableEstablishmentId({ id: 'est-est-etablissement' }), 'est-etablissement');
+  assert.equal(stableEstablishmentId({ id: 'est-hotel-oasis' }), 'est-hotel-oasis');
 });
