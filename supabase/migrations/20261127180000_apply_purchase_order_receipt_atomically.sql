@@ -1,5 +1,6 @@
 -- data-contract: function-only
 -- Commit purchase-order receipt, immutable movement ledger and stock projections atomically.
+-- The receiptMovements array in the single purchase_order Outbox envelope is the authoritative cloud batch.
 create or replace function public.apply_purchase_order_receipt(
   p_workspace_id uuid,
   p_establishment_id text,

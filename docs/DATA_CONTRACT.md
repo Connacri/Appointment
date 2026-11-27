@@ -621,7 +621,10 @@ The stock UI now awaits draft/confirmed purchase-order persistence before markin
 
 A receipt is one durable local command. Its purchase-order Outbox payload carries the immutable
 receipt movement set; individual movement envelopes are still appended to the local P2P event
-log, but are not dispatched as independent Supabase mutations. The cloud dispatcher calls
+log, but are not dispatched as independent Supabase mutations.
+The `receiptMovements` payload is captured in the same IndexedDB transaction as the
+purchase-order state and P2P events. The Supabase receipt RPC is the only cloud writer for
+that batch; movement rows must never be replayed through `apply_stock_movement` individually. The cloud dispatcher calls
 `apply_purchase_order_receipt`, which locks the purchase order and affected stock rows,
 validates received quantities against the order lines and commits the stock movement ledger,
 stock quantity projections and `purchase_orders.status/received_at` in one PostgreSQL
