@@ -600,3 +600,8 @@ Staff creation and its optional initial tasks now share one local IndexedDB tran
 ## Awaited staff lifecycle commands (2026-11-27)
 
 Assignment, promotion/transfer and deletion now report success only after their IndexedDB persistence/tombstone command completes. Failed commands leave the UI open and do not change the staff projection. These operations remain separate from any dependent task reassignment.
+
+
+## Staff lifecycle persistence regression guard (2026-11-27)
+
+The staff lifecycle command boundary is now covered by `tests/indexedDbMutationAtomicity.test.ts`. Creation with optional initial tasks uses one multi-entity IndexedDB transaction; assignment and promotion/transfer await the same staff projection/Outbox/P2P persistence path; deletion awaits the tombstone-aware delete path. React projections and success feedback are changed only after the durable command resolves.
