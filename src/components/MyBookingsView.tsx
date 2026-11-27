@@ -357,6 +357,7 @@ export const MyBookingsView: React.FC = () => {
                   setEditPhone(clientProfile.phone);
                   setIsEditingProfile(!isEditingProfile);
                 }}
+                disabled={!deviceMutationAvailability.canMutate}
                 className="px-3.5 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white font-semibold text-xs rounded-xl transition-colors flex items-center gap-1.5"
               >
                 <Edit3 size={14} />
@@ -383,6 +384,7 @@ export const MyBookingsView: React.FC = () => {
                 type="text"
                 required
                 value={editName}
+                disabled={!deviceMutationAvailability.canMutate}
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="Nom complet"
                 className="h-8 px-3 rounded-lg bg-white/20 text-white placeholder-white/60 text-xs border border-white/30 focus:outline-none"
@@ -391,6 +393,7 @@ export const MyBookingsView: React.FC = () => {
                 type="email"
                 required
                 value={editEmail}
+                disabled={!deviceMutationAvailability.canMutate}
                 onChange={(e) => setEditEmail(e.target.value)}
                 placeholder="Email"
                 className="h-8 px-3 rounded-lg bg-white/20 text-white placeholder-white/60 text-xs border border-white/30 focus:outline-none"
@@ -400,6 +403,7 @@ export const MyBookingsView: React.FC = () => {
                   type="tel"
                   required
                   value={editPhone}
+                  disabled={!deviceMutationAvailability.canMutate}
                   onChange={(e) => setEditPhone(e.target.value)}
                   placeholder="Téléphone"
                   className="h-8 px-3 rounded-lg bg-white/20 text-white placeholder-white/60 text-xs border border-white/30 flex-1 focus:outline-none"

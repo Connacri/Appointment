@@ -169,7 +169,8 @@ interface AppContextType {
   deviceRegistry: DeviceRegistry | null;
   deviceMutationAvailability: MutationAvailability;
   configureSingleDeviceTopology: () => Promise<void>;
-  assertBusinessMutationAllowed: (allowInitialSetup?: boolean) => void;
+  assertBusinessMutationAllowed: () => void;
+  assertInitialSetupMutationAllowed: () => void;
   refreshWorkspaces: () => Promise<void>;
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -957,8 +958,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Bootstrap exception is deliberately limited to the first establishment setup.
   // It does not authorize bookings, stock, tasks, staff, invoices or other operations.
-  const assertBusinessMutationAllowed = (allowInitialSetup = false): void => {
-    if (allowInitialSetup && !hasOnboardedRef.current && !deviceRegistry) return;
+  const assertBusinessMutationAllowed = (): void => {
+    assertCriticalMutationAllowed();
+  };
+
+  const assertInitialSetupMutationAllowed = (): void => {
+    if (!hasOnboardedRef.current && !deviceRegistry) return;
     assertCriticalMutationAllowed();
   };
 
@@ -4187,7 +4192,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deviceRegistry,
         deviceMutationAvailability,
         configureSingleDeviceTopology,
-        assertBusinessMutationAllowed: (allowInitialSetup) => assertBusinessMutationAllowed(allowInitialSetup),
+        assertBusinessMutationAllowed,
+        assertInitialSetupMutationAllowed,
         refreshWorkspaces: workspace.refreshWorkspaces,
         language,
         setLanguage,

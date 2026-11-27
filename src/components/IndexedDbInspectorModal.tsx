@@ -976,7 +976,7 @@ export const IndexedDbInspectorModal: React.FC<{
                       className="hidden"
                       type="file"
                       accept=".mdb,application/x-msaccess"
-                      disabled={mdbBusy}
+                      disabled={mdbBusy || !deviceMutationAvailability.canMutate}
                       onChange={(event) => {
                         const file = event.target.files?.[0] ?? null;
                         void handleMdbImport(file);

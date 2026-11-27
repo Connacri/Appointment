@@ -77,6 +77,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     activeWorkspaceId,
     selectedEstablishmentId,
     assertBusinessMutationAllowed,
+    assertInitialSetupMutationAllowed,
     deviceMutationAvailability,
   } = useApp();
   const isRtl = language === 'ar';
@@ -233,7 +234,8 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     setIsImportingMdb(true);
     setStructureMessage('');
     try {
-      assertBusinessMutationAllowed(isFirstLaunch);
+      if (isFirstLaunch) assertInitialSetupMutationAllowed();
+      else assertBusinessMutationAllowed();
       const snapshot = await lockManager.importMdb(file);
       if (snapshot.buildings.length === 0 && snapshot.counts.rooms === 0) throw new Error('Aucun bâtiment déclaré dans BuildingInfo ni aucune chambre dans RoomInfo. L’inventaire existant a été conservé.');
       const planning = mdbSnapshotToPlanning(snapshot);
@@ -916,9 +918,9 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
                   {null}
                   {!cardLockPaths.liveMdbPath && <p>{cardLockPaths.accessNote}</p>}
                 </div>
-                <input ref={mdbInputRef} type="file" accept=".mdb,application/x-msaccess" onChange={handleMdbImport} className="hidden" />
+                <input ref={mdbInputRef} type="file" accept=".mdb,application/x-msaccess" disabled={isImportingMdb || (!deviceMutationAvailability.canMutate && !isFirstLaunch)} onChange={handleMdbImport} className="hidden" />
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" disabled={isImportingMdb} onClick={() => mdbInputRef.current?.click()}
+                  <button type="button" disabled={isImportingMdb || (!deviceMutationAvailability.canMutate && !isFirstLaunch)} onClick={() => mdbInputRef.current?.click()}
                     className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 disabled:opacity-60">
                     <Upload size={15} /> {isImportingMdb ? 'Analyse de la base en cours…' : 'Choisir CardLock.mdb'}
                   </button>

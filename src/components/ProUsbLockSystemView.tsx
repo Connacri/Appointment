@@ -1117,6 +1117,7 @@ export const ProUsbLockSystemView: React.FC = () => {
   const handleReadAuditLog = async () => {
     setIsReading(true);
     try {
+      assertBusinessMutationAllowed();
       await lockManager.readAuditLogFromCard();
       showToast('success', 'Journal des ouvertures serrure récupéré avec succès !');
     } catch (err: any) {
@@ -2327,6 +2328,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                 {mdbStatus.connected && (
                   <button
                     type="button"
+                    disabled={!deviceMutationAvailability.canMutate}
                     onClick={() => runGuardedLockMutation(() => {
                       lockManager.clearMdb();
                       setMdbStatus(lockManager.getMdbStatus());
@@ -2342,6 +2344,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                 {mdbStatus.connected && (
                   <button
                     type="button"
+                    disabled={!deviceMutationAvailability.canMutate}
                     onClick={() => runGuardedLockMutation(() => {
                       lockManager.clearPersistedData();
                       setMdbStatus(lockManager.getMdbStatus());
@@ -2568,11 +2571,8 @@ export const ProUsbLockSystemView: React.FC = () => {
                   Émettre Carte Relève (RecordCard)
                 </button>
                 <button
-                  onClick={() => {
-                    if (!runGuardedLockMutation(() => undefined)) return;
-                    void handleReadAuditLog();
-                  }}
-                  disabled={isReading}
+                  onClick={() => void handleReadAuditLog()}
+                  disabled={!deviceMutationAvailability.canMutate || isReading}
                   className="px-3.5 py-1.5 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5"
                 >
                   <RefreshCw size={14} className={isReading ? 'animate-spin' : ''} />
@@ -2832,6 +2832,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                 </div>
 
                 <button
+                  disabled={!deviceMutationAvailability.canMutate}
                   onClick={() => runGuardedLockMutation(() => lockManager.clearLogs())}
                   className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
                 >
@@ -3378,6 +3379,8 @@ export const ProUsbLockSystemView: React.FC = () => {
                 Effacer toutes les donnees persistantes (cartes emises, journal d'audit, parametres). Action irreversible.
               </p>
               <button
+                type="button"
+                disabled={!deviceMutationAvailability.canMutate}
                 onClick={() => {
                   if (window.confirm('Effacer toutes les donnees proUSB persistantes ?')) {
                     runGuardedLockMutation(() => {

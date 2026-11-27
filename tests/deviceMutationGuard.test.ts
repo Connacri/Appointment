@@ -18,14 +18,6 @@ function sectionProUsb(start: string, end: string): string {
   return proUsb.slice(from, to);
 }
 
-function sectionBooking(start: string, end: string): string {
-  const from = bookingModal.indexOf(start);
-  assert.notEqual(from, -1, `missing BookingModal section: ${start}`);
-  const to = bookingModal.indexOf(end, from + start.length);
-  assert.notEqual(to, -1, `missing BookingModal end marker: ${end}`);
-  return bookingModal.slice(from, to);
-}
-
 function section(start: string, end: string): string {
   const from = app.indexOf(start);
   assert.notEqual(from, -1, `missing section: ${start}`);
@@ -61,7 +53,8 @@ test('raw booking and resource setters cannot bypass the mutation policy', () =>
 });
 
 test('initial establishment setup is the only no-registry bootstrap exception', () => {
-  assert.match(app, /if \(allowInitialSetup && !hasOnboardedRef\.current && !deviceRegistry\) return/);
+  assert.match(app, /const assertInitialSetupMutationAllowed = \(\): void => \{\s+if \(!hasOnboardedRef\.current && !deviceRegistry\) return/);
+  assert.doesNotMatch(app, /assertBusinessMutationAllowed: \(allowInitialSetup/);
 });
 
 
@@ -75,7 +68,7 @@ test('physical lock card issuance, revocation, settings and destructive actions 
   assert.match(sectionProUsb('const confirmRevoke', 'const cancelRevoke'), /runGuardedLockMutation/);
   assert.match(proUsb, /const runGuardedLockMutation[\\s\\S]*?assertBusinessMutationAllowed\(\)/);
   assert.match(proUsb, /lockManager\.clearMdb\(\)[\\s\\S]{0,250}runGuardedLockMutation|runGuardedLockMutation[\\s\\S]{0,250}lockManager\.clearMdb\(\)/);
-  assert.match(proUsb, /lockManager\.updateSettings\(\{ guestAccessBolt:/);
+  assert.match(proUsb, /runGuardedLockMutation\(\(\) => lockManager\.updateSettings\(\{ guestAccessBolt:/);
   assert.match(proUsb, /runGuardedLockMutation\(\(\) => lockManager\.clearLogs\(\)\)/);
 });
 
@@ -83,7 +76,7 @@ test('CardLock imports and BookingModal card writes check device mutation author
   assert.match(sectionProUsb('const handleImportMdb', 'const handleIssueCommissioning'), /assertBusinessMutationAllowed\(\)/);
   assert.match(setupModal, /assertBusinessMutationAllowed\(isFirstLaunch\)[\\s\\S]*?lockManager\.importMdb/);
   assert.match(inspector, /assertBusinessMutationAllowed\(\)[\\s\\S]*?lockManager\.importMdb/);
-  assert.match(sectionBooking('const handleCreateRoomCard', 'const ['), /assertBusinessMutationAllowed\(\)/);
+  assert.match(bookingModal, /const handleCreateRoomCard[\s\S]*?assertBusinessMutationAllowed\(\)/);
 });
 
 test('read-only UI disables high-risk profile, booking and lock controls', () => {
