@@ -506,3 +506,42 @@ IndexedDB schema v15 adds:
 - Windows SQLite parity and archive integrity/restore tests remain open.
 
 The six-month rule is a performance boundary, not a legal-retention rule. Invoices, payments, audit events, card/lock security records and required accounting evidence must retain their own retention policy and must not be deleted merely because a stay is archived. Supabase remains the remote durable replica until a separately verified archive export, checksum, restore test and retention policy exist.
+
+## Workspace membership resolution and initial Gantt load (2026-11-27)
+
+Workspace resolution is based on the authenticated Supabase session and the RLS-filtered
+`workspace_members` inner join returned by `listWorkspaces()`. Membership is never
+created or inferred by the client when selecting a shared workspace.
+
+Selection order:
+- Reuse a previously selected shared workspace only when it is still returned by the
+  authenticated membership query.
+- If exactly one shared workspace is accessible, select it before creating or selecting
+  the user's own personal workspace. This prevents a staff account from silently opening
+  a new empty personal workspace instead of its hotel workspace.
+- If multiple shared workspaces are accessible and no valid shared selection is cached,
+  do not guess a tenant. Workspace selection remains unresolved and the Gantt stays gated.
+- If no shared workspace is accessible, use or create the authenticated user's personal
+  workspace as before.
+- Offline reuse remains limited to the deterministic personal workspace. A shared
+  membership cannot be assumed current while disconnected because it may have been revoked.
+
+The Gantt initial-load contract is now explicit:
+- Local IndexedDB hydration and workspace resolution must both finish first.
+- In an online authenticated workspace, the first sync must complete with phase
+  `synced` for that exact workspace before the Gantt mounts.
+- `pending`, `error`, `no_workspace`, stale workspace IDs and unresolved workspace
+  selection keep the Gantt hidden and expose a retry action.
+- Offline and unconfigured/local-only operation remains available after local hydration;
+  this is an explicit offline-first exception, not a claim that a remote sync succeeded.
+- A successful sync for a previous workspace cannot unlock the Gantt for a different
+  workspace.
+
+This selection logic does not grant access to another user's workspace. An administrator
+must establish membership through a separately secured invitation/membership workflow.
+The current production workspace has one owner membership; additional staff accounts
+will not see its data until they are explicitly added.
+
+The browser IndexedDB and Windows Native SQLite stores remain separate physical stores.
+The current native Windows companion syncs bookings only; full PMS domain parity is still
+open. Do not claim cross-platform database identity or complete Windows replication.
