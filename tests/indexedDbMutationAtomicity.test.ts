@@ -148,4 +148,5 @@ test('AppContext persists task completion and stock deductions through one atomi
   assert.match(body, /await persistStockMutationsAtomically\(/);
   assert.match(body, /field: 'status', value: 'done'/);
   assert.doesNotMatch(body, /addStockMovement\(/);
+  assert.doesNotMatch(body, /localStorage\.setItem\(['"]omnibook_(stock_items|stock_movements)/);
 });

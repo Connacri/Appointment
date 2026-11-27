@@ -580,3 +580,6 @@ The task completion command is a single durable local mutation:
 - React state changes only after the transaction commits. The new command does not add direct localStorage business writes.
 
 Boundary: Supabase still dispatches task and stock-movement entities separately. Server-side atomic completion, end-to-end P2P transport and awaited/fail-closed behavior for the remaining generic task CRUD commands are not covered by this local transaction.
+
+
+Regression guard: `tests/indexedDbMutationAtomicity.test.ts` verifies that the task-completion command stays on the atomic IndexedDB path and does not reintroduce direct localStorage writes for stock projections or movements.
