@@ -4203,7 +4203,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       : [];
 
     try {
-      const committed = await persistStaffCreationAtomically(record, initialTasks);
+      const committed = await persistStaffAndTasksAtomically(record, initialTasks);
       setStaffMembers((prev) => {
         const updated = [committed.staff, ...prev.filter((member) => member.id !== committed.staff.id)];
         localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));

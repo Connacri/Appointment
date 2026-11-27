@@ -182,7 +182,7 @@ test('task CRUD commands await durable IndexedDB persistence before updating Rea
 
 test('staff creation and optional initial tasks commit as one awaited IndexedDB command', () => {
   const appContext = readFileSync(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8');
-  const staffHelperStart = appContext.indexOf('const persistStaffCreationAtomically = async');
+  const staffHelperStart = appContext.indexOf('const persistStaffAndTasksAtomically = async');
   const staffHelperEnd = appContext.indexOf('const persistStockMutationsAtomically', staffHelperStart);
   assert.notEqual(staffHelperStart, -1);
   assert.notEqual(staffHelperEnd, -1);
@@ -198,7 +198,7 @@ test('staff creation and optional initial tasks commit as one awaited IndexedDB 
   assert.notEqual(createStart, -1);
   assert.notEqual(createEnd, -1);
   const create = appContext.slice(createStart, createEnd);
-  assert.match(create, /await persistStaffCreationAtomically\(record, initialTasks\)/);
+  assert.match(create, /await persistStaffAndTasksAtomically\(record, initialTasks\)/);
   assert.doesNotMatch(create, /commitBusinessUpsert\(/);
   assert.doesNotMatch(create, /initialTasks\.forEach\(/);
   assert.match(create, /return null/);
