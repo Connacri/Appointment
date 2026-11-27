@@ -22,6 +22,7 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 ### Fixed
 
 - **Cycle de vie des conflits de réservation P2P (IndexedDB)** : un conflit en attente passe à `superseded` lorsqu’une nouvelle frontière causale remplace l’un de ses événements sources et que le chevauchement disparaît. Les événements d’origine restent immuables ; une résolution explicite reste un événement distinct. La parité SQLite Windows et le transport authentifié restent des chantiers séparés.
+- **Détecteur de conflits de réservation natif** : le moteur Rust reproduit les règles du détecteur IndexedDB (frontière causale, heures locales sans dépendance au fuseau du PC, marge hôtelière symétrique et identifiants déterministes), avec tests natifs. La persistance SQLite et l'interface de résolution ne sont pas encore intégrées.
 
 ### Changed
 
