@@ -69,7 +69,8 @@ test('physical lock card issuance, revocation, settings and destructive actions 
   assert.match(proUsb, /const runWithCardProgress[\s\S]*?assertBusinessMutationAllowed\(\)/);
   assert.match(sectionProUsb('const confirmRevoke', 'const cancelRevoke'), /runGuardedLockMutation/);
   assert.match(proUsb, /const runGuardedLockMutation[\s\S]*?assertBusinessMutationAllowed\(\)/);
-  assert.match(proUsb, /lockManager\.clearMdb\(\)[\\s\\S]{0,250}runGuardedLockMutation|runGuardedLockMutation[\\s\\S]{0,250}lockManager\.clearMdb\(\)/);
+  assert.match(proUsb, /runGuardedLockMutation\(\(\) => \{\s*lockManager\.clearMdb\(\)/);
+  assert.match(proUsb, /runGuardedLockMutation\(\(\) => \{\s*lockManager\.clearPersistedData\(\)/);
   assert.match(proUsb, /runGuardedLockMutation\(\(\) => lockManager\.updateSettings\(\{ guestAccessBolt:/);
   assert.match(proUsb, /runGuardedLockMutation\(\(\) => lockManager\.clearLogs\(\)\)/);
 });
