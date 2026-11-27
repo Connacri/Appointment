@@ -150,8 +150,8 @@ export const ChannelManagerView: React.FC = () => {
 
   // Submit New Channel
   const handleCreateChannel = (e: React.FormEvent) => {
-    assertBusinessMutationAllowed();
     e.preventDefault();
+    assertBusinessMutationAllowed();
     if (!newChannelName.trim()) return;
 
     const providerIcons: Record<string, string> = {

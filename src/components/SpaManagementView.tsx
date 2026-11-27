@@ -165,8 +165,8 @@ export const SpaManagementView: React.FC = () => {
 
   // Create New Spa Booking
   const handleCreateAppointment = (e: React.FormEvent) => {
-    assertBusinessMutationAllowed();
     e.preventDefault();
+    assertBusinessMutationAllowed();
 
     const selectedTreatment = treatments.find((t) => t.id === formTreatmentId) || treatments[0];
     const selectedFacility = facilities.find((f) => f.id === formFacilityId) || facilities[0];
