@@ -149,16 +149,16 @@ export function isBookingConflictSuperseded(
   conflict: BookingConflictSnapshot,
   currentBookingFrontiers: readonly P2pEvent[],
 ): boolean {
-  const firstFrontier = currentBookingFrontiers.filter((event) =>
+  const firstFrontier = maximalP2pEvents(currentBookingFrontiers.filter((event) =>
     event.workspaceId === conflict.workspaceId
     && event.entity === 'booking'
     && event.entityId === conflict.firstBookingId
-  );
-  const secondFrontier = currentBookingFrontiers.filter((event) =>
+  ));
+  const secondFrontier = maximalP2pEvents(currentBookingFrontiers.filter((event) =>
     event.workspaceId === conflict.workspaceId
     && event.entity === 'booking'
     && event.entityId === conflict.secondBookingId
-  );
+  ));
   const firstReplaced = firstFrontier.length > 0
     && !firstFrontier.some((event) => event.eventId === conflict.firstEventId);
   const secondReplaced = secondFrontier.length > 0
