@@ -117,7 +117,7 @@ export function detectP2pBookingConflicts(
         || a.booking.resourceId !== b.booking.resourceId) continue;
       const turnover = a.booking.sector === 'hotel' || b.booking.sector === 'hotel' ? 10 : 0;
       if (a.range.start < b.range.end + turnover && a.range.end + turnover > b.range.start) {
-        const first = a.booking.id.localeCompare(b.booking.id) <= 0 ? a : b;
+        const first = a.booking.id <= b.booking.id ? a : b;
         const second = first === a ? b : a;
         conflicts.push({
           id: stableConflictId(a.event.workspaceId, a.event.eventId, b.event.eventId),
@@ -136,7 +136,7 @@ export function detectP2pBookingConflicts(
       }
     }
   }
-  return conflicts.sort((a, b) => a.id.localeCompare(b.id));
+  return conflicts.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
 
 
