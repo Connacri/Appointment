@@ -291,6 +291,18 @@ export async function listBookings(workspaceId: WorkspaceId, establishmentId?: s
   return bookings;
 }
 
+export interface BookingsWindowResult {
+  data: TimelineBooking[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+/**
+ * Historical date-window query. The overlap predicates align with
+ * idx_bookings_calendar (workspace_id, start_date, end_date) and keep the
+ * normal sync path from loading archived history.
+ */
 export async function listBookingsWindow(
   workspaceId: WorkspaceId,
   startDate: string,

@@ -500,7 +500,7 @@ IndexedDB schema v15 adds:
 
 **Current alignment status — partial implementation, not a completed retention pipeline:**
 - Local IndexedDB archival, manifest tracking, operational-window hydration and lazy local date-window reads are implemented.
-- Supabase still retains the complete booking history. The normal sync pull now requests only rows with end_date on/after the six-month cutoff or a non-terminal status; historical windows remain available through listBookingsWindow. This change does not delete or move remote rows and does not yet create private Storage archive objects.
+- Supabase still retains the complete booking history. The normal sync pull now requests only rows with end_date on/after the six-month cutoff or a non-terminal status; historical windows remain available through the paginated, overlap-safe listBookingsWindow query using the composite booking calendar index. This change does not delete or move remote rows and does not yet create private Storage archive objects.
 - The 365-day analytics view now loads the required historical window lazily from the local archive and supplements it from Supabase; it does not hydrate older rows during normal app startup. If the remote history is unavailable and a device lacks the corresponding local archive, the comparison is explicitly partial/unavailable.
 - The authenticated P2P inbound projection still needs an archive-aware projection path so old terminal events cannot repopulate the operational store.
 - Windows SQLite parity and archive integrity/restore tests remain open.

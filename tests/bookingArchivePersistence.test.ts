@@ -11,7 +11,8 @@ const analyticsSource = readFileSync(
 test('historical archive reads are indexed by workspace and booking start date', () => {
   assert.match(dbSource, /createIndex\('workspaceStartDate', \['workspaceId', 'startDate'\]/);
   assert.match(dbSource, /index\('workspaceStartDate'\)\.openCursor/);
-  assert.match(dbSource, /offset < limit/);
+  assert.match(dbSource, /skipped < offset/);
+  assert.match(dbSource, /result.length < limit/);
 });
 
 test('analytics loads archives only for the 365-day comparison window', () => {
