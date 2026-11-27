@@ -158,3 +158,10 @@ test('room replenishment cannot edit quantities or commit stock while read-only'
   assert.match(replenishmentModal, /disabled=\{!deviceMutationAvailability\.canMutate/);
   assert.match(replenishmentModal, /recordRoomReplenishment/);
 });
+
+
+test('billing creation and supplier dispatch actions are disabled or blocked in read-only mode', () => {
+  assert.match(billing, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
+  assert.match(billing, /handleCreateDocument[\s\S]*?assertBusinessMutationAllowed\(\)/);
+  assert.match(stockManagement, /event\.preventDefault\(\)[\s\S]*?aria-disabled=\{!deviceMutationAvailability\.canMutate\}/);
+});

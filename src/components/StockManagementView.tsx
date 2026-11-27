@@ -1262,11 +1262,16 @@ export const StockManagementView: React.FC = () => {
                             href={waUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            onClick={() => {
-                              if (!deviceMutationAvailability.canMutate) return;
+                            onClick={(event) => {
+                              if (!deviceMutationAvailability.canMutate) {
+                                event.preventDefault();
+                                return;
+                              }
                               const po = activeSavedPo || persistOrder('confirmed');
                               if (po) markOrderDispatched(po, 'whatsapp');
                             }}
+                            aria-disabled={!deviceMutationAvailability.canMutate}
+                            tabIndex={deviceMutationAvailability.canMutate ? 0 : -1}
                             className="min-h-[44px] px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-xs"
                           >
                             <MessageCircle size={15} />
@@ -1277,11 +1282,16 @@ export const StockManagementView: React.FC = () => {
                         {mailUrl ? (
                           <a
                             href={mailUrl}
-                            onClick={() => {
-                              if (!deviceMutationAvailability.canMutate) return;
+                            onClick={(event) => {
+                              if (!deviceMutationAvailability.canMutate) {
+                                event.preventDefault();
+                                return;
+                              }
                               const po = activeSavedPo || persistOrder('confirmed');
                               if (po) markOrderDispatched(po, 'email');
                             }}
+                            aria-disabled={!deviceMutationAvailability.canMutate}
+                            tabIndex={deviceMutationAvailability.canMutate ? 0 : -1}
                             className="min-h-[44px] px-3.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold inline-flex items-center gap-1.5"
                           >
                             <Mail size={15} />
@@ -1296,11 +1306,16 @@ export const StockManagementView: React.FC = () => {
                         {smsUrl && (
                           <a
                             href={smsUrl}
-                            onClick={() => {
-                              if (!deviceMutationAvailability.canMutate) return;
+                            onClick={(event) => {
+                              if (!deviceMutationAvailability.canMutate) {
+                                event.preventDefault();
+                                return;
+                              }
                               const po = activeSavedPo || persistOrder('confirmed');
                               if (po) markOrderDispatched(po, 'sms');
                             }}
+                            aria-disabled={!deviceMutationAvailability.canMutate}
+                            tabIndex={deviceMutationAvailability.canMutate ? 0 : -1}
                             className="min-h-[44px] px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-xs font-bold inline-flex items-center gap-1.5"
                           >
                             <Phone size={14} />
@@ -1455,8 +1470,12 @@ export const StockManagementView: React.FC = () => {
                             href={waUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            onClick={() => {
-                              if (deviceMutationAvailability.canMutate) markOrderDispatched(po, 'whatsapp');
+                            onClick={(event) => {
+                              if (!deviceMutationAvailability.canMutate) {
+                                event.preventDefault();
+                                return;
+                              }
+                              markOrderDispatched(po, 'whatsapp');
                             }}
                             aria-disabled={!deviceMutationAvailability.canMutate}
                             tabIndex={deviceMutationAvailability.canMutate ? 0 : -1}

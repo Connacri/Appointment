@@ -27,7 +27,7 @@ import { InvoicePreviewModal } from './InvoicePreviewModal';
 import { playClickFeedback } from '../utils/audioFeedback';
 
 export const BillingInvoicingView: React.FC = () => {
-  const { language, activeSector, currentDomain, establishmentProfile, setIsEstablishmentModalOpen, currency, logEvent, assertBusinessMutationAllowed } = useApp();
+  const { language, activeSector, currentDomain, establishmentProfile, setIsEstablishmentModalOpen, currency, logEvent, assertBusinessMutationAllowed, deviceMutationAvailability } = useApp();
   const activeCurrency = establishmentProfile.defaultCurrency || currency || 'DA';
 
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => {
@@ -291,6 +291,7 @@ export const BillingInvoicingView: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsCreateModalOpen(true)}
+            disabled={!deviceMutationAvailability.canMutate}
             className="flex items-center gap-1.5 h-8 sm:h-9 px-3 sm:px-3.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
           >
             <Plus size={15} />
@@ -652,7 +653,7 @@ export const BillingInvoicingView: React.FC = () => {
                     <label htmlFor="billing-customer-name" className={fieldLabelClass}>
                       Nom ou société *
                     </label>
-                    <input
+                    <input disabled={!deviceMutationAvailability.canMutate}
                       id="billing-customer-name"
                       type="text"
                       required
@@ -667,7 +668,7 @@ export const BillingInvoicingView: React.FC = () => {
                     <label htmlFor="billing-customer-email" className={fieldLabelClass}>
                       E-mail
                     </label>
-                    <input
+                    <input disabled={!deviceMutationAvailability.canMutate}
                       id="billing-customer-email"
                       type="email"
                       autoComplete="email"
@@ -681,7 +682,7 @@ export const BillingInvoicingView: React.FC = () => {
                     <label htmlFor="billing-customer-phone" className={fieldLabelClass}>
                       Téléphone
                     </label>
-                    <input
+                    <input disabled={!deviceMutationAvailability.canMutate}
                       id="billing-customer-phone"
                       type="tel"
                       autoComplete="tel"
@@ -695,7 +696,7 @@ export const BillingInvoicingView: React.FC = () => {
                     <label htmlFor="billing-customer-address" className={fieldLabelClass}>
                       Adresse de facturation
                     </label>
-                    <input
+                    <input disabled={!deviceMutationAvailability.canMutate}
                       id="billing-customer-address"
                       type="text"
                       autoComplete="street-address"
@@ -721,6 +722,7 @@ export const BillingInvoicingView: React.FC = () => {
                         { id: String(Date.now()), description: 'Option / Service supplémentaire', quantity: 1, unitPrice: 50, vatRate: 10, total: 50 },
                       ]);
                     }}
+                    disabled={!deviceMutationAvailability.canMutate}
                     className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold text-blue-600 transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:text-blue-400 dark:hover:bg-blue-950/40 sm:min-h-9"
                   >
                     <Plus size={14} />
@@ -754,7 +756,7 @@ export const BillingInvoicingView: React.FC = () => {
                         <label htmlFor={`line-description-${it.id}`} className={`${fieldLabelClass} sm:sr-only`}>
                           Description
                         </label>
-                        <input
+                        <input disabled={!deviceMutationAvailability.canMutate}
                           id={`line-description-${it.id}`}
                           type="text"
                           value={it.description}
@@ -769,7 +771,7 @@ export const BillingInvoicingView: React.FC = () => {
                         <label htmlFor={`line-quantity-${it.id}`} className={`${fieldLabelClass} sm:sr-only`}>
                           Qté
                         </label>
-                        <input
+                        <input disabled={!deviceMutationAvailability.canMutate}
                           id={`line-quantity-${it.id}`}
                           type="number"
                           min="1"
@@ -786,7 +788,7 @@ export const BillingInvoicingView: React.FC = () => {
                         <label htmlFor={`line-unit-price-${it.id}`} className={`${fieldLabelClass} sm:sr-only`}>
                           P.U. ({activeCurrency})
                         </label>
-                        <input
+                        <input disabled={!deviceMutationAvailability.canMutate}
                           id={`line-unit-price-${it.id}`}
                           type="number"
                           min="0"
@@ -831,7 +833,7 @@ export const BillingInvoicingView: React.FC = () => {
                 <label htmlFor="billing-promo" className={fieldLabelClass}>
                   Promotion ou réduction
                 </label>
-                <select
+                <select disabled={!deviceMutationAvailability.canMutate}
                   id="billing-promo"
                   value={newSelectedPromo}
                   onChange={(e) => setNewSelectedPromo(e.target.value)}
