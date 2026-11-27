@@ -1833,7 +1833,7 @@ class IndexedDbStore {
   /** List durable cross-ID booking conflicts for the conflict-resolution UI. */
   public async getP2pBookingConflicts(
     workspaceId: string,
-    status?: 'pending' | 'resolved' | 'rejected',
+    status?: 'pending' | 'resolved' | 'rejected' | 'superseded',
     limit = 200,
   ): Promise<BookingConflictSnapshot[]> {
     if (!workspaceId.trim()) return [];
