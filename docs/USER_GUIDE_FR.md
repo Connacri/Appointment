@@ -143,7 +143,38 @@ En conséquence :
 - ne partagez pas un profil de navigateur ou une copie de base locale entre plusieurs postes ;
 - limitez le multi-postes aux essais contrôlés jusqu'à livraison du registre partagé, du transport authentifié, de la coordination transactionnelle et du verrouillage global.
 
-### 4.3 Coupure réseau et reconnexion
+### 4.3 Edge sur PC et Chrome Canary sur Android : pourquoi aucun appareil n'apparaît
+
+Si Appointment est ouvert dans Microsoft Edge sur le PC et dans Chrome Canary sur un téléphone OPPO, la détection LAN native actuelle ne peut pas les découvrir. Ce n'est pas un réglage caché de Chrome, un problème de version Edge ou une preuve que le Wi-Fi est défectueux.
+
+La raison est technique :
+- le protocole LAN v1 utilise des datagrammes UDP multicast IPv4 ;
+- le programme Windows natif et le plugin Android natif peuvent ouvrir ces sockets ;
+- une page Web exécutée dans Edge ou Chrome ne peut pas ouvrir ce socket UDP multicast brut ;
+- le module Web ne charge donc pas le moteur de découverte natif Android/Windows.
+
+**Combinaisons actuellement prises en charge pour la découverte de présence :**
+
+| Poste PC | Téléphone | Découverte LAN |
+|---|---|---|
+| Appointment Windows natif (.exe) | Appointment Android natif (.apk) | Oui, si le réseau autorise le multicast |
+| Appointment Web dans Edge | Appointment Web dans Chrome Canary | Non |
+| Appointment Web dans Edge | Appointment Android natif (.apk) | Non |
+| Appointment Web dans Chrome Android | Appointment Windows natif (.exe) | Non |
+
+Pour tester le mécanisme natif existant :
+1. Installez l'EXE Windows officiel sur le PC.
+2. Installez l'APK Android officiel sur l'OPPO.
+3. Connectez les deux appareils au même réseau local IPv4, sans isolation des clients Wi-Fi.
+4. Gardez les deux applications natives ouvertes au premier plan.
+5. Autorisez Appointment dans le pare-feu Windows sur les réseaux privés.
+6. Vérifiez l'indicateur de pairs détectés.
+
+**Important :** cet indicateur confirme uniquement la présence d'un terminal. Il ne prouve ni l'appairage, ni l'authentification, ni l'autorisation d'écriture, ni la réplication des réservations, du stock ou des factures.
+
+La détection entre navigateurs nécessite un transport séparé : signalisation authentifiée et limitée au workspace (par exemple Supabase Realtime), WebRTC DataChannels, STUN et relais TURN lorsque le réseau bloque les connexions directes, appairage cryptographique et contrôle d'autorisation. Ce transport WebRTC n'est pas encore livré. N'utilisez donc pas deux navigateurs indépendants comme deux postes de production synchronisés.
+
+### 4.4 Coupure réseau et reconnexion
 
 | Situation | Comportement de sécurité | Consigne |
 |---|---|---|
