@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 const migration = readFileSync(
-  new URL('../supabase/migrations/20261127001800_harden_public_table_privileges.sql', import.meta.url),
+  new URL('../supabase/migrations/20261127001723_harden_public_table_privileges.sql', import.meta.url),
   'utf8',
 );
 
