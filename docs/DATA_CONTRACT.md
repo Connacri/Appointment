@@ -142,7 +142,7 @@ event references both source event IDs and every cancellation event ID. Receivin
 accept the resolution only after the cancellation events are present in the current booking
 frontiers and the resolution vector clock causally includes those events. Pending conflicts
 are rechecked after subsequent inbound batches, so out-of-order resolution delivery remains
-pending until its prerequisites arrive.
+pending until its prerequisites arrive. A pending snapshot is marked `superseded` (without deleting source events) when a causally newer booking frontier replaces either source event and the overlap no longer exists; an active overlap remains pending.
 
 Not yet implemented: a user-facing conflict-resolution UI, Windows SQLite conflict registry
 and resolution parity, authenticated pairing/revocation, live Windows↔Android transport,
