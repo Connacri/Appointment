@@ -47,6 +47,28 @@ import { RoleIcon } from './RoleIcon';
 import { supabase } from '../services/supabase/supabaseClient';
 import { DEFAULT_FAVICON_PATH, resolveAppIconHref } from '../utils/faviconSync';
 
+const prefetchViewChunk = (view: string) => {
+  switch (view) {
+    case 'tasks': void import('./TasksManagementView').catch(() => undefined); break;
+    case 'stock': void import('./StockManagementView').catch(() => undefined); break;
+    case 'pricing': void import('./DynamicPricingView').catch(() => undefined); break;
+    case 'analytics': void import('./BookingAnalyticsView').catch(() => undefined); break;
+    case 'billing': void import('./BillingInvoicingView').catch(() => undefined); break;
+    case 'my_bookings': void import('./MyBookingsView').catch(() => undefined); break;
+    case 'housekeeping': void import('./HousekeepingView').catch(() => undefined); break;
+    case 'lost_property': void import('./LostPropertyView').catch(() => undefined); break;
+    case 'channels': void import('./ChannelManagerView').catch(() => undefined); break;
+    case 'reports': void import('./ReportsView').catch(() => undefined); break;
+    case 'events': void import('./EventLogView').catch(() => undefined); break;
+    case 'prousb': void import('./ProUsbLockSystemView').catch(() => undefined); break;
+    case 'spa': void import('./SpaManagementView').catch(() => undefined); break;
+    case 'roles': void import('./RoleManagementView').catch(() => undefined); break;
+    case 'help': void import('./HelpCenterView').catch(() => undefined); break;
+    case 'videos': void import('./VideoHubView').catch(() => undefined); break;
+    default: break;
+  }
+};
+
 export const Sidebar: React.FC = () => {
   const {
     language,
@@ -360,6 +382,8 @@ export const Sidebar: React.FC = () => {
                   key={item.id}
                   type="button"
                   onClick={() => handleNavClick(item.view)}
+                  onPointerEnter={() => prefetchViewChunk(item.view)}
+                  onFocus={() => prefetchViewChunk(item.view)}
                   aria-current={isActive ? 'page' : undefined}
                   aria-label={item.label}
                   title={item.label}
@@ -662,6 +686,8 @@ export const Sidebar: React.FC = () => {
           {isTabAllowedForRole(activeRoleDefinition, 'help') && (
             <button
               type="button"
+              onPointerEnter={() => prefetchViewChunk('help')}
+              onFocus={() => prefetchViewChunk('help')}
               onClick={() => {
                 setActiveView('help');
                 setIsSidebarMobileOpen(false);

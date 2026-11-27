@@ -32,3 +32,11 @@ test('mobile operational notifications are nested in the compact More menu', () 
   assert.match(topBar, /mobile-staff-notifications-btn/);
   assert.match(topBar, /setNotifMenuRect\(computeClampedPopoverRect\(moreMenuRef\.current, 320, !isRtlDir\)\)/);
 });
+
+test('secondary navigation chunks are prefetched on pointer intent and keyboard focus', () => {
+  const sidebar = readFileSync(new URL('../src/components/Sidebar.tsx', import.meta.url), 'utf8');
+  assert.match(sidebar, /onPointerEnter=\{\(\) => prefetchViewChunk\(item\.view\)\}/);
+  assert.match(sidebar, /onFocus=\{\(\) => prefetchViewChunk\(item\.view\)\}/);
+  assert.match(sidebar, /case 'billing': void import\('\.\/BillingInvoicingView'\)/);
+  assert.match(sidebar, /case 'prousb': void import\('\.\/ProUsbLockSystemView'\)/);
+});
