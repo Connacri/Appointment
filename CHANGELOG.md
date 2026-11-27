@@ -19,6 +19,10 @@ Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) 
 - **Lecture totale de n'importe quelle carte** : le décodeur ne rejette plus rien. Une carte d'un autre système (en-tête `C9 12` absent) est affichée avec ses octets bruts, sans qu'aucun champ ne soit inventé ; une trame courte est complétée et signalée ; les octets `[4..5]`, `[6..8]` et `[13..15]` sont désormais exposés. L'interface affiche un bandeau « autre système », le site, le contrôle `~site`, la liste des anomalies et une table octet par octet.
 - **Distinction clé de recherche / ID `CardInfo`** : l'application affichait `Mid(CardData,19,8)` sous l'étiquette « ID », alors que l'ID du logiciel d'origine est l'AutoNumber de `CardInfo`. Les deux valeurs sont maintenant affichées séparément (`Clé de recherche` et `ID dans CardInfo` / `Operator Code`), avec « absent » si la ligne n'existe pas encore.
 
+### Fixed
+
+- **Cycle de vie des conflits de réservation P2P (IndexedDB)** : un conflit en attente passe à `superseded` lorsqu’une nouvelle frontière causale remplace l’un de ses événements sources et que le chevauchement disparaît. Les événements d’origine restent immuables ; une résolution explicite reste un événement distinct. La parité SQLite Windows et le transport authentifié restent des chantiers séparés.
+
 ### Changed
 
 - **Cycle de vie du personnel sécurisé hors ligne** : création de la fiche et de ses tâches initiales dans une transaction IndexedDB unique (Outbox et événements P2P inclus en mode Workspace) ; affectation, promotion, transfert et suppression attendent la persistance durable avant mise à jour de l’interface ou confirmation de succès.
