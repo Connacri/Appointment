@@ -615,3 +615,21 @@ Supplier create/update/delete and purchase-order create/update/delete now await 
 ## Purchase-order dispatch persistence ordering (2026-11-27)
 
 The stock UI now awaits draft/confirmed purchase-order persistence before marking a dispatch as sent through WhatsApp, email, SMS or copy. A failed local save prevents the sent-status update; the shared stock mutation error surface reports the failure.
+
+
+## Atomic cloud purchase-order receipt (2026-11-27)
+
+A receipt is one durable local command. Its purchase-order Outbox payload carries the immutable
+receipt movement set; individual movement envelopes are still appended to the local P2P event
+log, but are not dispatched as independent Supabase mutations. The cloud dispatcher calls
+`apply_purchase_order_receipt`, which locks the purchase order and affected stock rows,
+validates received quantities against the order lines and commits the stock movement ledger,
+stock quantity projections and `purchase_orders.status/received_at` in one PostgreSQL
+transaction. A retry after a lost ACK verifies the exact committed movement set and returns
+success without applying quantities twice. Later edits to the same order are held behind a
+failed receipt Outbox record. Local/offline receipt remains durable locally and is not
+represented as cloud-confirmed until this RPC commits.
+
+The RPC is an online workspace operation and relies on the existing authenticated RLS policies
+for purchase-order and stock-item mutation. It does not create global stock consensus between
+disconnected devices; offline local state remains provisional until reconciliation.
