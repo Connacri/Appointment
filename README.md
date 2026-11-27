@@ -90,7 +90,7 @@ QR) ne sont téléchargées qu'au premier usage. Voir [docs/ARCHITECTURE.md](./d
 
 ### État des données et synchronisation
 
-Appointment PMS est **offline-first** : IndexedDB reste la source de vérité locale. Le client Supabase et le schéma distant du projet Appointment sont présents (PostgreSQL 17, 16 tables publiques avec RLS activé). Le contexte workspace et l'Outbox transactionnelle sont partiellement raccordés au CRUD des réservations. En revanche, le worker réseau de push/pull n'est pas encore livré : les événements Outbox peuvent donc rester en attente. La présence du client, du schéma ou d'un indicateur réseau ne signifie pas que les données sont synchronisées. Les autres domaines métier ne sont pas encore tous raccordés. Voir [SUPABASE_SYNC_PLAN.md](./docs/SUPABASE_SYNC_PLAN.md) pour l'état exact.
+Appointment PMS est **offline-first** : IndexedDB reste la source de vérité locale. Le projet Supabase distant utilise PostgreSQL 17 et expose 21 tables publiques, toutes avec RLS activé (état vérifié le 27-11-2026). Le moteur de synchronisation push/pull est livré et déclenché par l'application (mutations Outbox, reprise au focus, invalidations Realtime, watchdog périodique et synchronisation manuelle). Ses dispatchers couvrent 11 entités, mais la couverture CRUD reste incomplète : factures et tarifs dynamiques ne sont pas envoyés, et certains modules (Channel Manager, Spa, audit) restent locaux ou partiels. Le P2P LAN livré ne fait que découvrir les pairs ; il ne transporte pas encore les événements métier et n'est pas prêt pour le multi-appareils en production. Un statut réseau ou une présence de pair ne prouve jamais la synchronisation ni l'exclusivité des réservations. Voir [le plan Supabase/P2P](./docs/SUPABASE_SYNC_PLAN.md) et [l'audit CRUD](./docs/CRUD_SYNC_AUDIT.md).
 
 ### Import de la base proUSB CardLock
 
@@ -176,6 +176,7 @@ Les artefacts de release utilisent le préfixe `Appointment-PMS` et la version d
 
 - [Contrat et consignes de développement](./AGENTS.md)
 - [Architecture applicative](./docs/ARCHITECTURE.md)
+- [Politique d'archivage et rétention des réservations](./docs/ARCHIVE_POLICY.md)
 - [Internationalisation et RTL](./docs/I18N.md)
 - [Inventaire des données et conformité Play / RGPD](./docs/COMPLIANCE.md)
 - [Scorecard de santé engineering](./docs/HEALTH.md)
