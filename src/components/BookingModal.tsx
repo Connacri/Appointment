@@ -241,7 +241,7 @@ export const BookingModal: React.FC = () => {
 
   // Dedicated Domain Specific Predefined States
   // 1. HOTEL Specific
-  const [hotelAdults, setHotelAdults] = useState(2);
+  const [hotelAdults, setHotelAdults] = useState(1);
   const [hotelChildren, setHotelChildren] = useState(0);
   const [hotelMealPlan, setHotelMealPlan] = useState<'room_only' | 'breakfast' | 'half_board' | 'full_board'>('breakfast');
   const [hotelCheckinTime, setHotelCheckinTime] = useState('15:00');
@@ -293,7 +293,7 @@ export const BookingModal: React.FC = () => {
   }, [isOpen]);
 
   // 2. RESORT Specific
-  const [resortOccupants, setResortOccupants] = useState(4);
+  const [resortOccupants, setResortOccupants] = useState(1);
   const [resortFormula, setResortFormula] = useState<'all_inclusive' | 'half_board' | 'spa_package'>('all_inclusive');
   const [resortCheckinTime, setResortCheckinTime] = useState('14:00');
   const [resortOptionPrivatePool, setResortOptionPrivatePool] = useState(true);
@@ -404,6 +404,10 @@ export const BookingModal: React.FC = () => {
       }
     } else {
       // New booking initialization strictly scoped to active domain
+      // Every new reservation starts with one adult; historical/edit values are hydrated below.
+      setHotelAdults(1);
+      setHotelChildren(0);
+      setResortOccupants(1);
       const defaultResId = domainResources[0]?.id || '';
       if (newBookingInitialSlot?.resourceId) {
         // verify if this resource belongs to domainResources

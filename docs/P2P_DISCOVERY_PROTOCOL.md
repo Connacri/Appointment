@@ -47,3 +47,21 @@ This protocol only discovers candidates. It does not open a TCP listener, pair d
 ## Network limitations
 
 Both devices must be on the same IPv4 multicast-capable LAN segment. Guest Wi-Fi client isolation, VLAN separation, multicast filtering, endpoint firewalls or a disabled multicast-capable interface can block discovery. This protocol does not cross routers, the public Internet or NAT boundaries.
+
+
+## Browser compatibility — important
+
+The multicast implementation is native-only. The following combinations do **not** discover one another:
+
+| Device A | Device B | LAN discovery |
+|---|---|---|
+| Appointment Windows native EXE | Appointment Android native APK | Supported, subject to same-LAN multicast and firewall conditions |
+| Appointment Web in Microsoft Edge | Appointment Web in Chrome/Chrome Canary on Android | Not supported |
+| Appointment Web in Edge | Appointment Android native APK | Not supported |
+| Appointment Web in Chrome on Android | Appointment Windows native EXE | Not supported |
+
+Edge and Chrome Canary are browser runtimes. They do not load the Capacitor Android UDP multicast plugin, and a browser page cannot open the raw IPv4 multicast socket used by protocol v1. Changing browser brand, browser channel or Android device does not change this platform boundary.
+
+For the reported setup (Edge on the PC + Chrome Canary on the OPPO), zero detected peers is the expected behavior, not evidence of a Wi-Fi fault. To validate the existing discovery implementation, install and launch the **native Appointment Windows EXE** on the PC and the **native Appointment Android APK** on the OPPO, put both on the same non-isolated IPv4 Wi-Fi/LAN, keep both apps in the foreground, and allow the app through the Windows firewall on Private networks. The peer indicator reports presence only; it does not mean that business data is synchronized.
+
+Browser-to-browser discovery needs a separate implementation: authenticated signaling (for example a workspace-scoped Supabase Realtime channel), WebRTC data channels, STUN and a TURN fallback for restrictive NAT/firewalls, device pairing and key authentication. It must not be represented as LAN multicast or trusted coordination authority. This transport is not implemented by protocol v1.

@@ -107,10 +107,10 @@ export const LanDiscoveryStatus: React.FC = () => {
   const isFrench = language === 'fr';
   const count = Object.keys(peers).length;
   const browserMessage = isArabic
-    ? 'متصفح الويب لا يتيح اكتشاف أجهزة LAN مباشرة. استخدم تطبيق Appointment الأصلي.'
+    ? 'نسخة الويب لا تكتشف أجهزة LAN: Edge على الكمبيوتر وChrome Canary على Android يعملان كمتصفحين، وليس كتطبيق Appointment الأصلي. يلزم اكتشاف WebRTC بإشارة موثقة، وهو غير منفذ بعد.'
     : isFrench
-      ? 'Ce navigateur ne permet pas la découverte LAN native. Utilisez Appointment natif pour détecter les appareils.'
-      : 'This browser cannot perform native LAN discovery. Use the native Appointment app to discover devices.';
+      ? 'La version web ne détecte pas les appareils LAN : Edge sur PC et Chrome Canary sur Android sont deux navigateurs, pas les applications natives Appointment. La découverte WebRTC avec signalisation authentifiée n’est pas encore implémentée.'
+      : 'The web version cannot discover LAN peers: Edge on PC and Chrome Canary on Android are browsers, not the native Appointment apps. Authenticated WebRTC signaling is not implemented yet.';
 
   if (!nativeDiscoveryAvailable) {
     return (
@@ -122,7 +122,7 @@ export const LanDiscoveryStatus: React.FC = () => {
       >
         <WifiOff size={14} className="shrink-0 text-slate-400" aria-hidden="true" />
         <span className="min-w-0 truncate">
-          {isFrench ? 'Pairs LAN : découverte native non disponible dans ce navigateur' : isArabic ? 'أجهزة الشبكة المحلية: الاكتشاف الأصلي غير متاح في هذا المتصفح' : 'LAN peers: native discovery unavailable in this browser'}
+          {isFrench ? 'Pairs LAN : découverte non disponible en version web' : isArabic ? 'أجهزة الشبكة المحلية: الاكتشاف غير متاح في نسخة الويب' : 'LAN peers: discovery unavailable in web version'}
         </span>
       </div>
     );
