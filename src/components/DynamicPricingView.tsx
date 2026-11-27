@@ -1021,6 +1021,7 @@ export const DynamicPricingView: React.FC = () => {
               onClearRate={clearDynamicRate}
               onStepRate={stepSelectedRate}
               onApplyMultiplier={applyMultiplierToDay}
+              disabled={!deviceMutationAvailability.canMutate}
               renderHolidayBadgeIcon={renderHolidayBadgeIcon}
             />
           )}
