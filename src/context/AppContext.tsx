@@ -224,7 +224,7 @@ interface AppContextType {
     note?: string;
     createInitialTasks?: boolean;
     initialRoom?: string;
-  }) => StaffMemberRecord;
+  }) => Promise<StaffMemberRecord | null>;
   updateStaffAssignment: (
     staffId: string,
     patch: {
@@ -1031,6 +1031,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       scheduleAutoSync();
     }
     return committedRows.map((row) => row.payload as unknown as PmsTask);
+  };
+
+  const persistStaffCreationAtomically = async (
+    staff: StaffMemberRecord,
+    initialTasks: readonly PmsTask[],
+  ): Promise<{ staff: StaffMemberRecord; tasks: PmsTask[] }> => {
+    assertBusinessMutationAllowed();
+    const identities = new Set<string>();
+    const mutations = [
+      {
+        entity: 'staff_member' as const,
+        entityId: staff.id,
+        payload: staff as unknown as Record<string, unknown>,
+      },
+      ...initialTasks.map((task) => {
+        if (!task.id.trim() || identities.has(task.id)) {
+          throw new Error('Le lot de tâches initiales contient un identifiant vide ou dupliqué.');
+        }
+        identities.add(task.id);
+        return {
+          entity: 'task' as const,
+          entityId: task.id,
+          payload: task as unknown as Record<string, unknown>,
+        };
+      }),
+    ];
+
+    const workspaceId = workspace.activeWorkspaceId?.trim();
+    const committedRows = !workspaceId
+      ? await indexedDb.putLocalBusinessEntitiesAtomically(mutations)
+      : await indexedDb.enqueueWorkspaceUpsertsAtomically(
+        (() => {
+          const establishmentId = resolveMutationEstablishmentId();
+          if (!establishmentId || establishmentId === 'all') {
+            throw new Error('Établissement réel requis pour créer un membre du personnel.');
+          }
+          return { workspaceId, establishmentId };
+        })(),
+        mutations,
+        `staff-create-${createMutationId()}`,
+      );
+    if (workspaceId) scheduleAutoSync();
+
+    const committedStaff = committedRows.find((row) => row.entity === 'staff_member')?.payload;
+    if (!committedStaff) throw new Error('Création du membre du personnel non confirmée par IndexedDB.');
+    const committedTasks = committedRows
+      .filter((row) => row.entity === 'task')
+      .map((row) => row.payload as unknown as PmsTask);
+    if (committedTasks.length !== initialTasks.length) {
+      throw new Error('Création des tâches initiales incomplète.');
+    }
+    return {
+      staff: committedStaff as unknown as StaffMemberRecord,
+      tasks: committedTasks,
+    };
   };
 
   const persistStockMutationsAtomically = async (
@@ -4122,38 +4177,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const createStaffMember: AppContextType['createStaffMember'] = (input) => {
+  const createStaffMember: AppContextType['createStaffMember'] = async (input): Promise<StaffMemberRecord | null> => {
     const approvedBy = resolveActorLabel(currentRoleRef.current);
     const record = buildStaffMemberRecord({
       fullName: input.fullName, phone: input.phone, roleId: input.roleId,
       assignment: input.assignment, shift: input.shift, defaultTasks: input.defaultTasks,
       status: input.status || 'active', note: input.note, approvedBy,
     });
-    commitBusinessUpsert('staff_member', record.id, record as unknown as Record<string, unknown>, () => {
+    const role = resolveRoleDefinition(rolesRef.current, input.roleId);
+    const room = input.initialRoom?.trim() || record.assignment || 'Étage 1';
+    const date = new Date().toISOString().slice(0, 10);
+    const initialTasks: PmsTask[] = input.createInitialTasks
+      ? record.defaultTasks.map((taskTitle) => ({
+        id: `tsk_${createMutationId()}`,
+        room,
+        typeId: 'custom',
+        typeName: taskTitle,
+        category: mapRoleToTaskCategory(role),
+        assignee: record.fullName,
+        date,
+        status: 'pending',
+        priority: 'normal',
+        note: `${role.label.fr} · ${record.assignment} (${record.shift})`,
+      }))
+      : [];
+
+    try {
+      const committed = await persistStaffCreationAtomically(record, initialTasks);
       setStaffMembers((prev) => {
-        const updated = [record, ...prev];
+        const updated = [committed.staff, ...prev.filter((member) => member.id !== committed.staff.id)];
         localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
         return updated;
       });
-      const role = resolveRoleDefinition(rolesRef.current, input.roleId);
+      if (committed.tasks.length > 0) {
+        setTasks((prev) => [
+          ...committed.tasks,
+          ...prev.filter((task) => !committed.tasks.some((created) => created.id === task.id)),
+        ]);
+      }
       logEvent({
         category: 'system', action: 'staff.member_created', severity: 'success',
-        title: `Personnel créé · ${record.fullName} (${role.label.fr})`,
-        description: `Affectation : ${record.assignment} · Shift ${record.shift} · ${record.defaultTasks.length} tâche(s).`,
-        metadata: { roleId: record.roleId, assignment: record.assignment, shift: record.shift },
+        title: `Personnel créé · ${committed.staff.fullName} (${role.label.fr})`,
+        description: `Affectation : ${committed.staff.assignment} · Shift ${committed.staff.shift} · ${committed.tasks.length} tâche(s) initiale(s).`,
+        metadata: { roleId: committed.staff.roleId, assignment: committed.staff.assignment, shift: committed.staff.shift },
       });
-      if (input.createInitialTasks && record.defaultTasks.length > 0) {
-        const room = input.initialRoom?.trim() || record.assignment || 'Étage 1';
-        const category = mapRoleToTaskCategory(role);
-        const date = new Date().toISOString().slice(0, 10);
-        record.defaultTasks.forEach((taskTitle) => addTask({
-          room, typeId: 'custom', typeName: taskTitle, category, assignee: record.fullName,
-          date, status: 'pending', priority: 'normal',
-          note: `${role.label.fr} · ${record.assignment} (${record.shift})`,
-        }));
+      for (const task of committed.tasks) {
+        logEvent({
+          category: 'task', action: 'task.created',
+          severity: task.priority === 'urgent' ? 'warn' : 'info',
+          title: `Tâche créée · ${task.typeName}`,
+          description: `Chambre ${task.room} · Assignée à ${task.assignee} · Priorité ${task.priority}`,
+          target: { type: 'task', id: task.id, label: task.typeName, secondaryLabel: task.room },
+          metadata: { assignee: task.assignee, priority: task.priority, category: task.category, date: task.date },
+        });
       }
-    });
-    return record;
+      return committed.staff;
+    } catch (error) {
+      reportQueueFailure('staff_member', record.id, error);
+      return null;
+    }
   };
 
   const updateStaffAssignment: AppContextType['updateStaffAssignment'] = (staffId, patch) => {

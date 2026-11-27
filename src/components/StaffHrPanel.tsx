@@ -172,14 +172,14 @@ export const StaffHrPanel: React.FC<{ onToast: (msg: string) => void }> = ({ onT
     setDraftTasks((prev) => prev.filter((item) => item !== taskLabel));
   };
 
-  const handleCreateStaffSubmit = (e: React.FormEvent) => {
+  const handleCreateStaffSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) {
       setFormError(t('Veuillez saisir le nom complet du membre.', 'Please enter the staff full name.', 'يرجى إدخال الاسم الكامل للموظف.'));
       return;
     }
     setFormError(null);
-    const created = createStaffMember({
+    const created = await createStaffMember({
       fullName: fullName.trim(),
       phone: phone.trim() || undefined,
       roleId: selectedRoleId,
@@ -190,6 +190,14 @@ export const StaffHrPanel: React.FC<{ onToast: (msg: string) => void }> = ({ onT
       createInitialTasks,
       initialRoom: initialRoom.trim() || assignment.trim() || '101',
     });
+    if (!created) {
+      setFormError(t(
+        'Enregistrement impossible. Aucune fiche ni tâche initiale n’a été validée.',
+        'Save failed. No staff record or initial task was committed.',
+        'تعذر الحفظ. لم يتم اعتماد ملف الموظف أو المهام الأولية.'
+      ));
+      return;
+    }
     playFeedback('success');
     const roleDef = resolveRoleDefinition(roles, created.roleId);
     onToast(

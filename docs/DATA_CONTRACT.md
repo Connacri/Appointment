@@ -590,3 +590,8 @@ Regression guard: `tests/indexedDbMutationAtomicity.test.ts` verifies that the t
 Task creation, status updates, subtask toggles, deletion, staff quick-task assignment and checkout turnover-task generation now await durable IndexedDB persistence before updating the React task projection or reporting success. Checkout turnover tasks are inserted as one bounded batch transaction rather than independent fire-and-forget writes. The UI marks task notifications read and closes task-entry flows only after the command returns success.
 
 Task completion with stock consumption retains the atomic combined task/stock command documented above. The staff-creation flow's optional initial-task fan-out and other non-task business entities remain separate work.
+
+
+## Staff onboarding transaction (2026-11-27)
+
+Staff creation and its optional initial tasks now share one local IndexedDB transaction. Workspace mode emits the staff and task Outbox/P2P records in the same transaction; local-only mode writes both projections atomically. UI success is displayed only after durable commit. This does not yet make later staff assignment, promotion, transfer or deletion commands awaited.

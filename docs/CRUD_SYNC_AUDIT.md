@@ -146,3 +146,8 @@ The live Supabase project reports 17 applied migrations. The repository currentl
 - Staff quick-task assignment waits for the task write before showing success or closing the form.
 - Task notification read state is updated only after the completion command succeeds.
 - Remaining: optional default-task creation from the staff-creation callback is still a separate asynchronous fan-out; Supabase receives task and stock movement entities through separate dispatchers.
+
+
+## Atomic staff creation with initial tasks (2026-11-27)
+
+Creating a staff record and its optional default tasks is now one bounded IndexedDB command. In workspace mode, the staff row, task projections, Outbox intents and P2P events are committed together. In local-only mode, the staff row and tasks are committed in one local-business-entity transaction. The React projections, audit events and success feedback are applied only after the transaction resolves. If validation or persistence fails, the command returns no created record and the UI does not report success.

@@ -178,3 +178,37 @@ test('task CRUD commands await durable IndexedDB persistence before updating Rea
   assert.match(turnover, /await persistTasksAtomically\(/);
   assert.match(turnover, /committedTasks\.length !== generatedTasks\.length/);
 });
+
+
+test('staff creation and optional initial tasks commit as one awaited IndexedDB command', () => {
+  const appContext = readFileSync(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8');
+  const staffHelperStart = appContext.indexOf('const persistStaffCreationAtomically = async');
+  const staffHelperEnd = appContext.indexOf('const persistStockMutationsAtomically', staffHelperStart);
+  assert.notEqual(staffHelperStart, -1);
+  assert.notEqual(staffHelperEnd, -1);
+  const helper = appContext.slice(staffHelperStart, staffHelperEnd);
+  assert.match(helper, /entity: 'staff_member'/);
+  assert.match(helper, /entity: 'task'/);
+  assert.match(helper, /await indexedDb\.putLocalBusinessEntitiesAtomically\(mutations\)/);
+  assert.match(helper, /await indexedDb\.enqueueWorkspaceUpsertsAtomically\(/);
+  assert.match(helper, /committedTasks\.length !== initialTasks\.length/);
+
+  const createStart = appContext.indexOf("const createStaffMember: AppContextType['createStaffMember'] = async");
+  const createEnd = appContext.indexOf('const updateStaffAssignment:', createStart);
+  assert.notEqual(createStart, -1);
+  assert.notEqual(createEnd, -1);
+  const create = appContext.slice(createStart, createEnd);
+  assert.match(create, /await persistStaffCreationAtomically\(record, initialTasks\)/);
+  assert.doesNotMatch(create, /commitBusinessUpsert\(/);
+  assert.doesNotMatch(create, /initialTasks\.forEach\(/);
+  assert.match(create, /return null/);
+
+  const panel = readFileSync(new URL('../src/components/StaffHrPanel.tsx', import.meta.url), 'utf8');
+  const submitStart = panel.indexOf('const handleCreateStaffSubmit = async');
+  const submitEnd = panel.indexOf('const openAssignmentModal', submitStart);
+  assert.notEqual(submitStart, -1);
+  assert.notEqual(submitEnd, -1);
+  const submit = panel.slice(submitStart, submitEnd);
+  assert.match(submit, /await createStaffMember\(/);
+  assert.match(submit, /if \(!created\)/);
+});
