@@ -750,6 +750,7 @@ export const IndexedDbInspectorModal: React.FC<{
                   <div className="relative">
                     <input
                       type="url"
+                      disabled={!canEditCloudConfig}
                       value={supabaseUrl}
                       onChange={(e) => setSupabaseUrl(e.target.value)}
                       placeholder="https://xxxxx.supabase.co"
@@ -778,6 +779,7 @@ export const IndexedDbInspectorModal: React.FC<{
                     <input
                       type={showPublishableKey ? 'text' : 'password'}
                       autoComplete="off"
+                      disabled={!canEditCloudConfig}
                       value={publishableKey}
                       onChange={(e) => setPublishableKey(e.target.value)}
                       placeholder="sb_publishable_..."
@@ -800,6 +802,7 @@ export const IndexedDbInspectorModal: React.FC<{
                     <input
                       type={showAnonKey ? 'text' : 'password'}
                       autoComplete="off"
+                      disabled={!canEditCloudConfig}
                       value={anonKey}
                       onChange={(e) => setAnonKey(e.target.value)}
                       placeholder="eyJhbGciOiJIUzI1NiIsIn..."
