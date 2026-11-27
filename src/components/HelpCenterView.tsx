@@ -6,6 +6,7 @@ import {
   AlertTriangle, Lightbulb, PlayCircle, GraduationCap, Wrench, FileText, Palette,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { WINDOWS_CARDLOCK_MDB_PATHS, ANDROID_CARDLOCK_MDB_PATHS, WEB_CARDLOCK_MDB_PATHS } from '../locks/database/mdbPaths';
 import { filterHelpTutorials, readCompletedTutorialIds, writeCompletedTutorialIds } from '../utils/helpCenter';
 
 type Locale = 'fr' | 'en' | 'ar';
