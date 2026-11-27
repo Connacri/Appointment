@@ -96,6 +96,7 @@ export const TopBar: React.FC = () => {
   const [roleSearch, setRoleSearch] = useState('');
   const [isSectorMenuOpen, setIsSectorMenuOpen] = useState(false);
   const [isNotifMenuOpen, setIsNotifMenuOpen] = useState(false);
+  const [isMobileNotificationAnchor, setIsMobileNotificationAnchor] = useState(false);
   const [readNotifIds, setReadNotifIds] = useState<Set<string>>(() => loadReadNotificationIds());
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -208,14 +209,14 @@ export const TopBar: React.FC = () => {
     const updateOpenRects = () => {
       if (isSectorMenuOpen) setSectorMenuRect(computeClampedPopoverRect(sectorMenuRef.current, 232, isRtlDir));
       if (isRoleMenuOpen) setRoleMenuRect(computeClampedPopoverRect(roleMenuRef.current, 288, isRtlDir));
-      if (isNotifMenuOpen) setNotifMenuRect(computeClampedPopoverRect(notifMenuRef.current, 320, !isRtlDir));
+      if (isNotifMenuOpen) setNotifMenuRect(computeClampedPopoverRect(isMobileNotificationAnchor ? moreMenuRef.current : notifMenuRef.current, 320, !isRtlDir));
       if (isMoreMenuOpen) setMoreMenuRect(computeClampedPopoverRect(moreMenuRef.current, 256, !isRtlDir));
     };
     updateOpenRects();
     if (!isSectorMenuOpen && !isRoleMenuOpen && !isNotifMenuOpen && !isMoreMenuOpen) return;
     window.addEventListener('resize', updateOpenRects, { passive: true });
     return () => window.removeEventListener('resize', updateOpenRects);
-  }, [isSectorMenuOpen, isRoleMenuOpen, isNotifMenuOpen, isMoreMenuOpen, isRtlDir, computeClampedPopoverRect]);
+  }, [isSectorMenuOpen, isRoleMenuOpen, isNotifMenuOpen, isMoreMenuOpen, isMobileNotificationAnchor, isRtlDir, computeClampedPopoverRect]);
 
   const toggleSectorMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -249,6 +250,7 @@ export const TopBar: React.FC = () => {
 
   const toggleNotifMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
+    setIsMobileNotificationAnchor(false);
     const next = !isNotifMenuOpen;
     if (next) setNotifMenuRect(computeClampedPopoverRect(notifMenuRef.current, 320, !isRtlDir));
     setIsNotifMenuOpen(next);
@@ -1040,6 +1042,7 @@ export const TopBar: React.FC = () => {
                     data-testid="mobile-staff-notifications-btn"
                     onClick={(event) => {
                       event.stopPropagation();
+                      setIsMobileNotificationAnchor(true);
                       setNotifMenuRect(computeClampedPopoverRect(moreMenuRef.current, 320, !isRtlDir));
                       setIsNotifMenuOpen(true);
                       setIsMoreMenuOpen(false);
