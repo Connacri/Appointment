@@ -594,6 +594,43 @@ export async function listPurchaseOrders(workspaceId: WorkspaceId, establishment
   }));
 }
 
+/**
+ * Commit the received order, all immutable stock movements and every stock
+ * quantity projection in one PostgreSQL transaction. Retrying the same durable
+ * Outbox payload after a lost ACK cannot receive the order twice.
+ */
+export async function applyPurchaseOrderReceipt(
+  workspaceId: WorkspaceId,
+  establishmentId: string,
+  order: PurchaseOrderRecord,
+  movements: StockMovement[],
+): Promise<void> {
+  if (!workspaceId.trim() || !establishmentId.trim() || !order.id.trim()
+    || order.status !== 'received' || !order.receivedAt || !Array.isArray(movements)
+    || movements.length === 0 || movements.length > 100) {
+    throw new Error('Commande reçue ou lignes de réception invalides.');
+  }
+  const receivedAt = new Date(order.receivedAt);
+  if (!Number.isFinite(receivedAt.getTime())) throw new Error('Date de réception invalide.');
+  const actor = movements[0]?.user?.trim() ?? '';
+  if (!actor || movements.some((movement) =>
+    !movement.id.trim() || !movement.itemId.trim() || !Number.isFinite(movement.delta)
+    || movement.delta <= 0 || movement.timestamp !== order.receivedAt
+    || movement.user?.trim() !== actor || !movement.reason.trim()
+  )) throw new Error('Les mouvements de réception doivent être positifs, cohérents et partager le même opérateur/horodatage.');
+
+  const db = requireSupabase();
+  const { error } = await db.rpc('apply_purchase_order_receipt', {
+    p_workspace_id: workspaceId,
+    p_establishment_id: establishmentId,
+    p_order_id: order.id,
+    p_received_at: receivedAt.toISOString(),
+    p_actor_name: actor,
+    p_movements: movements as unknown as Json,
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function savePurchaseOrder(workspaceId: WorkspaceId, establishmentId: string, order: PurchaseOrderRecord) {
   if (!workspaceId.trim() || !establishmentId.trim() || !order.id.trim() || !order.orderNumber.trim()) {
     throw new Error('Workspace, établissement, commande et numéro de commande obligatoires.');
