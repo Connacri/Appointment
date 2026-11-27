@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { detectP2pBookingConflicts } from '../src/services/p2p/bookingConflictDetection';
+import { detectP2pBookingConflicts, isBookingConflictSuperseded } from '../src/services/p2p/bookingConflictDetection';
 import type { P2pEvent } from '../src/services/p2p/protocol';
 
 function bookingEvent(nodeId: string, bookingId: string, payload: Record<string, unknown>, sequence = 1): P2pEvent {
@@ -91,4 +91,32 @@ test('ignores malformed legacy booking intervals without blocking valid records'
   const malformed = stay('A', '2026-02-30', '2026-03-04');
   const valid = stay('B', '2026-03-01', '2026-03-04');
   assert.equal(detectP2pBookingConflicts([malformed, valid]).length, 0);
+});
+
+
+test('marks an overlap superseded only when a newer booking frontier replaces a source event', () => {
+  const originalA = stay('A', '2026-12-01', '2026-12-05');
+  const originalB = stay('B', '2026-12-03', '2026-12-04');
+  const [conflict] = detectP2pBookingConflicts([originalA, originalB]);
+  assert.ok(conflict);
+  assert.equal(isBookingConflictSuperseded(conflict, [originalA, originalB]), false);
+
+  const newerA: P2pEvent = {
+    ...originalA,
+    eventId: 'node-A:2',
+    sequence: 2,
+    clock: { 'node-A': 2, 'node-B': 1 },
+    payload: { ...(originalA.payload as object), endDate: '2026-12-02' },
+    createdAt: '2026-11-26T10:01:00.000Z',
+  };
+  assert.equal(detectP2pBookingConflicts([newerA, originalB]).length, 0);
+  assert.equal(isBookingConflictSuperseded(conflict, [newerA, originalB]), true);
+});
+
+test('does not supersede a conflict when one booking frontier is unavailable', () => {
+  const a = stay('A', '2026-12-01', '2026-12-05');
+  const b = stay('B', '2026-12-03', '2026-12-04');
+  const [conflict] = detectP2pBookingConflicts([a, b]);
+  assert.ok(conflict);
+  assert.equal(isBookingConflictSuperseded(conflict, [a]), false);
 });
