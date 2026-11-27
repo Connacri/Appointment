@@ -3473,7 +3473,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const updatedItems = stockItemsRef.current.map((item) => savedById.get(item.id) ?? item);
           stockItemsRef.current = updatedItems;
           setStockItems(updatedItems);
-          localStorage.setItem('omnibook_stock_items', JSON.stringify(updatedItems));
         }
 
         const movements = committed
@@ -3482,7 +3481,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (movements.length > 0) {
           setStockMovements((previous) => {
             const updated = [...movements, ...previous].slice(0, 200);
-            localStorage.setItem('omnibook_stock_movements', JSON.stringify(updated));
             return updated;
           });
         }

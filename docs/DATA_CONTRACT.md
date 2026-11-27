@@ -567,3 +567,16 @@ profile id is reused as the source slug. Regression coverage exists in
 `tests/backfillPlanner.test.ts`. Existing duplicate rows are not automatically
 deleted or deactivated by this normalization; they require a separate, verified
 data-cleanup decision.
+
+
+## Local atomic task completion and stock consumption (2026-11-27)
+
+The task completion command is a single durable local mutation:
+
+- The task status transition, affected stock-item projections and immutable stock-movement records are passed to one IndexedDB strict transaction.
+- Local-only installations use one atomic `localBusinessEntities` transaction; workspace installations commit workspace projections, Outbox records, tombstones and P2P events together.
+- Repeated consumed-item lines are aggregated by stock item. Missing items, invalid quantities and insufficient stock abort the complete command.
+- A transaction precondition rejects a second completion if the persisted task is already `done`, preventing duplicate stock deductions from concurrent/repeated completion attempts.
+- React state changes only after the transaction commits. The new command does not add direct localStorage business writes.
+
+Boundary: Supabase still dispatches task and stock-movement entities separately. Server-side atomic completion, end-to-end P2P transport and awaited/fail-closed behavior for the remaining generic task CRUD commands are not covered by this local transaction.
