@@ -482,3 +482,27 @@ Important limits remain:
 Do not claim complete global read-only enforcement or production multi-device authorization
 until the remaining UI surfaces, durable repositories and shared authority have passed their
 respective regression and integration tests.
+
+
+## Operational booking retention and historical archive (2026-11-27)
+
+The operational booking projection retains:
+- Every booking whose end date is on/after the rolling six-calendar-month cutoff.
+- Every non-terminal booking, even when its end date is older than the cutoff.
+- Future and in-house bookings regardless of age.
+
+Only `checked_out` and `cancelled` bookings with `endDate < cutoff` are eligible for local archive. A booking with a pending or failed Outbox mutation is skipped. Archive movement is performed in bounded IndexedDB transactions that write the archive record and manifest before deleting the operational row. Archive records are stored in the separate `bookingArchiveRecords` object store, partitioned by calendar semester, and are queried by exact workspace/date range. The app does not hydrate archive payloads during normal startup.
+
+IndexedDB schema v15 adds:
+- `endDate` and compound `statusEndDate` indexes on operational bookings.
+- `bookingArchiveRecords` with workspace/end-date and workspace/booking indexes.
+- `bookingArchiveManifests` with workspace/archive-time index.
+
+**Current alignment status — partial implementation, not a completed retention pipeline:**
+- Local IndexedDB archival, manifest tracking, operational-window hydration and lazy local date-window reads are implemented.
+- Supabase still retains the complete booking history; this change does not delete or move remote rows and does not yet create private Storage archive objects.
+- Historical archive reads are not yet wired into the analytics/prediction screens.
+- The authenticated P2P inbound projection still needs an archive-aware projection path so old terminal events cannot repopulate the operational store.
+- Windows SQLite parity and archive integrity/restore tests remain open.
+
+The six-month rule is a performance boundary, not a legal-retention rule. Invoices, payments, audit events, card/lock security records and required accounting evidence must retain their own retention policy and must not be deleted merely because a stay is archived. Supabase remains the remote durable replica until a separately verified archive export, checksum, restore test and retention policy exist.

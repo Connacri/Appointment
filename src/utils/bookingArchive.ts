@@ -34,7 +34,7 @@ export function isBookingEligibleForArchive(
   booking: Pick<TimelineBooking, 'status' | 'endDate'>,
   cutoffDate: string,
 ): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(cutoffDate) || !/^\d{4}-\d{2}-\d{2}$/.test(booking.endDate)) {
+  if (!isValidIsoDate(cutoffDate) || !isValidIsoDate(booking.endDate)) {
     return false;
   }
   return (booking.status === 'checked_out' || booking.status === 'cancelled')
@@ -44,9 +44,10 @@ export function isBookingEligibleForArchive(
 /** Calendar half-year partition; historical queries still use the exact date index. */
 export function getBookingArchivePeriodKey(endDate: string): string {
   const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(endDate);
-  if (!match || !isValidIsoDate(endDate)) throw new Error('Booking archive requires a valid YYYY-MM-DD end date.');
+  if (!match) throw new Error('Booking archive requires a valid YYYY-MM-DD end date.');
   const month = Number(match[2]);
   if (month < 1 || month > 12) throw new Error('Booking archive end date has an invalid month.');
+  if (!isValidIsoDate(endDate)) throw new Error('Booking archive requires a valid calendar date.');
   return `${match[1]}-${month <= 6 ? 'H1' : 'H2'}`;
 }
 
