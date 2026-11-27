@@ -58,7 +58,8 @@ Migrations distantes enregistrées :
 11. `20261126125222_enable_procurement_and_staff_realtime`
 12. `20261126125552_enforce_supplier_establishment_scope`
 13. `20261126125656_apply_stock_movement_atomically`
-14. `20261126130041_align_stock_preferred_supplier_reference`
+14. `20261127180000_apply_purchase_order_receipt_atomically`
+15. `20261126130041_align_stock_preferred_supplier_reference`
 15. `20261126130712_fix_stock_movement_retry_after_soft_delete`
 16. `20261126131639_harden_keepalive_function_search_path`
 
