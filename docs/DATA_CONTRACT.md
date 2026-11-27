@@ -11,6 +11,17 @@ independent remote replica/backup and must never act as a LAN coordinator.
 
 No database-engine replacement is planned. ObjectBox and FyroDB are out of scope.
 
+## IndexedDB migration safety
+
+Every version-change migration must inspect `db.objectStoreNames` before calling
+`transaction.objectStore(name)`. A store introduced by the same migration is not
+available until after `createObjectStore` has run. Create all required indexes when
+creating a new store, and add missing indexes only to stores that already exist.
+Migration failure must abort atomically without deleting or resetting existing data.
+
+Regression coverage: `tests/indexedDbUpgradeGuards.test.ts` checks that archive and
+P2P queue index lookups are guarded and that newly created stores receive those indexes.
+
 ## Accepted consistency policy
 
 **Offline with protection of critical operations and strict business rules.**
