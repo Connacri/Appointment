@@ -82,8 +82,10 @@ export function readCompletedTutorialIds(
   }
 }
 
+type HelpWritableStorage = Pick<Storage, 'setItem'>;
+
 export function writeCompletedTutorialIds(
-  storage: HelpStorage | null,
+  storage: HelpWritableStorage | null,
   ids: readonly string[],
   validIds: readonly string[],
   key = APPOINTMENT_ACADEMY_PROGRESS_KEY,

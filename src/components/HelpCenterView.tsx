@@ -669,10 +669,6 @@ export const HelpCenterView: React.FC = () => {
         </header>
 
         {selected ? (
-          </div>
-        </header>
-
-        {selected ? (
           <article className="space-y-5">
             <button type="button" onClick={() => setSelectedId(null)} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-900">
               {isRtl ? <ChevronRight size={17}/> : <ChevronLeft size={17}/>} {t.back}
