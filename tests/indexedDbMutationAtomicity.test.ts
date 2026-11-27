@@ -41,7 +41,7 @@ test('putWithOutbox commits business projection, cloud Outbox and P2P state in o
 test('snapshot reconciliation atomically queues every changed workspace entity for cloud and P2P', () => {
   const body = methodBody(
     'public async reconcileSnapshotWithOutbox<',
-    '/** Append a local immutable P2P event',
+    'private appendLocalP2pEvent(',
   );
   for (const store of requiredMutationStores) assert.ok(body.includes(`'${store}'`) || store === 'storeName');
   assert.match(body, /workspaceEntities\.put\(/);
