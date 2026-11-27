@@ -257,7 +257,6 @@ pub fn record_state(events: &[P2pEvent]) -> P2pRecordState {
     P2pRecordState::Conflict(frontier)
 }
 
-
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BookingConflictSnapshot {
@@ -355,7 +354,10 @@ fn encode_uri_component(value: &str) -> String {
     let mut encoded = String::with_capacity(value.len());
     for byte in value.as_bytes() {
         if byte.is_ascii_alphanumeric()
-            || matches!(*byte, b'-' | b'_' | b'.' | b'!' | b'~' | b'*' | b'\'' | b'(' | b')')
+            || matches!(
+                *byte,
+                b'-' | b'_' | b'.' | b'!' | b'~' | b'*' | b'\'' | b'(' | b')'
+            )
         {
             encoded.push(*byte as char);
         } else {
@@ -379,8 +381,14 @@ fn booking_candidate(event: &P2pEvent) -> Option<BookingConflictCandidate> {
     if booking_id != event.entity_id || resource_id.is_empty() || status == "cancelled" {
         return None;
     }
-    let check_in = payload.get("checkInTime").and_then(Value::as_str).unwrap_or("14:00");
-    let check_out = payload.get("checkOutTime").and_then(Value::as_str).unwrap_or("12:00");
+    let check_in = payload
+        .get("checkInTime")
+        .and_then(Value::as_str)
+        .unwrap_or("14:00");
+    let check_out = payload
+        .get("checkOutTime")
+        .and_then(Value::as_str)
+        .unwrap_or("12:00");
     let start = wall_clock_minute(start_date, check_in)?;
     let end = wall_clock_minute(end_date, check_out)?;
     if end <= start {
@@ -430,9 +438,17 @@ pub fn detect_p2p_booking_conflicts(
             {
                 continue;
             }
-            let turnover = if a.sector == "hotel" || b.sector == "hotel" { 10 } else { 0 };
+            let turnover = if a.sector == "hotel" || b.sector == "hotel" {
+                10
+            } else {
+                0
+            };
             if a.start < b.end + turnover && a.end + turnover > b.start {
-                let (first, second) = if a.booking_id <= b.booking_id { (a, b) } else { (b, a) };
+                let (first, second) = if a.booking_id <= b.booking_id {
+                    (a, b)
+                } else {
+                    (b, a)
+                };
                 let mut source_event_ids = [a.event.event_id.clone(), b.event.event_id.clone()];
                 source_event_ids.sort();
                 conflicts.push(BookingConflictSnapshot {
@@ -471,24 +487,32 @@ pub fn is_booking_conflict_superseded(
 ) -> bool {
     let first: Vec<P2pEvent> = current_events
         .iter()
-        .filter(|event| event.workspace_id == conflict.workspace_id
-            && event.entity == "booking"
-            && event.entity_id == conflict.first_booking_id)
+        .filter(|event| {
+            event.workspace_id == conflict.workspace_id
+                && event.entity == "booking"
+                && event.entity_id == conflict.first_booking_id
+        })
         .cloned()
         .collect();
     let second: Vec<P2pEvent> = current_events
         .iter()
-        .filter(|event| event.workspace_id == conflict.workspace_id
-            && event.entity == "booking"
-            && event.entity_id == conflict.second_booking_id)
+        .filter(|event| {
+            event.workspace_id == conflict.workspace_id
+                && event.entity == "booking"
+                && event.entity_id == conflict.second_booking_id
+        })
         .cloned()
         .collect();
     let first_frontier = maximal_events(&first);
     let second_frontier = maximal_events(&second);
     let first_replaced = !first_frontier.is_empty()
-        && !first_frontier.iter().any(|event| event.event_id == conflict.first_event_id);
+        && !first_frontier
+            .iter()
+            .any(|event| event.event_id == conflict.first_event_id);
     let second_replaced = !second_frontier.is_empty()
-        && !second_frontier.iter().any(|event| event.event_id == conflict.second_event_id);
+        && !second_frontier
+            .iter()
+            .any(|event| event.event_id == conflict.second_event_id);
     first_replaced || second_replaced
 }
 
@@ -521,7 +545,14 @@ mod tests {
     }
 
 
-    fn stay_event(node: &str, booking_id: &str, start: &str, end: &str, resource: &str, sector: &str) -> P2pEvent {
+    fn stay_event(
+        node: &str,
+        booking_id: &str,
+        start: &str,
+        end: &str,
+        resource: &str,
+        sector: &str,
+    ) -> P2pEvent {
         let mut value = event(
             node,
             1,
@@ -541,8 +572,22 @@ mod tests {
 
     #[test]
     fn detects_same_resource_overlaps_between_distinct_booking_ids() {
-        let a = stay_event("node-A", "booking-A", "2026-12-01", "2026-12-04", "room-101", "hotel");
-        let b = stay_event("node-B", "booking-B", "2026-12-03", "2026-12-05", "room-101", "hotel");
+        let a = stay_event(
+            "node-A",
+            "booking-A",
+            "2026-12-01",
+            "2026-12-04",
+            "room-101",
+            "hotel",
+        );
+        let b = stay_event(
+            "node-B",
+            "booking-B",
+            "2026-12-03",
+            "2026-12-05",
+            "room-101",
+            "hotel",
+        );
         let conflicts = detect_p2p_booking_conflicts(&[a, b], "2026-11-27T10:00:00.000Z");
         assert_eq!(conflicts.len(), 1);
         assert_eq!(conflicts[0].first_booking_id, "booking-A");
@@ -557,40 +602,124 @@ mod tests {
 
     #[test]
     fn ignores_other_resources_cancelled_and_malformed_stays() {
-        let a = stay_event("node-A", "booking-A", "2026-12-01", "2026-12-02", "room-101", "hotel");
-        let mut other_room = stay_event("node-B", "booking-B", "2026-12-01", "2026-12-03", "room-102", "hotel");
-        let mut cancelled = stay_event("node-C", "booking-C", "2026-12-01", "2026-12-03", "room-101", "hotel");
+        let a = stay_event(
+            "node-A",
+            "booking-A",
+            "2026-12-01",
+            "2026-12-02",
+            "room-101",
+            "hotel",
+        );
+        let mut other_room = stay_event(
+            "node-B",
+            "booking-B",
+            "2026-12-01",
+            "2026-12-03",
+            "room-102",
+            "hotel",
+        );
+        let mut cancelled = stay_event(
+            "node-C",
+            "booking-C",
+            "2026-12-01",
+            "2026-12-03",
+            "room-101",
+            "hotel",
+        );
         cancelled.payload.as_mut().unwrap()["status"] = json!("cancelled");
-        let mut malformed = stay_event("node-D", "booking-D", "2026-02-30", "2026-03-03", "room-101", "hotel");
+        let mut malformed = stay_event(
+            "node-D",
+            "booking-D",
+            "2026-02-30",
+            "2026-03-03",
+            "room-101",
+            "hotel",
+        );
         other_room.workspace_id = "other-workspace".into();
-        assert!(detect_p2p_booking_conflicts(&[a, other_room, cancelled, malformed], "2026-11-27T10:00:00Z").is_empty());
+        assert!(detect_p2p_booking_conflicts(
+            &[a, other_room, cancelled, malformed],
+            "2026-11-27T10:00:00Z"
+        )
+        .is_empty());
     }
 
     #[test]
     fn applies_hotel_turnover_symmetrically() {
-        let before = stay_event("node-A", "booking-A", "2026-12-01", "2026-12-02", "room-101", "hotel");
-        let mut within = stay_event("node-B", "booking-B", "2026-12-02", "2026-12-03", "room-101", "hotel");
+        let before = stay_event(
+            "node-A",
+            "booking-A",
+            "2026-12-01",
+            "2026-12-02",
+            "room-101",
+            "hotel",
+        );
+        let mut within = stay_event(
+            "node-B",
+            "booking-B",
+            "2026-12-02",
+            "2026-12-03",
+            "room-101",
+            "hotel",
+        );
         within.payload.as_mut().unwrap()["checkInTime"] = json!("12:05");
-        let mut outside = stay_event("node-C", "booking-C", "2026-12-02", "2026-12-03", "room-101", "hotel");
+        let mut outside = stay_event(
+            "node-C",
+            "booking-C",
+            "2026-12-02",
+            "2026-12-03",
+            "room-101",
+            "hotel",
+        );
         outside.payload.as_mut().unwrap()["checkInTime"] = json!("12:10");
-        assert_eq!(detect_p2p_booking_conflicts(&[before.clone(), within], "2026-11-27T10:00:00Z").len(), 1);
-        assert!(detect_p2p_booking_conflicts(&[before, outside], "2026-11-27T10:00:00Z").is_empty());
+        assert_eq!(
+            detect_p2p_booking_conflicts(&[before.clone(), within], "2026-11-27T10:00:00Z").len(),
+            1
+        );
+        assert!(
+            detect_p2p_booking_conflicts(&[before, outside], "2026-11-27T10:00:00Z").is_empty()
+        );
     }
 
     #[test]
     fn newer_causal_booking_frontier_supersedes_old_overlap() {
-        let original_a = stay_event("node-A", "booking-A", "2026-12-01", "2026-12-05", "room-101", "hotel");
-        let original_b = stay_event("node-B", "booking-B", "2026-12-03", "2026-12-04", "room-101", "hotel");
-        let conflicts = detect_p2p_booking_conflicts(&[original_a.clone(), original_b.clone()], "2026-11-27T10:00:00Z");
+        let original_a = stay_event(
+            "node-A",
+            "booking-A",
+            "2026-12-01",
+            "2026-12-05",
+            "room-101",
+            "hotel",
+        );
+        let original_b = stay_event(
+            "node-B",
+            "booking-B",
+            "2026-12-03",
+            "2026-12-04",
+            "room-101",
+            "hotel",
+        );
+        let conflicts = detect_p2p_booking_conflicts(
+            &[original_a.clone(), original_b.clone()],
+            "2026-11-27T10:00:00Z",
+        );
         assert_eq!(conflicts.len(), 1);
         let conflict = &conflicts[0];
         let mut newer_a = original_a.clone();
         newer_a.event_id = "node-A:2".into();
         newer_a.sequence = 2;
-        newer_a.clock = [("node-A".to_string(), 2), ("node-B".to_string(), 1)].into_iter().collect();
+        newer_a.clock = [("node-A".to_string(), 2), ("node-B".to_string(), 1)]
+            .into_iter()
+            .collect();
         newer_a.payload.as_mut().unwrap()["endDate"] = json!("2026-12-02");
-        assert!(detect_p2p_booking_conflicts(&[newer_a.clone(), original_b.clone()], "2026-11-27T10:00:00Z").is_empty());
-        assert!(is_booking_conflict_superseded(conflict, &[original_a, newer_a, original_b]));
+        assert!(detect_p2p_booking_conflicts(
+            &[newer_a.clone(), original_b.clone()],
+            "2026-11-27T10:00:00Z"
+        )
+        .is_empty());
+        assert!(is_booking_conflict_superseded(
+            conflict,
+            &[original_a, newer_a, original_b]
+        ));
     }
 
     #[test]
