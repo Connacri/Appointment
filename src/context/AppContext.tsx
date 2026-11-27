@@ -234,7 +234,7 @@ interface AppContextType {
       defaultTasks?: string[];
       note?: string;
     }
-  ) => void;
+  ) => Promise<boolean>;
   promoteOrTransferStaff: (
     staffId: string,
     change: {
@@ -245,7 +245,7 @@ interface AppContextType {
       changeType: Extract<StaffCareerChangeType, 'promoted' | 'transferred'>;
       note?: string;
     }
-  ) => void;
+  ) => Promise<boolean>;
   assignTaskToStaff: (
     staffId: string,
     input: {
@@ -255,7 +255,7 @@ interface AppContextType {
       note?: string;
     }
   ) => Promise<boolean>;
-  deleteStaffMember: (staffId: string) => void;
+  deleteStaffMember: (staffId: string) => Promise<boolean>;
   clientProfile: ClientProfile;
   setClientProfile: (profile: ClientProfile) => void;
   activeSector: SectorType | 'all';
@@ -1033,7 +1033,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return committedRows.map((row) => row.payload as unknown as PmsTask);
   };
 
-  const persistStaffCreationAtomically = async (
+  const persistStaffAndTasksAtomically = async (
     staff: StaffMemberRecord,
     initialTasks: readonly PmsTask[],
   ): Promise<{ staff: StaffMemberRecord; tasks: PmsTask[] }> => {
@@ -4238,15 +4238,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateStaffAssignment: AppContextType['updateStaffAssignment'] = (staffId, patch) => {
+  const updateStaffAssignment: AppContextType['updateStaffAssignment'] = async (staffId, patch): Promise<boolean> => {
     const target = staffMembers.find((member) => member.id === staffId);
-    if (!target) return;
+    if (!target) return false;
     const updatedMember = applyStaffAssignmentUpdate(target, {
       ...patch, approvedBy: resolveActorLabel(currentRoleRef.current),
     });
-    commitBusinessUpsert('staff_member', staffId, updatedMember as unknown as Record<string, unknown>, () => {
+    try {
+      const committed = await persistStaffAndTasksAtomically(updatedMember, []);
       setStaffMembers((prev) => {
-        const updated = prev.map((member) => member.id === staffId ? updatedMember : member);
+        const updated = prev.map((member) => member.id === staffId ? committed.staff : member);
         localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
         return updated;
       });
@@ -4259,20 +4260,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...(target.shift !== patch.shift ? [{ field: 'Shift', before: target.shift, after: patch.shift }] : []),
         ],
       });
-    });
+      return true;
+    } catch (error) {
+      reportQueueFailure('staff_member', staffId, error);
+      return false;
+    }
   };
 
-  const promoteOrTransferStaff: AppContextType['promoteOrTransferStaff'] = (staffId, change) => {
+  const promoteOrTransferStaff: AppContextType['promoteOrTransferStaff'] = async (staffId, change): Promise<boolean> => {
     const target = staffMembers.find((member) => member.id === staffId);
-    if (!target) return;
+    if (!target) return false;
     const fromRole = resolveRoleDefinition(rolesRef.current, target.roleId);
     const toRole = resolveRoleDefinition(rolesRef.current, change.newRoleId);
     const updatedMember = applyStaffPromotionOrTransfer(target, {
       ...change, approvedBy: resolveActorLabel(currentRoleRef.current),
     });
-    commitBusinessUpsert('staff_member', staffId, updatedMember as unknown as Record<string, unknown>, () => {
+    try {
+      const committed = await persistStaffAndTasksAtomically(updatedMember, []);
       setStaffMembers((prev) => {
-        const updated = prev.map((member) => member.id === staffId ? updatedMember : member);
+        const updated = prev.map((member) => member.id === staffId ? committed.staff : member);
         localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
         return updated;
       });
@@ -4283,7 +4289,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         description: `${fromRole.label.fr} → ${toRole.label.fr}${change.newAssignment ? ` · ${change.newAssignment}` : ''}`,
         changes: [{ field: 'Poste / Rôle', before: fromRole.label.fr, after: toRole.label.fr }],
       });
-    });
+      return true;
+    } catch (error) {
+      reportQueueFailure('staff_member', staffId, error);
+      return false;
+    }
   };
 
   const assignTaskToStaff: AppContextType['assignTaskToStaff'] = async (staffId, input): Promise<boolean> => {
@@ -4299,9 +4309,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const deleteStaffMember = (staffId: string) => {
+  const deleteStaffMember = async (staffId: string): Promise<boolean> => {
     const target = staffMembers.find((member) => member.id === staffId);
-    commitBusinessDelete('staff_member', staffId, () => {
+    try {
+      await queueBusinessDelete('staff_member', staffId);
+      if (workspace.activeWorkspaceId) scheduleAutoSync();
       setStaffMembers((prev) => {
         const updated = prev.filter((member) => member.id !== staffId);
         localStorage.setItem('omnibook_staff_members', JSON.stringify(updated));
@@ -4312,7 +4324,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: `Fiche personnel retirée · ${target.fullName}`,
         description: `Ancien poste : ${resolveRoleDefinition(rolesRef.current, target.roleId).label.fr} (${target.assignment}).`,
       });
-    });
+      return true;
+    } catch (error) {
+      reportQueueFailure('staff_member', staffId, error);
+      return false;
+    }
   };
 
   const purgeAllUserData = async (): Promise<void> => {

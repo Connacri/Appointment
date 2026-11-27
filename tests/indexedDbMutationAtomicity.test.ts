@@ -212,3 +212,34 @@ test('staff creation and optional initial tasks commit as one awaited IndexedDB 
   assert.match(submit, /await createStaffMember\(/);
   assert.match(submit, /if \(!created\)/);
 });
+
+
+test('staff assignment, career changes and deletion await durable IndexedDB commands', () => {
+  const appContext = readFileSync(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8');
+  const readBody = (start: string, end: string) => {
+    const from = appContext.indexOf(start);
+    const to = appContext.indexOf(end, from + start.length);
+    assert.notEqual(from, -1, `Missing AppContext command: ${start}`);
+    assert.notEqual(to, -1, `Missing AppContext command boundary: ${end}`);
+    return appContext.slice(from, to);
+  };
+  const assignment = readBody("const updateStaffAssignment: AppContextType['updateStaffAssignment'] = async", 'const promoteOrTransferStaff:');
+  assert.match(assignment, /await persistStaffAndTasksAtomically\(/);
+  assert.match(assignment, /return true/);
+  assert.match(assignment, /return false/);
+  const career = readBody("const promoteOrTransferStaff: AppContextType['promoteOrTransferStaff'] = async", 'const assignTaskToStaff:');
+  assert.match(career, /await persistStaffAndTasksAtomically\(/);
+  assert.match(career, /return true/);
+  assert.match(career, /return false/);
+  const remove = readBody('const deleteStaffMember = async', 'const purgeAllUserData');
+  assert.match(remove, /await queueBusinessDelete\('staff_member'/);
+  assert.match(remove, /setStaffMembers\(/);
+  assert.match(remove, /return false/);
+
+  const panel = readFileSync(new URL('../src/components/StaffHrPanel.tsx', import.meta.url), 'utf8');
+  assert.match(panel, /const handleSaveAssignment = async/);
+  assert.match(panel, /await updateStaffAssignment\(/);
+  assert.match(panel, /const handleSavePromotion = async/);
+  assert.match(panel, /await promoteOrTransferStaff\(/);
+  assert.match(panel, /await deleteStaffMember\(/);
+});

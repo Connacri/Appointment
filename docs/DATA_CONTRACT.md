@@ -595,3 +595,8 @@ Task completion with stock consumption retains the atomic combined task/stock co
 ## Staff onboarding transaction (2026-11-27)
 
 Staff creation and its optional initial tasks now share one local IndexedDB transaction. Workspace mode emits the staff and task Outbox/P2P records in the same transaction; local-only mode writes both projections atomically. UI success is displayed only after durable commit. This does not yet make later staff assignment, promotion, transfer or deletion commands awaited.
+
+
+## Awaited staff lifecycle commands (2026-11-27)
+
+Assignment, promotion/transfer and deletion now report success only after their IndexedDB persistence/tombstone command completes. Failed commands leave the UI open and do not change the staff projection. These operations remain separate from any dependent task reassignment.

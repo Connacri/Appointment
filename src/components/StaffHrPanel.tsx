@@ -223,16 +223,20 @@ export const StaffHrPanel: React.FC<{ onToast: (msg: string) => void }> = ({ onT
     });
   };
 
-  const handleSaveAssignment = (e: React.FormEvent) => {
+  const handleSaveAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assignModalMember) return;
-    updateStaffAssignment(assignModalMember.id, {
+    const saved = await updateStaffAssignment(assignModalMember.id, {
       assignment: assignPatch.assignment.trim() || assignModalMember.assignment,
       shift: assignPatch.shift,
       status: assignPatch.status,
       defaultTasks: assignPatch.defaultTasks,
       note: assignPatch.note.trim() || undefined,
     });
+    if (!saved) {
+      onToast(t('Échec de l’enregistrement de l’affectation.', 'Assignment could not be saved.', 'تعذر حفظ التعيين.'));
+      return;
+    }
     playFeedback('success');
     onToast(
       t(
@@ -264,11 +268,11 @@ export const StaffHrPanel: React.FC<{ onToast: (msg: string) => void }> = ({ onT
     });
   };
 
-  const handleSavePromotion = (e: React.FormEvent) => {
+  const handleSavePromotion = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!promoModalMember) return;
     const roleDef = resolveRoleDefinition(roles, promoState.newRoleId);
-    promoteOrTransferStaff(promoModalMember.id, {
+    const saved = await promoteOrTransferStaff(promoModalMember.id, {
       newRoleId: promoState.newRoleId,
       newAssignment: promoState.newAssignment.trim() || promoModalMember.assignment,
       newShift: promoState.newShift,
@@ -276,6 +280,10 @@ export const StaffHrPanel: React.FC<{ onToast: (msg: string) => void }> = ({ onT
       changeType: promoState.changeType,
       note: promoState.note.trim() || undefined,
     });
+    if (!saved) {
+      onToast(t('Échec de l’enregistrement du changement de poste.', 'Role change could not be saved.', 'تعذر حفظ تغيير المنصب.'));
+      return;
+    }
     playFeedback('success');
     onToast(
       t(
@@ -901,8 +909,12 @@ export const StaffHrPanel: React.FC<{ onToast: (msg: string) => void }> = ({ onT
                         <div className="ms-auto flex items-center gap-1">
                           <button
                             type="button"
-                            onClick={() => {
-                              deleteStaffMember(member.id);
+                            onClick={async () => {
+                              const deleted = await deleteStaffMember(member.id);
+                              if (!deleted) {
+                                onToast(t('Échec de la suppression du membre du personnel.', 'Staff member could not be deleted.', 'تعذر حذف الموظف.'));
+                                return;
+                              }
                               setConfirmDeleteId(null);
                               onToast(t(`Fiche de ${member.fullName} supprimée.`, `${member.fullName} removed.`, `تم حذف ملف ${member.fullName}.`));
                             }}

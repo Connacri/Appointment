@@ -151,3 +151,8 @@ The live Supabase project reports 17 applied migrations. The repository currentl
 ## Atomic staff creation with initial tasks (2026-11-27)
 
 Creating a staff record and its optional default tasks is now one bounded IndexedDB command. In workspace mode, the staff row, task projections, Outbox intents and P2P events are committed together. In local-only mode, the staff row and tasks are committed in one local-business-entity transaction. The React projections, audit events and success feedback are applied only after the transaction resolves. If validation or persistence fails, the command returns no created record and the UI does not report success.
+
+
+### Awaited staff lifecycle mutations (2026-11-27)
+
+Staff assignment updates, promotions/transfers and deletion now await their IndexedDB Outbox/tombstone operation before updating the React projection or reporting success. The staff UI keeps the relevant modal/confirmation state open when a command fails. These commands are individually durable; they are not a distributed transaction with related tasks.
