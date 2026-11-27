@@ -25,6 +25,7 @@ import type { StockDeductionLine } from '../utils/stockProcurement';
 import { buildPurchaseOrderReceiptPlan } from '../utils/purchaseOrderReceipt';
 import {
   buildStockDeltaMutations,
+  buildTaskCompletionMutations,
   buildStockItemCreationMutations,
   buildStockItemUpdateMutations,
   type StockAtomicMutation,
@@ -326,7 +327,7 @@ interface AppContextType {
   setCurrency: (c: string) => void;
   tasks: PmsTask[];
   addTask: (task: Omit<PmsTask, 'id'>) => void;
-  updateTaskStatus: (id: string, status: PmsTask['status'], completedByOverride?: string) => void;
+  updateTaskStatus: (id: string, status: PmsTask['status'], completedByOverride?: string) => Promise<void>;
   toggleSubtask: (taskId: string, subtaskId: string) => void;
   deleteTask: (id: string) => void;
   generateTurnoverTasksForCheckout: (roomName: string) => void;
@@ -1005,13 +1006,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const persistStockMutationsAtomically = async (
     mutations: StockAtomicMutation[],
-  ): Promise<Array<{ entity: 'stock_item' | 'stock_movement'; entityId: string; payload: Record<string, unknown> }>> => {
+    rejectIfCurrentFieldEquals?: { entity: StockAtomicMutation['entity']; entityId: string; field: string; value: unknown },
+  ): Promise<Array<{ entity: StockAtomicMutation['entity']; entityId: string; payload: Record<string, unknown> }>> => {
     if (mutations.length === 0) return [];
     assertBusinessMutationAllowed();
     const workspaceId = workspace.activeWorkspaceId?.trim();
     let committedRows: Awaited<ReturnType<typeof indexedDb.putLocalBusinessEntitiesAtomically>>;
     if (!workspaceId) {
-      committedRows = await indexedDb.putLocalBusinessEntitiesAtomically(mutations);
+      committedRows = await indexedDb.putLocalBusinessEntitiesAtomically(mutations, rejectIfCurrentFieldEquals);
     } else {
       const establishmentId = resolveMutationEstablishmentId();
       if (!establishmentId || establishmentId === 'all') {
@@ -1021,12 +1023,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         { workspaceId, establishmentId },
         mutations,
         `stock-command-${createMutationId()}`,
+        rejectIfCurrentFieldEquals,
       );
       scheduleAutoSync();
     }
     return committedRows.map((row) => ({
       ...row,
-      entity: row.entity as 'stock_item' | 'stock_movement',
+      entity: row.entity as StockAtomicMutation['entity'],
     }));
   };
 
@@ -3422,34 +3425,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const updateTaskStatus = (id: string, status: PmsTask['status'], completedByOverride?: string) => {
+  const updateTaskStatus = async (
+    id: string,
+    status: PmsTask['status'],
+    completedByOverride?: string,
+  ): Promise<void> => {
     const target = tasks.find((task) => task.id === id);
-    if (!target) return;
+    if (!target || target.status === status) return;
+    assertBusinessMutationAllowed();
+
     const executor = completedByOverride?.trim() || activeOperatorNameRef.current.trim()
       || clientProfileRef.current?.name?.trim() || target.assignee?.trim()
       || resolveActorLabel(currentRoleRef.current);
-    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    const nowIso = new Date().toISOString();
+    const now = nowIso.slice(0, 16).replace('T', ' ');
     const nextTask: PmsTask = {
       ...target, status,
       completedAt: status === 'done' ? now : undefined,
       completedBy: status === 'done' ? executor : undefined,
     };
-    commitBusinessUpsert('task', id, nextTask as unknown as Record<string, unknown>, () => {
-      if (status === 'done') playSuccessFeedback(); else playClickFeedback();
-      setTasks((prev) => {
-        const updated = prev.map((task) => task.id === id ? nextTask : task);
-        return updated;
-      });
+
+    try {
+      let committedTask = nextTask;
       if (status === 'done' && target.status !== 'done') {
-        for (const item of target.consumedItems ?? []) {
-          addStockMovement(item.itemId, -item.quantity, `Consommation tâche: ${target.typeName}`, target.room);
+        // Task completion and every consumed stock movement share one strict IDB
+        // transaction. A missing item, insufficient quantity or duplicate completion
+        // aborts the entire command: neither the task nor stock is partially updated.
+        const mutations = buildTaskCompletionMutations({
+          task: nextTask,
+          stockItems: stockItemsRef.current,
+          actor: executor,
+          timestamp: nowIso,
+          createMovementId: () => `mov_${createMutationId()}`,
+        });
+        const committed = await persistStockMutationsAtomically(mutations, {
+          entity: 'task', entityId: id, field: 'status', value: 'done',
+        });
+        const taskRow = committed.find((row) => row.entity === 'task');
+        if (!taskRow) throw new Error('Clôture de tâche non confirmée par IndexedDB.');
+        committedTask = taskRow.payload as unknown as PmsTask;
+
+        const savedItems = committed
+          .filter((row) => row.entity === 'stock_item')
+          .map((row) => row.payload as unknown as StockItem);
+        const savedById = new Map(savedItems.map((item) => [item.id, item]));
+        if (savedItems.length > 0) {
+          const updatedItems = stockItemsRef.current.map((item) => savedById.get(item.id) ?? item);
+          stockItemsRef.current = updatedItems;
+          setStockItems(updatedItems);
+          localStorage.setItem('omnibook_stock_items', JSON.stringify(updatedItems));
         }
-        if (target.typeId === 'clean' || target.typeId === 'depclean') {
-          const resource = resourceGroups.flatMap((group) => group.resources)
-            .find((item) => item.name.includes(target.room) || item.id === target.room);
-          if (resource) updateHousekeepingStatus(resource.id, 'clean');
+
+        const movements = committed
+          .filter((row) => row.entity === 'stock_movement')
+          .map((row) => row.payload as unknown as StockMovement);
+        if (movements.length > 0) {
+          setStockMovements((previous) => {
+            const updated = [...movements, ...previous].slice(0, 200);
+            localStorage.setItem('omnibook_stock_movements', JSON.stringify(updated));
+            return updated;
+          });
         }
+      } else {
+        await queueBusinessUpsert('task', id, nextTask as unknown as Record<string, unknown>);
+        scheduleAutoSync();
       }
+
+      if (status === 'done') playSuccessFeedback(); else playClickFeedback();
+      setTasks((prev) => prev.map((task) => task.id === id ? committedTask : task));
+
+      if (status === 'done' && target.status !== 'done'
+        && (target.typeId === 'clean' || target.typeId === 'depclean')) {
+        const resource = resourceGroups.flatMap((group) => group.resources)
+          .find((item) => item.name.includes(target.room) || item.id === target.room);
+        if (resource) updateHousekeepingStatus(resource.id, 'clean');
+      }
+
       logEvent({
         category: 'task', action: 'task.status_changed',
         severity: status === 'done' ? 'success' : status === 'cancel' ? 'warn' : 'info',
@@ -3460,7 +3511,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         metadata: status === 'done' ? { completedBy: executor, assignee: target.assignee } : undefined,
         changes: [{ field: 'Statut tâche', before: target.status, after: status }],
       });
-    });
+    } catch (error) {
+      reportQueueFailure('task', id, error);
+    }
   };
 
   const toggleSubtask = (taskId: string, subtaskId: string) => {

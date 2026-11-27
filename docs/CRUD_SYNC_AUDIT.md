@@ -127,3 +127,13 @@ Audit status: **NOT READY for full CRUD replication or production P2P**. This is
 The live Supabase project reports 17 applied migrations. The repository currently tracks 13 SQL migration files. The following remote versions have no matching tracked file: `20261103172324 initial_pms_multi_tenant_schema`, `20261103172339 tenant_integrity_and_membership_hardening`, `20261103172454 foreign_key_indexes_and_policy_cleanup`, and `20261120184245 pms_mdb_imports_sync`. In addition, the repository file `20261120122449_allow_same_day_bookings.sql` does not match the remote applied version `20261120131109 allow_same_day_bookings`.
 
 **This is migration drift.** Do not add invoice RPCs, PO receipt RPCs, indexes or other production DDL until the local migration history is reconciled with the live project and a reproducible baseline is established. No migration or production schema change was made during this check.
+
+
+## Task completion / stock consumption atomicity (2026-11-27)
+
+- Task completion now builds a single local command containing the task status, each affected stock projection and its immutable stock movement(s).
+- Repeated consumed-item lines are aggregated by stock item before transaction creation, preventing duplicate entity keys in one batch.
+- The strict IndexedDB transaction commits the task, stock projections, Outbox intents and P2P events together. Local-only mode uses one atomic local-business-entity transaction.
+- A transaction precondition rejects a second completion when the persisted task is already `done`; insufficient stock, missing items or invalid consumption abort the whole command.
+- The React task state is updated only after the local transaction commits.
+- Scope limitation: other task CRUD operations still use the generic enqueue callback; Supabase push of the task and its stock movements is not a single server-side transaction. This closes the local completion boundary, not the global cloud/P2P delivery or all fire-and-forget CRUD gaps.

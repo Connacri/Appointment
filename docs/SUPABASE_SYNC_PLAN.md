@@ -134,3 +134,10 @@ Aucune déclaration « P2P prêt », « multi-device prêt » ou « synchronisat
 - essais sur matériel et réseaux réels.
 
 **État de sortie actuel : NOT READY pour la réplication P2P multi-appareils et la distribution comme PMS multi-postes de production.** L'application peut être évaluée en mono-appareil avec les limites documentées, mais le mode SINGLE_DEVICE actuel ne remplace pas un audit complet de tous les chemins de mutation.
+
+
+## Task completion command update (2026-11-27)
+
+Completing a housekeeping task that consumes inventory now writes the task status, stock projection deltas and immutable stock movement records in one local IndexedDB transaction (or one local-only business-entity transaction). The command rejects duplicate completion against the persisted task status and aborts on missing/insufficient stock. The UI projection changes only after commit.
+
+This does not make the cloud operation globally atomic: Supabase still receives the task and stock movement through separate entity dispatchers. The server-side command boundary and awaited/fail-closed handling for the remaining task CRUD methods are still open.

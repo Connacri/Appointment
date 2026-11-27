@@ -1,9 +1,9 @@
-import type { StockItem, StockMovement } from '../types/booking';
+import type { PmsTask, StockItem, StockMovement } from '../types/booking';
 
 export type StockCurrentBatch = ReadonlyMap<string, Record<string, unknown>>;
 
 export interface StockAtomicMutation {
-  entity: 'stock_item' | 'stock_movement';
+  entity: 'task' | 'stock_item' | 'stock_movement';
   entityId: string;
   payload: Record<string, unknown>;
   applyToCurrent?: (currentPayload?: Record<string, unknown>, currentBatch?: StockCurrentBatch) => Record<string, unknown>;
@@ -141,4 +141,58 @@ export function buildStockItemCreationMutations(item: StockItem, actor: string, 
     rows.push(createMovementMutation(movement, item));
   }
   return rows;
+}
+
+
+/**
+ * Build one atomic task-completion command. The task status, stock projections and
+ * immutable consumption movements are committed together by the IndexedDB adapter.
+ * Repeated consumed-item lines are aggregated so one task cannot create duplicate
+ * stock-item rows in the same transaction.
+ */
+export function buildTaskCompletionMutations(input: {
+  task: PmsTask;
+  stockItems: readonly StockItem[];
+  actor: string;
+  timestamp: string;
+  createMovementId: () => string;
+}): StockAtomicMutation[] {
+  const { task, stockItems, actor, timestamp, createMovementId } = input;
+  if (!task.id.trim() || task.status !== 'done') {
+    throw new Error('Une tâche valide au statut terminé est obligatoire.');
+  }
+  if (!actor.trim() || !Number.isFinite(Date.parse(timestamp))) {
+    throw new Error('Opérateur et horodatage sont obligatoires pour terminer une tâche.');
+  }
+
+  const deductions = new Map<string, number>();
+  for (const consumed of task.consumedItems ?? []) {
+    if (!consumed.itemId.trim() || !Number.isFinite(consumed.quantity) || consumed.quantity <= 0) {
+      throw new Error('Consommation de stock invalide dans la tâche.');
+    }
+    deductions.set(consumed.itemId, (deductions.get(consumed.itemId) ?? 0) + consumed.quantity);
+  }
+
+  const mutations: StockAtomicMutation[] = [{
+    entity: 'task',
+    entityId: task.id,
+    payload: task as unknown as Record<string, unknown>,
+    applyToCurrent: (current) => ({ ...(current ?? {}), ...task }),
+  }];
+
+  for (const [itemId, quantity] of deductions) {
+    const item = stockItems.find((candidate) => candidate.id === itemId);
+    if (!item) throw new Error(`Article de stock introuvable : ${itemId}.`);
+    mutations.push(...buildStockDeltaMutations({
+      item,
+      delta: -quantity,
+      reason: `Consommation tâche: ${task.typeName}`,
+      actor,
+      timestamp,
+      movementId: createMovementId(),
+      room: task.room,
+    }));
+  }
+
+  return mutations;
 }
