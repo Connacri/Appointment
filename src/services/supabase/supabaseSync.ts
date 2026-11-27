@@ -115,6 +115,12 @@ export interface SupabaseSyncAdapter {
   pushSupplierUpsert?: (workspaceId: string, establishmentId: string, supplier: StockSupplier) => Promise<void>;
   pushSupplierDelete?: (workspaceId: string, supplierId: string) => Promise<void>;
   pushPurchaseOrderUpsert?: (workspaceId: string, establishmentId: string, order: PurchaseOrderRecord) => Promise<void>;
+  pushPurchaseOrderReceipt?: (
+    workspaceId: string,
+    establishmentId: string,
+    order: PurchaseOrderRecord,
+    movements: StockMovement[],
+  ) => Promise<void>;
   pushPurchaseOrderDelete?: (workspaceId: string, orderId: string) => Promise<void>;
   pushStaffMemberUpsert?: (workspaceId: string, establishmentId: string, member: StaffMemberRecord) => Promise<void>;
   pushStaffMemberDelete?: (workspaceId: string, memberId: string) => Promise<void>;
@@ -516,6 +522,8 @@ export async function runSupabaseSync({
   let appliedRemoteTombstones: AppliedRemoteTombstones = { applied: [], conflicts: [] };
   let remoteTombstoneLookupAvailable = false;
   const remoteTombstoneKeys = new Set<string>();
+  // A later edit must not overtake a failed receipt transaction for the same order.
+  const blockedPurchaseOrderIds = new Set<string>();
 
   const acknowledgePush = async (record: OutboxRecord): Promise<void> => {
     await adapter.markOutboxSynced(record.id);
@@ -584,6 +592,14 @@ export async function runSupabaseSync({
     }
 
     for (const record of dueRecords) {
+      if (record.entity === 'purchase_order' && blockedPurchaseOrderIds.has(record.entityId)) {
+        const detail = 'Commande bloquée : la transaction de réception précédente doit être synchronisée avant toute mutation ultérieure.';
+        pushFailedCount += 1;
+        if (!firstPushError) firstPushError = detail;
+        warnings.push(`Push purchase_order/${record.entityId} suspendu : ${detail}`);
+        await adapter.markOutboxFailed(record.id, detail, computeBackoffIso(record.attempts, now().getTime())).catch(() => undefined);
+        continue;
+      }
       const tombstoneSensitive = ['task', 'stock_item', 'supplier', 'purchase_order', 'staff_member'].includes(record.entity);
       const tombstoneKey = `${record.entity}:${record.entityId}`;
       if (record.operation === 'upsert' && tombstoneSensitive
@@ -596,6 +612,7 @@ export async function runSupabaseSync({
         warnings.push(`Push ${record.entity}/${record.entityId} suspendu : ${detail}`);
         const nextAttempt = computeBackoffIso(record.attempts, now().getTime());
         await adapter.markOutboxFailed(record.id, detail, nextAttempt).catch(() => undefined);
+        if (record.entity === 'purchase_order') blockedPurchaseOrderIds.add(record.entityId);
         continue;
       }
 
@@ -788,9 +805,19 @@ export async function runSupabaseSync({
             if (!adapter.pushPurchaseOrderDelete) throw new Error('Suppression commande cloud non configurée.');
             await adapter.pushPurchaseOrderDelete(workspaceId, record.entityId);
           } else {
-            const payload = record.payload as unknown as PurchaseOrderRecord | null;
-            if (!payload || !establishmentId || !adapter.pushPurchaseOrderUpsert) throw new Error('Commande achat ou dispatcher cloud manquant.');
-            await adapter.pushPurchaseOrderUpsert(workspaceId, establishmentId, payload);
+            const payload = record.payload as unknown as (PurchaseOrderRecord & { receiptMovements?: StockMovement[] }) | null;
+            if (!payload || !establishmentId) throw new Error('Commande achat ou établissement cible manquant.');
+            if (payload.receiptMovements !== undefined) {
+              if (payload.status !== 'received' || !Array.isArray(payload.receiptMovements)
+                || payload.receiptMovements.length === 0 || !adapter.pushPurchaseOrderReceipt) {
+                throw new Error('Commande reçue sans transaction cloud atomique de réception configurée.');
+              }
+              const { receiptMovements, ...orderPayload } = payload;
+              await adapter.pushPurchaseOrderReceipt(workspaceId, establishmentId, orderPayload, receiptMovements);
+            } else {
+              if (!adapter.pushPurchaseOrderUpsert) throw new Error('Synchronisation des commandes cloud non configurée.');
+              await adapter.pushPurchaseOrderUpsert(workspaceId, establishmentId, payload);
+            }
           }
           await acknowledgePush(record);
         } else if (record.entity === 'staff_member') {
@@ -816,6 +843,7 @@ export async function runSupabaseSync({
         }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : 'Échec d’envoi vers Supabase';
+        if (record.entity === 'purchase_order') blockedPurchaseOrderIds.add(record.entityId);
         pushFailedCount += 1;
         if (!firstPushError) firstPushError = errMsg;
         emit({
