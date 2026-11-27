@@ -182,7 +182,7 @@ export interface OutboxSummary {
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 15;
+  private dbVersion = 16;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -317,6 +317,10 @@ class IndexedDbStore {
           entities.createIndex('workspaceResource', ['workspaceId', 'payload.resourceId'], { unique: false });
         }
         const upgradeTxForIndexes = (e.target as IDBOpenDBRequest).transaction;
+        const p2pQueueStore = upgradeTxForIndexes?.objectStore('p2pTransportQueue');
+        if (p2pQueueStore && !p2pQueueStore.indexNames.contains('workspaceEntity')) {
+          p2pQueueStore.createIndex('workspaceEntity', ['workspaceId', 'event.entity', 'event.entityId'], { unique: false });
+        }
         const bookingsStore = upgradeTxForIndexes?.objectStore('bookings');
         if (bookingsStore && !bookingsStore.indexNames.contains('endDate')) {
           bookingsStore.createIndex('endDate', 'endDate', { unique: false });
@@ -787,12 +791,13 @@ class IndexedDbStore {
       return { archivedIds: [], skippedPendingCount: 0, periodCount: 0 };
     }
     const tx = this.createStrictTransaction([
-      'bookings', 'outbox', 'bookingArchiveRecords', 'bookingArchiveManifests',
+      'bookings', 'outbox', 'p2pTransportQueue', 'bookingArchiveRecords', 'bookingArchiveManifests',
     ]);
     const bookingStore = tx.objectStore('bookings');
     const archiveStore = tx.objectStore('bookingArchiveRecords');
     const manifestStore = tx.objectStore('bookingArchiveManifests');
     const outboxIndex = tx.objectStore('outbox').index('workspaceEntity');
+    const p2pQueueIndex = tx.objectStore('p2pTransportQueue').index('workspaceEntity');
     const statusEndDate = bookingStore.index('statusEndDate');
     const checkedOutRequest = statusEndDate.getAll(
       IDBKeyRange.bound(['checked_out', ''], ['checked_out', cutoffDate], false, true),
@@ -878,19 +883,36 @@ class IndexedDbStore {
       };
       for (const booking of candidates) {
         const workspaceId = (booking as TimelineBooking & { workspaceId?: string }).workspaceId || fallbackWorkspaceId;
-        const pendingRequest = outboxIndex.getAll(
-          IDBKeyRange.only([workspaceId, 'booking', booking.id]),
-        );
-        pendingRequest.onsuccess = () => {
-          const pending = (pendingRequest.result as OutboxRecord[]).some((record) =>
-            record.status === 'pending' || record.status === 'failed',
-          );
-          if (pending) skippedPendingCount += 1;
+        let checksReady = 0;
+        let hasPendingOutbox = false;
+        let hasPendingP2p = false;
+        const finishCandidateChecks = () => {
+          if (checksReady !== 2) return;
+          if (hasPendingOutbox || hasPendingP2p) skippedPendingCount += 1;
           else eligible.push({ booking, workspaceId });
           pendingChecks -= 1;
           finishPendingChecks();
         };
+        const pendingRequest = outboxIndex.getAll(
+          IDBKeyRange.only([workspaceId, 'booking', booking.id]),
+        );
+        pendingRequest.onsuccess = () => {
+          hasPendingOutbox = (pendingRequest.result as OutboxRecord[]).some((record) =>
+            record.status === 'pending' || record.status === 'failed',
+          );
+          checksReady += 1;
+          finishCandidateChecks();
+        };
         pendingRequest.onerror = abort;
+        const p2pPendingRequest = p2pQueueIndex.getAll(
+          IDBKeyRange.only([workspaceId, 'booking', booking.id]),
+        );
+        p2pPendingRequest.onsuccess = () => {
+          hasPendingP2p = p2pPendingRequest.result.length > 0;
+          checksReady += 1;
+          finishCandidateChecks();
+        };
+        p2pPendingRequest.onerror = abort;
       }
     };
 

@@ -36,3 +36,13 @@ test('archive partitions use calendar half-years and expose exact boundaries', (
   assert.throws(() => getBookingArchivePeriodKey('2026-13-01'), /invalid month/i);
   assert.throws(() => getBookingArchivePeriodBounds('2026-Q1'), /period key/i);
 });
+
+
+test('archive date validation rejects impossible calendar dates', () => {
+  assert.equal(isBookingEligibleForArchive({
+    status: 'checked_out',
+    endDate: '2026-02-31',
+  }, '2026-05-27'), false);
+  assert.throws(() => getBookingArchivePeriodKey('2026-13-01'), /invalid month/i);
+  assert.throws(() => getBookingArchivePeriodKey('2026-02-31'), /calendar date/i);
+});

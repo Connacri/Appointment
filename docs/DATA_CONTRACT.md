@@ -491,7 +491,7 @@ The operational booking projection retains:
 - Every non-terminal booking, even when its end date is older than the cutoff.
 - Future and in-house bookings regardless of age.
 
-Only `checked_out` and `cancelled` bookings with `endDate < cutoff` are eligible for local archive. A booking with a pending or failed Outbox mutation is skipped. Archive movement is performed in bounded IndexedDB transactions that write the archive record and manifest before deleting the operational row. Archive records are stored in the separate `bookingArchiveRecords` object store, partitioned by calendar semester, and are queried by exact workspace/date range. The app does not hydrate archive payloads during normal startup.
+Only `checked_out` and `cancelled` bookings with `endDate < cutoff` are eligible for local archive. A booking with a pending or failed Outbox mutation, or an unacknowledged P2P transport-queue event, is skipped. Archive movement is performed in bounded IndexedDB transactions that write the archive record and manifest before deleting the operational row. Archive records are stored in the separate `bookingArchiveRecords` object store, partitioned by calendar semester, and are queried by exact workspace/date range. The app does not hydrate archive payloads during normal startup.
 
 IndexedDB schema v15 adds:
 - `endDate` and compound `statusEndDate` indexes on operational bookings.
