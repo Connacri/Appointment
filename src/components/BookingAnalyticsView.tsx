@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   Building2,
@@ -26,7 +26,10 @@ import {
   ClipboardCheck,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { InvoiceRecord } from '../types/booking';
+import { InvoiceRecord, TimelineBooking } from '../types/booking';
+import { indexedDb } from '../db/indexedDb';
+import { useWorkspace } from '../services/supabase/WorkspaceContext';
+import { listBookingsWindow } from '../services/supabase/pmsRepository';
 import {
   buildSmoothSplinePath,
   computeRoundedPieWedges,
@@ -55,6 +58,7 @@ type RoomSortMode = 'most_used' | 'least_used' | 'maintenance';
 const RING_PALETTE = ['#87CEFA', '#7178FF', '#67C380', '#FFA84B', '#FF7369', '#6E717A'];
 
 export const BookingAnalyticsView: React.FC = () => {
+  const { activeWorkspaceId } = useWorkspace();
   const {
     bookings,
     resourceGroups,
@@ -70,6 +74,8 @@ export const BookingAnalyticsView: React.FC = () => {
   } = useApp();
 
   const [range, setRange] = useState<AnalyticsRangeKey>('30d');
+  const [archivedBookings, setArchivedBookings] = useState<TimelineBooking[]>([]);
+  const [archiveLoadState, setArchiveLoadState] = useState<'idle' | 'loading' | 'remote' | 'local' | 'partial' | 'unavailable'>('idle');
   const [ringDimension, setRingDimension] = useState<RingDimension>('status');
   const [selectedRingKey, setSelectedRingKey] = useState<string | null>(null);
   const [selectedWedgeKey, setSelectedWedgeKey] = useState<string | null>(null);
@@ -107,10 +113,18 @@ export const BookingAnalyticsView: React.FC = () => {
     return { activeGroups: groups, rooms: groupRooms };
   }, [resourceGroups, currentDomain, language]);
 
+  const analyticsBookings = useMemo(() => {
+    const byId = new Map<string, TimelineBooking>();
+    for (const booking of archivedBookings) byId.set(booking.id, booking);
+    // Operational records always win over their archived historical projection.
+    for (const booking of bookings) byId.set(booking.id, booking);
+    return [...byId.values()];
+  }, [bookings, archivedBookings]);
+
   const snapshot = useMemo(
     () =>
       computeBookingAnalyticsSnapshot({
-        bookings,
+        bookings: analyticsBookings,
         rooms,
         groups: activeGroups,
         tasks,
@@ -125,7 +139,7 @@ export const BookingAnalyticsView: React.FC = () => {
         now,
       }),
     [
-      bookings,
+      analyticsBookings,
       rooms,
       activeGroups,
       tasks,
@@ -142,6 +156,74 @@ export const BookingAnalyticsView: React.FC = () => {
   );
 
   const { current, previous, deltas, trendPoints } = snapshot;
+
+  // The 365-day view is the only screen that requests historical data. It reads
+  // the local archive by date index and supplements it from Supabase on demand.
+  useEffect(() => {
+    if (range !== '365d') {
+      setArchivedBookings([]);
+      setArchiveLoadState('idle');
+      return undefined;
+    }
+    let cancelled = false;
+    setArchiveLoadState('loading');
+    const startDate = previous.from;
+    const endDate = current.toInclusive;
+    void (async () => {
+      const workspaceId = activeWorkspaceId || 'local';
+      const localRows: TimelineBooking[] = [];
+      try {
+        let offset = 0;
+        while (offset < 10000) {
+          const page = await indexedDb.getArchivedBookingsWindow(
+            workspaceId, startDate, endDate, 1000, offset,
+          );
+          localRows.push(...page);
+          offset += page.length;
+          if (page.length < 1000) break;
+        }
+      } catch (error) {
+        console.warn('[BookingAnalytics] Local archive query failed:', error);
+      }
+
+      const remoteRows: TimelineBooking[] = [];
+      let remoteLoaded = false;
+      let remotePartial = false;
+      if (activeWorkspaceId) {
+        try {
+          let offset = 0;
+          while (offset < 10000) {
+            const page = await listBookingsWindow(activeWorkspaceId, startDate, endDate, {
+              offset,
+              limit: 500,
+              withCount: offset === 0,
+            });
+            remoteRows.push(...page.data);
+            offset += page.data.length;
+            if (page.data.length < 500) break;
+            if (offset >= 10000) remotePartial = true;
+          }
+          remoteLoaded = true;
+        } catch (error) {
+          console.warn('[BookingAnalytics] Remote historical window unavailable:', error);
+        }
+      }
+
+      if (cancelled) return;
+      const byId = new Map<string, TimelineBooking>();
+      for (const booking of localRows) byId.set(booking.id, booking);
+      for (const booking of remoteRows) byId.set(booking.id, booking);
+      setArchivedBookings([...byId.values()]);
+      setArchiveLoadState(remotePartial ? 'partial' : remoteLoaded ? 'remote' : localRows.length ? 'local' : 'unavailable');
+    })().catch((error) => {
+      if (!cancelled) {
+        console.warn('[BookingAnalytics] Historical archive load failed:', error);
+        setArchiveLoadState('unavailable');
+      }
+    });
+    return () => { cancelled = true; };
+  }, [range, activeWorkspaceId, previous.from, current.toInclusive]);
+
   const from = current.from;
   const toExclusive = current.toExclusive;
   const today = snapshot.today;
@@ -198,11 +280,11 @@ export const BookingAnalyticsView: React.FC = () => {
 
   const periodBookings = useMemo(
     () =>
-      bookings.filter(
+      analyticsBookings.filter(
         (booking) =>
           booking.sector === currentDomain && booking.startDate < toExclusive && booking.endDate > from
       ),
-    [bookings, currentDomain, from, toExclusive]
+    [analyticsBookings, currentDomain, from, toExclusive]
   );
 
   const buildingStats = useMemo(() => {
@@ -758,6 +840,21 @@ export const BookingAnalyticsView: React.FC = () => {
                 <span className="text-slate-400 dark:text-[#6E6E78] tabular-nums">
                   {t('vs', 'vs', 'مقابل')} {previous.from} → {previous.toInclusive}
                 </span>
+                {range === '365d' && (
+                  <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-white/[0.06] dark:text-slate-300">
+                    {archiveLoadState === 'loading'
+                      ? t('Chargement des archives…', 'Loading archives…', 'جارٍ تحميل الأرشيف…')
+                      : archiveLoadState === 'remote'
+                        ? t('Historique synchronisé', 'Synced history', 'سجل متزامن')
+                        : archiveLoadState === 'local'
+                          ? t('Historique local', 'Local history', 'سجل محلي')
+                          : archiveLoadState === 'partial'
+                            ? t('Historique partiel', 'Partial history', 'سجل جزئي')
+                            : archiveLoadState === 'unavailable'
+                              ? t('Archives indisponibles', 'Archives unavailable', 'الأرشيف غير متاح')
+                              : ''}
+                  </span>
+                )}
               </p>
             </div>
           </div>

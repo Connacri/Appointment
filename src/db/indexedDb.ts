@@ -182,7 +182,7 @@ export interface OutboxSummary {
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 16;
+  private dbVersion = 17;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -317,6 +317,10 @@ class IndexedDbStore {
           entities.createIndex('workspaceResource', ['workspaceId', 'payload.resourceId'], { unique: false });
         }
         const upgradeTxForIndexes = (e.target as IDBOpenDBRequest).transaction;
+        const archiveRecordsStore = upgradeTxForIndexes?.objectStore('bookingArchiveRecords');
+        if (archiveRecordsStore && !archiveRecordsStore.indexNames.contains('workspaceStartDate')) {
+          archiveRecordsStore.createIndex('workspaceStartDate', ['workspaceId', 'startDate'], { unique: false });
+        }
         const p2pQueueStore = upgradeTxForIndexes?.objectStore('p2pTransportQueue');
         if (p2pQueueStore && !p2pQueueStore.indexNames.contains('workspaceEntity')) {
           p2pQueueStore.createIndex('workspaceEntity', ['workspaceId', 'event.entity', 'event.entityId'], { unique: false });
@@ -928,26 +932,41 @@ class IndexedDbStore {
   }
 
   /** Lazy historical read by exact end-date window; no archive is loaded at startup. */
+  /** Lazy historical read by booking start-date window; supports bounded cursor pagination. */
   public async getArchivedBookingsWindow(
     workspaceId: string,
     startDate: string,
     endDate: string,
     limit = 500,
+    offset = 0,
   ): Promise<TimelineBooking[]> {
     if (!workspaceId.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)
       || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || startDate > endDate
-      || !Number.isSafeInteger(limit) || limit < 1 || limit > 1000) {
+      || !Number.isSafeInteger(limit) || limit < 1 || limit > 1000
+      || !Number.isSafeInteger(offset) || offset < 0) {
       throw new Error('Invalid archived booking window.');
     }
     await this.openStore();
     if (!this.idb) return [];
     const tx = this.idb.transaction('bookingArchiveRecords', 'readonly');
-    const request = tx.objectStore('bookingArchiveRecords').index('workspaceEndDate').getAll(
+    const request = tx.objectStore('bookingArchiveRecords').index('workspaceStartDate').openCursor(
       IDBKeyRange.bound([workspaceId, startDate], [workspaceId, endDate]),
-      limit,
     );
     const records = await new Promise<BookingArchiveRecord[]>((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result as BookingArchiveRecord[]);
+      const result: BookingArchiveRecord[] = [];
+      let skipped = 0;
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor || result.length >= limit) { resolve(result); return; }
+        if (skipped < offset) {
+          skipped += 1;
+          cursor.continue();
+          return;
+        }
+        result.push(cursor.value as BookingArchiveRecord);
+        if (result.length < limit) cursor.continue();
+        else resolve(result);
+      };
       request.onerror = () => reject(request.error ?? new Error('Archived booking query failed.'));
     });
     await waitForTransactionCompletion(tx, 'getArchivedBookingsWindow');
