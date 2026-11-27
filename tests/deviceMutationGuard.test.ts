@@ -18,7 +18,6 @@ const tasksView = readFileSync(new URL('../src/components/TasksManagementView.ts
 const housekeepingView = readFileSync(new URL('../src/components/HousekeepingView.tsx', import.meta.url), 'utf8');
 const roleManagement = readFileSync(new URL('../src/components/RoleManagementView.tsx', import.meta.url), 'utf8');
 const stockManagement = readFileSync(new URL('../src/components/StockManagementView.tsx', import.meta.url), 'utf8');
-const stockManagement = readFileSync(new URL('../src/components/StockManagementView.tsx', import.meta.url), 'utf8');
 
 function sectionProUsb(start: string, end: string): string {
   const from = proUsb.indexOf(start);
