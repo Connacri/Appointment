@@ -76,6 +76,7 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
     activeOperatorName,
     activeRoleDefinition,
     language,
+    deviceMutationAvailability,
   } = useApp();
 
   const isFr = language === 'fr';
@@ -376,7 +377,7 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      disabled={stockItems.length === 0}
+                      disabled={!deviceMutationAvailability.canMutate || stockItems.length === 0}
                       onClick={() => applyPreset(PRESET_DEPART)}
                       className="min-h-[44px] px-2.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/40 disabled:opacity-40 text-blue-700 dark:text-blue-300 text-xs font-bold cursor-pointer"
                     >
@@ -384,7 +385,7 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
                     </button>
                     <button
                       type="button"
-                      disabled={stockItems.length === 0}
+                      disabled={!deviceMutationAvailability.canMutate || stockItems.length === 0}
                       onClick={() => applyPreset(PRESET_RECOUCH)}
                       className="min-h-[44px] px-2.5 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-40 text-amber-800 dark:text-amber-300 text-xs font-bold cursor-pointer"
                     >
@@ -416,7 +417,7 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
                   {canSeedCatalog && (
                     <button
                       type="button"
-                      disabled={isSeedingCatalog}
+                      disabled={!deviceMutationAvailability.canMutate || isSeedingCatalog}
                       onClick={() => {
                         if (isSeedingCatalog) return;
                         setIsSeedingCatalog(true);
@@ -519,6 +520,7 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
                             <button
                               type="button"
                               onClick={() => adjustQty(item.id, -1)}
+                              disabled={!deviceMutationAvailability.canMutate}
                               aria-label={`${t('Diminuer', 'Decrease', 'تقليل')} ${item.name}`}
                               className="min-h-[44px] min-w-[44px] rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center cursor-pointer"
                             >
@@ -529,6 +531,7 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
                               min={0}
                               inputMode="numeric"
                               value={chosenQty || ''}
+                              disabled={!deviceMutationAvailability.canMutate}
                               placeholder="0"
                               onChange={(e) => {
                                 const val = Math.max(0, Number(e.target.value) || 0);
@@ -545,6 +548,7 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
                             <button
                               type="button"
                               onClick={() => adjustQty(item.id, 1)}
+                              disabled={!deviceMutationAvailability.canMutate}
                               aria-label={`${t('Augmenter', 'Increase', 'زيادة')} ${item.name}`}
                               className="min-h-[44px] min-w-[44px] rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 flex items-center justify-center cursor-pointer"
                             >
@@ -613,7 +617,7 @@ export const RoomReplenishmentModal: React.FC<RoomReplenishmentModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={selectedLines.length === 0 || isSubmitting || insufficientLines.length > 0}
+                  disabled={!deviceMutationAvailability.canMutate || selectedLines.length === 0 || isSubmitting || insufficientLines.length > 0}
                   className="min-h-[44px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
                 >
                   <CheckCircle2 size={15} />

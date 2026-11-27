@@ -20,6 +20,7 @@ const roleManagement = readFileSync(new URL('../src/components/RoleManagementVie
 const stockManagement = readFileSync(new URL('../src/components/StockManagementView.tsx', import.meta.url), 'utf8');
 const pricingView = readFileSync(new URL('../src/components/DynamicPricingView.tsx', import.meta.url), 'utf8');
 const lostPropertyView = readFileSync(new URL('../src/components/LostPropertyView.tsx', import.meta.url), 'utf8');
+const replenishmentModal = readFileSync(new URL('../src/components/RoomReplenishmentModal.tsx', import.meta.url), 'utf8');
 
 function sectionProUsb(start: string, end: string): string {
   const from = proUsb.indexOf(start);
@@ -150,4 +151,10 @@ test('dynamic pricing and lost-property actions are disabled without write autho
   assert.match(pricingView, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
   assert.match(pricingView, /disabled=\{disabled\}/);
   assert.match(lostPropertyView, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
+});
+
+
+test('room replenishment cannot edit quantities or commit stock while read-only', () => {
+  assert.match(replenishmentModal, /disabled=\{!deviceMutationAvailability\.canMutate/);
+  assert.match(replenishmentModal, /recordRoomReplenishment/);
 });
