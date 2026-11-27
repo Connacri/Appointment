@@ -57,11 +57,14 @@ export const MyBookingsView: React.FC = () => {
     currency,
     updateBooking,
     updateBookingStatus,
+    assertBusinessMutationAllowed,
+    deviceMutationAvailability,
   } = useApp();
 
   const isClientRole = activeRoleDefinition.permissions.isClientPortal;
   const [filterTab, setFilterTab] = useState<'all' | 'confirmed' | 'checked_in' | 'cash_pending'>('all');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
   const [editName, setEditName] = useState(clientProfile.name);
   const [editEmail, setEditEmail] = useState(clientProfile.email);
   const [editPhone, setEditPhone] = useState(clientProfile.phone);
@@ -77,13 +80,19 @@ export const MyBookingsView: React.FC = () => {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    setClientProfile({
-      ...clientProfile,
-      name: editName,
-      email: editEmail,
-      phone: editPhone,
-    });
-    setIsEditingProfile(false);
+    try {
+      assertBusinessMutationAllowed();
+      setClientProfile({
+        ...clientProfile,
+        name: editName,
+        email: editEmail,
+        phone: editPhone,
+      });
+      setProfileSaveError(null);
+      setIsEditingProfile(false);
+    } catch (error) {
+      setProfileSaveError(error instanceof Error ? error.message : 'Modification bloquée en lecture seule.');
+    }
   };
 
   const filtered = useMemo(
@@ -357,6 +366,7 @@ export const MyBookingsView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsNewBookingModalOpen(true)}
+                disabled={!deviceMutationAvailability.canMutate}
                 className="px-5 py-2.5 bg-white text-blue-900 hover:bg-blue-50 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center gap-2 hover:scale-102"
               >
                 <Plus size={16} strokeWidth={3} />
@@ -368,6 +378,7 @@ export const MyBookingsView: React.FC = () => {
           {/* Quick inline profile editor */}
           {isEditingProfile && (
             <form onSubmit={handleSaveProfile} className="mt-4 pt-4 border-t border-white/20 grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {profileSaveError && <p role="alert" className="sm:col-span-3 text-xs font-semibold text-rose-200">{profileSaveError}</p>}
               <input
                 type="text"
                 required
@@ -395,6 +406,7 @@ export const MyBookingsView: React.FC = () => {
                 />
                 <button
                   type="submit"
+                  disabled={!deviceMutationAvailability.canMutate}
                   className="px-3 h-8 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold rounded-lg text-xs"
                 >
                   OK

@@ -445,8 +445,10 @@ transactional public-table/identity-sequence DDL probe passed and was rolled bac
 
 The AppContext now exposes `assertBusinessMutationAllowed` and enforces it before
 generic business upserts/deletes, atomic stock transactions, housekeeping status changes,
-purchase-order receipts, dynamic-rate edits, invoice creation, role configuration and
-destructive local-data purge. The legacy raw booking/resource state setters are wrapped
+purchase-order receipts, dynamic-rate edits, invoice creation, customer-profile changes,
+onboarding completion, role configuration and destructive local-data purge. Physical
+proUSB card issuance/revocation, lock-setting changes, CardLock imports, audit-log reads
+that persist records, and destructive lock-cache actions also check the same runtime gate. The legacy raw booking/resource state setters are wrapped
 with the same guard so components cannot bypass the policy through those two setters.
 
 The only bootstrap exception is the first establishment setup while onboarding is incomplete

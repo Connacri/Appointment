@@ -76,6 +76,8 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     setHasOnboarded,
     activeWorkspaceId,
     selectedEstablishmentId,
+    assertBusinessMutationAllowed,
+    deviceMutationAvailability,
   } = useApp();
   const isRtl = language === 'ar';
 
@@ -231,6 +233,7 @@ export const EstablishmentSetupModal: React.FC<EstablishmentSetupModalProps> = (
     setIsImportingMdb(true);
     setStructureMessage('');
     try {
+      assertBusinessMutationAllowed(isFirstLaunch);
       const snapshot = await lockManager.importMdb(file);
       if (snapshot.buildings.length === 0 && snapshot.counts.rooms === 0) throw new Error('Aucun bâtiment déclaré dans BuildingInfo ni aucune chambre dans RoomInfo. L’inventaire existant a été conservé.');
       const planning = mdbSnapshotToPlanning(snapshot);

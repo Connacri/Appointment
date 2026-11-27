@@ -96,6 +96,8 @@ export const BookingModal: React.FC = () => {
     lastCreatedInvoice,
     setLastCreatedInvoice,
     createInvoiceFromBooking,
+    assertBusinessMutationAllowed,
+    deviceMutationAvailability,
   } = useApp();
 
   const isEditing = !!selectedBooking;
@@ -709,6 +711,17 @@ export const BookingModal: React.FC = () => {
    */
   const handleCreateRoomCard = async () => {
     if (isCreatingCard) return;
+    try {
+      assertBusinessMutationAllowed();
+    } catch (error) {
+      setCardResult({
+        success: false,
+        title: 'Émission de carte bloquée',
+        message: error instanceof Error ? error.message : 'Cet appareil est en lecture seule.',
+        details: [{ label: 'Chambre', value: currentResource?.name || resourceNameFallback }],
+      });
+      return;
+    }
 
     if (!usbConnected) {
       await lockManager.notifyFailure();
@@ -1357,7 +1370,7 @@ export const BookingModal: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => void handleCreateRoomCard()}
-                      disabled={isCreatingCard || !usbConnected || cardsCreatedCount >= bookingConfirmation.cardCountRequested}
+                      disabled={!deviceMutationAvailability.canMutate || isCreatingCard || !usbConnected || cardsCreatedCount >= bookingConfirmation.cardCountRequested}
                       className="flex-1 min-h-11 px-4 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <KeyRound size={16} className="shrink-0" />
@@ -1932,7 +1945,7 @@ export const BookingModal: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => void handleCreateRoomCard()}
-                        disabled={isCreatingCard}
+                        disabled={!deviceMutationAvailability.canMutate || isCreatingCard}
                         className={`min-h-11 flex-1 sm:flex-none justify-center px-4 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-violet-500 ${
                           isCreatingCard
                             ? 'bg-slate-300 text-slate-700 cursor-wait'

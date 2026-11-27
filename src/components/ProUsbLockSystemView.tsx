@@ -93,6 +93,8 @@ export const ProUsbLockSystemView: React.FC = () => {
     setResourceGroups,
     activeWorkspaceId,
     selectedEstablishmentId,
+    assertBusinessMutationAllowed,
+    deviceMutationAvailability,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
@@ -232,6 +234,17 @@ export const ProUsbLockSystemView: React.FC = () => {
   const showToast = (type: 'success' | 'error' | 'info', text: string) => {
     setStatusMessage({ type, text });
     setTimeout(() => setStatusMessage(null), 5000);
+  };
+
+  const runGuardedLockMutation = (action: () => void): boolean => {
+    try {
+      assertBusinessMutationAllowed();
+      action();
+      return true;
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Mutation bloquée en mode lecture seule.');
+      return false;
+    }
   };
 
   /** Traduction des chaînes des onglets USB Reader / USBPro. */
@@ -638,6 +651,7 @@ export const ProUsbLockSystemView: React.FC = () => {
     title: string,
     action: (updateProgress: (p: number, step?: string) => void) => Promise<void>
   ) => {
+    assertBusinessMutationAllowed();
     setIsWriting(true);
     setWritingCardTitle(title);
     setWriteProgress(15);
@@ -807,7 +821,40 @@ export const ProUsbLockSystemView: React.FC = () => {
   };
 
   const confirmRevoke = () => {
-    let count = 0;
+    if (!runGuardedLockMutation(() => {
+      let count = 0;
+      let typeLabel = '';
+      if (revokePendingAll) {
+        count = lockManager.revokeAllServiceCards();
+        typeLabel = 'toutes les cartes de service';
+      } else if (revokePendingType) {
+        count = lockManager.revokeCardsByType(revokePendingType);
+        const meta = PROUSB_CARD_TYPES[revokePendingType];
+        typeLabel = meta.label.fr;
+      }
+      if (count > 0) {
+        showToast('success', `${count} carte(s) ${typeLabel} révoquée(s) avec succès.`);
+      } else {
+        showToast('info', 'Aucune carte active de ce type à révoquer.');
+      }
+    })) return;
+    setRevokePendingType(null);
+    setRevokePendingAll(false);
+  };
+
+  const cancelRevoke = () => {
+    setRevokePendingType(null);
+    setRevokePendingAll(false);
+  };
+
+  const handleIssueSpecialCard = async () => {
+    if (!specialPin || specialPin.trim().length < 4) {
+      showToast('error', 'Le mot de passe / code PIN doit comporter au moins 4 caractères.');
+      return;
+    }
+    const cardTitle = `Carte Spéciale Protégée · Chambre ${specialRoomNumber}`;
+    try {
+      await runWithCardProgress(cardTitle, async (updateProgress) => {
     let typeLabel = '';
     if (revokePendingAll) {
       count = lockManager.revokeAllServiceCards();
@@ -884,6 +931,7 @@ export const ProUsbLockSystemView: React.FC = () => {
     if (!file) return;
     setIsImportingMdb(true);
     try {
+      assertBusinessMutationAllowed();
       const snapshot = await lockManager.importMdb(file);
       setMdbStatus(lockManager.getMdbStatus());
       // A same-hotel re-import clears a stale purge marker, so the migration
@@ -1416,7 +1464,7 @@ export const ProUsbLockSystemView: React.FC = () => {
 
                   <button
                     onClick={handleIssueGuestCard}
-                    disabled={isWriting}
+                    disabled={!deviceMutationAvailability.canMutate || isWriting}
                     className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md transition flex items-center gap-2 disabled:opacity-75 cursor-pointer"
                   >
                     {isWriting ? (
@@ -1977,7 +2025,7 @@ export const ProUsbLockSystemView: React.FC = () => {
               <div className="md:col-span-3 pt-3 flex justify-end">
                 <button
                   onClick={handleIssueStaffCard}
-                  disabled={isWriting}
+                  disabled={!deviceMutationAvailability.canMutate || isWriting}
                   className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-75"
                 >
                   {isWriting ? (
@@ -2014,7 +2062,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleRevokeAllService}
-                  disabled={isWriting}
+                  disabled={!deviceMutationAvailability.canMutate || isWriting}
                   className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
                     isWriting
                       ? 'bg-slate-300 text-slate-600 cursor-not-allowed'
@@ -2154,7 +2202,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                 <button
                   type="button"
                   onClick={confirmRevoke}
-                  disabled={isWriting}
+                  disabled={!deviceMutationAvailability.canMutate || isWriting}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <ShieldCheck size={15} />
@@ -2268,7 +2316,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                     type="file"
                     accept=".mdb,.accdb"
                     className="hidden"
-                    disabled={isImportingMdb}
+                    disabled={isImportingMdb || !deviceMutationAvailability.canMutate}
                     onChange={(e) => {
                       const file = e.target.files?.[0] ?? null;
                       e.target.value = '';
@@ -2279,12 +2327,12 @@ export const ProUsbLockSystemView: React.FC = () => {
                 {mdbStatus.connected && (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={() => runGuardedLockMutation(() => {
                       lockManager.clearMdb();
                       setMdbStatus(lockManager.getMdbStatus());
                       setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
                       showToast('info', 'Identité CardLock déconnectée. Réimportez une base CardLock pour reprendre l’émission des cartes.');
-                    }}
+                    })}
                     className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
                     <Trash2 size={14} />
@@ -2294,14 +2342,14 @@ export const ProUsbLockSystemView: React.FC = () => {
                 {mdbStatus.connected && (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={() => runGuardedLockMutation(() => {
                       lockManager.clearPersistedData();
                       setMdbStatus(lockManager.getMdbStatus());
                       setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
                       showToast('success', cardLockPaths.liveMdbPath
                         ? `Cache effacé. Réimportez la base CardLock depuis ${cardLockPaths.liveMdbPath} pour charger les données à jour.`
                         : 'Cache effacé. Réimportez la base CardLock.mdb réelle pour cette plateforme pour charger les données à jour.');
-                    }}
+                    })}
                     className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40"
                   >
                     <RefreshCw size={14} />
@@ -2313,9 +2361,10 @@ export const ProUsbLockSystemView: React.FC = () => {
                 <div role="alert" className="mt-3 rounded-xl border border-amber-400 bg-amber-50 dark:bg-amber-950/40 p-3 space-y-2 text-xs">
                   <strong className="text-amber-900 dark:text-amber-200">Reprogrammation obligatoire après changement d’hôtel</strong>
                   <p className="text-amber-800 dark:text-amber-300">Les cartes client, spéciales, étage et bâtiment sont suspendues. Réimportez la base CardLock de cet hôtel : si le code système n’a pas changé, l’import lève automatiquement ce blocage. En cas de véritable changement d’hôtel (code système différent), présentez les cartes Reset, Room Set et Time Set à chaque serrure puis confirmez ci-dessous. Les anciennes cartes ne sont pas révoquées à distance : elles cessent d’être reconnues uniquement après reprogrammation physique de chaque serrure.</p>
-                  <button type="button" disabled={!lockManager.canConfirmHotelRecommissioning()} onClick={() => {
+                  <button type="button" disabled={!deviceMutationAvailability.canMutate || !lockManager.canConfirmHotelRecommissioning()} onClick={() => {
                     if (!window.confirm('Confirmez-vous avoir physiquement reprogrammé toutes les serrures de cet hôtel avec la nouvelle identité système ?')) return;
                     try {
+                      assertBusinessMutationAllowed();
                       lockManager.confirmHotelRecommissioning();
                       setHotelRecommissioningRequired(false);
                       showToast('success', 'Migration clôturée. Les nouvelles cartes d’accès peuvent être émises.');
@@ -2356,7 +2405,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                 </label>
                 <button
                   onClick={() => handleIssueCommissioning('reset')}
-                  disabled={isWriting}
+                  disabled={!deviceMutationAvailability.canMutate || isWriting}
                   className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs transition-colors"
                 >
                   Émettre Carte Reset
@@ -2388,7 +2437,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                       }
                     }
                   }}
-                  disabled={isWriting}
+                  disabled={!deviceMutationAvailability.canMutate || isWriting}
                   className="w-full py-2 bg-red-700 hover:bg-red-800 text-white font-bold rounded-lg text-xs transition-colors"
                 >
                   {isWriting ? 'Reset en cours...' : 'HARD RESET PERSISTANT'}
@@ -2428,7 +2477,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                 </p>
                 <button
                   onClick={() => handleIssueCommissioning('room_set')}
-                  disabled={isWriting}
+                  disabled={!deviceMutationAvailability.canMutate || isWriting}
                   className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs transition-colors"
                 >
                   Émettre Carte N° Chambre
@@ -2446,11 +2495,11 @@ export const ProUsbLockSystemView: React.FC = () => {
                   Groupe = chambres assignées ; bâtiment = bâtiment sélectionné ; master = tout l'établissement. La carte Étage proUSB encode uniquement le numéro d'étage : si plusieurs bâtiments possèdent le même étage, la serrure peut appliquer ce niveau dans chacun d'eux.
                 </p>
                 <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => handleIssueCommissioning('group_set')} disabled={isWriting} className="py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs">Groupe Config (0x50)</button>
-                  <button onClick={() => handleIssueCommissioning('group')} disabled={isWriting} className="py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs">Carte Groupe (0x80)</button>
-                  <button onClick={() => handleIssueCommissioning('floor')} disabled={isWriting || availableFloors.length === 0} className="py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg text-xs">Carte Étage (0xD0)</button>
-                  <button onClick={() => handleIssueCommissioning('building')} disabled={isWriting || availableBuildings.length === 0} className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs">Carte Bâtiment (0xC0)</button>
-                  <button onClick={() => handleIssueCommissioning('master')} disabled={isWriting} className="py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs col-span-2">Passe Général Master (0xB0)</button>
+                  <button onClick={() => handleIssueCommissioning('group_set')} disabled={!deviceMutationAvailability.canMutate || isWriting} className="py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs">Groupe Config (0x50)</button>
+                  <button onClick={() => handleIssueCommissioning('group')} disabled={!deviceMutationAvailability.canMutate || isWriting} className="py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs">Carte Groupe (0x80)</button>
+                  <button onClick={() => handleIssueCommissioning('floor')} disabled={!deviceMutationAvailability.canMutate || isWriting || availableFloors.length === 0} className="py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg text-xs">Carte Étage (0xD0)</button>
+                  <button onClick={() => handleIssueCommissioning('building')} disabled={!deviceMutationAvailability.canMutate || isWriting || availableBuildings.length === 0} className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs">Carte Bâtiment (0xC0)</button>
+                  <button onClick={() => handleIssueCommissioning('master')} disabled={!deviceMutationAvailability.canMutate || isWriting} className="py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs col-span-2">Passe Général Master (0xB0)</button>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[10px] text-amber-800 dark:text-amber-200">
                   <div><strong>Durée</strong> <input type="number" min={1} max={3650} value={commissionValidityDays} onChange={e=>setCommissionValidityDays(Math.max(1,parseInt(e.target.value)||365))} className="w-full p-1 text-xs rounded bg-white dark:bg-slate-800" /> j</div>
@@ -2486,7 +2535,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                 </p>
                 <button
                   onClick={() => handleIssueCommissioning('time_set')}
-                  disabled={isWriting}
+                  disabled={!deviceMutationAvailability.canMutate || isWriting}
                   className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors"
                 >
                   Émettre Carte Horloge
@@ -2513,13 +2562,16 @@ export const ProUsbLockSystemView: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleIssueCommissioning('record')}
-                  disabled={isWriting}
+                  disabled={!deviceMutationAvailability.canMutate || isWriting}
                   className="px-3 py-1.5 bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300 border border-violet-200 dark:border-violet-800 hover:bg-violet-100 rounded-lg text-xs font-semibold"
                 >
                   Émettre Carte Relève (RecordCard)
                 </button>
                 <button
-                  onClick={handleReadAuditLog}
+                  onClick={() => {
+                    if (!runGuardedLockMutation(() => undefined)) return;
+                    void handleReadAuditLog();
+                  }}
                   disabled={isReading}
                   className="px-3.5 py-1.5 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5"
                 >
@@ -2780,7 +2832,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => lockManager.clearLogs()}
+                  onClick={() => runGuardedLockMutation(() => lockManager.clearLogs())}
                   className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
                 >
                   Effacer console
@@ -3283,7 +3335,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                     }
                   }
                 }}
-                disabled={isWriting}
+                disabled={!deviceMutationAvailability.canMutate || isWriting}
                 className="w-full py-3 bg-red-700 hover:bg-red-800 text-white font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
               >
                 <AlertTriangle size={18} />
@@ -3328,9 +3380,11 @@ export const ProUsbLockSystemView: React.FC = () => {
               <button
                 onClick={() => {
                   if (window.confirm('Effacer toutes les donnees proUSB persistantes ?')) {
-                    lockManager.clearPersistedData();
-                    setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
-                    showToast('success', 'Données proUSB effacées. Réimportez la base CardLock de cet hôtel pour réactiver l’émission des cartes.');
+                    runGuardedLockMutation(() => {
+                      lockManager.clearPersistedData();
+                      setHotelRecommissioningRequired(lockManager.isHotelRecommissioningRequired());
+                      showToast('success', 'Données proUSB effacées. Réimportez la base CardLock de cet hôtel pour réactiver l’émission des cartes.');
+                    });
                   }
                 }}
                 className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white font-bold rounded-lg text-xs transition-colors"
@@ -3366,7 +3420,8 @@ export const ProUsbLockSystemView: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={lockSettings.guestAccessBolt}
-                      onChange={(e) => lockManager.updateSettings({ guestAccessBolt: e.target.checked })}
+                      disabled={!deviceMutationAvailability.canMutate}
+                      onChange={(e) => runGuardedLockMutation(() => lockManager.updateSettings({ guestAccessBolt: e.target.checked }))}
                       className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
                     />
                     <div>
@@ -3383,7 +3438,8 @@ export const ProUsbLockSystemView: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={lockSettings.alarmForcedPin}
-                      onChange={(e) => lockManager.updateSettings({ alarmForcedPin: e.target.checked })}
+                      disabled={!deviceMutationAvailability.canMutate}
+                      onChange={(e) => runGuardedLockMutation(() => lockManager.updateSettings({ alarmForcedPin: e.target.checked }))}
                       className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
                     />
                     <div>
@@ -3400,7 +3456,8 @@ export const ProUsbLockSystemView: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={lockSettings.remindCloseDoor}
-                      onChange={(e) => lockManager.updateSettings({ remindCloseDoor: e.target.checked })}
+                      disabled={!deviceMutationAvailability.canMutate}
+                      onChange={(e) => runGuardedLockMutation(() => lockManager.updateSettings({ remindCloseDoor: e.target.checked }))}
                       className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
                     />
                     <div>
@@ -3417,7 +3474,8 @@ export const ProUsbLockSystemView: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={lockSettings.lockAfterReleaseKnob}
-                      onChange={(e) => lockManager.updateSettings({ lockAfterReleaseKnob: e.target.checked })}
+                      disabled={!deviceMutationAvailability.canMutate}
+                      onChange={(e) => runGuardedLockMutation(() => lockManager.updateSettings({ lockAfterReleaseKnob: e.target.checked }))}
                       className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
                     />
                     <div>
@@ -3630,7 +3688,7 @@ export const ProUsbLockSystemView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isWriting}
+                  disabled={!deviceMutationAvailability.canMutate || isWriting}
                   className="px-5 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-bold rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-75"
                 >
                   <ShieldCheck size={16} />

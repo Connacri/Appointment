@@ -4,6 +4,27 @@ import { test } from 'node:test';
 
 const app = readFileSync(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8');
 const billing = readFileSync(new URL('../src/components/BillingInvoicingView.tsx', import.meta.url), 'utf8');
+const proUsb = readFileSync(new URL('../src/components/ProUsbLockSystemView.tsx', import.meta.url), 'utf8');
+const bookingModal = readFileSync(new URL('../src/components/BookingModal.tsx', import.meta.url), 'utf8');
+const setupModal = readFileSync(new URL('../src/components/EstablishmentSetupModal.tsx', import.meta.url), 'utf8');
+const inspector = readFileSync(new URL('../src/components/IndexedDbInspectorModal.tsx', import.meta.url), 'utf8');
+const myBookings = readFileSync(new URL('../src/components/MyBookingsView.tsx', import.meta.url), 'utf8');
+
+function sectionProUsb(start: string, end: string): string {
+  const from = proUsb.indexOf(start);
+  assert.notEqual(from, -1, `missing ProUSB section: ${start}`);
+  const to = proUsb.indexOf(end, from + start.length);
+  assert.notEqual(to, -1, `missing ProUSB end marker: ${end}`);
+  return proUsb.slice(from, to);
+}
+
+function sectionBooking(start: string, end: string): string {
+  const from = bookingModal.indexOf(start);
+  assert.notEqual(from, -1, `missing BookingModal section: ${start}`);
+  const to = bookingModal.indexOf(end, from + start.length);
+  assert.notEqual(to, -1, `missing BookingModal end marker: ${end}`);
+  return bookingModal.slice(from, to);
+}
 
 function section(start: string, end: string): string {
   const from = app.indexOf(start);
@@ -41,4 +62,32 @@ test('raw booking and resource setters cannot bypass the mutation policy', () =>
 
 test('initial establishment setup is the only no-registry bootstrap exception', () => {
   assert.match(app, /if \(allowInitialSetup && !hasOnboardedRef\.current && !deviceRegistry\) return/);
+});
+
+
+test('customer profile and onboarding mutations respect the topology gate', () => {
+  assert.match(section('const setHasOnboarded', '// 1ère ouverture'), /assertBusinessMutationAllowed\(true\)/);
+  assert.match(section('const setClientProfile', 'const [selectedBooking'), /assertBusinessMutationAllowed\(\)/);
+});
+
+test('physical lock card issuance, revocation, settings and destructive actions are guarded', () => {
+  assert.match(proUsb, /const runWithCardProgress[\\s\\S]*?assertBusinessMutationAllowed\(\)/);
+  assert.match(sectionProUsb('const confirmRevoke', 'const cancelRevoke'), /runGuardedLockMutation/);
+  assert.match(proUsb, /const runGuardedLockMutation[\\s\\S]*?assertBusinessMutationAllowed\(\)/);
+  assert.match(proUsb, /lockManager\.clearMdb\(\)[\\s\\S]{0,250}runGuardedLockMutation|runGuardedLockMutation[\\s\\S]{0,250}lockManager\.clearMdb\(\)/);
+  assert.match(proUsb, /lockManager\.updateSettings\(\{ guestAccessBolt:/);
+  assert.match(proUsb, /runGuardedLockMutation\(\(\) => lockManager\.clearLogs\(\)\)/);
+});
+
+test('CardLock imports and BookingModal card writes check device mutation authority first', () => {
+  assert.match(sectionProUsb('const handleImportMdb', 'const handleIssueCommissioning'), /assertBusinessMutationAllowed\(\)/);
+  assert.match(setupModal, /assertBusinessMutationAllowed\(isFirstLaunch\)[\\s\\S]*?lockManager\.importMdb/);
+  assert.match(inspector, /assertBusinessMutationAllowed\(\)[\\s\\S]*?lockManager\.importMdb/);
+  assert.match(sectionBooking('const handleCreateRoomCard', 'const ['), /assertBusinessMutationAllowed\(\)/);
+});
+
+test('read-only UI disables high-risk profile, booking and lock controls', () => {
+  assert.match(myBookings, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
+  assert.match(proUsb, /disabled=\{!deviceMutationAvailability\.canMutate \|\| isWriting\}/);
+  assert.match(proUsb, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
 });

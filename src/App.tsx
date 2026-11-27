@@ -316,7 +316,8 @@ const MainLayout: React.FC = () => {
         >
           <div className="mx-auto flex max-w-screen-2xl flex-wrap items-center justify-between gap-2">
             <div>
-              <strong>Mode lecture seule — opérations de réservation bloquées.</strong>{' '}
+              <strong>Mode lecture seule — toutes les mutations métier sont bloquées.</strong>{' '}
+              <span className="block text-xs opacity-80">La consultation et la navigation restent disponibles.</span>{' '}
               {deviceMutationAvailability.reason === 'registry_missing'
                 ? 'Cet établissement ne possède pas encore de registre d’appareils.'
                 : deviceMutationAvailability.reason === 'no_coordination_authority'

@@ -316,7 +316,7 @@ export const IndexedDbInspectorModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
 }> = ({ isOpen, onClose }) => {
-  const { language, setBookings, setResourceGroups } = useApp();
+  const { language, setBookings, setResourceGroups, assertBusinessMutationAllowed, deviceMutationAvailability } = useApp();
   const t = COPY[language] || COPY.fr;
   const isRtl = language === 'ar';
   const mt = MANAGEMENT_COPY[language] || MANAGEMENT_COPY.fr;
@@ -436,6 +436,7 @@ export const IndexedDbInspectorModal: React.FC<{
     setMdbMessage(null);
     setMdbTables([]);
     try {
+      assertBusinessMutationAllowed();
       const snapshot = await lockManager.importMdb(file);
       setMdbTables(snapshot.tables ?? []);
       const sourceIsOld = snapshot.fileLastModified ? (Date.now() - new Date(snapshot.fileLastModified).getTime()) / 86400000 > 90 : false;

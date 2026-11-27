@@ -169,7 +169,7 @@ interface AppContextType {
   deviceRegistry: DeviceRegistry | null;
   deviceMutationAvailability: MutationAvailability;
   configureSingleDeviceTopology: () => Promise<void>;
-  assertBusinessMutationAllowed: () => void;
+  assertBusinessMutationAllowed: (allowInitialSetup?: boolean) => void;
   refreshWorkspaces: () => Promise<void>;
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -1144,6 +1144,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   hasOnboardedRef.current = hasOnboarded;
 
   const setHasOnboarded = (done: boolean) => {
+    assertBusinessMutationAllowed(true);
     hasOnboardedRef.current = done;
     setHasOnboardedState(done);
     if (done) {
@@ -1452,6 +1453,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   clientProfileRef.current = clientProfile;
 
   const setClientProfile = (p: ClientProfile) => {
+    assertBusinessMutationAllowed();
     setClientProfileState(p);
     localStorage.setItem('omnibook_client_profile', JSON.stringify(p));
   };
@@ -4185,7 +4187,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deviceRegistry,
         deviceMutationAvailability,
         configureSingleDeviceTopology,
-        assertBusinessMutationAllowed: () => assertBusinessMutationAllowed(),
+        assertBusinessMutationAllowed: (allowInitialSetup) => assertBusinessMutationAllowed(allowInitialSetup),
         refreshWorkspaces: workspace.refreshWorkspaces,
         language,
         setLanguage,
