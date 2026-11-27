@@ -151,7 +151,7 @@ export const LanDiscoveryStatus: React.FC = () => {
     <div
       role="status"
       aria-live="polite"
-      className="relative flex min-h-8 w-full shrink-0 items-center gap-2 border-t border-slate-200/70 bg-slate-50/80 px-3 py-1 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300"
+      className="relative flex min-h-7 w-full shrink-0 items-center gap-2 border-t border-slate-200/70 bg-slate-50/80 px-3 py-0.5 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300"
     >
       <span
         className={`h-2 w-2 shrink-0 rounded-full ${error ? 'bg-rose-500' : active ? 'bg-emerald-500' : 'animate-pulse bg-slate-400'}`}

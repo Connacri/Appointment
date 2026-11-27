@@ -53,8 +53,6 @@ import { LanDiscoveryStatus } from './LanDiscoveryStatus';
 export const TopBar: React.FC = () => {
   const {
     language,
-    searchQuery,
-    setSearchQuery,
     currentDomain,
     setCurrentDomain,
     currentRole,
@@ -677,34 +675,6 @@ export const TopBar: React.FC = () => {
           </div>
         </div>
 
-        {/* CENTER SECTION: Tablet & Desktop Global Search */}
-        <div className="pms-app-topbar-search hidden md:flex relative items-center h-9 min-w-[90px] flex-1 max-w-[130px] lg:max-w-[170px] xl:max-w-[200px] 2xl:max-w-[240px]">
-          <div className="relative flex min-w-0 flex-1 items-center h-9">
-            <Search size={14} className="absolute left-2.5 rtl:left-auto rtl:right-2.5 text-slate-400 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={
-                uiCaps.canViewPlanningOrBookings
-                  ? (language === 'fr' ? 'Rechercher...' : language === 'ar' ? 'بحث...' : 'Search...')
-                  : (language === 'fr' ? 'Filtrer chambre / tâche...' : language === 'ar' ? 'تصفية غرفة / مهمة...' : 'Filter room / task...')
-              }
-              className="w-full h-9 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs pl-8 pr-6 rtl:pl-6 rtl:pr-8 rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium transition-colors"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 rtl:right-auto rtl:left-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-                title={language === 'fr' ? 'Effacer la recherche' : language === 'ar' ? 'مسح البحث' : 'Clear search'}
-              >
-                <X size={13} />
-              </button>
-            )}
-          </div>
-        </div>
-
         {/* RIGHT SECTION: Primary actions & More menu (streamlined per breakpoint to prevent overflow) */}
         <div className="pms-app-topbar-actions flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-visible">
           {/* Staff & Operational Notifications Bell */}
@@ -1081,6 +1051,21 @@ export const TopBar: React.FC = () => {
 
                 <div className="pt-1 border-t border-slate-100 dark:border-slate-800 my-1" />
 
+                {/* Booking finder moved into the compact mobile menu */}
+                {uiCaps.canViewPlanningOrBookings && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsBookingFinderOpen(true);
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className="sm:hidden w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left rtl:text-right"
+                  >
+                    <CalendarSearch size={14} className="text-blue-500 shrink-0" />
+                    <span className="truncate font-semibold">{getTranslation('bookingFinderOpen', language)}</span>
+                  </button>
+                )}
+
                 {/* Force Supabase Cloud Sync (mobile + accessible menu entry) */}
                 <button
                   type="button"
@@ -1267,89 +1252,7 @@ export const TopBar: React.FC = () => {
         </div>
       </div>
 
-      {/* ROW 2: Mobile Dedicated Search & Quick Utility Row */}
-      <div className="w-full flex md:hidden items-center gap-1.5 min-w-0 pt-0.5">
-        <div className="relative flex min-w-0 flex-1 items-center">
-          <Search size={14} className="absolute left-2.5 rtl:left-auto rtl:right-2.5 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={
-              uiCaps.canViewPlanningOrBookings
-                ? (language === 'fr' ? 'Rechercher un séjour, client, chambre...' : language === 'ar' ? 'بحث عن حجز أو نزيل أو غرفة...' : 'Search booking, guest, room...')
-                : (language === 'fr' ? 'Filtrer chambre ou tâche...' : language === 'ar' ? 'تصفية غرفة أو مهمة...' : 'Filter room or task...')
-            }
-            className="w-full h-9 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs pl-8 pr-7 rtl:pl-7 rtl:pr-8 rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium transition-colors"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2 rtl:right-auto rtl:left-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-0.5"
-              title={language === 'fr' ? 'Effacer la recherche' : language === 'ar' ? 'مسح البحث' : 'Clear search'}
-            >
-              <X size={13} />
-            </button>
-          )}
-        </div>
-
-        {/* Mobile Booking Finder shortcut (<sm only; sm+ uses Row 1 button) */}
-        {uiCaps.canViewPlanningOrBookings && (
-          <button
-            type="button"
-            onClick={() => setIsBookingFinderOpen(true)}
-            className="sm:hidden flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer shrink-0"
-            title={getTranslation('bookingFinderOpen', language)}
-            aria-label={getTranslation('bookingFinderOpen', language)}
-          >
-            <CalendarSearch size={14} className="shrink-0" />
-          </button>
-        )}
-
-        {/* Mobile Cloud Sync shortcut (<sm only; sm+ uses Row 1 button) */}
-        {(() => {
-          const syncBusy = cloudSyncStatus.isSyncing;
-          const pendingCount = cloudSyncStatus.pendingCount;
-          const phase = cloudSyncStatus.phase;
-          const toneClass = syncBusy
-            ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-            : phase === 'synced'
-            ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300'
-            : phase === 'error'
-            ? 'border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300'
-            : phase === 'pending'
-            ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
-            : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200';
-          return (
-            <button
-              type="button"
-              disabled={syncBusy || isOffline}
-              onClick={() => void forceSupabaseSync()}
-              className={`sm:hidden flex h-9 min-w-9 px-2 items-center justify-center gap-1 rounded-xl border text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${toneClass}`}
-              title={getTranslation('supabaseForceSyncFullBtn', language)}
-              aria-label={getTranslation('supabaseForceSyncFullBtn', language)}
-            >
-              {syncBusy ? (
-                <RefreshCw size={14} className="animate-spin shrink-0" />
-              ) : phase === 'offline' ? (
-                <CloudOff size={14} className="shrink-0" />
-              ) : phase === 'error' || phase === 'pending' ? (
-                <AlertTriangle size={14} className="shrink-0" />
-              ) : (
-                <Cloud size={14} className="shrink-0" />
-              )}
-              {pendingCount > 0 && (
-                <span className="px-1 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-extrabold leading-none">
-                  {pendingCount}
-                </span>
-              )}
-            </button>
-          );
-        })()}
-      </div>
-
-      <LanDiscoveryStatus />
+      <div className="hidden sm:block"><LanDiscoveryStatus /></div>
 
       {uiCaps.canViewPlanningOrBookings && (
         <BookingFinderModal

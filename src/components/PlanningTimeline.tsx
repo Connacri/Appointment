@@ -265,6 +265,8 @@ export const PlanningTimeline: React.FC = () => {
   });
   const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [isDayHeaderCollapsed, setIsDayHeaderCollapsed] = useState(false);
+  const [isGanttToolsOpen, setIsGanttToolsOpen] = useState(false);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [scrollVisibleDate, setScrollVisibleDate] = useState<string>(() => currentBaseDate);
   useEffect(() => {
     try {
@@ -554,6 +556,26 @@ export const PlanningTimeline: React.FC = () => {
   const effectiveSearchQuery = timelineSearchQuery.trim()
     ? timelineSearchQuery
     : searchQuery;
+
+  useEffect(() => {
+    if (!isGanttToolsOpen) return undefined;
+    const closeOnOutside = (event: MouseEvent | TouchEvent) => {
+      if (toolbarRef.current && !toolbarRef.current.contains(event.target as Node)) {
+        setIsGanttToolsOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsGanttToolsOpen(false);
+    };
+    document.addEventListener('mousedown', closeOnOutside);
+    document.addEventListener('touchstart', closeOnOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutside);
+      document.removeEventListener('touchstart', closeOnOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isGanttToolsOpen]);
 
   // Close search results popover on outside click / touch
   useEffect(() => {
@@ -892,7 +914,24 @@ export const PlanningTimeline: React.FC = () => {
     <div className="flex-1 flex flex-col h-full overflow-hidden pms-gantt-root bg-[rgb(var(--pms-canvas))] relative select-none">
       {/* Responsive Toolbar: one compact, horizontally scrollable row on phones */}
       <div className="w-full min-w-0 shrink-0 border-b border-[rgb(var(--pms-border))] pms-gantt-surface select-none">
-        <div className="flex min-w-0 flex-row flex-wrap items-center gap-1.5 overflow-visible whitespace-normal px-1.5 py-2 md:px-3 md:py-1.5">
+        <div ref={toolbarRef} className="flex min-w-0 flex-col gap-1.5 px-1.5 py-1.5 md:px-3 md:py-1.5">
+          <button
+            type="button"
+            className="md:hidden flex min-h-9 w-full items-center justify-between rounded-lg border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] px-3 text-xs font-semibold text-slate-700 shadow-2xs dark:text-slate-200"
+            onClick={() => setIsGanttToolsOpen((open) => !open)}
+            aria-expanded={isGanttToolsOpen}
+            aria-controls="gantt-toolbar-tools"
+          >
+            <span className="flex items-center gap-2">
+              <SlidersHorizontal size={14} className="text-[var(--theme-primary)]" />
+              {language === 'fr' ? 'Outils du planning' : language === 'ar' ? 'أدوات المخطط' : 'Planning tools'}
+            </span>
+            <ChevronDown size={15} className={isGanttToolsOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+          </button>
+          <div
+            id="gantt-toolbar-tools"
+            className={`${isMobileScreen ? (isGanttToolsOpen ? 'flex' : 'hidden') : 'flex'} w-full min-w-0 flex-col items-stretch gap-2 rounded-lg md:w-auto md:flex-row md:flex-wrap md:items-center md:gap-1.5 md:rounded-none ${isMobileScreen && isGanttToolsOpen ? 'border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] p-2 shadow-sm' : ''}`}
+          >
           {/* Quick Date Stepper Navigation with sequential Month & Day navigation */}
           <div className="flex h-7 shrink-0 items-center gap-0.5 rounded-md border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] p-0.5 shadow-2xs">
             <button
@@ -1075,7 +1114,7 @@ export const PlanningTimeline: React.FC = () => {
               </span>
             </button>
           )}
-
+          </div>
         </div>
 
         {/* Dedicated Timeline Search & Quick-Locate Row */}
