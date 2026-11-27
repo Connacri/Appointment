@@ -92,7 +92,9 @@ Audit status: **NOT READY for full CRUD replication or production P2P**. This is
 - Added the atomic apply_stock_movement RPC. It locks the stock item, checks idempotency, rejects negative quantities and commits ledger + stock projection together.
 - AppContext now enqueues task, stock-item, stock-movement, supplier, purchase-order, staff-member and establishment-profile mutations. Generic IndexedDB workspace projections are restored on startup; local tombstones are respected. Supabase tombstones for task, stock item, supplier, purchase order and staff are applied locally and relayed as local P2P delete events.
 - This is not complete: UI enqueue is still fire-and-forget; local P2P identity still depends on an authenticated Supabase workspace; dynamic rates and invoices are excluded; remote delete propagation for resource/group and multi-device integration are not yet certified.
-- Latest live Supabase Security Advisor: no findings on the new tables; remaining warnings are two technical RLS tables without policies (default deny), keepalive_cap mutable search_path, and leaked-password protection disabled.
+- Supabase Security Advisor rechecked on 2026-11-27: two tables have RLS enabled but no policies (`keepalive_pings`, `pms_mdb_imports`), so access is default-deny; leaked-password protection is disabled in Auth. The earlier `keepalive_cap` mutable-search-path finding has been fixed.
+- Supabase Performance Advisor rechecked on 2026-11-27: five foreign keys lack covering indexes (`purchase_orders` workspace/establishment and supplier/establishment, `staff_members` establishment, `stock_items` preferred supplier/establishment, `stock_suppliers` establishment). It also reports 68 unused indexes at the current low observed workload; do not remove them blindly before production query-plan and workload review.
+- No Supabase schema or Auth settings were changed during this audit.
 
 
 ### Additional invariant gaps after the November 26 integration
@@ -110,3 +112,11 @@ Audit status: **NOT READY for full CRUD replication or production P2P**. This is
 - Remote tombstone pages are applied in IndexedDB batches of at most 500 records, matching the database's bounded page/transaction policy.
 
 - Supabase Security Advisor: keepalive_cap now has an empty search_path and fully qualified table references. Remaining warnings: default-deny RLS on keepalive_pings/pms_mdb_imports and leaked-password protection disabled at Auth configuration level.
+
+
+## Live Supabase advisor snapshot (2026-11-27)
+
+- Security: two RLS-enabled technical tables remain policy-free by design/default-deny (`keepalive_pings`, `pms_mdb_imports`); leaked-password protection remains disabled at Auth configuration level.
+- Performance: five foreign-key index gaps need a tracked migration and query-plan validation. The 68 unused-index notices are observational only; evaluate them against real workload before dropping anything.
+- The database currently exposes 21 public tables, all with RLS enabled.
+- No production SQL, policies, indexes or Auth settings were modified by this advisor review.
