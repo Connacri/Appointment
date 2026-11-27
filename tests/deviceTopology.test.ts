@@ -88,6 +88,25 @@ test('registry verification and hydration gate mutations during reconnect', () =
   assert.equal(hydrating.reason, 'data_not_ready');
 });
 
+test('single-device also remains read-only until core hydration completes', () => {
+  const single: DeviceRegistry = {
+    ...registry,
+    deploymentMode: 'SINGLE_DEVICE',
+    singleDeviceId: 'pc-a',
+  };
+  const result = evaluateMutationAvailability({
+    registry: single,
+    localDeviceId: 'pc-a',
+    coordinationAuthority: 'none',
+    registryEpochVerified: true,
+    coreDataHydrated: false,
+    integrityChecksPassed: true,
+  });
+  assert.equal(result.state, 'RECONNECTING');
+  assert.equal(result.canMutate, false);
+  assert.equal(result.reason, 'data_not_ready');
+});
+
 test('only an authorized administrator can explicitly transition to single-device', () => {
   const next = buildSingleDeviceTransition(registry, 'pc-a', 'pc-a', 'admin', '2026-11-27T11:00:00.000Z');
   assert.equal(next.epoch, 5);

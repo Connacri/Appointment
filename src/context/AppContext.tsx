@@ -824,6 +824,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return '';
   };
 
+  // Keep the readiness state declared above this callback: registry policy evaluation
+  // must never observe an uninitialized hydration flag during the first render.
   const refreshDeviceMutationAvailability = useCallback(async (): Promise<void> => {
     const requestId = ++deviceRegistryLoadSeqRef.current;
     const workspaceId = workspace.activeWorkspaceId?.trim();
