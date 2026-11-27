@@ -1,11 +1,6 @@
 name: Windows Native (Rust)
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - "windows-native/**"
-      - ".github/workflows/windows-native.yml"
   pull_request:
     paths:
       - "windows-native/**"

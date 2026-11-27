@@ -1,20 +1,6 @@
 name: Android Native (Capacitor)
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - "android/**"
-      - "src/App.tsx"
-      - "src/db/**"
-      - "src/context/**"
-      - "src/components/**"
-      - "src/components/LanDiscoveryStatus.tsx"
-      - "src/services/p2p/**"
-      - "capacitor.config.json"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/android-native.yml"
   pull_request:
     paths:
       - "android/**"
