@@ -31,6 +31,7 @@ test('detects same-room overlap even when offline devices generated different bo
   assert.equal(conflicts[0].firstBookingId, 'A');
   assert.equal(conflicts[0].secondBookingId, 'B');
   assert.equal(conflicts[0].status, 'pending');
+  assert.equal(conflicts[0].id, 'booking-overlap:hotel-1:node-A%3A1:node-B%3A1');
 });
 
 test('does not report different rooms, cancelled stays, or non-overlapping stays', () => {
