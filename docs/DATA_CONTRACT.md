@@ -399,3 +399,16 @@ orders, staff, housekeeping, invoices, settings or every keyboard/context-menu a
 The local registry is not yet authoritative across devices. `MULTI_DEVICE` therefore remains
 read-only because no shared registry authority or authenticated P2P coordination transport is
 available. Do not treat this slice as production multi-device authorization.
+
+
+### AppContext registry hydration ordering
+
+The registry refresh callback is allowed to evaluate the deployment policy only after core
+IndexedDB data hydration has completed. Before hydration, the runtime must remain
+`RECONNECTING` with `canMutate=false` and reason `data_not_ready`; it must not briefly
+expose a writable state while workspace or establishment scope is still being restored.
+The hydration state is declared before the callback that consumes it, preserving React hook
+order and preventing a TypeScript use-before-declaration error.
+
+Regression coverage explicitly asserts the reconnecting state, disabled mutation capability
+and `data_not_ready` reason while core data is not hydrated.
