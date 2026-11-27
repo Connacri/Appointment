@@ -213,6 +213,19 @@ const MainLayout: React.FC = () => {
 
   useBrandIconSync(establishmentProfile?.logoUrl, establishmentProfile?.name);
 
+  // Remove only obsolete HackTube-owned browser keys; PMS data is untouched.
+  React.useEffect(() => {
+    const obsoleteKeys = [
+      'videohub_library', 'videohub_likes', 'videohub_dislikes',
+      'videohub_seen', 'videohub_later', 'videohub_extra_cats',
+      'videohub_playlists', 'appointment_pending_video_share',
+      'appointment_open_hacktube_quick_add',
+    ];
+    for (const key of obsoleteKeys) {
+      try { localStorage.removeItem(key); } catch { /* storage may be unavailable */ }
+    }
+  }, []);
+
 
   // Pull-to-refresh reloads remote data only. It must never reload the page:
   // that would discard open forms and transient local state.
