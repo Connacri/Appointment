@@ -137,3 +137,12 @@ The live Supabase project reports 17 applied migrations. The repository currentl
 - A transaction precondition rejects a second completion when the persisted task is already `done`; insufficient stock, missing items or invalid consumption abort the whole command.
 - The React task state is updated only after the local transaction commits.
 - Scope limitation: other task CRUD operations still use the generic enqueue callback; Supabase push of the task and its stock movements is not a single server-side transaction. This closes the local completion boundary, not the global cloud/P2P delivery or all fire-and-forget CRUD gaps.
+
+
+## Awaited task CRUD integration (2026-11-27)
+
+- Task create, status change, subtask toggle and delete now await IndexedDB commit before changing the React projection.
+- Checkout turnover tasks are persisted as one atomic bounded batch; room housekeeping is marked dirty only after the batch commits.
+- Staff quick-task assignment waits for the task write before showing success or closing the form.
+- Task notification read state is updated only after the completion command succeeds.
+- Remaining: optional default-task creation from the staff-creation callback is still a separate asynchronous fan-out; Supabase receives task and stock movement entities through separate dispatchers.

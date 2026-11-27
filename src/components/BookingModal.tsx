@@ -1535,7 +1535,7 @@ export const BookingModal: React.FC = () => {
                 setEndDate(payload.endDate);
                 setCheckOutTime(payload.checkOutTime);
                 setStatus('checked_out');
-                generateTurnoverTasksForCheckout(resolvedRoomName);
+                await generateTurnoverTasksForCheckout(resolvedRoomName);
                 setPendingCheckoutPrompt(null);
                 setCheckoutNotice({
                   title:

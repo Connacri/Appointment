@@ -289,15 +289,16 @@ export const StaffHrPanel: React.FC<{ onToast: (msg: string) => void }> = ({ onT
     });
   };
 
-  const handleSaveQuickTask = (e: React.FormEvent) => {
+  const handleSaveQuickTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!taskModalMember || !quickTaskState.taskTitle.trim()) return;
-    assignTaskToStaff(taskModalMember.id, {
+    const created = await assignTaskToStaff(taskModalMember.id, {
       room: quickTaskState.room,
       taskTitle: quickTaskState.taskTitle,
       priority: quickTaskState.priority,
       note: quickTaskState.note,
     });
+    if (!created) return;
     playFeedback('success');
     onToast(
       t(

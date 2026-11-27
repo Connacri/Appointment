@@ -224,13 +224,12 @@ export const TasksManagementView: React.FC = () => {
     return t('Maintenance', 'Maintenance', 'صيانة');
   };
 
-  const handleCompleteTask = (taskId: string) => {
+  const handleCompleteTask = (taskId: string) =>
     updateTaskStatus(taskId, 'done', activeOperatorName.trim() || undefined);
-  };
 
-  const handleCreateTask = (e: React.FormEvent) => {
+  const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    addTask({
+    const created = await addTask({
       room: newRoom,
       typeId: 'custom',
       typeName: newTypeName,
@@ -247,8 +246,10 @@ export const TasksManagementView: React.FC = () => {
       ],
       tools: [t('Chariot d’intervention', 'Service trolley', 'عربة الخدمة'), t('Tablette PMS', 'PMS Tablet', 'جهاز لوحي')],
     });
-    setIsNewTaskOpen(false);
-    setNewNote('');
+    if (created) {
+      setIsNewTaskOpen(false);
+      setNewNote('');
+    }
   };
 
   const handleNotificationClick = (notif: StaffNotification) => {
@@ -501,9 +502,8 @@ export const TasksManagementView: React.FC = () => {
                         {notif.taskId && (
                           <button
                             type="button"
-                            onClick={() => {
-                              markNotifRead(notif.id);
-                              handleCompleteTask(notif.taskId!);
+                            onClick={async () => {
+                              if (await handleCompleteTask(notif.taskId!)) markNotifRead(notif.id);
                             }}
                             className="min-h-[32px] px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer"
                           >
@@ -926,7 +926,7 @@ export const TasksManagementView: React.FC = () => {
                   <button
                     key={st.id}
                     type="button"
-                    onClick={() => toggleSubtask(selectedTask.id, st.id)}
+                    onClick={async () => { await toggleSubtask(selectedTask.id, st.id); }}
                     disabled={!deviceMutationAvailability.canMutate}
                     className={`w-full min-h-[44px] flex items-center justify-between p-2.5 rounded-xl border text-start text-xs transition-colors cursor-pointer ${
                       st.completed
@@ -1004,7 +1004,7 @@ export const TasksManagementView: React.FC = () => {
               {canDeleteTask && (
                 <button
                   type="button"
-                  onClick={() => deleteTask(selectedTask.id)}
+                  onClick={async () => { if (await deleteTask(selectedTask.id)) setSelectedTaskId(null); }}
                   disabled={!deviceMutationAvailability.canMutate}
                   className="w-full min-h-[40px] flex items-center justify-center gap-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 py-2 rounded-xl font-semibold text-xs transition cursor-pointer"
                 >

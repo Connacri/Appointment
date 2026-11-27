@@ -254,7 +254,7 @@ interface AppContextType {
       priority?: 'normal' | 'urgent';
       note?: string;
     }
-  ) => void;
+  ) => Promise<boolean>;
   deleteStaffMember: (staffId: string) => void;
   clientProfile: ClientProfile;
   setClientProfile: (profile: ClientProfile) => void;
@@ -326,11 +326,11 @@ interface AppContextType {
   currency: 'DA' | 'DZD' | 'EUR' | 'USD' | 'RMB' | 'GBP' | 'SAR' | string;
   setCurrency: (c: string) => void;
   tasks: PmsTask[];
-  addTask: (task: Omit<PmsTask, 'id'>) => void;
-  updateTaskStatus: (id: string, status: PmsTask['status'], completedByOverride?: string) => Promise<void>;
-  toggleSubtask: (taskId: string, subtaskId: string) => void;
-  deleteTask: (id: string) => void;
-  generateTurnoverTasksForCheckout: (roomName: string) => void;
+  addTask: (task: Omit<PmsTask, 'id'>) => Promise<boolean>;
+  updateTaskStatus: (id: string, status: PmsTask['status'], completedByOverride?: string) => Promise<boolean>;
+  toggleSubtask: (taskId: string, subtaskId: string) => Promise<boolean>;
+  deleteTask: (id: string) => Promise<boolean>;
+  generateTurnoverTasksForCheckout: (roomName: string) => Promise<boolean>;
   activeOperatorName: string;
   setActiveOperatorName: (name: string) => void;
   focusedTaskId: string | null;
@@ -1002,6 +1002,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       context, entity, entityId, 'upsert', 1,
       { ...payload, workspaceId, establishmentId }, idempotencyKey,
     );
+  };
+
+  const persistTasksAtomically = async (tasksToPersist: readonly PmsTask[]): Promise<PmsTask[]> => {
+    if (tasksToPersist.length === 0) return [];
+    assertBusinessMutationAllowed();
+    const identities = new Set<string>();
+    const mutations = tasksToPersist.map((task) => {
+      if (!task.id.trim() || identities.has(task.id)) {
+        throw new Error('Le lot de tâches contient un identifiant vide ou dupliqué.');
+      }
+      identities.add(task.id);
+      return { entity: 'task' as const, entityId: task.id, payload: task as unknown as Record<string, unknown> };
+    });
+
+    const workspaceId = workspace.activeWorkspaceId?.trim();
+    let committedRows: Awaited<ReturnType<typeof indexedDb.putLocalBusinessEntitiesAtomically>>;
+    if (!workspaceId) {
+      committedRows = await indexedDb.putLocalBusinessEntitiesAtomically(mutations);
+    } else {
+      const establishmentId = resolveMutationEstablishmentId();
+      if (!establishmentId || establishmentId === 'all') {
+        throw new Error('Établissement réel requis pour enregistrer les tâches.');
+      }
+      committedRows = await indexedDb.enqueueWorkspaceUpsertsAtomically(
+        { workspaceId, establishmentId }, mutations, `task-command-${createMutationId()}`,
+      );
+      scheduleAutoSync();
+    }
+    return committedRows.map((row) => row.payload as unknown as PmsTask);
   };
 
   const persistStockMutationsAtomically = async (
@@ -3406,32 +3435,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  const addTask = (taskData: Omit<PmsTask, 'id'>) => {
-    const newTask: PmsTask = { ...taskData, id: `tsk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}` };
-    commitBusinessUpsert('task', newTask.id, newTask as unknown as Record<string, unknown>, () => {
+  const addTask = async (taskData: Omit<PmsTask, 'id'>): Promise<boolean> => {
+    const newTask: PmsTask = { ...taskData, id: `tsk_${createMutationId()}` };
+    try {
+      const [committedTask] = await persistTasksAtomically([newTask]);
+      if (!committedTask) throw new Error('Création de tâche non confirmée par IndexedDB.');
+      setTasks((prev) => [committedTask, ...prev.filter((task) => task.id !== committedTask.id)]);
       playSuccessFeedback();
-      setTasks((prev) => {
-        const updated = [newTask, ...prev];
-        return updated;
-      });
       logEvent({
         category: 'task', action: 'task.created',
-        severity: newTask.priority === 'urgent' ? 'warn' : 'info',
-        title: `Tâche créée · ${newTask.typeName}`,
-        description: `Chambre ${newTask.room} · Assignée à ${newTask.assignee} · Priorité ${newTask.priority}`,
-        target: { type: 'task', id: newTask.id, label: newTask.typeName, secondaryLabel: newTask.room },
-        metadata: { assignee: newTask.assignee, priority: newTask.priority, category: newTask.category, date: newTask.date },
+        severity: committedTask.priority === 'urgent' ? 'warn' : 'info',
+        title: `Tâche créée · ${committedTask.typeName}`,
+        description: `Chambre ${committedTask.room} · Assignée à ${committedTask.assignee} · Priorité ${committedTask.priority}`,
+        target: { type: 'task', id: committedTask.id, label: committedTask.typeName, secondaryLabel: committedTask.room },
+        metadata: { assignee: committedTask.assignee, priority: committedTask.priority, category: committedTask.category, date: committedTask.date },
       });
-    });
+      return true;
+    } catch (error) {
+      reportQueueFailure('task', newTask.id, error);
+      return false;
+    }
   };
 
   const updateTaskStatus = async (
     id: string,
     status: PmsTask['status'],
     completedByOverride?: string,
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const target = tasks.find((task) => task.id === id);
-    if (!target || target.status === status) return;
+    if (!target) return false;
+    if (target.status === status) return true;
     assertBusinessMutationAllowed();
 
     const executor = completedByOverride?.trim() || activeOperatorNameRef.current.trim()
@@ -3485,8 +3518,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
       } else {
-        await queueBusinessUpsert('task', id, nextTask as unknown as Record<string, unknown>);
-        scheduleAutoSync();
+        const [persistedTask] = await persistTasksAtomically([nextTask]);
+        if (!persistedTask) throw new Error('Mise à jour de tâche non confirmée par IndexedDB.');
+        committedTask = persistedTask;
       }
 
       if (status === 'done') playSuccessFeedback(); else playClickFeedback();
@@ -3509,25 +3543,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         metadata: status === 'done' ? { completedBy: executor, assignee: target.assignee } : undefined,
         changes: [{ field: 'Statut tâche', before: target.status, after: status }],
       });
+      return true;
     } catch (error) {
       reportQueueFailure('task', id, error);
+      return false;
     }
   };
 
-  const toggleSubtask = (taskId: string, subtaskId: string) => {
+  const toggleSubtask = async (taskId: string, subtaskId: string): Promise<boolean> => {
     const target = tasks.find((task) => task.id === taskId);
     const subtask = target?.subtasks?.find((item) => item.id === subtaskId);
-    if (!target || !subtask) return;
+    if (!target || !subtask) return false;
     const nextTask: PmsTask = {
       ...target,
       subtasks: target.subtasks?.map((item) => item.id === subtaskId ? { ...item, completed: !item.completed } : item),
     };
-    commitBusinessUpsert('task', taskId, nextTask as unknown as Record<string, unknown>, () => {
+    try {
+      const [committedTask] = await persistTasksAtomically([nextTask]);
+      if (!committedTask) throw new Error('Modification de sous-tâche non confirmée par IndexedDB.');
+      setTasks((prev) => prev.map((task) => task.id === taskId ? committedTask : task));
       playClickFeedback();
-      setTasks((prev) => {
-        const updated = prev.map((task) => task.id === taskId ? nextTask : task);
-        return updated;
-      });
       logEvent({
         category: 'task', action: 'task.subtask_toggled', severity: 'info',
         title: `Sous-tâche ${!subtask.completed ? 'cochée' : 'décochée'} · ${target.room}`,
@@ -3535,32 +3570,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         target: { type: 'task', id: taskId, label: target.typeName, secondaryLabel: target.room },
         changes: [{ field: subtask.text, before: subtask.completed ? 'Fait' : 'À faire', after: !subtask.completed ? 'Fait' : 'À faire' }],
       });
-    });
+      return true;
+    } catch (error) {
+      reportQueueFailure('task', taskId, error);
+      return false;
+    }
   };
 
-  const deleteTask = (id: string) => {
+  const deleteTask = async (id: string): Promise<boolean> => {
     const target = tasks.find((task) => task.id === id);
-    commitBusinessDelete('task', id, () => {
+    try {
+      await queueBusinessDelete('task', id);
+      if (workspace.activeWorkspaceId) scheduleAutoSync();
+      setTasks((prev) => prev.filter((task) => task.id !== id));
       playClickFeedback();
-      setTasks((prev) => {
-        const updated = prev.filter((task) => task.id !== id);
-        return updated;
-      });
       if (target) logEvent({
         category: 'task', action: 'task.deleted', severity: 'warn',
         title: `Tâche supprimée · ${target.room}`,
         description: `${target.typeName} (${target.assignee}) supprimée.`,
         target: { type: 'task', id, label: target.typeName, secondaryLabel: target.room },
       });
-    });
+      return true;
+    } catch (error) {
+      reportQueueFailure('task', id, error);
+      return false;
+    }
   };
 
-    const generateTurnoverTasksForCheckout = (roomName: string) => {
+    const generateTurnoverTasksForCheckout = async (roomName: string): Promise<boolean> => {
     const foundRes = resourceGroups.flatMap((g) => g.resources).find((r) => r.name.includes(roomName) || r.id === roomName);
-    if (foundRes) {
-      updateHousekeepingStatus(foundRes.id, 'dirty');
-    }
-
     const nowStr = new Date().toISOString().slice(0, 10);
     const checkoutTaskList: Omit<PmsTask, 'id'>[] = [
       {
@@ -3618,17 +3656,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
     ];
 
-    checkoutTaskList.forEach((t) => addTask(t));
-    logEvent({
-      category: 'housekeeping',
-      action: 'housekeeping.turnover_generated',
-      severity: 'info',
-      title: `Protocole départ lancé · ${roomName}`,
-      description: `${checkoutTaskList.length} tâche(s) de remise en état générée(s) suite au départ.`,
-      target: { type: 'resource', id: foundRes?.id, label: roomName },
-      metadata: { generatedTasks: checkoutTaskList.length },
-      resourceId: foundRes?.id,
-    });
+    const generatedTasks = checkoutTaskList.map((task) => ({ ...task, id: `tsk_${createMutationId()}` }));
+    try {
+      const committedTasks = await persistTasksAtomically(generatedTasks);
+      if (committedTasks.length !== generatedTasks.length) throw new Error('Génération des tâches de remise en état incomplète.');
+      setTasks((previous) => [
+        ...committedTasks,
+        ...previous.filter((task) => !committedTasks.some((created) => created.id === task.id)),
+      ]);
+      if (foundRes) updateHousekeepingStatus(foundRes.id, 'dirty');
+      logEvent({
+        category: 'housekeeping',
+        action: 'housekeeping.turnover_generated',
+        severity: 'info',
+        title: `Protocole départ lancé · ${roomName}`,
+        description: `${committedTasks.length} tâche(s) de remise en état générée(s) suite au départ.`,
+        target: { type: 'resource', id: foundRes?.id, label: roomName },
+        metadata: { generatedTasks: committedTasks.length },
+        resourceId: foundRes?.id,
+      });
+      return true;
+    } catch (error) {
+      reportQueueFailure('task', `turnover:${roomName}`, error);
+      return false;
+    }
   };
 
   const addStockMovement = async (itemId: string, delta: number, reason: string, room?: string): Promise<void> => {
@@ -4153,11 +4204,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const assignTaskToStaff: AppContextType['assignTaskToStaff'] = (staffId, input) => {
+  const assignTaskToStaff: AppContextType['assignTaskToStaff'] = async (staffId, input): Promise<boolean> => {
     const target = staffMembers.find((member) => member.id === staffId);
-    if (!target) return;
+    if (!target) return false;
     const role = resolveRoleDefinition(rolesRef.current, target.roleId);
-    addTask({
+    return addTask({
       room: input.room.trim() || target.assignment || '101', typeId: 'custom',
       typeName: input.taskTitle.trim(), category: mapRoleToTaskCategory(role),
       assignee: target.fullName, date: new Date().toISOString().slice(0, 10),

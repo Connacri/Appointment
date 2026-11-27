@@ -583,3 +583,10 @@ Boundary: Supabase still dispatches task and stock-movement entities separately.
 
 
 Regression guard: `tests/indexedDbMutationAtomicity.test.ts` verifies that the task-completion command stays on the atomic IndexedDB path and does not reintroduce direct localStorage writes for stock projections or movements.
+
+
+## Awaited task CRUD command boundary (2026-11-27)
+
+Task creation, status updates, subtask toggles, deletion, staff quick-task assignment and checkout turnover-task generation now await durable IndexedDB persistence before updating the React task projection or reporting success. Checkout turnover tasks are inserted as one bounded batch transaction rather than independent fire-and-forget writes. The UI marks task notifications read and closes task-entry flows only after the command returns success.
+
+Task completion with stock consumption retains the atomic combined task/stock command documented above. The staff-creation flow's optional initial-task fan-out and other non-task business entities remain separate work.

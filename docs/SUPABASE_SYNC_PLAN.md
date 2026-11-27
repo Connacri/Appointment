@@ -141,3 +141,10 @@ Aucune déclaration « P2P prêt », « multi-device prêt » ou « synchronisat
 Completing a housekeeping task that consumes inventory now writes the task status, stock projection deltas and immutable stock movement records in one local IndexedDB transaction (or one local-only business-entity transaction). The command rejects duplicate completion against the persisted task status and aborts on missing/insufficient stock. The UI projection changes only after commit.
 
 This does not make the cloud operation globally atomic: Supabase still receives the task and stock movement through separate entity dispatchers. The server-side command boundary and awaited/fail-closed handling for the remaining task CRUD methods are still open.
+
+
+## Task CRUD command boundary (2026-11-27)
+
+Task create/update/delete commands now use awaited local persistence and update the React projection only after the IndexedDB transaction resolves. Checkout turnover generation commits its task batch atomically. The UI waits for success before closing the task form, marking completion notifications read or showing a successful staff quick-task toast.
+
+The staff-creation flow's optional initial-task fan-out remains an open edge. This work does not add a server-side transaction joining task completion with stock movement dispatch.

@@ -150,3 +150,31 @@ test('AppContext persists task completion and stock deductions through one atomi
   assert.doesNotMatch(body, /addStockMovement\(/);
   assert.doesNotMatch(body, /localStorage\.setItem\(['"]omnibook_(stock_items|stock_movements)/);
 });
+
+
+test('task CRUD commands await durable IndexedDB persistence before updating React state', () => {
+  const appContext = readFileSync(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8');
+  const readBody = (start: string, end: string) => {
+    const from = appContext.indexOf(start);
+    const to = appContext.indexOf(end, from + start.length);
+    assert.notEqual(from, -1, `Missing AppContext command: ${start}`);
+    assert.notEqual(to, -1, `Missing AppContext command boundary: ${end}`);
+    return appContext.slice(from, to);
+  };
+
+  const add = readBody('const addTask = async', 'const updateTaskStatus = async');
+  assert.match(add, /await persistTasksAtomically\(/);
+  assert.match(add, /setTasks\(/);
+
+  const toggle = readBody('const toggleSubtask = async', 'const deleteTask = async');
+  assert.match(toggle, /await persistTasksAtomically\(/);
+  assert.match(toggle, /setTasks\(/);
+
+  const remove = readBody('const deleteTask = async', 'const generateTurnoverTasksForCheckout = async');
+  assert.match(remove, /await queueBusinessDelete\(/);
+  assert.match(remove, /setTasks\(/);
+
+  const turnover = readBody('const generateTurnoverTasksForCheckout = async', 'const addStockMovement = async');
+  assert.match(turnover, /await persistTasksAtomically\(/);
+  assert.match(turnover, /committedTasks\.length !== generatedTasks\.length/);
+});

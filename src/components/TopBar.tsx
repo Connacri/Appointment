@@ -785,9 +785,8 @@ export const TopBar: React.FC = () => {
                               <div className="mt-1.5 flex items-center justify-end gap-1.5">
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    updateTaskStatus(notif.taskId!, 'done');
-                                    markNotificationRead(notif.id);
+                                  onClick={async () => {
+                                    if (await updateTaskStatus(notif.taskId!, 'done')) markNotificationRead(notif.id);
                                   }}
                                   className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 text-[10px] font-bold cursor-pointer"
                                 >
