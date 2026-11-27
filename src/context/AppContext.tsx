@@ -92,6 +92,7 @@ import { hasBookingScheduleConflict, isValidCalendarDate, shouldMarkPaymentAsPai
 import { planRoomReassignment } from '../utils/roomReassignment';
 import { evaluateMutationAvailability, type DeviceRegistry, type MutationAvailability } from '../services/p2p/deviceTopology';
 import { normalizeBookingForPersistence } from '../utils/bookingOccupants';
+import { getBookingOperationalCutoffDate } from '../utils/bookingArchive';
 import { isDemoBookingId } from '../utils/bookingPersistence';
 import { isRoomReadyForBooking } from '../utils/roomReadiness';
 import { lockManager } from '../locks/lockManager';
@@ -1515,8 +1516,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     void (async () => {
       try {
         await indexedDb.openStore();
+        const archiveCutoffDate = getBookingOperationalCutoffDate();
+        const hasLegacyBookingSnapshot = localStorage.getItem('omnibook_bookings') !== null;
+        await indexedDb.archiveClosedBookings(
+          archiveCutoffDate,
+          workspace.activeWorkspaceId || 'local',
+          250,
+        );
         const [storedBookings, storedResources, storedGroups, storedEventLogs] = await Promise.all([
-          indexedDb.queryStore<TimelineBooking>('bookings'),
+          hasLegacyBookingSnapshot
+            ? indexedDb.queryStore<TimelineBooking>('bookings')
+            : indexedDb.queryOperationalBookings(archiveCutoffDate),
           indexedDb.queryStore<ResourceItem>('resources'),
           indexedDb.getAllFromStore<ResourceGroup>('resourceGroups'),
           indexedDb.getEventLogs(),
@@ -1589,12 +1599,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
         hydratedGroups = [...hydratedGroups, ...fallbackGroups.values()];
-        // Commit the merged, demo-filtered migration before deleting legacy snapshots.
+        // Only rewrite the booking store when importing a legacy localStorage snapshot.
+        // Normal startup reads the indexed operational window and never reloads full history.
         await Promise.all([
-          indexedDb.replaceAllForMigration('bookings', realBookings),
+          ...(hasLegacyBookingSnapshot
+            ? [indexedDb.replaceAllForMigration('bookings', realBookings)]
+            : []),
           indexedDb.replaceAllForMigration('resources', sourceResources),
           indexedDb.replaceStoreForMigration('resourceGroups', groupMetadata),
         ]);
+        await indexedDb.archiveClosedBookings(
+          archiveCutoffDate,
+          workspace.activeWorkspaceId || 'local',
+          250,
+        );
+        const operationalBookings = await indexedDb.queryOperationalBookings(archiveCutoffDate);
         try {
           localStorage.removeItem('omnibook_bookings');
           localStorage.removeItem('omnibook_resource_groups');
@@ -1602,7 +1621,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           console.warn('[AppContext] Legacy snapshot cleanup failed after IndexedDB migration:', cleanupError);
         }
         if (cancelled) return;
-        setBookings(realBookings);
+        setBookings(operationalBookings.data);
         setResourceGroups(hydratedGroups);
         if (storedEventLogs.length > 0) {
           setPersistedEventLogs((prev) => {
@@ -1612,6 +1631,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
         setIsCoreDataHydrated(true);
+        // Continue archive compaction in bounded background batches; the active UI
+        // already uses the date-indexed operational projection above.
+        void (async () => {
+          for (let batch = 0; batch < 8; batch += 1) {
+            const result = await indexedDb.archiveClosedBookings(
+              archiveCutoffDate,
+              workspace.activeWorkspaceId || 'local',
+              250,
+            );
+            if (result.archivedIds.length === 0) break;
+          }
+        })().catch((archiveError) => {
+          console.warn('[AppContext] Background booking archive paused safely:', archiveError);
+        });
       } catch (error) {
         console.error('[AppContext] Core IndexedDB hydration failed; writes are disabled to protect existing data:', error);
       }

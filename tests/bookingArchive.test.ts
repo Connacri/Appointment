@@ -9,7 +9,7 @@ import {
 
 test('operational cutoff uses six calendar months in UTC without DST drift', () => {
   assert.equal(getBookingOperationalCutoffDate(new Date('2026-11-27T12:00:00.000Z')), '2026-05-27');
-  assert.equal(getBookingOperationalCutoffDate(new Date('2026-08-31T12:00:00.000Z')), '2026-03-03');
+  assert.equal(getBookingOperationalCutoffDate(new Date('2026-08-31T12:00:00.000Z')), '2026-02-28');
 });
 
 test('only completed or cancelled bookings strictly older than cutoff are archived', () => {
@@ -20,6 +20,7 @@ test('only completed or cancelled bookings strictly older than cutoff are archiv
   assert.equal(isBookingEligibleForArchive({ status: 'checked_in', endDate: '2025-01-01' }, cutoff), false);
   assert.equal(isBookingEligibleForArchive({ status: 'confirmed', endDate: '2025-01-01' }, cutoff), false);
   assert.equal(isBookingEligibleForArchive({ status: 'checked_out', endDate: 'invalid' }, cutoff), false);
+  assert.equal(isBookingEligibleForArchive({ status: 'checked_out', endDate: '2026-02-31' }, cutoff), false);
 });
 
 test('archive partitions use calendar half-years and expose exact boundaries', () => {

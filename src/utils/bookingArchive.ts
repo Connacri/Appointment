@@ -3,6 +3,12 @@ import type { TimelineBooking } from '../types/booking';
 export const BOOKING_ARCHIVE_SCHEMA_VERSION = 1;
 export const BOOKING_OPERATIONAL_RETENTION_MONTHS = 6;
 
+function isValidIsoDate(value: string): boolean {
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && toIsoDate(date) === value;
+}
+
 function toIsoDate(date: Date): string {
   return [
     date.getUTCFullYear(),
@@ -13,9 +19,14 @@ function toIsoDate(date: Date): string {
 
 /** Rolling six-calendar-month cutoff, calculated in UTC to avoid DST drift. */
 export function getBookingOperationalCutoffDate(now = new Date()): string {
-  const cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  cutoff.setUTCMonth(cutoff.getUTCMonth() - BOOKING_OPERATIONAL_RETENTION_MONTHS);
-  return toIsoDate(cutoff);
+  const sourceYear = now.getUTCFullYear();
+  const sourceMonth = now.getUTCMonth();
+  const sourceDay = now.getUTCDate();
+  const targetMonthIndex = sourceMonth - BOOKING_OPERATIONAL_RETENTION_MONTHS;
+  const targetYear = sourceYear + Math.floor(targetMonthIndex / 12);
+  const targetMonth = (targetMonthIndex % 12 + 12) % 12;
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  return toIsoDate(new Date(Date.UTC(targetYear, targetMonth, Math.min(sourceDay, lastDayOfTargetMonth))));
 }
 
 /** Closed stays only. Never archive future, in-house, pending or unresolved bookings. */
@@ -33,7 +44,7 @@ export function isBookingEligibleForArchive(
 /** Calendar half-year partition; historical queries still use the exact date index. */
 export function getBookingArchivePeriodKey(endDate: string): string {
   const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(endDate);
-  if (!match) throw new Error('Booking archive requires a valid YYYY-MM-DD end date.');
+  if (!match || !isValidIsoDate(endDate)) throw new Error('Booking archive requires a valid YYYY-MM-DD end date.');
   const month = Number(match[2]);
   if (month < 1 || month > 12) throw new Error('Booking archive end date has an invalid month.');
   return `${match[1]}-${month <= 6 ? 'H1' : 'H2'}`;

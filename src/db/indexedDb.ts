@@ -17,6 +17,12 @@ import { waitForTransactionCompletion } from './indexedDbTransaction';
 import { runSerialQueue } from './serialQueue';
 import { migrateBookingRecordV7 } from './bookingMigration';
 import { hasBookingScheduleConflict } from '../utils/bookingValidation';
+import {
+  BOOKING_ARCHIVE_SCHEMA_VERSION,
+  getBookingArchivePeriodBounds,
+  getBookingArchivePeriodKey,
+  isBookingEligibleForArchive,
+} from '../utils/bookingArchive';
 import { detectP2pBookingConflicts, type BookingConflictSnapshot } from '../services/p2p/bookingConflictDetection';
 import { validateDeviceRegistry, type DeviceRegistry } from '../services/p2p/deviceTopology';
 import {
@@ -110,6 +116,28 @@ export interface TombstoneRecord {
   origin?: 'local' | 'supabase' | 'p2p';
   remoteVersion?: number;
 }
+export interface BookingArchiveRecord {
+  workspaceId: string;
+  periodKey: string;
+  bookingId: string;
+  startDate: string;
+  endDate: string;
+  resourceId: string;
+  sector: DomainType;
+  archivedAt: string;
+  schemaVersion: number;
+  booking: TimelineBooking;
+}
+export interface BookingArchiveManifest {
+  workspaceId: string;
+  periodKey: string;
+  periodStartDate: string;
+  periodEndDate: string;
+  bookingCount: number;
+  archivedAt: string;
+  schemaVersion: number;
+  storage: 'indexeddb';
+}
 export interface OutboxMutationContext { workspaceId: string; establishmentId?: string; }
 export interface RemoteWorkspaceTombstone {
   entity: P2pEntity;
@@ -154,7 +182,7 @@ export interface OutboxSummary {
 class IndexedDbStore {
   // Preserve the legacy database identifier so existing browser data remains accessible.
   private dbName = 'OmniBook_ObjectBox_Store';
-  private dbVersion = 14;
+  private dbVersion = 15;
   private idb: IDBDatabase | null = null;
   private isInitialized = false;
   private syncState: IndexedDbSyncState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
@@ -289,6 +317,27 @@ class IndexedDbStore {
           entities.createIndex('workspaceResource', ['workspaceId', 'payload.resourceId'], { unique: false });
         }
         const upgradeTxForIndexes = (e.target as IDBOpenDBRequest).transaction;
+        const bookingsStore = upgradeTxForIndexes?.objectStore('bookings');
+        if (bookingsStore && !bookingsStore.indexNames.contains('endDate')) {
+          bookingsStore.createIndex('endDate', 'endDate', { unique: false });
+        }
+        if (bookingsStore && !bookingsStore.indexNames.contains('statusEndDate')) {
+          bookingsStore.createIndex('statusEndDate', ['status', 'endDate'], { unique: false });
+        }
+        if (!db.objectStoreNames.contains('bookingArchiveRecords')) {
+          const archiveRecords = db.createObjectStore('bookingArchiveRecords', {
+            keyPath: ['workspaceId', 'periodKey', 'bookingId'],
+          });
+          archiveRecords.createIndex('workspaceEndDate', ['workspaceId', 'endDate'], { unique: false });
+          archiveRecords.createIndex('workspaceBooking', ['workspaceId', 'bookingId'], { unique: false });
+          archiveRecords.createIndex('workspacePeriod', ['workspaceId', 'periodKey'], { unique: false });
+        }
+        if (!db.objectStoreNames.contains('bookingArchiveManifests')) {
+          const archiveManifests = db.createObjectStore('bookingArchiveManifests', {
+            keyPath: ['workspaceId', 'periodKey'],
+          });
+          archiveManifests.createIndex('workspaceArchivedAt', ['workspaceId', 'archivedAt'], { unique: false });
+        }
         const workspaceEntitiesStore = upgradeTxForIndexes?.objectStore('workspaceEntities');
         if (workspaceEntitiesStore && !workspaceEntitiesStore.indexNames.contains('workspaceResource')) {
           workspaceEntitiesStore.createIndex('workspaceResource', ['workspaceId', 'payload.resourceId'], { unique: false });
@@ -680,6 +729,236 @@ class IndexedDbStore {
     });
   }
 
+  /**
+   * Read only the operational booking projection. Closed bookings older than the
+   * retention window live in bookingArchiveRecords and are never hydrated here.
+   * Non-terminal records are retained even when their end date is old.
+   */
+  public async queryOperationalBookings(
+    cutoffDate: string,
+  ): Promise<{ data: TimelineBooking[]; total: number }> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cutoffDate)) {
+      throw new Error('Operational booking cutoff must use YYYY-MM-DD.');
+    }
+    await this.openStore();
+    if (!this.idb) {
+      return this.queryStore<TimelineBooking>('bookings', {
+        where: (booking) => booking.endDate >= cutoffDate
+          || (booking.status !== 'checked_out' && booking.status !== 'cancelled'),
+      });
+    }
+    const tx = this.idb.transaction('bookings', 'readonly');
+    const store = tx.objectStore('bookings');
+    const activeStatuses = ['new', 'confirmed', 'due_in', 'checked_in', 'due_out', 'booking_offer', 'out_of_order'];
+    const requests: IDBRequest<TimelineBooking[]>[] = [
+      store.index('endDate').getAll(IDBKeyRange.lowerBound(cutoffDate)),
+      ...activeStatuses.map((status) => store.index('status').getAll(status)),
+    ];
+    const pages = await Promise.all(requests.map((request) => new Promise<TimelineBooking[]>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error ?? new Error('Operational booking query failed.'));
+    })));
+    await waitForTransactionCompletion(tx, 'queryOperationalBookings');
+    const byId = new Map<string, TimelineBooking>();
+    for (const page of pages) for (const booking of page) byId.set(booking.id, booking);
+    const data = [...byId.values()].sort((a, b) =>
+      a.startDate.localeCompare(b.startDate) || a.id.localeCompare(b.id),
+    );
+    return { data, total: data.length };
+  }
+
+  /**
+   * Move only checked-out/cancelled bookings older than the six-month cutoff.
+   * Each batch atomically writes the archive row + manifest and removes the
+   * operational row. Pending/failed Outbox mutations are never archived.
+   */
+  public async archiveClosedBookings(
+    cutoffDate: string,
+    fallbackWorkspaceId = 'local',
+    limit = 250,
+  ): Promise<{ archivedIds: string[]; skippedPendingCount: number; periodCount: number }> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cutoffDate)
+      || !fallbackWorkspaceId.trim()
+      || !Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
+      throw new Error('Invalid booking archive scope, cutoff or batch limit.');
+    }
+    await this.openStore();
+    if (!this.idb) {
+      return { archivedIds: [], skippedPendingCount: 0, periodCount: 0 };
+    }
+    const tx = this.createStrictTransaction([
+      'bookings', 'outbox', 'bookingArchiveRecords', 'bookingArchiveManifests',
+    ]);
+    const bookingStore = tx.objectStore('bookings');
+    const archiveStore = tx.objectStore('bookingArchiveRecords');
+    const manifestStore = tx.objectStore('bookingArchiveManifests');
+    const outboxIndex = tx.objectStore('outbox').index('workspaceEntity');
+    const statusEndDate = bookingStore.index('statusEndDate');
+    const checkedOutRequest = statusEndDate.getAll(
+      IDBKeyRange.bound(['checked_out', ''], ['checked_out', cutoffDate], false, true),
+      limit,
+    );
+    const cancelledRequest = statusEndDate.getAll(
+      IDBKeyRange.bound(['cancelled', ''], ['cancelled', cutoffDate], false, true),
+      limit,
+    );
+    const manifestsRequest = manifestStore.getAll();
+    let checkedOutRows: TimelineBooking[] = [];
+    let cancelledRows: TimelineBooking[] = [];
+    let manifests: BookingArchiveManifest[] = [];
+    let readsReady = 0;
+    let skippedPendingCount = 0;
+    let archivedIds: string[] = [];
+    let periodCount = 0;
+
+    const abort = () => { try { tx.abort(); } catch { /* already inactive */ } };
+    const writeArchiveBatch = (eligible: Array<{ booking: TimelineBooking; workspaceId: string }>) => {
+      if (eligible.length === 0) return;
+      const now = new Date().toISOString();
+      const manifestByKey = new Map(manifests.map((manifest) => [
+        `${manifest.workspaceId}:${manifest.periodKey}`,
+        manifest,
+      ]));
+      const grouped = new Map<string, { workspaceId: string; periodKey: string; count: number }>();
+      for (const item of eligible) {
+        const periodKey = getBookingArchivePeriodKey(item.booking.endDate);
+        const groupKey = `${item.workspaceId}:${periodKey}`;
+        const group = grouped.get(groupKey) ?? {
+          workspaceId: item.workspaceId,
+          periodKey,
+          count: 0,
+        };
+        group.count += 1;
+        grouped.set(groupKey, group);
+        archiveStore.put({
+          workspaceId: item.workspaceId,
+          periodKey,
+          bookingId: item.booking.id,
+          startDate: item.booking.startDate,
+          endDate: item.booking.endDate,
+          resourceId: item.booking.resourceId,
+          sector: item.booking.sector,
+          archivedAt: now,
+          schemaVersion: BOOKING_ARCHIVE_SCHEMA_VERSION,
+          booking: item.booking,
+        } satisfies BookingArchiveRecord);
+        bookingStore.delete(item.booking.id);
+      }
+      for (const group of grouped.values()) {
+        const previous = manifestByKey.get(`${group.workspaceId}:${group.periodKey}`);
+        const bounds = getBookingArchivePeriodBounds(group.periodKey);
+        manifestStore.put({
+          workspaceId: group.workspaceId,
+          periodKey: group.periodKey,
+          periodStartDate: bounds.startDate,
+          periodEndDate: bounds.endDate,
+          bookingCount: (previous?.bookingCount ?? 0) + group.count,
+          archivedAt: now,
+          schemaVersion: BOOKING_ARCHIVE_SCHEMA_VERSION,
+          storage: 'indexeddb',
+        } satisfies BookingArchiveManifest);
+      }
+      archivedIds = eligible.map((item) => item.booking.id);
+      periodCount = grouped.size;
+    };
+
+    const processCandidates = () => {
+      if (readsReady !== 3) return;
+      const unique = new Map<string, TimelineBooking>();
+      for (const booking of [...checkedOutRows, ...cancelledRows]) {
+        if (isBookingEligibleForArchive(booking, cutoffDate)) unique.set(booking.id, booking);
+      }
+      const candidates = [...unique.values()].slice(0, limit);
+      if (candidates.length === 0) return;
+      const eligible: Array<{ booking: TimelineBooking; workspaceId: string }> = [];
+      let pendingChecks = candidates.length;
+      const finishPendingChecks = () => {
+        if (pendingChecks !== 0) return;
+        writeArchiveBatch(eligible);
+      };
+      for (const booking of candidates) {
+        const workspaceId = (booking as TimelineBooking & { workspaceId?: string }).workspaceId || fallbackWorkspaceId;
+        const pendingRequest = outboxIndex.getAll(
+          IDBKeyRange.only([workspaceId, 'booking', booking.id]),
+        );
+        pendingRequest.onsuccess = () => {
+          const pending = (pendingRequest.result as OutboxRecord[]).some((record) =>
+            record.status === 'pending' || record.status === 'failed',
+          );
+          if (pending) skippedPendingCount += 1;
+          else eligible.push({ booking, workspaceId });
+          pendingChecks -= 1;
+          finishPendingChecks();
+        };
+        pendingRequest.onerror = abort;
+      }
+    };
+
+    checkedOutRequest.onsuccess = () => { checkedOutRows = checkedOutRequest.result; readsReady += 1; processCandidates(); };
+    cancelledRequest.onsuccess = () => { cancelledRows = cancelledRequest.result; readsReady += 1; processCandidates(); };
+    manifestsRequest.onsuccess = () => { manifests = manifestsRequest.result as BookingArchiveManifest[]; readsReady += 1; processCandidates(); };
+    checkedOutRequest.onerror = abort;
+    cancelledRequest.onerror = abort;
+    manifestsRequest.onerror = abort;
+
+    await waitForTransactionCompletion(tx, 'archiveClosedBookings');
+    return { archivedIds, skippedPendingCount, periodCount };
+  }
+
+  /** Lazy historical read by exact end-date window; no archive is loaded at startup. */
+  public async getArchivedBookingsWindow(
+    workspaceId: string,
+    startDate: string,
+    endDate: string,
+    limit = 500,
+  ): Promise<TimelineBooking[]> {
+    if (!workspaceId.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)
+      || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || startDate > endDate
+      || !Number.isSafeInteger(limit) || limit < 1 || limit > 1000) {
+      throw new Error('Invalid archived booking window.');
+    }
+    await this.openStore();
+    if (!this.idb) return [];
+    const tx = this.idb.transaction('bookingArchiveRecords', 'readonly');
+    const request = tx.objectStore('bookingArchiveRecords').index('workspaceEndDate').getAll(
+      IDBKeyRange.bound([workspaceId, startDate], [workspaceId, endDate]),
+      limit,
+    );
+    const records = await new Promise<BookingArchiveRecord[]>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result as BookingArchiveRecord[]);
+      request.onerror = () => reject(request.error ?? new Error('Archived booking query failed.'));
+    });
+    await waitForTransactionCompletion(tx, 'getArchivedBookingsWindow');
+    return records.map((record) => record.booking);
+  }
+
+  /** Archive manifests are small and can be listed without reading historical payloads. */
+  public async getBookingArchiveManifests(
+    workspaceId: string,
+    limit = 100,
+  ): Promise<BookingArchiveManifest[]> {
+    if (!workspaceId.trim() || !Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
+      throw new Error('Invalid booking archive manifest query.');
+    }
+    await this.openStore();
+    if (!this.idb) return [];
+    const tx = this.idb.transaction('bookingArchiveManifests', 'readonly');
+    const request = tx.objectStore('bookingArchiveManifests').index('workspaceArchivedAt')
+      .openCursor(IDBKeyRange.bound([workspaceId, ''], [workspaceId, '\uffff']), 'prev');
+    const manifests = await new Promise<BookingArchiveManifest[]>((resolve, reject) => {
+      const result: BookingArchiveManifest[] = [];
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor || result.length >= limit) { resolve(result); return; }
+        result.push(cursor.value as BookingArchiveManifest);
+        cursor.continue();
+      };
+      request.onerror = () => reject(request.error ?? new Error('Booking archive manifest query failed.'));
+    });
+    await waitForTransactionCompletion(tx, 'getBookingArchiveManifests');
+    return manifests;
+  }
+
   /** Replace non-business issued-card metadata; it is not part of P2P business replication. */
   public async replaceStore<T extends { id: string }>(storeName: 'issuedCards', items: T[]): Promise<void> {
     await this.openStore();
@@ -798,8 +1077,10 @@ class IndexedDbStore {
         const nextNodeId = supportsNativeLanDiscovery()
           ? await resetNativeLanNodeIdentity()
           : this.createId();
-        const tx = this.createStrictTransaction(['bookings', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'localBusinessEntities', 'issuedCards', 'resourceGroups', 'eventLogs', 'p2pEvents', 'p2pTransportQueue', 'p2pPeerAcks', 'p2pClock', 'p2pMeta', 'p2pPeerCursors', 'p2pRecordFrontiers']);
+        const tx = this.createStrictTransaction(['bookings', 'bookingArchiveRecords', 'bookingArchiveManifests', 'invoices', 'resources', 'outbox', 'tombstones', 'workspaceEntities', 'localBusinessEntities', 'issuedCards', 'resourceGroups', 'eventLogs', 'p2pEvents', 'p2pTransportQueue', 'p2pPeerAcks', 'p2pClock', 'p2pMeta', 'p2pPeerCursors', 'p2pRecordFrontiers']);
         tx.objectStore('bookings').clear();
+        tx.objectStore('bookingArchiveRecords').clear();
+        tx.objectStore('bookingArchiveManifests').clear();
         tx.objectStore('invoices').clear();
         tx.objectStore('resources').clear();
         tx.objectStore('outbox').clear();
@@ -888,7 +1169,7 @@ class IndexedDbStore {
     if (!this.idb) throw new Error('P2P replication requires IndexedDB; localStorage fallback is unsafe.');
     const tx = this.createStrictTransaction(
       ['p2pEvents', 'p2pTransportQueue', 'p2pClock', 'p2pPeerCursors', 'p2pRecordFrontiers', 'p2pBookingConflicts', 'outbox',
-        'tombstones', 'workspaceEntities', 'bookings', 'resources', 'invoices', 'resourceGroups'],
+        'tombstones', 'workspaceEntities', 'bookings', 'bookingArchiveRecords', 'bookingArchiveManifests', 'resources', 'invoices', 'resourceGroups'],
     );
     const report: P2pApplyReport = {
       appendedEvents: 0,
@@ -3509,7 +3790,7 @@ class IndexedDbStore {
     if (!this.idb) throw new Error('Outbox is unavailable without IndexedDB.');
     const tx = this.createStrictTransaction(
       ['outbox', 'tombstones', 'p2pEvents', 'p2pTransportQueue', 'p2pRecordFrontiers', 'workspaceEntities',
-        'bookings', 'resources', 'invoices', 'resourceGroups'],
+        'bookings', 'bookingArchiveRecords', 'bookingArchiveManifests', 'resources', 'invoices', 'resourceGroups'],
     );
     const outbox = tx.objectStore('outbox');
     const request = outbox.get(id);
