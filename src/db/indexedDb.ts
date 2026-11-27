@@ -277,6 +277,15 @@ class IndexedDbStore {
 
       req.onupgradeneeded = (e) => {
         const db = (e.target as IDBOpenDBRequest).result;
+        const upgradeTransaction = (e.target as IDBOpenDBRequest).transaction;
+        upgradeTransaction?.addEventListener('abort', () => {
+          console.error('[IndexedDB] Schema upgrade transaction aborted', {
+            oldVersion: e.oldVersion,
+            newVersion: e.newVersion,
+            error: upgradeTransaction.error?.message ?? null,
+            stores: Array.from(db.objectStoreNames),
+          });
+        });
         // Box 1: Bookings
         if (!db.objectStoreNames.contains('bookings')) {
           const bStore = db.createObjectStore('bookings', { keyPath: 'id' });
@@ -511,6 +520,11 @@ class IndexedDbStore {
 
       req.onerror = () => {
         this.isInitialized = false;
+        console.error('[IndexedDB] Database open or schema upgrade failed', {
+          database: this.dbName,
+          requestedVersion: this.dbVersion,
+          error: req.error?.message ?? null,
+        });
         reject(req.error ?? new Error('Unable to open the local IndexedDB database'));
       };
       req.onblocked = () => {
