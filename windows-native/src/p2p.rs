@@ -290,7 +290,7 @@ struct BookingConflictCandidate {
 }
 
 fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let adjusted_year = year - i64::from(month <= 2);
+    let adjusted_year = year - if month <= 2 { 1 } else { 0 };
     let era = adjusted_year.div_euclid(400);
     let year_of_era = adjusted_year - era * 400;
     let adjusted_month = month + if month > 2 { -3 } else { 9 };
@@ -310,7 +310,7 @@ fn civil_from_days(days_since_epoch: i64) -> (i64, i64, i64) {
     let month_prime = (5 * day_of_year + 2) / 153;
     let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
     let month = month_prime + if month_prime < 10 { 3 } else { -9 };
-    year += i64::from(month <= 2);
+    year += if month <= 2 { 1 } else { 0 };
     (year, month, day)
 }
 
@@ -522,7 +522,7 @@ mod tests {
 
 
     fn stay_event(node: &str, booking_id: &str, start: &str, end: &str, resource: &str, sector: &str) -> P2pEvent {
-        event(
+        let mut value = event(
             node,
             1,
             &[(node, 1)],
@@ -534,7 +534,9 @@ mod tests {
                 "endDate": end,
                 "status": "confirmed"
             })),
-        ).with_entity_id(booking_id)
+        );
+        value.entity_id = booking_id.into();
+        value
     }
 
     #[test]
@@ -579,9 +581,9 @@ mod tests {
     fn newer_causal_booking_frontier_supersedes_old_overlap() {
         let original_a = stay_event("node-A", "booking-A", "2026-12-01", "2026-12-05", "room-101", "hotel");
         let original_b = stay_event("node-B", "booking-B", "2026-12-03", "2026-12-04", "room-101", "hotel");
-        let [conflict] = detect_p2p_booking_conflicts(&[original_a.clone(), original_b.clone()], "2026-11-27T10:00:00Z").as_slice() else {
-            panic!("expected one conflict");
-        };
+        let conflicts = detect_p2p_booking_conflicts(&[original_a.clone(), original_b.clone()], "2026-11-27T10:00:00Z");
+        assert_eq!(conflicts.len(), 1);
+        let conflict = &conflicts[0];
         let mut newer_a = original_a.clone();
         newer_a.event_id = "node-A:2".into();
         newer_a.sequence = 2;
