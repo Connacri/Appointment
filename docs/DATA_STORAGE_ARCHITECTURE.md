@@ -43,3 +43,19 @@ Ne pas présenter l'EXE Native comme équivalent fonctionnel complet du Web tant
 ## Politique d'archivage
 
 Les réservations clôturées depuis plus de six mois sont compactées dans une archive IndexedDB locale, partitionnée par semestre et chargée uniquement pour les comparaisons historiques. Les lignes Supabase ne sont pas supprimées. Les factures, paiements, mouvements de stock, audits CardLock et données RH ne doivent pas être purgés selon cette règle de six mois : ils nécessitent des politiques de conservation spécifiques.
+
+## Recommandation d'archivage cible
+
+**Supabase doit rester l'archive canonique ; l'archive locale doit être un cache reconstructible.** Une archive conservée uniquement dans IndexedDB est perdue avec le profil navigateur, le nettoyage du stockage ou la panne du terminal. Elle ne peut pas garantir les comparaisons entre appareils.
+
+Architecture recommandée :
+
+1. Garder dans la projection opérationnelle les réservations récentes et toutes les réservations non terminales. Le seuil glissant de six mois est une règle de chargement, pas une suppression de l'historique cloud.
+2. Conserver l'historique complet dans Supabase. Tant qu'une table d'archive serveur avec export, checksum et restauration vérifiée n'existe pas, ne déplacer ni supprimer les lignes distantes.
+3. Utiliser IndexedDB comme cache local par semestre. Le cache est chargé à la demande pour les comparaisons et peut être reconstruit depuis Supabase. Ne jamais le charger intégralement au démarrage.
+4. À l'échelle supérieure, créer une archive serveur immuable partitionnée par mois ou semestre, avec transfert atomique depuis les tables opérationnelles, index workspace/établissement/date, checksum, manifeste et procédure de restauration testée. Le transfert doit préserver les références de paiements, factures, clients et journaux.
+5. Alimenter les prédictions avec des agrégats versionnés (occupation, ADR, RevPAR, durée de séjour, annulations, jour de semaine, saison et événement), pas avec le chargement de toutes les réservations brutes dans le navigateur.
+
+Ne pas introduire une partition PostgreSQL uniquement sur la base d'une projection de croissance. Mesurer le volume, les temps de requête et les coûts d'indexation. Les index temporels et la pagination bornée suffisent généralement avant d'atteindre des volumes réellement élevés.
+
+**État actuel :** l'archive semestrielle locale existe, Supabase conserve encore l'historique complet, et les lectures historiques distantes sont paginées. Le cache local n'est donc pas la seule copie, mais la procédure d'archive serveur atomique et sa restauration restent à construire.
