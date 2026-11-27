@@ -351,17 +351,17 @@ interface AppContextType {
     operatorName?: string;
   }) => Promise<{ deductedCount: number; lowStockTriggered: StockItem[]; rupturedItems: StockItem[] }>;
   suppliers: StockSupplier[];
-  saveSupplier: (supplier: Omit<StockSupplier, 'id'> & { id?: string }) => StockSupplier;
-  deleteSupplier: (id: string) => void;
+  saveSupplier: (supplier: Omit<StockSupplier, 'id'> & { id?: string }) => Promise<StockSupplier>;
+  deleteSupplier: (id: string) => Promise<void>;
   purchaseOrders: PurchaseOrderRecord[];
   createPurchaseOrder: (
     input: Omit<PurchaseOrderRecord, 'id' | 'orderNumber' | 'createdAt' | 'createdBy'> & {
       orderNumber?: string;
       createdBy?: string;
     }
-  ) => PurchaseOrderRecord;
-  updatePurchaseOrder: (po: PurchaseOrderRecord) => void;
-  deletePurchaseOrder: (id: string) => void;
+  ) => Promise<PurchaseOrderRecord>;
+  updatePurchaseOrder: (po: PurchaseOrderRecord) => Promise<void>;
+  deletePurchaseOrder: (id: string) => Promise<void>;
   markPurchaseOrderReceived: (id: string) => Promise<void>;
   focusedStockTab: 'stock' | 'movements' | 'reorder' | 'suppliers' | null;
   setFocusedStockTab: (tab: 'stock' | 'movements' | 'reorder' | 'suppliers' | null) => void;
@@ -3965,15 +3965,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { deductedCount: newMovements.length, lowStockTriggered, rupturedItems };
   };
 
-  const saveSupplier: AppContextType['saveSupplier'] = (input) => {
-    const id = input.id || `sup_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const saveSupplier: AppContextType['saveSupplier'] = async (input): Promise<StockSupplier> => {
+    const id = input.id || `sup_${createMutationId()}`;
     const record: StockSupplier = {
       id, name: input.name.trim(), category: input.category.trim() || 'Général',
       contactName: input.contactName?.trim() || undefined, phone: input.phone?.trim() || undefined,
       email: input.email?.trim() || undefined, preferredChannel: input.preferredChannel || 'whatsapp',
       notes: input.notes?.trim() || undefined,
     };
-    commitBusinessUpsert('supplier', record.id, record as unknown as Record<string, unknown>, () => {
+    try {
+      await queueBusinessUpsert('supplier', record.id, record as unknown as Record<string, unknown>);
+      if (workspace.activeWorkspaceId) scheduleAutoSync();
       setSuppliers((prev) => {
         const exists = prev.some((supplier) => supplier.id === id);
         const updated = exists ? prev.map((supplier) => supplier.id === id ? record : supplier) : [record, ...prev];
@@ -3985,19 +3987,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         severity: 'info', title: `Fournisseur enregistré · ${record.name}`,
         description: `Canal préféré : ${record.preferredChannel.toUpperCase()}${record.phone ? ` · ${record.phone}` : ''}`,
       });
-    });
-    return record;
+      return record;
+    } catch (error) {
+      reportQueueFailure('supplier', record.id, error);
+      throw error;
+    }
   };
 
-  const deleteSupplier = (id: string) => {
-    commitBusinessDelete('supplier', id, () => setSuppliers((prev) => {
-      const updated = prev.filter((supplier) => supplier.id !== id);
-      localStorage.setItem('omnibook_stock_suppliers', JSON.stringify(updated));
-      return updated;
-    }));
+  const deleteSupplier = async (id: string): Promise<void> => {
+    const target = suppliers.find((supplier) => supplier.id === id);
+    if (!target) throw new Error('Fournisseur introuvable.');
+    try {
+      await queueBusinessDelete('supplier', id);
+      if (workspace.activeWorkspaceId) scheduleAutoSync();
+      setSuppliers((prev) => {
+        const updated = prev.filter((supplier) => supplier.id !== id);
+        localStorage.setItem('omnibook_stock_suppliers', JSON.stringify(updated));
+        return updated;
+      });
+      logEvent({
+        category: 'stock', action: 'stock.supplier_deleted', severity: 'warn',
+        title: `Fournisseur supprimé · ${target.name}`,
+        description: 'Fournisseur retiré du répertoire.',
+      });
+    } catch (error) {
+      reportQueueFailure('supplier', id, error);
+      throw error;
+    }
   };
 
-  const createPurchaseOrder: AppContextType['createPurchaseOrder'] = (input) => {
+  const createPurchaseOrder: AppContextType['createPurchaseOrder'] = async (input): Promise<PurchaseOrderRecord> => {
     const nowIso = new Date().toISOString();
     const id = `po_${Date.now()}_${createMutationId().slice(0, 8).toUpperCase()}`;
     const record: PurchaseOrderRecord = {
@@ -4005,9 +4024,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       orderNumber: input.orderNumber?.trim() || `CMD-${nowIso.slice(0, 7).replace('-', '')}-${id.slice(-6)}`,
       createdAt: nowIso, createdBy: input.createdBy?.trim() || resolveActorLabel(currentRoleRef.current),
     };
-    commitBusinessUpsert('purchase_order', record.id, record as unknown as Record<string, unknown>, () => {
+    try {
+      await queueBusinessUpsert('purchase_order', record.id, record as unknown as Record<string, unknown>);
+      if (workspace.activeWorkspaceId) scheduleAutoSync();
       setPurchaseOrders((prev) => {
-        const updated = [record, ...prev];
+        const updated = [record, ...prev.filter((item) => item.id !== record.id)];
         localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
         return updated;
       });
@@ -4017,12 +4038,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: `Commande ${record.orderNumber} (${record.status}) · ${record.supplierName}`,
         description: `${record.items.length} ligne(s) préparée(s) par ${record.createdBy}.`,
       });
-    });
-    return record;
+      return record;
+    } catch (error) {
+      reportQueueFailure('purchase_order', record.id, error);
+      throw error;
+    }
   };
 
-  const updatePurchaseOrder = (po: PurchaseOrderRecord) => {
-    commitBusinessUpsert('purchase_order', po.id, po as unknown as Record<string, unknown>, () => {
+  const updatePurchaseOrder = async (po: PurchaseOrderRecord): Promise<void> => {
+    if (!purchaseOrders.some((item) => item.id === po.id)) throw new Error('Commande fournisseur introuvable.');
+    try {
+      await queueBusinessUpsert('purchase_order', po.id, po as unknown as Record<string, unknown>);
+      if (workspace.activeWorkspaceId) scheduleAutoSync();
       setPurchaseOrders((prev) => {
         const updated = prev.map((item) => item.id === po.id ? po : item);
         localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
@@ -4034,15 +4061,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: `Commande ${po.orderNumber} (${po.status}) · ${po.supplierName}`,
         description: po.sentVia ? `Envoyée au fournisseur via ${po.sentVia.toUpperCase()}.` : `${po.items.length} article(s) — statut ${po.status}.`,
       });
-    });
+    } catch (error) {
+      reportQueueFailure('purchase_order', po.id, error);
+      throw error;
+    }
   };
 
-  const deletePurchaseOrder = (id: string) => {
-    commitBusinessDelete('purchase_order', id, () => setPurchaseOrders((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
-      return updated;
-    }));
+  const deletePurchaseOrder = async (id: string): Promise<void> => {
+    const target = purchaseOrders.find((item) => item.id === id);
+    if (!target) throw new Error('Commande fournisseur introuvable.');
+    try {
+      await queueBusinessDelete('purchase_order', id);
+      if (workspace.activeWorkspaceId) scheduleAutoSync();
+      setPurchaseOrders((prev) => {
+        const updated = prev.filter((item) => item.id !== id);
+        localStorage.setItem('omnibook_purchase_orders', JSON.stringify(updated));
+        return updated;
+      });
+      logEvent({
+        category: 'stock', action: 'stock.purchase_order_deleted', severity: 'warn',
+        title: `Commande supprimée · ${target.orderNumber}`,
+        description: `Commande fournisseur de ${target.supplierName} retirée.`,
+      });
+    } catch (error) {
+      reportQueueFailure('purchase_order', id, error);
+      throw error;
+    }
   };
 
   const markPurchaseOrderReceived = async (id: string): Promise<void> => {

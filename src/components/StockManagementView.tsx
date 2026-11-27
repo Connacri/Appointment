@@ -87,14 +87,16 @@ export const StockManagementView: React.FC = () => {
   const stockMutationPendingRef = useRef(false);
   const [stockMutationError, setStockMutationError] = useState<string | null>(null);
 
-  const runStockMutation = async (action: () => Promise<unknown>) => {
-    if (stockMutationPendingRef.current) return;
+  const runStockMutation = async <T,>(action: () => Promise<T>): Promise<T | null> => {
+    if (stockMutationPendingRef.current) return null;
     stockMutationPendingRef.current = true;
     setIsStockMutationPending(true);
     setStockMutationError(null);
-    try { await action(); }
-    catch (error) { setStockMutationError(error instanceof Error ? error.message : 'Échec de l’opération de stock.'); }
-    finally {
+    try { return await action(); }
+    catch (error) {
+      setStockMutationError(error instanceof Error ? error.message : 'Échec de l’opération de stock.');
+      return null;
+    } finally {
       stockMutationPendingRef.current = false;
       setIsStockMutationPending(false);
     }
@@ -367,7 +369,7 @@ export const StockManagementView: React.FC = () => {
     [poItems]
   );
 
-  const persistOrder = (targetStatus: 'draft' | 'confirmed'): PurchaseOrderRecord | null => {
+  const persistOrder = async (targetStatus: 'draft' | 'confirmed'): Promise<PurchaseOrderRecord | null> => {
     const cleanItems = poItems.filter((i) => i.orderQty > 0);
     if (cleanItems.length === 0) return null;
     const supplierLabel = poSupplierName.trim() || t('Fournisseur à préciser', 'Unspecified supplier', 'مورد عام');
@@ -387,14 +389,18 @@ export const StockManagementView: React.FC = () => {
           status: targetStatus,
           confirmedAt: targetStatus === 'confirmed' ? existing.confirmedAt || nowIso : existing.confirmedAt,
         };
-        updatePurchaseOrder(updated);
+        const saved = await runStockMutation(async () => {
+          await updatePurchaseOrder(updated);
+          return updated;
+        });
+        if (!saved) return null;
         setLastCreatedPoId(updated.id);
         setEditingOrderId(updated.id);
-        return updated;
+        return saved;
       }
     }
 
-    const created = createPurchaseOrder({
+    const created = await runStockMutation(() => createPurchaseOrder({
       supplierId: poSupplierId || undefined,
       supplierName: supplierLabel,
       supplierPhone: poSupplierPhone.trim() || undefined,
@@ -403,7 +409,8 @@ export const StockManagementView: React.FC = () => {
       items: cleanItems,
       status: targetStatus,
       confirmedAt: targetStatus === 'confirmed' ? nowIso : undefined,
-    });
+    }));
+    if (!created) return null;
     setLastCreatedPoId(created.id);
     setEditingOrderId(created.id);
     return created;
@@ -434,14 +441,18 @@ export const StockManagementView: React.FC = () => {
     setIsCustomMessageEdited(false);
   };
 
-  const markOrderDispatched = (po: PurchaseOrderRecord, channel: SupplierChannel | 'copy') => {
-    updatePurchaseOrder({
-      ...po,
-      status: po.status === 'received' ? 'received' : 'sent',
-      confirmedAt: po.confirmedAt || new Date().toISOString(),
-      sentAt: new Date().toISOString(),
-      sentVia: channel,
+  const markOrderDispatched = async (po: PurchaseOrderRecord, channel: SupplierChannel | 'copy'): Promise<boolean> => {
+    const saved = await runStockMutation(async () => {
+      await updatePurchaseOrder({
+        ...po,
+        status: po.status === 'received' ? 'received' : 'sent',
+        confirmedAt: po.confirmedAt || new Date().toISOString(),
+        sentAt: new Date().toISOString(),
+        sentVia: channel,
+      });
+      return true;
     });
+    return saved === true;
   };
 
   const handleCopyPoMessage = async (po: PurchaseOrderRecord | null, msg: string) => {
@@ -451,17 +462,17 @@ export const StockManagementView: React.FC = () => {
       setCopyFeedbackId(feedbackKey);
       setTimeout(() => setCopyFeedbackId(null), 2200);
       if (po) {
-        markOrderDispatched(po, 'copy');
+        await markOrderDispatched(po, 'copy');
       }
     } catch {
       // Ignore clipboard permission failure
     }
   };
 
-  const handleSaveSupplierForm = (e: React.FormEvent) => {
+  const handleSaveSupplierForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supName.trim()) return;
-    saveSupplier({
+    const saved = await runStockMutation(() => saveSupplier({
       id: editingSupplierId || undefined,
       name: supName,
       category: supCategory,
@@ -470,7 +481,8 @@ export const StockManagementView: React.FC = () => {
       email: supEmail,
       preferredChannel: supChannel,
       notes: supNotes,
-    });
+    }));
+    if (!saved) return;
     setEditingSupplierId(null);
     setSupName('');
     setSupContact('');
@@ -1207,7 +1219,7 @@ export const StockManagementView: React.FC = () => {
               <button
                 type="button"
                 disabled={!deviceMutationAvailability.canMutate || poItems.every((i) => i.orderQty <= 0)}
-                onClick={() => persistOrder('draft')}
+                onClick={() => { void persistOrder('draft'); }}
                 className="min-h-[44px] px-3.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
               >
                 {t('Enregistrer brouillon', 'Save Draft', 'حفظ كمسودة')}
@@ -1216,7 +1228,7 @@ export const StockManagementView: React.FC = () => {
               <button
                 type="button"
                 disabled={!deviceMutationAvailability.canMutate || poItems.every((i) => i.orderQty <= 0)}
-                onClick={() => persistOrder('confirmed')}
+                onClick={() => { void persistOrder('confirmed'); }}
                 className="min-h-[44px] px-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
               >
                 <CheckCircle2 size={15} />
@@ -1428,8 +1440,8 @@ export const StockManagementView: React.FC = () => {
 
                         <button
                           type="button"
-                          onClick={() => deletePurchaseOrder(po.id)}
-                          disabled={!deviceMutationAvailability.canMutate}
+                          onClick={() => { void runStockMutation(async () => { await deletePurchaseOrder(po.id); return true; }); }}
+                          disabled={!deviceMutationAvailability.canMutate || isStockMutationPending}
                           aria-label={t('Supprimer', 'Delete', 'حذف')}
                           className="min-h-[32px] min-w-[32px] rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center justify-center cursor-pointer shrink-0"
                         >
@@ -1451,13 +1463,16 @@ export const StockManagementView: React.FC = () => {
                         {po.status === 'draft' && (
                           <button
                             type="button"
-                            onClick={() =>
-                              updatePurchaseOrder({
-                                ...po,
-                                status: 'confirmed',
-                                confirmedAt: new Date().toISOString(),
-                              })
-                            }
+                            onClick={() => {
+                              void runStockMutation(async () => {
+                                await updatePurchaseOrder({
+                                  ...po,
+                                  status: 'confirmed',
+                                  confirmedAt: new Date().toISOString(),
+                                });
+                                return true;
+                              });
+                            }}
                             disabled={!deviceMutationAvailability.canMutate}
                             className="min-h-[34px] px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold cursor-pointer"
                           >
@@ -1714,8 +1729,8 @@ export const StockManagementView: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={() => deleteSupplier(sup.id)}
-                        disabled={!deviceMutationAvailability.canMutate}
+                        onClick={() => { void runStockMutation(async () => { await deleteSupplier(sup.id); return true; }); }}
+                        disabled={!deviceMutationAvailability.canMutate || isStockMutationPending}
                         aria-label={t('Supprimer', 'Delete', 'حذف')}
                         className="min-h-[36px] min-w-[36px] rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center justify-center cursor-pointer"
                       >

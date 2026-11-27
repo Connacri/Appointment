@@ -243,3 +243,39 @@ test('staff assignment, career changes and deletion await durable IndexedDB comm
   assert.match(panel, /await promoteOrTransferStaff\(/);
   assert.match(panel, /await deleteStaffMember\(/);
 });
+
+
+test('supplier and purchase-order CRUD await durable Outbox/tombstone commands before React projections', () => {
+  const appContext = readFileSync(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8');
+  const readBody = (start: string, end: string) => {
+    const from = appContext.indexOf(start);
+    const to = appContext.indexOf(end, from + start.length);
+    assert.notEqual(from, -1, `Missing AppContext command: ${start}`);
+    assert.notEqual(to, -1, `Missing AppContext command boundary: ${end}`);
+    return appContext.slice(from, to);
+  };
+  for (const [start, end] of [
+    ["const saveSupplier: AppContextType['saveSupplier'] = async", 'const deleteSupplier = async'],
+    ['const createPurchaseOrder: AppContextType[', 'const updatePurchaseOrder = async'],
+  ]) {
+    const body = readBody(start, end);
+    assert.match(body, /await queueBusinessUpsert\(/);
+    assert.match(body, /set(Suppliers|PurchaseOrders)\(/);
+  }
+  const deleteSupplier = readBody('const deleteSupplier = async', 'const createPurchaseOrder:');
+  assert.match(deleteSupplier, /await queueBusinessDelete\('supplier'/);
+  const updateOrder = readBody('const updatePurchaseOrder = async', 'const deletePurchaseOrder = async');
+  assert.match(updateOrder, /await queueBusinessUpsert\(/);
+  assert.match(updateOrder, /setPurchaseOrders\(/);
+  const deleteOrder = readBody('const deletePurchaseOrder = async', 'const markPurchaseOrderReceived = async');
+  assert.match(deleteOrder, /await queueBusinessDelete\('purchase_order'/);
+  assert.match(deleteOrder, /setPurchaseOrders\(/);
+
+  const panel = readFileSync(new URL('../src/components/StockManagementView.tsx', import.meta.url), 'utf8');
+  assert.match(panel, /const persistOrder = async/);
+  assert.match(panel, /await runStockMutation\(\(\) => createPurchaseOrder\(/);
+  assert.match(panel, /await runStockMutation\(\(\) => saveSupplier\(/);
+  assert.match(panel, /await updatePurchaseOrder\(/);
+  assert.match(panel, /await deletePurchaseOrder\(/);
+  assert.match(panel, /await deleteSupplier\(/);
+});

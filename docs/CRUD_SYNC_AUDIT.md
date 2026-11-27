@@ -156,3 +156,8 @@ Creating a staff record and its optional default tasks is now one bounded Indexe
 ### Awaited staff lifecycle mutations (2026-11-27)
 
 Staff assignment updates, promotions/transfers and deletion now await their IndexedDB Outbox/tombstone operation before updating the React projection or reporting success. The staff UI keeps the relevant modal/confirmation state open when a command fails. These commands are individually durable; they are not a distributed transaction with related tasks.
+
+
+## Supplier and purchase-order CRUD command boundary (2026-11-27)
+
+The supplier and purchase-order CRUD callbacks no longer use the generic fire-and-forget commit wrappers. They await durable IndexedDB writes/deletes, schedule cloud synchronization only after local commit, and update React state afterward. The stock-management UI awaits these operations and exposes failures through its shared mutation error surface. Multi-line purchase-order receipt still uses its existing local atomic command and separate remote dispatch calls.

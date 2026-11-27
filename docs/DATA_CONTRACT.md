@@ -605,3 +605,8 @@ Assignment, promotion/transfer and deletion now report success only after their 
 ## Staff lifecycle persistence regression guard (2026-11-27)
 
 The staff lifecycle command boundary is now covered by `tests/indexedDbMutationAtomicity.test.ts`. Creation with optional initial tasks uses one multi-entity IndexedDB transaction; assignment and promotion/transfer await the same staff projection/Outbox/P2P persistence path; deletion awaits the tombstone-aware delete path. React projections and success feedback are changed only after the durable command resolves.
+
+
+## Awaited supplier and purchase-order CRUD (2026-11-27)
+
+Supplier create/update/delete and purchase-order create/update/delete now await the local IndexedDB Outbox/tombstone command before updating React projections. The stock UI routes these commands through a single pending/error boundary, preserves supplier form values after failed saves, and waits for order persistence before treating it as dispatched. Purchase-order receipt remains a separate atomic stock/PO command; this change does not convert the server-side multi-line receipt into one Supabase RPC.
