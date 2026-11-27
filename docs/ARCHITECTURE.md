@@ -18,10 +18,11 @@ index.html
 
 ### Code splitting
 
-`src/App.tsx` keeps only the landing experience eager: `TopBar`, `Sidebar`, `OfflineBanner`,
-`PlanningTimeline`, `LegendBar` and `BookingModal`. Every other view and modal is loaded on
-demand with `React.lazy` inside a `Suspense` boundary (`ViewFallback`), and modals are only
-mounted while open. Adding a view means adding it to the lazy map, never to the eager imports.
+`src/App.tsx` keeps only the shell and landing experience eager: `TopBar`, `Sidebar`,
+`OfflineBanner`, `PlanningTimeline` and `LegendBar`. Every other view and modal is loaded on
+demand with `React.lazy` inside a `Suspense` boundary (`ViewFallback`). `BookingModal` is lazy
+and mounts only while a new booking or an existing booking is selected; print dialogs also mount
+only while requested. Adding a view means adding it to the lazy map, never to the eager imports.
 
 ### View error boundary
 

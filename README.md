@@ -81,10 +81,10 @@ L'interface partage un design system unique défini dans [`src/index.css`](./src
 
 ### Chargement et performance
 
-La coque applicative (`TopBar`, `Sidebar`, planning, fiche de réservation) est chargée
+La coque applicative (`TopBar`, `Sidebar`, planning et légende) est chargée
 immédiatement ; les autres écrans et modales sont découpés par `React.lazy` et chargés à la
-demande (`Suspense` + indicateur `pms-view-loading`). Les modales ne sont montées que
-lorsqu'elles sont ouvertes. Le bundle initial reste ainsi autour de **≈ 208 kB gzip**
+demande (`Suspense` + indicateur `pms-view-loading`). La fiche de réservation et les dialogues
+d'impression sont eux aussi montés uniquement à l'ouverture. Le bundle initial reste ainsi autour de **≈ 208 kB gzip**
 (contre 494 kB auparavant), et les dépendances lourdes (`jspdf`, `html2canvas`, génération de
 QR) ne sont téléchargées qu'au premier usage. Voir [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).
 
