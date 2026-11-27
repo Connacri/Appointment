@@ -439,3 +439,21 @@ Post-deployment SQL verification on 2026-11-27 confirmed 21 public tables, zero 
 with any `anon` table privileges, zero tables with dangerous `authenticated` table
 privileges, and no loss of authenticated SELECT on the 19 application tables. A
 transactional public-table/identity-sequence DDL probe passed and was rolled back.
+
+
+### Central device-policy enforcement — business command boundaries
+
+The AppContext now exposes `assertBusinessMutationAllowed` and enforces it before
+generic business upserts/deletes, atomic stock transactions, housekeeping status changes,
+purchase-order receipts, dynamic-rate edits, invoice creation, role configuration and
+destructive local-data purge. The legacy raw booking/resource state setters are wrapped
+with the same guard so components cannot bypass the policy through those two setters.
+
+The only bootstrap exception is the first establishment setup while onboarding is incomplete
+and no device registry exists. That exception does not authorize operational reservations,
+stock, tasks, staffing, invoices, role configuration or purge operations.
+
+This is a domain-boundary guard, not yet proof of a fully greyed-out UI. The proUSB
+hardware write path, direct invoice component writes and every standalone configuration
+surface still require integration and UI-level disabled-state coverage. All commands must
+remain fail-closed until those paths are covered.

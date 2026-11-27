@@ -169,6 +169,7 @@ interface AppContextType {
   deviceRegistry: DeviceRegistry | null;
   deviceMutationAvailability: MutationAvailability;
   configureSingleDeviceTopology: () => Promise<void>;
+  assertBusinessMutationAllowed: () => void;
   refreshWorkspaces: () => Promise<void>;
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -410,6 +411,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const workspace = useWorkspace();
   const [isCoreDataHydrated, setIsCoreDataHydrated] = useState(false);
+  const hasOnboardedRef = useRef(false);
   const [language, setLanguageState] = useState<Language>(() => {
     return (localStorage.getItem('omnibook_lang') as Language) || 'fr';
   });
@@ -590,6 +592,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const persistRolesConfig = useCallback((updater: (prev: StoredRolesPayload) => StoredRolesPayload) => {
+    assertBusinessMutationAllowed();
     setStoredRolesConfig((prev) => {
       const next = updater(prev);
       saveStoredRolesPayload(next);
@@ -759,6 +762,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const setCurrency = (c: string) => {
+    assertBusinessMutationAllowed(true);
     if (c !== currency) {
       logEvent({
         category: 'system',
@@ -940,15 +944,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!availability.canMutate) {
       const messages: Record<MutationAvailability['reason'], string> = {
         single_device_local: '', coordination_available: '',
-        registry_missing: 'Registre des appareils absent : les écritures de réservation sont bloquées jusqu’à la configuration explicite de la topologie.',
-        registry_unverified: 'Registre des appareils non vérifié : les écritures de réservation restent bloquées.',
-        data_not_ready: 'Données locales en cours de chargement : réessayez après la synchronisation.',
-        integrity_failed: 'Contrôle d’intégrité en échec : les écritures de réservation sont bloquées.',
+        registry_missing: 'Registre des appareils absent : toutes les mutations métier sont bloquées jusqu’à la configuration explicite de la topologie.',
+        registry_unverified: 'Registre des appareils non vérifié : les mutations métier restent bloquées.',
+        data_not_ready: 'Données locales en cours de chargement : les mutations métier restent bloquées.',
+        integrity_failed: 'Contrôle d’intégrité en échec : les mutations métier sont bloquées.',
         device_not_authorized: 'Cet appareil n’est pas autorisé par le registre de l’établissement.',
-        no_coordination_authority: 'Établissement multi-appareils sans autorité de coordination : réservations en lecture seule.',
+        no_coordination_authority: 'Établissement multi-appareils sans autorité de coordination : toutes les mutations métier sont en lecture seule.',
       };
       throw new Error(messages[availability.reason]);
     }
+  };
+
+  // Bootstrap exception is deliberately limited to the first establishment setup.
+  // It does not authorize bookings, stock, tasks, staff, invoices or other operations.
+  const assertBusinessMutationAllowed = (allowInitialSetup = false): void => {
+    if (allowInitialSetup && !hasOnboardedRef.current && !deviceRegistry) return;
+    assertCriticalMutationAllowed();
   };
 
   const createMutationId = (): string => {
@@ -965,6 +976,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     payload: Record<string, unknown>,
     establishmentOverride?: string,
   ): Promise<void> => {
+    assertBusinessMutationAllowed(entity === 'establishment_profile');
     const workspaceId = workspace.activeWorkspaceId?.trim();
     // Local-only installations remain durable without inventing a workspace identity.
     if (!workspaceId) {
@@ -987,6 +999,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     mutations: StockAtomicMutation[],
   ): Promise<Array<{ entity: 'stock_item' | 'stock_movement'; entityId: string; payload: Record<string, unknown> }>> => {
     if (mutations.length === 0) return [];
+    assertBusinessMutationAllowed();
     const workspaceId = workspace.activeWorkspaceId?.trim();
     let committedRows: Awaited<ReturnType<typeof indexedDb.putLocalBusinessEntitiesAtomically>>;
     if (!workspaceId) {
@@ -1013,6 +1026,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     entity: 'task' | 'stock_item' | 'supplier' | 'purchase_order' | 'staff_member',
     entityId: string,
   ): Promise<void> => {
+    assertBusinessMutationAllowed();
     const workspaceId = workspace.activeWorkspaceId?.trim();
     if (!workspaceId) {
       await indexedDb.deleteLocalBusinessEntity(entity, entityId);
@@ -1035,6 +1049,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     commit: () => void,
     establishmentOverride?: string,
   ): void => {
+    assertBusinessMutationAllowed(entity === 'establishment_profile');
     void queueBusinessUpsert(entity, entityId, payload, establishmentOverride)
       .then(() => { commit(); scheduleAutoSync(); })
       .catch((error) => reportQueueFailure(entity, entityId, error));
@@ -1045,6 +1060,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     entityId: string,
     commit: () => void,
   ): void => {
+    assertBusinessMutationAllowed();
     void queueBusinessDelete(entity, entityId)
       .then(() => { commit(); scheduleAutoSync(); })
       .catch((error) => reportQueueFailure(entity, entityId, error));
@@ -1125,8 +1141,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [hasOnboarded, setHasOnboardedState] = useState<boolean>(() => {
     return localStorage.getItem('omnibook_onboarding_completed') === 'true';
   });
+  hasOnboardedRef.current = hasOnboarded;
 
   const setHasOnboarded = (done: boolean) => {
+    hasOnboardedRef.current = done;
     setHasOnboardedState(done);
     if (done) {
       localStorage.setItem('omnibook_onboarding_completed', 'true');
@@ -1331,6 +1349,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createInvoiceFromBooking = (booking: TimelineBooking, docType: DocumentType = 'invoice'): InvoiceRecord | null => {
+    assertBusinessMutationAllowed();
     if (!booking.id) return null;
     const profile = establishmentProfile;
     const activeCurrency = profile.defaultCurrency || currency || 'DA';
@@ -2528,6 +2547,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     resourceId: string,
     status: 'clean' | 'cleaning' | 'dirty' | 'out_of_order'
   ) => {
+    assertBusinessMutationAllowed();
     let updatedResource: ResourceItem | undefined;
     let previousStatus: string | undefined;
     let groupLabel: string | undefined;
@@ -3649,6 +3669,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteStockItem = async (id: string): Promise<void> => {
+    assertBusinessMutationAllowed();
     const existing = stockItemsRef.current.find((item) => item.id === id);
     await queueBusinessDelete('stock_item', id);
     if (workspace.activeWorkspaceId) scheduleAutoSync();
@@ -3815,6 +3836,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const markPurchaseOrderReceived = async (id: string): Promise<void> => {
+    assertBusinessMutationAllowed();
     const target = purchaseOrders.find((order) => order.id === id);
     if (!target || target.status === 'received') return;
 
@@ -3871,6 +3893,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
     const setDynamicRate = (roomType: string, date: string, price: number) => {
+    assertBusinessMutationAllowed();
     const prevPrice = dynamicRates[roomType]?.[date];
     setDynamicRates((prev) => {
       const next = { ...prev, [roomType]: { ...(prev[roomType] || {}), [date]: price } };
@@ -3889,6 +3912,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const applyDynamicRatesBulk = (roomType: string, rates: Record<string, number>) => {
+    assertBusinessMutationAllowed();
     setDynamicRates((prev) => {
       const next = { ...prev, [roomType]: { ...(prev[roomType] || {}), ...rates } };
       localStorage.setItem('omnibook_dynamic_rates', JSON.stringify(next));
@@ -3907,6 +3931,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const clearDynamicRate = (roomType: string, date: string) => {
+    assertBusinessMutationAllowed();
     setDynamicRates((prev) => {
       const typeRates = { ...(prev[roomType] || {}) };
       if (!(date in typeRates)) return prev;
@@ -3918,6 +3943,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const clearDynamicRatesMonth = (roomType: string, yearMonth: string) => {
+    assertBusinessMutationAllowed();
     let removedCount = 0;
     setDynamicRates((prev) => {
       const typeRates = { ...(prev[roomType] || {}) };
@@ -4053,6 +4079,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const purgeAllUserData = async (): Promise<void> => {
+    assertBusinessMutationAllowed();
     // Reset all user-owned in-memory collections.
     setBookings([]);
     setSelectedBooking(null);
@@ -4158,6 +4185,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deviceRegistry,
         deviceMutationAvailability,
         configureSingleDeviceTopology,
+        assertBusinessMutationAllowed: () => assertBusinessMutationAllowed(),
         refreshWorkspaces: workspace.refreshWorkspaces,
         language,
         setLanguage,
@@ -4197,9 +4225,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentBaseDate,
         shiftDays,
         bookings,
-        setBookings,
+        setBookings: (next) => { assertBusinessMutationAllowed(true); setBookings(next); },
         resourceGroups,
-        setResourceGroups,
+        setResourceGroups: (next) => { assertBusinessMutationAllowed(true); setResourceGroups(next); },
         updateHousekeepingStatus,
         checkConflict,
         addBooking,

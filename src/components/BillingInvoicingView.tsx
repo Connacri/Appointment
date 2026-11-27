@@ -27,7 +27,7 @@ import { InvoicePreviewModal } from './InvoicePreviewModal';
 import { playClickFeedback } from '../utils/audioFeedback';
 
 export const BillingInvoicingView: React.FC = () => {
-  const { language, activeSector, currentDomain, establishmentProfile, setIsEstablishmentModalOpen, currency, logEvent } = useApp();
+  const { language, activeSector, currentDomain, establishmentProfile, setIsEstablishmentModalOpen, currency, logEvent, assertBusinessMutationAllowed } = useApp();
   const activeCurrency = establishmentProfile.defaultCurrency || currency || 'DA';
 
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => {
@@ -155,6 +155,7 @@ export const BillingInvoicingView: React.FC = () => {
 
   const handleCreateDocument = (e: React.FormEvent) => {
     e.preventDefault();
+    assertBusinessMutationAllowed();
     if (!newCustomerName.trim()) return;
 
     const prefix = newDocType === 'invoice' ? 'FAC' : newDocType === 'quote' ? 'DEV' : 'PRO';
