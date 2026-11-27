@@ -565,7 +565,6 @@ mod tests {
         }
     }
 
-
     fn stay_event(
         node: &str,
         booking_id: &str,
