@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import headerImage from '../../assets/branding/HEADER RMZ.jpg';
+import { APP_VERSION } from '../version';
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -122,7 +123,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                   Cybernetics Engineering &bull; Advanced Technology
                 </p>
                 <p className="text-[11px] text-cyan-400 font-mono mt-0.5">
-                  www.forslog.com &bull; Oran, Algérie 🇩🇿
+                  www.forslog.com &bull; Oran, Algérie 🇩🇿 &bull; Appointment PMS v{APP_VERSION}
                 </p>
               </div>
             </div>

@@ -5,6 +5,7 @@ import { incrementReleaseVersion } from './versioning.mjs';
 const packagePath = new URL('../package.json', import.meta.url);
 const cargoPath = new URL('../windows-native/Cargo.toml', import.meta.url);
 const cargoLockPath = new URL('../windows-native/Cargo.lock', import.meta.url);
+const appVersionPath = new URL('../src/version.ts', import.meta.url);
 
 const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
 const tags = execFileSync('git', ['tag', '--list', 'v*'], { encoding: 'utf8' })
@@ -26,4 +27,5 @@ if (!lockBlock.test(cargoLock)) throw new Error('Cargo.lock native package versi
 
 writeFileSync(cargoPath, cargoToml.replace(packageBlock, '$1' + nextVersion + '$3'));
 writeFileSync(cargoLockPath, cargoLock.replace(lockBlock, '$1' + nextVersion + '$3'));
+writeFileSync(appVersionPath, `export const APP_VERSION = '${nextVersion}' as const;\n`);
 process.stdout.write(nextVersion + '\n');

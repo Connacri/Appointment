@@ -7,7 +7,7 @@ Il ne contient aucun secret : uniquement des **noms** de secrets et de variables
 
 - Aucune release ni signature de production n'est produite en local.
   Les APK/AAB/EXE signés et le site de production sont construits **uniquement** par GitHub Actions.
-- La version applicative a une source unique : `package.json` → `version`.
+- La version applicative a une source unique : `package.json` → `version`. Le script de release génère aussi `src/version.ts` depuis cette valeur pour l'afficher dans « À propos » ; ce fichier ne doit jamais être incrémenté manuellement.
 - Un push sur `main` touchant le code applicatif, Android, Windows natif, les assets, les scripts de build ou la configuration de release déclenche : qualité → Android signé → Rust/Win32 natif Windows signé → GitHub Release de snapshot.
 - Un tag `vX.Y.Z` déclenche une release officielle ; le tag doit être **égal** à `package.json` (vérifié par le workflow).
 - `workflow_dispatch` permet de relancer manuellement le pipeline (`release_track`).
