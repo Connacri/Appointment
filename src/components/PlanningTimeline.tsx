@@ -946,7 +946,8 @@ export const PlanningTimeline: React.FC = () => {
     <div className="flex-1 flex flex-col h-full overflow-hidden pms-gantt-root bg-[rgb(var(--pms-canvas))] relative select-none">
       {/* Responsive Toolbar: one compact, horizontally scrollable row on phones */}
       <div className="w-full min-w-0 shrink-0 border-b border-[rgb(var(--pms-border))] pms-gantt-surface select-none">
-        <div ref={toolbarRef} className="flex min-w-0 flex-col gap-1.5 px-1.5 py-1.5 md:px-3 md:py-1.5">
+        <div ref={toolbarRef} className={`flex min-w-0 flex-col gap-1.5 px-1.5 py-1.5 md:px-3 md:py-1.5 ${isMobileScreen && isGanttToolsOpen ? 'max-h-[min(68vh,560px)] overflow-y-auto overscroll-contain' : ''}`}>
+
           <button
             type="button"
             className="md:hidden flex min-h-9 w-full items-center justify-between rounded-lg border border-[rgb(var(--pms-border))] bg-[rgb(var(--pms-surface))] px-3 text-xs font-semibold text-slate-700 shadow-2xs dark:text-slate-200"
@@ -956,7 +957,7 @@ export const PlanningTimeline: React.FC = () => {
           >
             <span className="flex items-center gap-2">
               <SlidersHorizontal size={14} className="text-[var(--theme-primary)]" />
-              {language === 'fr' ? 'Outils du planning' : language === 'ar' ? 'أدوات المخطط' : 'Planning tools'}
+              {language === 'fr' ? 'Outils & recherche' : language === 'ar' ? 'الأدوات والبحث' : 'Tools & search'}
             </span>
             <ChevronDown size={15} className={isGanttToolsOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
           </button>
@@ -1152,7 +1153,7 @@ export const PlanningTimeline: React.FC = () => {
         {/* Dedicated Timeline Search & Quick-Locate Row */}
         <div
           ref={searchBoxRef}
-          className="relative flex flex-wrap items-center gap-1.5 border-t border-[rgb(var(--pms-border)/0.7)] px-2 py-1.5 md:px-3"
+          className={`${isMobileScreen && !isGanttToolsOpen ? 'hidden' : 'relative flex'} min-w-0 flex-wrap items-center gap-1.5 border-t border-[rgb(var(--pms-border)/0.7)] px-2 py-1.5 md:px-3 ${isMobileScreen ? 'border-t-0 pt-1' : ''}`}
         >
           <div className="relative flex min-w-0 flex-1 items-center sm:max-w-md">
             <Search
@@ -1397,7 +1398,7 @@ export const PlanningTimeline: React.FC = () => {
         <button
           type="button"
           onClick={scrollToToday}
-          className="absolute top-12 right-2 sm:right-6 z-[95] px-3 py-1 rounded-full text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/70 shadow-md backdrop-blur-md flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer select-none active:scale-95 group"
+          className="hidden sm:flex absolute top-12 right-2 sm:right-6 z-[95] px-3 py-1 rounded-full text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/70 shadow-md backdrop-blur-md items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer select-none active:scale-95 group"
           title={language === 'fr' ? 'Centrer la vue sur Aujourd’hui' : language === 'ar' ? 'الانتقال إلى اليوم' : 'Scroll to Today'}
         >
           <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />

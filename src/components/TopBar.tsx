@@ -23,7 +23,6 @@ import {
   Cloud,
   CloudOff,
   AlertTriangle,
-  CalendarSearch,
   History,
   UserCog,
   Bell,
@@ -48,10 +47,6 @@ import {
 } from '../utils/staffNotifications';
 import { RoleIcon } from './RoleIcon';
 import { LanDiscoveryStatus } from './LanDiscoveryStatus';
-
-const BookingFinderModal = React.lazy(() =>
-  import('./BookingFinderModal').then((m) => ({ default: m.BookingFinderModal })),
-);
 
 export const TopBar: React.FC = () => {
   const {
@@ -104,7 +99,6 @@ export const TopBar: React.FC = () => {
   const [readNotifIds, setReadNotifIds] = useState<Set<string>>(() => loadReadNotificationIds());
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isBookingFinderOpen, setIsBookingFinderOpen] = useState(false);
 
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const roleMenuRef = useRef<HTMLDivElement>(null);
@@ -811,21 +805,6 @@ export const TopBar: React.FC = () => {
             </div>
           )}
 
-          {/* Global reservation finder: shown only for roles with planning/booking access */}
-          {uiCaps.canViewPlanningOrBookings && (
-            <button
-              type="button"
-              data-testid="open-booking-finder"
-              onClick={() => setIsBookingFinderOpen(true)}
-              className="hidden sm:flex h-9 w-9 2xl:w-auto 2xl:px-2.5 items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer shrink-0"
-              title={getTranslation('bookingFinderOpen', language)}
-              aria-label={getTranslation('bookingFinderOpen', language)}
-            >
-              <CalendarSearch size={14} className="shrink-0" />
-              <span className="hidden 2xl:inline text-xs font-semibold whitespace-nowrap">{getTranslation('bookingFinderOpen', language)}</span>
-            </button>
-          )}
-
           {/* Bidirectional Supabase Auto-Sync + Force Sync Button (Row 1 from sm+, Row 2 on <sm) */}
           {(() => {
             const syncBusy = cloudSyncStatus.isSyncing;
@@ -1054,21 +1033,6 @@ export const TopBar: React.FC = () => {
 
                 <div className="pt-1 border-t border-slate-100 dark:border-slate-800 my-1" />
 
-                {/* Booking finder moved into the compact mobile menu */}
-                {uiCaps.canViewPlanningOrBookings && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsBookingFinderOpen(true);
-                      setIsMoreMenuOpen(false);
-                    }}
-                    className="sm:hidden w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left rtl:text-right"
-                  >
-                    <CalendarSearch size={14} className="text-blue-500 shrink-0" />
-                    <span className="truncate font-semibold">{getTranslation('bookingFinderOpen', language)}</span>
-                  </button>
-                )}
-
                 {/* Force Supabase Cloud Sync (mobile + accessible menu entry) */}
                 <button
                   type="button"
@@ -1257,14 +1221,6 @@ export const TopBar: React.FC = () => {
 
       <div className="hidden sm:block"><LanDiscoveryStatus /></div>
 
-      <React.Suspense fallback={null}>
-        {uiCaps.canViewPlanningOrBookings && (
-          <BookingFinderModal
-            isOpen={isBookingFinderOpen}
-            onClose={() => setIsBookingFinderOpen(false)}
-          />
-        )}
-      </React.Suspense>
     </header>
   );
 };
