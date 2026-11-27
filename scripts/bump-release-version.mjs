@@ -8,22 +8,22 @@ const cargoLockPath = new URL('../windows-native/Cargo.lock', import.meta.url);
 
 const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
 const tags = execFileSync('git', ['tag', '--list', 'v*'], { encoding: 'utf8' })
-  .split(/\\r?\\n/)
+  .split(/\r?\n/)
   .map((tag) => tag.trim())
   .filter(Boolean);
 
 const nextVersion = incrementReleaseVersion(packageJson.version, tags);
 packageJson.version = nextVersion;
-writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\\n`);
+writeFileSync(packagePath, JSON.stringify(packageJson, null, 2) + '\n');
 
 const cargoToml = readFileSync(cargoPath, 'utf8');
 const cargoLock = readFileSync(cargoLockPath, 'utf8');
-const packageBlock = /(\\[package\\][\\s\\S]*?^version\\s*=\\s*")([^"]+)(")/m;
-const lockBlock = /(\\[\\[package\\]\\]\\s*\\nname\\s*=\\s*"appointment-pms-native"\\s*\\nversion\\s*=\\s*")([^"]+)(")/m;
+const packageBlock = /(\[package\][\s\S]*?^version\s*=\s*")([^"]+)(")/m;
+const lockBlock = /(\[\[package\]\]\s*\nname\s*=\s*"appointment-pms-native"\s*\nversion\s*=\s*")([^"]+)(")/m;
 
 if (!packageBlock.test(cargoToml)) throw new Error('Cargo.toml package version not found.');
 if (!lockBlock.test(cargoLock)) throw new Error('Cargo.lock native package version not found.');
 
-writeFileSync(cargoPath, cargoToml.replace(packageBlock, `$1${nextVersion}$3`));
-writeFileSync(cargoLockPath, cargoLock.replace(lockBlock, `$1${nextVersion}$3`));
-process.stdout.write(`${nextVersion}\\n`);
+writeFileSync(cargoPath, cargoToml.replace(packageBlock, '$1' + nextVersion + '$3'));
+writeFileSync(cargoLockPath, cargoLock.replace(lockBlock, '$1' + nextVersion + '$3'));
+process.stdout.write(nextVersion + '\n');

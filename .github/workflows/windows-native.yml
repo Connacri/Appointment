@@ -68,7 +68,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (!(Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
-          & $iscc installer\Appointment.iss
+          $version = node -p "require('../package.json').version"
+          & $iscc "/DAppVersion=$version" installer\Appointment.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE" }
 
       - name: Verify browser independence
