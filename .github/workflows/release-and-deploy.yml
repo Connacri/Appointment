@@ -55,10 +55,10 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
     steps:
-      - name: Checkout triggering commit
+      - name: Checkout latest main for serialized release versioning
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: main
           fetch-depth: 0
 
       - name: Setup Node.js 22
@@ -86,15 +86,61 @@ jobs:
               echo "::error::Production versioning is allowed only from main or an explicit release tag."
               exit 1
             fi
-            VERSION="$(node scripts/bump-release-version.mjs)"
-            TAG="v$VERSION"
+
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add package.json windows-native/Cargo.toml windows-native/Cargo.lock src/version.ts
-            git commit -m "chore(release): $TAG"
-            git tag -a "$TAG" -m "Appointment PMS $TAG"
-            git push origin HEAD:main
-            git push origin "refs/tags/$TAG"
+            published=false
+            for attempt in 1 2 3 4 5; do
+              echo "::group::Release version attempt $attempt/5"
+              git fetch origin main --force
+              git fetch --tags --force
+              git checkout -B release-version origin/main
+
+              VERSION="$(node scripts/bump-release-version.mjs)"
+              TAG="v$VERSION"
+              git add package.json windows-native/Cargo.toml windows-native/Cargo.lock src/version.ts
+              git commit -m "chore(release): $TAG"
+              COMMIT_SHA="$(git rev-parse HEAD)"
+
+              if git push origin HEAD:main; then
+                if git ls-remote --exit-code origin "refs/tags/$TAG" >/dev/null 2>&1; then
+                  git fetch origin "refs/tags/$TAG:refs/tags/$TAG"
+                  TAG_COMMIT="$(git rev-parse "$TAG^{}")"
+                  if [[ "$TAG_COMMIT" != "$COMMIT_SHA" ]]; then
+                    echo "::error::Remote tag $TAG points to a different commit."
+                    exit 1
+                  fi
+                else
+                  git tag -a "$TAG" -m "Appointment PMS $TAG"
+                  tag_pushed=false
+                  for tag_attempt in 1 2 3; do
+                    if git push origin "refs/tags/$TAG"; then
+                      tag_pushed=true
+                      break
+                    fi
+                    sleep $((tag_attempt * 2))
+                  done
+                  if [[ "$tag_pushed" != "true" ]]; then
+                    echo "::error::Could not publish tag $TAG after 3 attempts."
+                    exit 1
+                  fi
+                fi
+                published=true
+                echo "Published $TAG from $COMMIT_SHA"
+                echo "::endgroup::"
+                break
+              fi
+
+              echo "::warning::main advanced during release attempt $attempt; retrying from latest origin/main."
+              git tag -d "$TAG" >/dev/null 2>&1 || true
+              sleep $((attempt * 2))
+              echo "::endgroup::"
+            done
+
+            if [[ "$published" != "true" ]]; then
+              echo "::error::Could not publish a release after 5 attempts."
+              exit 1
+            fi
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
