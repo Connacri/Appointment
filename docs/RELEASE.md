@@ -6,7 +6,7 @@ Il ne contient aucun secret : uniquement des **noms** de secrets et de variables
 ## 1. Principe
 
 - Aucune release ni signature de production n'est produite en local.
-  Les APK/AAB/EXE signés et le site de production sont construits **uniquement** par GitHub Actions.
+  L'APK/AAB Android signé et les binaires Windows natifs **non signés** sont construits uniquement par GitHub Actions.
 - La version applicative a une source unique : `package.json` → `version`. Le script de release génère aussi `src/version.ts` depuis cette valeur pour l'afficher dans « À propos » ; ce fichier ne doit jamais être incrémenté manuellement.
 - Un push sur `main` touchant le code applicatif, Android, Windows natif, les assets, les scripts de build ou la configuration de release déclenche : qualité → Android signé → Rust/Win32 natif Windows signé → GitHub Release de snapshot.
 - Un tag `vX.Y.Z` déclenche une release officielle ; le tag doit être **égal** à `package.json` (vérifié par le workflow).
@@ -99,3 +99,12 @@ Ne jamais committer de keystore, `.env`, JSON de service account ou mot de passe
 - Solution la plus fiable : pousser un **nouveau commit** (ou lancer `workflow_dispatch` sur un
   commit différent) afin d'obtenir un nouveau SHA et un nouvel artefact Pages.
 - Ne jamais supprimer ni déplacer un tag publié ; corriger en avant avec un nouveau build.
+
+
+## 7. Compatibilité Windows et dépannage de l'installateur
+
+- Le binaire natif publié est x64. L'installateur utilise `x64compatible` : Windows x64 et Windows 11 ARM64 (émulation x64) sont ciblés. Windows 32 bits et Windows ARM64 sans émulation x64 ne sont pas pris en charge.
+- L'installation est par utilisateur (`PrivilegesRequired=lowest`) dans `%LOCALAPPDATA%\Programs\Appointment PMS`; aucun droit administrateur n'est requis pour ce chemin.
+- Si SetupLdr ne peut pas créer son répertoire `IS-*.tmp` avec `Error 5: Access denied`, extraire le ZIP Windows puis lancer `Install-With-Temp-Fallback.ps1`. Le script teste un dossier temporaire privé sous `%LOCALAPPDATA%\Connacri\Appointment\InstallerTemp` et redirige `TMP`/`TEMP` pour le processus enfant.
+- Si une stratégie de sécurité bloque aussi ce dossier, `Install-Portable.ps1` installe le binaire sans passer par SetupLdr. Cette solution de secours ne remplace pas la correction des ACL Windows ou de l'antivirus.
+- Les données utilisateur restent dans `%LOCALAPPDATA%\Connacri\Appointment` et ne doivent jamais être supprimées par une mise à jour ou une désinstallation.
