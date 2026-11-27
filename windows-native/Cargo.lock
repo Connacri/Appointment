@@ -16,7 +16,7 @@ dependencies = [
 
 [[package]]
 name = "appointment-pms-native"
-version = "1.2.7"
+version = "1.2.8"
 dependencies = [
  "rusqlite",
  "serde",
