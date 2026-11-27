@@ -1530,6 +1530,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_purchase_order_receipt: {
+        Args: {
+          p_actor_name: string
+          p_establishment_id: string
+          p_movements: Json
+          p_order_id: string
+          p_received_at: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       apply_stock_movement: {
         Args: {
           p_actor_name?: string
