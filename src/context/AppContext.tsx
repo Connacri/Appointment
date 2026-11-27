@@ -523,11 +523,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return entry;
   }, [resolveActorLabel]);
 
-  const clearEventLogs = useCallback(async (): Promise<void> => {
-    setPersistedEventLogs([]);
-    await indexedDb.clearEventLogs();
-  }, []);
-
   const [isSoundEnabled, setIsSoundEnabled] = useState<boolean>(() => audioFeedbackService.isEnabled());
 
   const toggleSound = () => {
@@ -965,6 +960,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const assertInitialSetupMutationAllowed = (): void => {
     assertBusinessMutationAllowed(true);
+  };
+
+  const clearEventLogs = async (): Promise<void> => {
+    assertBusinessMutationAllowed();
+    setPersistedEventLogs([]);
+    await indexedDb.clearEventLogs();
   };
 
   const createMutationId = (): string => {

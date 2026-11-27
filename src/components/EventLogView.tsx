@@ -112,6 +112,7 @@ export const EventLogView: React.FC = () => {
     isOffline,
     establishmentProfile,
     logEvent,
+    deviceMutationAvailability,
   } = useApp();
 
   const isRtl = language === 'ar';
@@ -801,6 +802,7 @@ export const EventLogView: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsClearConfirmOpen((v) => !v)}
+              disabled={!deviceMutationAvailability.canMutate}
               className="min-h-11 sm:min-h-9 inline-flex items-center gap-2 rounded-xl border border-rose-200 dark:border-rose-900/70 bg-rose-50/70 dark:bg-rose-950/40 px-3 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/70 cursor-pointer transition-colors whitespace-nowrap shrink-0"
             >
               <Trash2 size={14} />
@@ -863,8 +865,17 @@ export const EventLogView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  void clearEventLogs().finally(() => setIsClearConfirmOpen(false));
+                  void clearEventLogs()
+                    .then(() => setIsClearConfirmOpen(false))
+                    .catch((error) => {
+                      setExportNotice({
+                        kind: 'error',
+                        message: error instanceof Error ? error.message : 'Suppression bloquée en mode lecture seule.',
+                      });
+                      setIsClearConfirmOpen(false);
+                    });
                 }}
+                disabled={!deviceMutationAvailability.canMutate}
                 className="min-h-10 rounded-lg bg-rose-600 px-3 font-semibold text-white hover:bg-rose-500 cursor-pointer"
               >
                 {getTranslation('eventLogConfirmAction', language)}

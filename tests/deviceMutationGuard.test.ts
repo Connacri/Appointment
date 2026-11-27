@@ -12,6 +12,7 @@ const myBookings = readFileSync(new URL('../src/components/MyBookingsView.tsx', 
 const channelManager = readFileSync(new URL('../src/components/ChannelManagerView.tsx', import.meta.url), 'utf8');
 const spaManagement = readFileSync(new URL('../src/components/SpaManagementView.tsx', import.meta.url), 'utf8');
 const cloudConfig = readFileSync(new URL('../src/components/CloudConfigPanel.tsx', import.meta.url), 'utf8');
+const eventLogView = readFileSync(new URL('../src/components/EventLogView.tsx', import.meta.url), 'utf8');
 
 function sectionProUsb(start: string, end: string): string {
   const from = proUsb.indexOf(start);
@@ -106,4 +107,10 @@ test('Supabase runtime configuration remains editable only during explicit first
   assert.match(cloudConfig, /canEditCloudConfig = deviceMutationAvailability\.canMutate \|\| \(!hasOnboarded && !deviceRegistry\)/);
   assert.match(inspector, /assertInitialSetupMutationAllowed\(\)/);
   assert.match(inspector, /disabled=\{!canEditCloudConfig\}/);
+});
+
+
+test('audit-log deletion is a guarded mutation and disabled without write authority', () => {
+  assert.match(section('const clearEventLogs = async', 'const createMutationId'), /assertBusinessMutationAllowed\(\)/);
+  assert.match(eventLogView, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
 });

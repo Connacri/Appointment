@@ -455,7 +455,26 @@ The only bootstrap exception is the first establishment setup while onboarding i
 and no device registry exists. That exception does not authorize operational reservations,
 stock, tasks, staffing, invoices, role configuration or purge operations.
 
-This is a domain-boundary guard, not yet proof of a fully greyed-out UI. The proUSB
-hardware write path, direct invoice component writes and every standalone configuration
-surface still require integration and UI-level disabled-state coverage. All commands must
-remain fail-closed until those paths are covered.
+This is a domain-boundary guard, not yet proof of a fully greyed-out UI. Additional
+standalone paths now use the same gate: proUSB card issuance/revocation/lock settings,
+CardLock import and destructive cache actions; OTA Channel Manager transitions; Spa
+appointments, cabin and therapist state; Supabase runtime configuration; and local event-log
+deletion. High-risk controls in those views are disabled when write authority is absent.
+Customer profile writes and onboarding completion are also guarded.
+
+Important limits remain:
+- Invoice creation is blocked in read-only mode, but invoice records are still stored by the
+  billing view in localStorage and are not yet backed by a durable transactional repository
+  and outbox.
+- Channel Manager and Spa currently hold their operational state in component memory. The
+  topology guard prevents local UI mutation while read-only, but it does not make those
+  modules durable or prove that a real OTA/Spa integration exists.
+- Not every form, context menu, keyboard shortcut, bulk action and administrative control
+  across every view has yet been audited and visually disabled. UI coverage is incremental;
+  the repository/domain command guard remains the enforcement boundary.
+- The device registry is still local-only and is not a shared authority. MULTI_DEVICE remains
+  read-only until an authenticated shared coordination authority is implemented.
+
+Do not claim complete global read-only enforcement or production multi-device authorization
+until the remaining UI surfaces, durable repositories and shared authority have passed their
+respective regression and integration tests.
