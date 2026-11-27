@@ -223,6 +223,9 @@ const MainLayout: React.FC = () => {
     establishmentProfile,
     activeRoleDefinition,
     deviceMutationAvailability,
+    isInitialSyncReady,
+    cloudSyncStatus,
+    forceSupabaseSync,
     configureSingleDeviceTopology,
   } = useApp();
 
@@ -357,10 +360,38 @@ const MainLayout: React.FC = () => {
             <ViewErrorBoundary language={language}>
               <Suspense fallback={<ViewFallback />}>
                 {activeView === 'planning' && activeRoleDefinition.allowedTabs.includes('planning') && (
-                  <>
-                    <PlanningTimeline />
-                    <LegendBar />
-                  </>
+                  isInitialSyncReady ? (
+                    <>
+                      <PlanningTimeline />
+                      <LegendBar />
+                    </>
+                  ) : (
+                    <section className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-5" aria-live="polite" aria-busy={cloudSyncStatus.isSyncing}>
+                      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                        <span className={`mx-auto mb-3 block h-8 w-8 rounded-full border-2 border-blue-200 border-t-blue-600 ${cloudSyncStatus.isSyncing ? 'animate-spin' : ''}`} />
+                        <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                          {language === 'fr' ? 'Synchronisation requise avant le Gantt' : language === 'ar' ? 'المزامنة مطلوبة قبل المخطط' : 'Sync required before opening Gantt'}
+                        </h2>
+                        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                          {cloudSyncStatus.lastError
+                            ? cloudSyncStatus.lastError
+                            : cloudSyncStatus.isSyncing
+                              ? (language === 'fr' ? 'Chargement et vérification des données de cet espace…' : language === 'ar' ? 'جارٍ تحميل بيانات مساحة العمل والتحقق منها…' : 'Loading and verifying this workspace data…')
+                              : (language === 'fr' ? 'Le Gantt restera masqué tant que le premier chargement et la vérification de synchronisation ne sont pas terminés.' : language === 'ar' ? 'سيبقى المخطط مخفيًا حتى اكتمال التحميل الأول والتحقق من المزامنة.' : 'Gantt stays hidden until the initial load and sync verification are complete.')}
+                        </p>
+                        <button
+                          type="button"
+                          disabled={cloudSyncStatus.isSyncing}
+                          onClick={() => void forceSupabaseSync()}
+                          className="mt-4 min-h-10 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {cloudSyncStatus.isSyncing
+                            ? (language === 'fr' ? 'Synchronisation…' : language === 'ar' ? 'جارٍ التزامن…' : 'Synchronizing…')
+                            : (language === 'fr' ? 'Réessayer la synchronisation' : language === 'ar' ? 'إعادة محاولة المزامنة' : 'Retry synchronization')}
+                        </button>
+                      </div>
+                    </section>
+                  )
                 )}
 
                 {activeView === 'tasks' && <TasksManagementView />}

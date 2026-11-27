@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { isInitialSyncReady } from '../src/services/supabase/initialSyncReadiness';
 
 const topBar = readFileSync(new URL('../src/components/TopBar.tsx', import.meta.url), 'utf8');
 const gantt = readFileSync(new URL('../src/components/PlanningTimeline.tsx', import.meta.url), 'utf8');
@@ -51,4 +52,37 @@ test('invoice PDF preview is mounted only after selecting a document', () => {
   const billing = readFileSync(new URL('../src/components/BillingInvoicingView.tsx', import.meta.url), 'utf8');
   assert.ok(billing.includes('{selectedInvoice && ('));
   assert.ok(billing.includes('<InvoicePreviewModal'));
+});
+
+test('Gantt waits for local hydration and verified initial workspace sync', () => {
+  const base = {
+    isCoreDataHydrated: true,
+    isWorkspaceResolved: true,
+    isConfigured: true,
+    isOffline: false,
+    workspaceId: 'workspace-a',
+    syncWorkspaceId: 'workspace-a',
+    syncPhase: 'synced' as const,
+  };
+  assert.equal(isInitialSyncReady(base), true);
+  assert.equal(isInitialSyncReady({ ...base, isCoreDataHydrated: false }), false);
+  assert.equal(isInitialSyncReady({ ...base, isWorkspaceResolved: false }), false);
+  assert.equal(isInitialSyncReady({ ...base, syncPhase: 'pending' }), false);
+  assert.equal(isInitialSyncReady({ ...base, syncPhase: 'error' }), false);
+  assert.equal(isInitialSyncReady({ ...base, syncWorkspaceId: 'workspace-b' }), false);
+});
+
+test('Gantt remains usable after local hydration in offline and local-only deployments', () => {
+  const base = {
+    isCoreDataHydrated: true,
+    isWorkspaceResolved: true,
+    isConfigured: true,
+    isOffline: true,
+    workspaceId: 'workspace-a',
+    syncWorkspaceId: '',
+    syncPhase: 'offline' as const,
+  };
+  assert.equal(isInitialSyncReady(base), true);
+  assert.equal(isInitialSyncReady({ ...base, isConfigured: false, isOffline: false }), true);
+  assert.equal(isInitialSyncReady({ ...base, isOffline: false, workspaceId: '', syncPhase: 'unauthenticated' }), true);
 });

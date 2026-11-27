@@ -93,6 +93,7 @@ import { planRoomReassignment } from '../utils/roomReassignment';
 import { evaluateMutationAvailability, type DeviceRegistry, type MutationAvailability } from '../services/p2p/deviceTopology';
 import { normalizeBookingForPersistence } from '../utils/bookingOccupants';
 import { getBookingOperationalCutoffDate } from '../utils/bookingArchive';
+import { isInitialSyncReady as deriveInitialSyncReadiness } from '../services/supabase/initialSyncReadiness';
 import { isDemoBookingId } from '../utils/bookingPersistence';
 import { isRoomReadyForBooking } from '../utils/roomReadiness';
 import { lockManager } from '../locks/lockManager';
@@ -380,6 +381,7 @@ interface AppContextType {
   setHasOnboarded: (done: boolean) => void;
   triggerCloudRecovery: () => Promise<CloudRecoveryReport>;
   cloudSyncStatus: CloudSyncStatus;
+  isInitialSyncReady: boolean;
   forceSupabaseSync: () => Promise<CloudRecoveryReport>;
   syncLog: SyncLogEntry[];
   syncTerminalOpen: boolean;
@@ -2527,11 +2529,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     syncWithSupabase,
   ]);
 
-  // Automatic initial & reconnect sync
+  // Wait for auth/workspace resolution before the first remote pull.
   useEffect(() => {
-    if (!isCoreDataHydrated) return;
+    if (!isCoreDataHydrated || !workspace.isWorkspaceResolved) return;
     void syncWithSupabase({ force: false });
-  }, [isCoreDataHydrated, workspace.activeWorkspaceId, isOffline, syncWithSupabase]);
+  }, [isCoreDataHydrated, workspace.isWorkspaceResolved, workspace.activeWorkspaceId, isOffline, syncWithSupabase]);
 
   useEffect(() => onSupabaseConfigChange(() => setSupabaseConfigVersion((value) => value + 1)), []);
 
@@ -2583,6 +2585,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (autoSyncTimerRef.current) clearTimeout(autoSyncTimerRef.current);
     };
   }, [forceSupabaseSync, syncWithSupabase, isCoreDataHydrated, workspace.activeWorkspaceId, isOffline, supabaseConfigVersion]);
+
+  const isInitialSyncReady = deriveInitialSyncReadiness({
+    isCoreDataHydrated,
+    isWorkspaceResolved: workspace.isWorkspaceResolved,
+    isConfigured: isSupabaseConfigured,
+    isOffline,
+    workspaceId: workspace.activeWorkspaceId,
+    syncWorkspaceId: cloudSyncStatus.workspaceId,
+    syncPhase: cloudSyncStatus.phase,
+  });
+
   // Housekeeping status updater
   const updateHousekeepingStatus = (
     resourceId: string,
@@ -4360,6 +4373,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setHasOnboarded,
         triggerCloudRecovery: forceSupabaseSync,
         cloudSyncStatus,
+        isInitialSyncReady,
         forceSupabaseSync,
         syncLog,
         syncTerminalOpen,

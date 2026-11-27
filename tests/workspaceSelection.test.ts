@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  findAccessibleWorkspace,
   findPersonalWorkspace,
   isWorkspaceNetworkError,
   PERSONAL_WORKSPACE_NAME,
@@ -71,4 +72,25 @@ test('isWorkspaceNetworkError identifies fetch/network errors without masking RL
   assert.equal(isWorkspaceNetworkError(new Error('new row violates row-level security policy')), false);
   assert.equal(isWorkspaceNetworkError(new Error('Invalid API key')), false);
   assert.equal(isWorkspaceNetworkError(null), false);
+});
+
+test('a staff account with one shared workspace selects it instead of its empty personal workspace', () => {
+  const shared = {
+    id: 'hotel-workspace',
+    name: 'Hotel PMS',
+    owner_id: otherUserId,
+    workspace_members: [{ role: 'receptionist' }],
+  };
+  assert.equal(findAccessibleWorkspace([personalWorkspace, shared], userId, personalWorkspace.id)?.id, shared.id);
+});
+
+test('a previously selected shared workspace remains selected when several are accessible', () => {
+  const sharedA = { id: 'hotel-a', name: 'Hotel A', owner_id: otherUserId, workspace_members: [{ role: 'admin' }] };
+  const sharedB = { id: 'hotel-b', name: 'Hotel B', owner_id: 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff', workspace_members: [{ role: 'manager' }] };
+  assert.equal(findAccessibleWorkspace([personalWorkspace, sharedA, sharedB], userId, sharedB.id)?.id, sharedB.id);
+  assert.equal(findAccessibleWorkspace([personalWorkspace, sharedA, sharedB], userId, personalWorkspace.id), undefined);
+});
+
+test('personal workspace remains the fallback when the user has no shared membership', () => {
+  assert.equal(findAccessibleWorkspace([personalWorkspace], userId)?.id, personalWorkspace.id);
 });
