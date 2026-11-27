@@ -1868,7 +1868,7 @@ export const BookingModal: React.FC = () => {
                           setIsInvoicePreviewOpen(true);
                         }
                       }}
-                      disabled={!createInvoiceFromBooking}
+                      disabled={!deviceMutationAvailability.canMutate || !createInvoiceFromBooking}
                       className="min-h-11 justify-center px-3.5 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-emerald-500 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-900/40 cursor-pointer"
                       title={language === 'fr' ? 'Créer la facture de ce séjour' : 'Create invoice for this stay'}
                     >
@@ -1902,7 +1902,7 @@ export const BookingModal: React.FC = () => {
                       </span>
                       <button
                         type="button"
-                        disabled={isDeletingBooking}
+                        disabled={!deviceMutationAvailability.canMutate || isDeletingBooking}
                         onClick={async () => {
                           setIsDeletingBooking(true);
                           try {
@@ -3577,6 +3577,7 @@ export const BookingModal: React.FC = () => {
               </button>
               <button
                 type="submit"
+                disabled={!deviceMutationAvailability.canMutate || isDeletingBooking}
                 className="min-h-11 w-full min-[360px]:flex-1 sm:flex-none sm:min-w-52 justify-center px-5 sm:px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl shadow-md transition-colors flex items-center gap-2 text-xs sm:text-sm cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <CheckCircle2 size={16} className="shrink-0" />

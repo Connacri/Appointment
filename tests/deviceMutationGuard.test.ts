@@ -17,6 +17,7 @@ const staffHr = readFileSync(new URL('../src/components/StaffHrPanel.tsx', impor
 const tasksView = readFileSync(new URL('../src/components/TasksManagementView.tsx', import.meta.url), 'utf8');
 const housekeepingView = readFileSync(new URL('../src/components/HousekeepingView.tsx', import.meta.url), 'utf8');
 const roleManagement = readFileSync(new URL('../src/components/RoleManagementView.tsx', import.meta.url), 'utf8');
+const stockManagement = readFileSync(new URL('../src/components/StockManagementView.tsx', import.meta.url), 'utf8');
 
 function sectionProUsb(start: string, end: string): string {
   const from = proUsb.indexOf(start);
@@ -126,4 +127,11 @@ test('staff, task, housekeeping and role mutation controls are disabled without 
   assert.match(tasksView, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
   assert.match(housekeepingView, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
   assert.match(roleManagement, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
+});
+
+
+test('stock operations and booking form controls are disabled without write authority', () => {
+  assert.match(stockManagement, /disabled=\{!deviceMutationAvailability\.canMutate/);
+  assert.match(stockManagement, /onClick=\{\(\) => markPurchaseOrderReceived\(po\.id\)\}[\s\S]*?disabled=\{!deviceMutationAvailability\.canMutate\}/);
+  assert.match(bookingModal, /type="submit"[\s\S]*?disabled=\{!deviceMutationAvailability\.canMutate/);
 });

@@ -56,6 +56,7 @@ export const StockManagementView: React.FC = () => {
     establishmentProfile,
     language,
     currency,
+    deviceMutationAvailability,
   } = useApp();
 
   const isFr = language === 'fr';
@@ -627,7 +628,7 @@ export const StockManagementView: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              disabled={isStockMutationPending}
+              disabled={!deviceMutationAvailability.canMutate || isStockMutationPending}
               onClick={() => void runStockMutation(seedStandardStockCatalog)}
               className="min-h-[40px] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 cursor-pointer"
             >
@@ -807,7 +808,7 @@ export const StockManagementView: React.FC = () => {
                         </button>
                         <button
                           type="button"
-                          disabled={isStockMutationPending}
+                          disabled={!deviceMutationAvailability.canMutate || isStockMutationPending}
                           onClick={() => void runStockMutation(() => deleteStockItem(item.id))}
                           aria-label={t('Supprimer article', 'Delete item', 'حذف')}
                           className="min-h-[36px] min-w-[36px] rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center justify-center cursor-pointer"
@@ -820,6 +821,7 @@ export const StockManagementView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleOpenMovement(item, 'in')}
+                          disabled={!deviceMutationAvailability.canMutate}
                           className="min-h-[36px] px-2.5 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 rounded-lg text-xs font-medium transition-colors cursor-pointer"
                         >
                           + {t('Entrée', 'In', 'إدخال')}
@@ -827,6 +829,7 @@ export const StockManagementView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleOpenMovement(item, 'out')}
+                          disabled={!deviceMutationAvailability.canMutate}
                           className="min-h-[36px] px-2.5 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50 rounded-lg text-xs font-medium transition-colors cursor-pointer"
                         >
                           − {t('Sortie', 'Out', 'إخراج')}
@@ -834,6 +837,7 @@ export const StockManagementView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleOpenMovement(item, 'inventory')}
+                          disabled={!deviceMutationAvailability.canMutate}
                           className="min-h-[36px] px-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium transition-colors cursor-pointer"
                         >
                           {t('Inventaire', 'Count', 'جرد')}
@@ -1051,8 +1055,9 @@ export const StockManagementView: React.FC = () => {
               </select>
               <button
                 type="button"
-                disabled={!addItemPickerId}
+                disabled={!deviceMutationAvailability.canMutate || !addItemPickerId}
                 onClick={handleAddStockLineToPo}
+                disabled={!deviceMutationAvailability.canMutate || !addItemPickerId}
                 className="min-h-[40px] px-3 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 disabled:opacity-40 text-xs font-bold cursor-pointer"
               >
                 {t('Ajouter ligne', 'Add Line', 'إضافة')}
@@ -1202,7 +1207,7 @@ export const StockManagementView: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <button
                 type="button"
-                disabled={poItems.every((i) => i.orderQty <= 0)}
+                disabled={!deviceMutationAvailability.canMutate || poItems.every((i) => i.orderQty <= 0)}
                 onClick={() => persistOrder('draft')}
                 className="min-h-[44px] px-3.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
               >
@@ -1211,7 +1216,7 @@ export const StockManagementView: React.FC = () => {
 
               <button
                 type="button"
-                disabled={poItems.every((i) => i.orderQty <= 0)}
+                disabled={!deviceMutationAvailability.canMutate || poItems.every((i) => i.orderQty <= 0)}
                 onClick={() => persistOrder('confirmed')}
                 className="min-h-[44px] px-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
               >
@@ -1407,6 +1412,7 @@ export const StockManagementView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => deletePurchaseOrder(po.id)}
+                          disabled={!deviceMutationAvailability.canMutate}
                           aria-label={t('Supprimer', 'Delete', 'حذف')}
                           className="min-h-[32px] min-w-[32px] rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center justify-center cursor-pointer shrink-0"
                         >
@@ -1447,6 +1453,8 @@ export const StockManagementView: React.FC = () => {
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={() => markOrderDispatched(po, 'whatsapp')}
+                            aria-disabled={!deviceMutationAvailability.canMutate}
+                            tabIndex={deviceMutationAvailability.canMutate ? 0 : -1}
                             className="min-h-[34px] px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold inline-flex items-center gap-1"
                           >
                             <MessageCircle size={12} />
@@ -1458,6 +1466,7 @@ export const StockManagementView: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => markPurchaseOrderReceived(po.id)}
+                            disabled={!deviceMutationAvailability.canMutate}
                             className="min-h-[34px] px-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer"
                           >
                             <Check size={12} />
@@ -1604,6 +1613,7 @@ export const StockManagementView: React.FC = () => {
               )}
               <button
                 type="submit"
+                disabled={!deviceMutationAvailability.canMutate || isStockMutationPending}
                 className="min-h-[44px] px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold cursor-pointer"
               >
                 {editingSupplierId
@@ -1681,6 +1691,7 @@ export const StockManagementView: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => deleteSupplier(sup.id)}
+                        disabled={!deviceMutationAvailability.canMutate}
                         aria-label={t('Supprimer', 'Delete', 'حذف')}
                         className="min-h-[36px] min-w-[36px] rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center justify-center cursor-pointer"
                       >
@@ -1780,7 +1791,7 @@ export const StockManagementView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isStockMutationPending}
+                  disabled={!deviceMutationAvailability.canMutate || isStockMutationPending}
                   className="min-h-[40px] px-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer"
                 >
                   {isStockMutationPending ? t('Enregistrement…', 'Saving…', 'جارٍ الحفظ…') : t('Enregistrer', 'Save', 'حفظ')}
@@ -1937,7 +1948,7 @@ export const StockManagementView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isStockMutationPending}
+                  disabled={!deviceMutationAvailability.canMutate || isStockMutationPending}
                   className="min-h-[40px] px-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold cursor-pointer"
                 >
                   {isStockMutationPending ? t('Enregistrement…', 'Saving…', 'جارٍ الحفظ…') : t('Enregistrer', 'Save', 'حفظ')}
