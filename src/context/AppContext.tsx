@@ -71,6 +71,7 @@ import {
   saveResourceGroupRow as remoteSaveResourceGroupRow,
   saveStockItem as remoteSaveStockItem,
   saveStockMovement as remoteSaveStockMovement,
+  applyPurchaseOrderReceipt as remoteApplyPurchaseOrderReceipt,
   saveStockSupplier as remoteSaveStockSupplier,
   savePurchaseOrder as remoteSavePurchaseOrder,
   saveStaffMember as remoteSaveStaffMember,
@@ -2189,6 +2190,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           pushPurchaseOrderUpsert: async (targetWsId, estId, order) => {
             await remoteSavePurchaseOrder(targetWsId, estId, order);
+          },
+          pushPurchaseOrderReceipt: async (targetWsId, estId, order, movements) => {
+            await remoteApplyPurchaseOrderReceipt(targetWsId, estId, order, movements);
           },
           pushPurchaseOrderDelete: async (targetWsId, orderId) => {
             await remoteDeletePurchaseOrder(targetWsId, orderId);
