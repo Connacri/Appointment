@@ -1,4 +1,5 @@
 import { requireSupabase } from './supabaseClient';
+import { getBookingOperationalCutoffDate } from '../../utils/bookingArchive';
 import type { Database, Json } from './database.types';
 import type {
   TimelineBooking, ResourceGroup, ResourceItem, HotelEstablishment, EstablishmentSyncRecord,
@@ -250,60 +251,44 @@ export async function listBookingTombstones(workspaceId: WorkspaceId): Promise<R
   return tombstones;
 }
 
-export async function listBookings(workspaceId: WorkspaceId, establishmentId?: string): Promise<TimelineBooking[]> {
-  // PostgREST caps a single response (Supabase default max rows). Pull the whole
-  // workspace page by page through the calendar index instead of silently
-  // truncating history at the first page.
-  const pageSize = SUPABASE_PAGE_SIZE;
-  const first = await listBookingsWindow(workspaceId, '0001-01-01', '9999-12-31', {
-    establishmentId,
-    offset: 0,
-    limit: pageSize,
-  });
-  const bookings = [...first.data];
-  let offset = first.data.length;
-
-  // `count` can be unavailable under some RLS/PostgREST configurations, so use
-  // page fullness as the termination signal instead of trusting `total` alone.
-  while (first.data.length === pageSize) {
-    const page = await listBookingsWindow(workspaceId, '0001-01-01', '9999-12-31', {
-      establishmentId,
-      offset,
-      limit: pageSize,
-      withCount: false,
-    });
-    if (page.data.length === 0) break;
-    bookings.push(...page.data);
-    offset += page.data.length;
-    if (page.data.length < pageSize) break;
-  }
-
-  return bookings;
-}
-
 /**
- * Windowed, overlap-safe booking load for the timeline.
+ * Pull only the operational booking projection. Historical closed stays remain
+ * in Supabase and are loaded on demand through listBookingsWindow.
  *
- * Uses the existing remote index `idx_bookings_calendar` on
- * (workspace_id, establishment_id, start_date, end_date) WHERE deleted_at IS NULL,
- * a narrow column projection, deterministic ordering and PostgREST `.range()` so
- * only the visible slice travels over the network. No new DDL is required.
- *
- * A booking is included when it overlaps [startDate, endDate]:
- *   start_date <= endDate AND end_date >= startDate
- * PostgREST cannot express the overlap directly, so we fetch the calendar window
- * [startDate, endDate] (every booking starting inside the window) plus, to stay
- * overlap-safe, bookings that started before the window but end inside or after it.
- * The caller may re-filter strictly if needed.
- *
- * `listBookings` reuses this function page by page for whole-workspace pulls so a
- * large history is never silently truncated by the PostgREST max-row limit.
+ * Keep every non-terminal booking even when its end date is old; only closed
+ * checked-out/cancelled rows are excluded once they cross the six-month cutoff.
  */
-export interface BookingsWindowResult {
-  data: TimelineBooking[];
-  total: number;
-  offset: number;
-  limit: number;
+export async function listBookings(workspaceId: WorkspaceId, establishmentId?: string): Promise<TimelineBooking[]> {
+  const cutoffDate = getBookingOperationalCutoffDate();
+  const pageSize = SUPABASE_PAGE_SIZE;
+  const db = requireSupabase();
+  const fetchPage = async (offset: number) => {
+    let query = db
+      .from('bookings')
+      .select(BOOKING_SELECT_COLUMNS)
+      .eq('workspace_id', workspaceId)
+      .is('deleted_at', null)
+      .or(`end_date.gte.${cutoffDate},status.not.in.(checked_out,cancelled)`)
+      .order('start_date', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, Math.max(offset, offset + pageSize - 1));
+    if (establishmentId) query = query.eq('establishment_id', establishmentId);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(mapBookingRow);
+  };
+
+  const first = await fetchPage(0);
+  const bookings = [...first];
+  let offset = first.length;
+  while (first.length === pageSize) {
+    const page = await fetchPage(offset);
+    if (page.length === 0) break;
+    bookings.push(...page);
+    offset += page.length;
+    if (page.length < pageSize) break;
+  }
+  return bookings;
 }
 
 export async function listBookingsWindow(

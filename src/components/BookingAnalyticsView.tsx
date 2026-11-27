@@ -161,8 +161,8 @@ export const BookingAnalyticsView: React.FC = () => {
   // the local archive by date index and supplements it from Supabase on demand.
   useEffect(() => {
     if (range !== '365d') {
-      setArchivedBookings([]);
-      setArchiveLoadState('idle');
+      setArchivedBookings((previousRows) => previousRows.length ? [] : previousRows);
+      setArchiveLoadState((previousState) => previousState === 'idle' ? previousState : 'idle');
       return undefined;
     }
     let cancelled = false;
@@ -189,6 +189,7 @@ export const BookingAnalyticsView: React.FC = () => {
       const remoteRows: TimelineBooking[] = [];
       let remoteLoaded = false;
       let remotePartial = false;
+      let remoteTotal = 0;
       if (activeWorkspaceId) {
         try {
           let offset = 0;
@@ -199,9 +200,10 @@ export const BookingAnalyticsView: React.FC = () => {
               withCount: offset === 0,
             });
             remoteRows.push(...page.data);
+            if (offset === 0) remoteTotal = page.total;
             offset += page.data.length;
             if (page.data.length < 500) break;
-            if (offset >= 10000) remotePartial = true;
+            if (offset >= 10000 && remoteTotal > offset) remotePartial = true;
           }
           remoteLoaded = true;
         } catch (error) {

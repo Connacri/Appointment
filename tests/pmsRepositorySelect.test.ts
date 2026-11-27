@@ -42,18 +42,20 @@ test('listBookingsWindow paginates an overlap-safe window on the calendar index'
   assert.doesNotMatch(windowSource, /\.select\('\*'\)/);
 });
 
-test('listBookings paginates every remote page instead of truncating at the PostgREST row cap', () => {
+test('listBookings pages only the operational six-month projection', () => {
   const listSource = repositorySource.slice(
     repositorySource.indexOf('export async function listBookings('),
     repositorySource.indexOf('export async function listBookingsWindow'),
   );
 
   assert.ok(listSource, 'listBookings must exist');
-  assert.match(listSource, /pageSize = SUPABASE_PAGE_SIZE/);
-  assert.match(listSource, /while \(first\.data\.length === pageSize\)/);
-  assert.match(listSource, /withCount: false/);
-  assert.match(listSource, /offset \+= page\.data\.length/);
-  assert.match(listSource, /if \(page\.data\.length === 0\) break;/);
+  assert.match(listSource, /getBookingOperationalCutoffDate\(\)/);
+  assert.match(listSource, /\.or\(\`end_date\.gte\.\$\{cutoffDate\},status\.not\.in\.\(checked_out,cancelled\)\`\)/);
+  assert.match(listSource, /\.range\(offset, Math\.max\(offset, offset \+ pageSize - 1\)\)/);
+  assert.match(listSource, /while \(first\.length === pageSize\)/);
+  assert.match(listSource, /offset \+= page\.length/);
+  assert.match(listSource, /if \(page\.length === 0\) break;/);
+  assert.doesNotMatch(listSource, /0001-01-01|9999-12-31/);
 });
 
 test('saveResourceGroupRow upserts only the group row and never cascades resources', () => {
