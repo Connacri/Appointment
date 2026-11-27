@@ -20,3 +20,9 @@ test('mobile Gantt controls and quick search share the collapsible tools panel',
 test('the floating current-time badge is removed from narrow screens', () => {
   assert.match(gantt, /className="hidden sm:flex absolute top-12/);
 });
+
+test('heavy booking and print dialogs mount only while requested', () => {
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /isNewBookingModalOpen \|\| selectedBooking \? <BookingModal \/> : null/);
+  assert.match(gantt, /isPoliceBatchPrintOpen && \(/);
+});

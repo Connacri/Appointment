@@ -2134,13 +2134,15 @@ export const PlanningTimeline: React.FC = () => {
             );
           })()}
 
-      <React.Suspense fallback={null}>
-        <BookingPrintReportModal
-          isOpen={isPoliceBatchPrintOpen}
-          onClose={() => setIsPoliceBatchPrintOpen(false)}
-          initialMode="today"
-        />
-      </React.Suspense>
+      {isPoliceBatchPrintOpen && (
+        <React.Suspense fallback={null}>
+          <BookingPrintReportModal
+            isOpen
+            onClose={() => setIsPoliceBatchPrintOpen(false)}
+            initialMode="today"
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 };

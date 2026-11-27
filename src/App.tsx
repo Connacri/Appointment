@@ -205,6 +205,8 @@ const MainLayout: React.FC = () => {
     setActiveView,
     language,
     isIndexedDBOpen,
+    isNewBookingModalOpen,
+    selectedBooking,
     setIsIndexedDBOpen,
     isAboutModalOpen,
     setIsAboutModalOpen,
@@ -419,9 +421,7 @@ const MainLayout: React.FC = () => {
 
       {/* Global Interactive Modals — mounted on demand */}
       <Suspense fallback={null}>
-        {(activeRoleDefinition.permissions.canManageBookings ||
-          activeRoleDefinition.allowedTabs.includes('planning') ||
-          activeRoleDefinition.allowedTabs.includes('my_bookings')) && <BookingModal />}
+        {isNewBookingModalOpen || selectedBooking ? <BookingModal /> : null}
         {isCockpitOpen && (activeRoleDefinition.permissions.canManageRoles || activeRoleDefinition.permissions.canManageBookings) && <AgentsCockpitModal />}
         {isLegalModalOpen && <LegalModal />}
         {isIndexedDBOpen && (activeRoleDefinition.permissions.canManageRoles || activeRoleDefinition.permissions.canManageBookings) && (
