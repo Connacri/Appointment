@@ -39,21 +39,22 @@ Attention : les données locales du navigateur peuvent être perdues si vous eff
 
 1. Ouvrez https://github.com/Connacri/Appointment/releases.
 2. Choisissez la dernière version publiée.
-3. Téléchargez l'APK officiel.
+3. Téléchargez l'APK officiel, nommé Appointment-PMS-vX.Y.Z.apk dans une release versionnée.
 4. Si Android le demande, autorisez temporairement l'installation depuis cette source.
 5. Installez puis ouvrez Appointment PMS.
 6. Vérifiez la version dans l'écran À propos.
 
-Un fichier AAB est destiné à la distribution Google Play ; ce n'est normalement pas le fichier à installer directement. N'installez pas un APK provenant d'un site tiers.
+Le fichier AAB, nommé Appointment-PMS-vX.Y.Z.aab, est destiné à la distribution Google Play ; ce n'est pas le fichier à installer directement. N'installez pas un APK provenant d'un site tiers.
 
 ### 2.3 Windows
 
 1. Ouvrez la page officielle des Releases : https://github.com/Connacri/Appointment/releases.
-2. Téléchargez l'installateur Windows publié, généralement nommé Appointment-PMS-Setup-[version].exe.
-3. Vérifiez que le fichier provient du dépôt officiel.
-4. Lancez l'installateur et suivez les instructions.
-5. Ouvrez l'application depuis le raccourci créé.
-6. Vérifiez la version dans À propos.
+2. Téléchargez l'installateur Windows publié, nommé Appointment-PMS-Setup-vX.Y.Z.exe.
+3. Vous pouvez également télécharger Appointment-PMS-Windows-Native-vX.Y.Z.zip, qui contient l'installateur et l'exécutable natif appointment-pms-native.exe.
+4. Vérifiez que le fichier provient du dépôt officiel.
+5. Lancez l'installateur et suivez les instructions. L'exécutable natif peut aussi être lancé directement depuis l'archive si vous maîtrisez son emplacement.
+6. Ouvrez l'application depuis le raccourci créé.
+7. Vérifiez la version dans À propos.
 
 Ne contournez pas un avertissement Windows si vous ne pouvez pas confirmer l'origine du fichier.
 
