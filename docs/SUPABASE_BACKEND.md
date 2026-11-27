@@ -61,7 +61,8 @@ Migrations distantes enregistrées :
 14. `20261126130041_align_stock_preferred_supplier_reference`
 15. `20261126130712_fix_stock_movement_retry_after_soft_delete`
 16. `20261126131639_harden_keepalive_function_search_path`
-17. `20261127180000_apply_purchase_order_receipt_atomically`
+17. `20261127001723_harden_public_table_privileges`
+18. `20261127180000_apply_purchase_order_receipt_atomically`
 
 ## Code frontend présent
 
