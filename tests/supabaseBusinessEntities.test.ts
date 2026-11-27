@@ -76,7 +76,7 @@ test('repositories and application mutation paths are connected to the new entit
   assert.ok(types.includes('apply_purchase_order_receipt'));
   assert.match(repository, /export async function applyPurchaseOrderReceipt/);
   assert.match(repository, /db\.rpc\('apply_purchase_order_receipt'/);
-  const receiptSql = read('../supabase/migrations/20261127180000_apply_purchase_order_receipt_atomically.sql');
+  const receiptSql = read('../supabase/migrations/20261127183249_apply_purchase_order_receipt_atomically.sql');
   assert.match(receiptSql, /for update/i);
   assert.match(receiptSql, /status = 'received'/i);
   assert.match(receiptSql, /stock_movements/i);

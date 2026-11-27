@@ -636,3 +636,5 @@ represented as cloud-confirmed until this RPC commits.
 The RPC is an online workspace operation and relies on the existing authenticated RLS policies
 for purchase-order and stock-item mutation. It does not create global stock consensus between
 disconnected devices; offline local state remains provisional until reconciliation.
+The source migration filename is `20261127183249_apply_purchase_order_receipt_atomically.sql`,
+matching the migration version recorded by the production Supabase project.
