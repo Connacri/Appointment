@@ -134,6 +134,12 @@ Implemented on branch `feat/p2p-integrity-secure-transport`:
 - Regression tests cover different booking IDs, distinct rooms, cancellation,
   symmetric turnover, stale causal versions and arrival-order-independent IDs.
 
+The Windows Rust P2P module now contains a pure detector with the same booking fields,
+causal-frontier selection, wall-clock date rules, hotel defaults, symmetric turnover,
+stable conflict identifiers and supersession predicate. Native unit tests cover the same
+core scenarios. SQLite conflict snapshot persistence, native resolution and UI parity are
+still outstanding.
+
 Additional progress: explicit decisions are now recorded as immutable `booking_conflict`
 P2P events. A `keep_booking` decision cancels the losing booking; `reject_both` cancels
 both. Each cancellation is committed to the local booking projection, workspace projection,
