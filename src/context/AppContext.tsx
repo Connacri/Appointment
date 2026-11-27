@@ -164,7 +164,7 @@ export type ActiveAppView =
   | 'events'
   | 'roles'
   | 'help'
-  | 'videos';
+;
 
 interface AppContextType {
   activeWorkspaceId: string;
