@@ -47,6 +47,7 @@ export const DynamicPricingView: React.FC = () => {
     language,
     resourceGroups,
     currentDomain,
+    deviceMutationAvailability,
   } = useApp();
 
   const isFr = language === 'fr';
@@ -550,6 +551,7 @@ export const DynamicPricingView: React.FC = () => {
             <button
               type="button"
               onClick={handleApplyHolidaySurge}
+              disabled={!deviceMutationAvailability.canMutate}
               className="min-h-[44px] px-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
             >
               <Sparkles size={14} />
@@ -566,6 +568,7 @@ export const DynamicPricingView: React.FC = () => {
                 step="100"
                 min="0"
                 value={bulkPriceInput}
+                disabled={!deviceMutationAvailability.canMutate}
                 onChange={(e) => setBulkPriceInput(Math.max(0, Number(e.target.value)))}
                 aria-label={t('Tarif groupé', 'Bulk rate', 'سعر جماعي')}
                 className="w-full sm:w-36 min-h-[44px] px-3 pe-11 text-xs font-mono font-bold tabular-nums bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -578,6 +581,7 @@ export const DynamicPricingView: React.FC = () => {
             <button
               type="button"
               onClick={handleApplyAllMonth}
+              disabled={!deviceMutationAvailability.canMutate}
               className="min-h-[44px] px-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold cursor-pointer transition-colors"
             >
               {t('Tout le mois', 'Full Month', 'كامل الشهر')}
@@ -586,6 +590,7 @@ export const DynamicPricingView: React.FC = () => {
             <button
               type="button"
               onClick={handleApplyWeekendsOnly}
+              disabled={!deviceMutationAvailability.canMutate}
               className="min-h-[44px] px-3.5 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white rounded-xl text-xs font-semibold cursor-pointer transition-colors"
             >
               {t('Week-ends (Ven/Sam)', 'Weekends (Fri/Sat)', 'الجمعة والسبت')}
@@ -594,6 +599,7 @@ export const DynamicPricingView: React.FC = () => {
             <button
               type="button"
               onClick={handleClearMonth}
+              disabled={!deviceMutationAvailability.canMutate}
               className="col-span-2 sm:col-span-1 min-h-[44px] px-3 rounded-xl border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
               title={t('Réinitialiser tout le mois', 'Reset month overrides', 'إعادة ضبط الشهر')}
             >
@@ -736,6 +742,7 @@ export const DynamicPricingView: React.FC = () => {
                 onClearRate={clearDynamicRate}
                 onStepRate={stepSelectedRate}
                 onApplyMultiplier={applyMultiplierToDay}
+                disabled={!deviceMutationAvailability.canMutate}
                 renderHolidayBadgeIcon={renderHolidayBadgeIcon}
               />
             )}
@@ -824,6 +831,7 @@ export const DynamicPricingView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => stepSelectedRate(day.dateStr, day.effectivePrice, -500)}
+                          disabled={!deviceMutationAvailability.canMutate}
                           aria-label="-500"
                           className="min-h-[44px] min-w-[44px] rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 flex items-center justify-center cursor-pointer"
                         >
@@ -836,6 +844,7 @@ export const DynamicPricingView: React.FC = () => {
                             step="100"
                             min="0"
                             value={day.effectivePrice}
+                            disabled={!deviceMutationAvailability.canMutate}
                             onChange={(e) => setDynamicRate(selectedType, day.dateStr, Math.max(0, Number(e.target.value)))}
                             className="w-full min-h-[44px] px-3 pe-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono font-bold tabular-nums text-sm text-slate-900 dark:text-white text-center"
                           />
@@ -846,6 +855,7 @@ export const DynamicPricingView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => stepSelectedRate(day.dateStr, day.effectivePrice, 500)}
+                          disabled={!deviceMutationAvailability.canMutate}
                           aria-label="+500"
                           className="min-h-[44px] min-w-[44px] rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 flex items-center justify-center cursor-pointer"
                         >
@@ -855,6 +865,7 @@ export const DynamicPricingView: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => clearDynamicRate(selectedType, day.dateStr)}
+                            disabled={!deviceMutationAvailability.canMutate}
                             aria-label={t('Réinitialiser ce jour', 'Reset day', 'إعادة ضبط اليوم')}
                             className="min-h-[44px] min-w-[44px] rounded-xl border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 flex items-center justify-center cursor-pointer"
                           >
@@ -972,6 +983,7 @@ export const DynamicPricingView: React.FC = () => {
                       value={day.effectivePrice}
                       onFocus={() => setSelectedDateStr(day.dateStr)}
                       onChange={(e) => setDynamicRate(selectedType, day.dateStr, Math.max(0, Number(e.target.value)))}
+                      disabled={!deviceMutationAvailability.canMutate}
                       aria-label={`${day.dateStr} ${selectedType}`}
                       className="w-full text-end font-mono font-bold tabular-nums text-xs py-1 px-1 bg-transparent border-b border-dashed border-slate-300 dark:border-slate-700 focus:outline-none focus:border-blue-500 text-slate-900 dark:text-white"
                     />
@@ -1057,6 +1069,7 @@ export const DynamicPricingView: React.FC = () => {
                             e.stopPropagation();
                             setDynamicRate(selectedType, ev.date, suggestedPrice);
                           }}
+                          disabled={!deviceMutationAvailability.canMutate}
                           className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold cursor-pointer shrink-0"
                         >
                           {t('Appliquer', 'Apply', 'تطبيق')}
@@ -1092,6 +1105,7 @@ interface SelectedDayInspectorProps {
   onClearRate: (roomType: string, date: string) => void;
   onStepRate: (dateStr: string, currentVal: number, delta: number) => void;
   onApplyMultiplier: (dateStr: string, multiplier: number) => void;
+  disabled: boolean;
   renderHolidayBadgeIcon: (category: HolidayEvent['category']) => React.ReactNode;
 }
 
@@ -1105,6 +1119,7 @@ const SelectedDayInspectorCard: React.FC<SelectedDayInspectorProps> = ({
   onClearRate,
   onStepRate,
   onApplyMultiplier,
+  disabled,
   renderHolidayBadgeIcon,
 }) => {
   const isFr = language === 'fr';
@@ -1132,6 +1147,7 @@ const SelectedDayInspectorCard: React.FC<SelectedDayInspectorProps> = ({
           <button
             type="button"
             onClick={() => onClearRate(selectedType, day.dateStr)}
+            disabled={disabled}
             className="min-h-[36px] px-2.5 rounded-lg border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-[11px] font-semibold flex items-center gap-1 cursor-pointer shrink-0"
           >
             <RotateCcw size={12} />
@@ -1159,6 +1175,7 @@ const SelectedDayInspectorCard: React.FC<SelectedDayInspectorProps> = ({
               <button
                 type="button"
                 onClick={() => onApplyMultiplier(day.dateStr, day.holiday?.suggestedMultiplier || 1.3)}
+                disabled={disabled}
                 className="w-full min-h-[38px] rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold cursor-pointer transition-colors"
               >
                 {t(
@@ -1191,6 +1208,7 @@ const SelectedDayInspectorCard: React.FC<SelectedDayInspectorProps> = ({
           <button
             type="button"
             onClick={() => onStepRate(day.dateStr, day.effectivePrice, -500)}
+            disabled={disabled}
             aria-label="-500"
             className="min-h-[48px] min-w-[48px] rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center cursor-pointer transition-colors"
           >
@@ -1204,6 +1222,7 @@ const SelectedDayInspectorCard: React.FC<SelectedDayInspectorProps> = ({
               step="100"
               min="0"
               value={day.effectivePrice}
+              disabled={disabled}
               onChange={(e) => onSetRate(selectedType, day.dateStr, Math.max(0, Number(e.target.value)))}
               aria-label={t('Tarif du jour', 'Day rate', 'سعر اليوم')}
               className="w-full min-h-[48px] px-3 pe-12 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 font-mono font-bold tabular-nums text-base text-slate-900 dark:text-white text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1216,6 +1235,7 @@ const SelectedDayInspectorCard: React.FC<SelectedDayInspectorProps> = ({
           <button
             type="button"
             onClick={() => onStepRate(day.dateStr, day.effectivePrice, 500)}
+            disabled={disabled}
             aria-label="+500"
             className="min-h-[48px] min-w-[48px] rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center cursor-pointer transition-colors"
           >
@@ -1229,6 +1249,7 @@ const SelectedDayInspectorCard: React.FC<SelectedDayInspectorProps> = ({
         <button
           type="button"
           onClick={() => onClearRate(selectedType, day.dateStr)}
+          disabled={disabled}
           className="min-h-[40px] rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 hover:border-blue-400 text-[11px] font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
         >
           {t('Base', 'Base', 'أساسي')}
@@ -1242,6 +1263,7 @@ const SelectedDayInspectorCard: React.FC<SelectedDayInspectorProps> = ({
             key={preset.label}
             type="button"
             onClick={() => onApplyMultiplier(day.dateStr, preset.mult)}
+            disabled={disabled}
             className="min-h-[40px] rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 hover:border-amber-400 text-[11px] font-mono font-bold text-amber-700 dark:text-amber-300 cursor-pointer"
           >
             {preset.label}
