@@ -678,6 +678,7 @@ export const SpaManagementView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleFacilityCleaned(fac.id)}
+                      disabled={!deviceMutationAvailability.canMutate}
                       className="h-7 px-2.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md text-[11px] font-semibold cursor-pointer"
                     >
                       Libérer Cabine
@@ -780,6 +781,7 @@ export const SpaManagementView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleOpenBookingForTreatment(trt)}
+                    disabled={!deviceMutationAvailability.canMutate}
                     className="h-8 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
                   >
                     <Plus size={14} />

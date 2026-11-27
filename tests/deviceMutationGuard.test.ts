@@ -59,7 +59,7 @@ test('initial establishment setup is the only no-registry bootstrap exception', 
   assert.match(app, /const assertBusinessMutationAllowed = \(allowInitialSetup = false\): void => \{/);
   assert.match(app, /const assertInitialSetupMutationAllowed = \(\): void => \{\s+assertBusinessMutationAllowed\(true\)/);
   assert.match(app, /assertBusinessMutationAllowed: \(\) => assertBusinessMutationAllowed\(\)/);
-  assert.match(app, /assertInitialSetupMutationAllowed: \(\) => assertBusinessMutationAllowed\(true\)/);
+  assert.match(app, /assertInitialSetupMutationAllowed,/);
 });
 
 
