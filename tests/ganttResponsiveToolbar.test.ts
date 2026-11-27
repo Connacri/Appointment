@@ -26,3 +26,9 @@ test('heavy booking and print dialogs mount only while requested', () => {
   assert.match(app, /isNewBookingModalOpen \|\| selectedBooking \? <BookingModal \/> : null/);
   assert.match(gantt, /isPoliceBatchPrintOpen && \(/);
 });
+
+test('mobile operational notifications are nested in the compact More menu', () => {
+  assert.match(topBar, /relative hidden shrink-0 overflow-visible sm:block/);
+  assert.match(topBar, /mobile-staff-notifications-btn/);
+  assert.match(topBar, /setNotifMenuRect\(computeClampedPopoverRect\(moreMenuRef\.current, 320, !isRtlDir\)\)/);
+});

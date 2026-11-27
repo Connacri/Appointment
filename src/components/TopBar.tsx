@@ -676,7 +676,7 @@ export const TopBar: React.FC = () => {
         <div className="pms-app-topbar-actions flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-visible">
           {/* Staff & Operational Notifications Bell */}
           {!currentRoleObj.permissions.isClientPortal && (
-            <div className="relative shrink-0 overflow-visible" ref={notifMenuRef}>
+            <div className="relative hidden shrink-0 overflow-visible sm:block" ref={notifMenuRef}>
               <button
                 type="button"
                 data-testid="staff-notifications-btn"
@@ -1032,6 +1032,35 @@ export const TopBar: React.FC = () => {
                 </button>
 
                 <div className="pt-1 border-t border-slate-100 dark:border-slate-800 my-1" />
+
+                {/* Operational notifications are nested in More on phones to keep the header compact. */}
+                {!currentRoleObj.permissions.isClientPortal && (
+                  <button
+                    type="button"
+                    data-testid="mobile-staff-notifications-btn"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setNotifMenuRect(computeClampedPopoverRect(moreMenuRef.current, 320, !isRtlDir));
+                      setIsNotifMenuOpen(true);
+                      setIsMoreMenuOpen(false);
+                      setIsSectorMenuOpen(false);
+                      setIsRoleMenuOpen(false);
+                    }}
+                    className="sm:hidden w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left rtl:text-right"
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Bell size={14} className="text-amber-500 shrink-0" />
+                      <span className="truncate font-semibold">
+                        {language === 'fr' ? 'Notifications opérationnelles' : language === 'ar' ? 'إشعارات العمل' : 'Operational notifications'}
+                      </span>
+                    </span>
+                    {unreadNotifCount > 0 && (
+                      <span className="shrink-0 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-extrabold leading-none text-white tabular-nums">
+                        {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+                      </span>
+                    )}
+                  </button>
+                )}
 
                 {/* Force Supabase Cloud Sync (mobile + accessible menu entry) */}
                 <button
