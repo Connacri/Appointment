@@ -375,9 +375,11 @@ const MainLayout: React.FC = () => {
                         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
                           {cloudSyncStatus.lastError
                             ? cloudSyncStatus.lastError
-                            : cloudSyncStatus.isSyncing
-                              ? (language === 'fr' ? 'Chargement et vérification des données de cet espace…' : language === 'ar' ? 'جارٍ تحميل بيانات مساحة العمل والتحقق منها…' : 'Loading and verifying this workspace data…')
-                              : (language === 'fr' ? 'Le Gantt restera masqué tant que le premier chargement et la vérification de synchronisation ne sont pas terminés.' : language === 'ar' ? 'سيبقى المخطط مخفيًا حتى اكتمال التحميل الأول والتحقق من المزامنة.' : 'Gantt stays hidden until the initial load and sync verification are complete.')}
+                            : cloudSyncStatus.phase === 'no_workspace'
+                              ? (language === 'fr' ? 'Aucun espace de travail autorisé pour ce compte. Le propriétaire de l’hôtel doit vous ajouter comme membre du workspace.' : language === 'ar' ? 'لا توجد مساحة عمل مصرح بها لهذا الحساب. يجب على مالك الفندق إضافتك كعضو.' : 'This account has no accessible workspace. The hotel owner must add you as a workspace member.')
+                              : cloudSyncStatus.isSyncing
+                                ? (language === 'fr' ? 'Chargement et vérification des données de cet espace…' : language === 'ar' ? 'جارٍ تحميل بيانات مساحة العمل والتحقق منها…' : 'Loading and verifying this workspace data…')
+                                : (language === 'fr' ? 'Le Gantt restera masqué tant que le premier chargement et la vérification de synchronisation ne sont pas terminés.' : language === 'ar' ? 'سيبقى المخطط مخفيًا حتى اكتمال التحميل الأول والتحقق من المزامنة.' : 'Gantt stays hidden until the initial load and sync verification are complete.')}
                         </p>
                         <button
                           type="button"
