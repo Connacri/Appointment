@@ -14,7 +14,6 @@ import { SyncTerminal } from './components/SyncTerminal';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { SupabaseAuthGate } from './services/supabase/SupabaseAuthGate';
 import { WorkspaceProvider } from './services/supabase/WorkspaceContext';
-import { VideoBubble } from './services/VideoBubbleBridge';
 import { PullToRefresh } from './components/PullToRefresh';
 import { useBrandIconSync } from './hooks/useBrandIconSync';
 
@@ -69,9 +68,6 @@ const SpaManagementView = React.lazy(() =>
 const HelpCenterView = React.lazy(() =>
   import('./components/HelpCenterView').then((m) => ({ default: m.HelpCenterView })),
 );
-const VideoHubView = React.lazy(() =>
-  import('./components/VideoHubView').then((m) => ({ default: m.VideoHubView })),
-);
 const RoleManagementView = React.lazy(() =>
   import('./components/RoleManagementView').then((m) => ({ default: m.RoleManagementView })),
 );
@@ -109,34 +105,6 @@ const ViewFallback: React.FC = () => (
     <span className="pms-view-loading" />
   </div>
 );
-
-class VideoHubErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { error: Error | null }
-> {
-  state = { error: null as Error | null };
-
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[HackTube] View rendering failed:', error, info.componentStack);
-  }
-
-  render() {
-    if (this.state.error) {
-      return (
-        <div className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-3 bg-slate-50 p-6 text-center dark:bg-slate-950">
-          <div className="text-base font-semibold text-slate-900 dark:text-white">HackTube n’a pas pu être affiché</div>
-          <p className="max-w-xl text-sm text-slate-600 dark:text-slate-400">Une erreur JavaScript a interrompu le chargement de cet onglet. Rechargez l’application pour relancer son module.</p>
-          <button type="button" onClick={() => window.location.reload()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500">Recharger l’application</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 /**
  * Safety net for the working area: a rendering exception used to unmount the
@@ -202,7 +170,6 @@ class ViewErrorBoundary extends React.Component<
 const MainLayout: React.FC = () => {
   const {
     activeView,
-    setActiveView,
     language,
     isIndexedDBOpen,
     isNewBookingModalOpen,
@@ -246,49 +213,22 @@ const MainLayout: React.FC = () => {
 
   useBrandIconSync(establishmentProfile?.logoUrl, establishmentProfile?.name);
 
-  const [hasOpenedVideoHub, setHasOpenedVideoHub] = React.useState(activeView === 'videos');
-
+  // Remove only obsolete HackTube-owned browser keys; PMS data is untouched.
   React.useEffect(() => {
-    const openHackTube = (url?: string | null, openQuickAdd = false) => {
-      if (url) {
-        try { localStorage.setItem('appointment_pending_video_share', url); } catch { /* storage may be unavailable */ }
-      }
-      if (openQuickAdd || url) {
-        try { localStorage.setItem('appointment_open_hacktube_quick_add', '1'); } catch { /* storage may be unavailable */ }
-        setActiveView('videos');
-      }
-    };
-
-    const receiveVideoShare = (event: Event) => {
-      const detail = (event as CustomEvent<{ url?: string; openQuickAdd?: boolean }>).detail;
-      if (!detail?.url && detail?.openQuickAdd) {
-        // The user tapped the bubble: read the clipboard only now, with the app foregrounded.
-        VideoBubble.getPendingShare()
-          .then((pending) => {
-            openHackTube(pending?.url, true);
-            if (pending?.url) {
-              window.dispatchEvent(new CustomEvent('appointment-video-share', { detail: { url: pending.url, openQuickAdd: true } }));
-            }
-          })
-          .catch(() => openHackTube(undefined, true));
-        return;
-      }
-      openHackTube(detail?.url, Boolean(detail?.openQuickAdd));
-    };
-
-    window.addEventListener('appointment-video-share', receiveVideoShare);
-    VideoBubble.getPendingShare()
-      .then((pending) => {
-        if (pending?.url || pending?.openQuickAdd) openHackTube(pending.url, pending.openQuickAdd);
-      })
-      .catch(() => { /* Native bridge is unavailable in the web build. */ });
-
-    return () => window.removeEventListener('appointment-video-share', receiveVideoShare);
-  }, [setActiveView]);
+    const obsoleteKeys = [
+      'videohub_library', 'videohub_likes', 'videohub_dislikes',
+      'videohub_seen', 'videohub_later', 'videohub_extra_cats',
+      'videohub_playlists', 'appointment_pending_video_share',
+      'appointment_open_hacktube_quick_add',
+    ];
+    for (const key of obsoleteKeys) {
+      try { localStorage.removeItem(key); } catch { /* storage may be unavailable */ }
+    }
+  }, []);
 
 
   // Pull-to-refresh reloads remote data only. It must never reload the page:
-  // that would destroy the HackTube player, open forms and local state.
+  // that would discard open forms and transient local state.
   const handlePullRefresh = React.useCallback(async () => {
     await refreshWorkspaces();
     window.dispatchEvent(new CustomEvent('appointment-refresh'));
@@ -302,10 +242,6 @@ const MainLayout: React.FC = () => {
     window.addEventListener('appointment-refresh-request', handleRefreshRequest);
     return () => window.removeEventListener('appointment-refresh-request', handleRefreshRequest);
   }, [handlePullRefresh]);
-
-  React.useEffect(() => {
-    if (activeView === 'videos') setHasOpenedVideoHub(true);
-  }, [activeView]);
 
   const isSetupModalVisible = isEstablishmentModalOpen || !hasOnboarded;
 
@@ -430,22 +366,6 @@ const MainLayout: React.FC = () => {
             </ViewErrorBoundary>
           </main>
 
-          {/* Keep HackTube mounted after first use: changing workspace views must not
-              destroy its cross-origin media iframe or reset the current playback. */}
-          <Suspense fallback={activeView === 'videos' ? <ViewFallback /> : null}>
-            {hasOpenedVideoHub && (
-              <div
-                className={`absolute inset-0 transition-opacity duration-150 ${
-                  activeView === 'videos'
-                    ? 'z-10 opacity-100'
-                    : '-z-10 opacity-0 pointer-events-none'
-                }`}
-                aria-hidden={activeView !== 'videos'}
-              >
-                <VideoHubErrorBoundary><VideoHubView /></VideoHubErrorBoundary>
-              </div>
-            )}
-          </Suspense>
         </div>
       </div>
 

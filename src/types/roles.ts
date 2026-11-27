@@ -13,8 +13,7 @@ export type AppTabId =
   | 'spa'
   | 'reports'
   | 'events'
-  | 'roles'
-  | 'videos';
+  | 'roles';
 
 export type BuiltInRoleId =
   | 'admin'

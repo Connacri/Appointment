@@ -22,7 +22,6 @@ export const ALL_APP_TAB_IDS: AppTabId[] = [
   'reports',
   'events',
   'roles',
-  'videos',
 ];
 
 export const ROLE_CATEGORY_META: Record<
@@ -85,7 +84,6 @@ export const APP_TAB_META: Array<{
   { id: 'reports', group: 'management', label: { fr: "Rapports d'Activité", en: 'Performance Reports', ar: 'التقارير والإحصائيات' } },
   { id: 'roles', group: 'system', label: { fr: 'Rôles & Permissions', en: 'Roles & Permissions', ar: 'الأدوار والصلاحيات' } },
   { id: 'events', group: 'system', label: { fr: 'Journal des Événements', en: 'Event Log', ar: 'سجل الأحداث' } },
-  { id: 'videos', group: 'system', label: { fr: 'Vidéos (HackTube)', en: 'Videos (HackTube)', ar: 'فيديوهات (HackTube)' } },
 ];
 
 export const PERMISSION_OPTION_META: Array<{
@@ -228,7 +226,6 @@ export const BUILT_IN_ROLES: RoleDefinition[] = [
       'reports',
       'events',
       'roles',
-      'videos',
     ],
     permissions: {
       canManageBookings: true,
@@ -284,7 +281,6 @@ export const BUILT_IN_ROLES: RoleDefinition[] = [
       'prousb',
       'spa',
       'events',
-      'videos',
     ],
     permissions: {
       canManageBookings: true,
@@ -600,14 +596,14 @@ export const BUILT_IN_ROLES: RoleDefinition[] = [
     id: 'client',
     label: { fr: 'Client / Voyageur', en: 'Guest / Client', ar: 'النزيل / العميل' },
     description: {
-      fr: 'Consultation disponibilités, mes séjours, factures, Spa et espace vidéos.',
-      en: 'Availability view, personal stays, invoices, Spa, and video hub.',
-      ar: 'تصفح التوافر وحجوزاتي والفواتير والسبا والفيديوهات.',
+      fr: 'Consultation des disponibilités, séjours, factures et Spa.',
+      en: 'Availability view, personal stays, invoices, and Spa.',
+      ar: 'تصفح التوافر وحجوزاتي والفواتير والسبا.',
     },
     category: 'client',
     iconName: 'User',
     isBuiltIn: true,
-    allowedTabs: ['planning', 'my_bookings', 'billing', 'spa', 'videos'],
+    allowedTabs: ['planning', 'my_bookings', 'billing', 'spa'],
     permissions: {
       canManageBookings: false,
       canManageHousekeeping: false,

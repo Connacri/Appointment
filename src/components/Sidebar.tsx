@@ -32,7 +32,6 @@ import {
   Palette,
   LogOut,
   GraduationCap,
-  Film,
   History,
   UserCog,
 } from 'lucide-react';
@@ -64,7 +63,6 @@ const prefetchViewChunk = (view: string) => {
     case 'spa': void import('./SpaManagementView').catch(() => undefined); break;
     case 'roles': void import('./RoleManagementView').catch(() => undefined); break;
     case 'help': void import('./HelpCenterView').catch(() => undefined); break;
-    case 'videos': void import('./VideoHubView').catch(() => undefined); break;
     default: break;
   }
 };
@@ -266,13 +264,6 @@ export const Sidebar: React.FC = () => {
           : getTranslation('navRolesPermissions', language),
       icon: UserCog,
       view: 'roles' as AppTabId,
-      domains: ['hotel', 'resort'] as DomainType[],
-    },
-    {
-      id: 'videos',
-      label: language === 'fr' ? 'Vidéos (HackTube)' : language === 'ar' ? 'فيديوهات (HackTube)' : 'Videos (HackTube)',
-      icon: Film,
-      view: 'videos' as AppTabId,
       domains: ['hotel', 'resort'] as DomainType[],
     },
   ];
