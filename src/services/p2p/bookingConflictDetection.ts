@@ -12,7 +12,9 @@ export interface BookingConflictSnapshot {
   startAt: string;
   endAt: string;
   detectedAt: string;
-  status: 'pending' | 'resolved' | 'rejected';
+  status: 'pending' | 'resolved' | 'rejected' | 'superseded';
+  supersededAt?: string;
+  supersededByEventIds?: string[];
   reason: 'overlapping_reservations';
   resolution?: {
     decision: 'keep_booking' | 'reject_both';
@@ -135,4 +137,31 @@ export function detectP2pBookingConflicts(
     }
   }
   return conflicts.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+
+/**
+ * A pending overlap is superseded only when a causally newer booking frontier
+ * replaces at least one of its immutable source events. The caller must pass
+ * current per-booking frontiers, not the complete historical event log.
+ */
+export function isBookingConflictSuperseded(
+  conflict: BookingConflictSnapshot,
+  currentBookingFrontiers: readonly P2pEvent[],
+): boolean {
+  const firstFrontier = currentBookingFrontiers.filter((event) =>
+    event.workspaceId === conflict.workspaceId
+    && event.entity === 'booking'
+    && event.entityId === conflict.firstBookingId
+  );
+  const secondFrontier = currentBookingFrontiers.filter((event) =>
+    event.workspaceId === conflict.workspaceId
+    && event.entity === 'booking'
+    && event.entityId === conflict.secondBookingId
+  );
+  const firstReplaced = firstFrontier.length > 0
+    && !firstFrontier.some((event) => event.eventId === conflict.firstEventId);
+  const secondReplaced = secondFrontier.length > 0
+    && !secondFrontier.some((event) => event.eventId === conflict.secondEventId);
+  return firstReplaced || secondReplaced;
 }
