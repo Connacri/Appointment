@@ -317,13 +317,20 @@ class IndexedDbStore {
           entities.createIndex('workspaceResource', ['workspaceId', 'payload.resourceId'], { unique: false });
         }
         const upgradeTxForIndexes = (e.target as IDBOpenDBRequest).transaction;
-        const archiveRecordsStore = upgradeTxForIndexes?.objectStore('bookingArchiveRecords');
-        if (archiveRecordsStore && !archiveRecordsStore.indexNames.contains('workspaceStartDate')) {
-          archiveRecordsStore.createIndex('workspaceStartDate', ['workspaceId', 'startDate'], { unique: false });
+        // A versionchange transaction can only open stores that already exist.
+        // New stores are created below, so guard these lookups to keep upgrades
+        // from aborting on older or partially migrated databases.
+        if (upgradeTxForIndexes && db.objectStoreNames.contains('bookingArchiveRecords')) {
+          const archiveRecordsStore = upgradeTxForIndexes.objectStore('bookingArchiveRecords');
+          if (!archiveRecordsStore.indexNames.contains('workspaceStartDate')) {
+            archiveRecordsStore.createIndex('workspaceStartDate', ['workspaceId', 'startDate'], { unique: false });
+          }
         }
-        const p2pQueueStore = upgradeTxForIndexes?.objectStore('p2pTransportQueue');
-        if (p2pQueueStore && !p2pQueueStore.indexNames.contains('workspaceEntity')) {
-          p2pQueueStore.createIndex('workspaceEntity', ['workspaceId', 'event.entity', 'event.entityId'], { unique: false });
+        if (upgradeTxForIndexes && db.objectStoreNames.contains('p2pTransportQueue')) {
+          const p2pQueueStore = upgradeTxForIndexes.objectStore('p2pTransportQueue');
+          if (!p2pQueueStore.indexNames.contains('workspaceEntity')) {
+            p2pQueueStore.createIndex('workspaceEntity', ['workspaceId', 'event.entity', 'event.entityId'], { unique: false });
+          }
         }
         const bookingsStore = upgradeTxForIndexes?.objectStore('bookings');
         if (bookingsStore && !bookingsStore.indexNames.contains('endDate')) {
@@ -337,6 +344,7 @@ class IndexedDbStore {
             keyPath: ['workspaceId', 'periodKey', 'bookingId'],
           });
           archiveRecords.createIndex('workspaceEndDate', ['workspaceId', 'endDate'], { unique: false });
+          archiveRecords.createIndex('workspaceStartDate', ['workspaceId', 'startDate'], { unique: false });
           archiveRecords.createIndex('workspaceBooking', ['workspaceId', 'bookingId'], { unique: false });
           archiveRecords.createIndex('workspacePeriod', ['workspaceId', 'periodKey'], { unique: false });
         }
@@ -395,6 +403,7 @@ class IndexedDbStore {
         if (!db.objectStoreNames.contains('p2pTransportQueue')) {
           const queue = db.createObjectStore('p2pTransportQueue', { keyPath: 'localOrder', autoIncrement: true });
           queue.createIndex('workspaceOrder', ['workspaceId', 'localOrder'], { unique: true });
+          queue.createIndex('workspaceEntity', ['workspaceId', 'event.entity', 'event.entityId'], { unique: false });
         }
         if (!db.objectStoreNames.contains('p2pPeerAcks')) {
           db.createObjectStore('p2pPeerAcks', { keyPath: ['workspaceId', 'peerId'] });
