@@ -903,13 +903,15 @@ export const BillingInvoicingView: React.FC = () => {
         </div>
       )}
 
-      {/* High-Fidelity Official Document Preview & Print Modal */}
-      <InvoicePreviewModal
-        invoice={selectedInvoice}
-        isOpen={!!selectedInvoice}
-        onClose={() => setSelectedInvoice(null)}
-        onEditEstablishment={() => setIsEstablishmentModalOpen(true)}
-      />
+      {/* Mount the PDF-heavy preview only after a document is selected. */}
+      {selectedInvoice && (
+        <InvoicePreviewModal
+          invoice={selectedInvoice}
+          isOpen
+          onClose={() => setSelectedInvoice(null)}
+          onEditEstablishment={() => setIsEstablishmentModalOpen(true)}
+        />
+      )}
     </div>
   );
 };

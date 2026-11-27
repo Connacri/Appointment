@@ -46,3 +46,9 @@ test('Gantt floor availability is calculated only for expanded building and floo
   assert.ok(gantt.includes('if (floor.label && collapsedFloors[`${groupId}:${floor.key}`]) continue;'));
   assert.ok(gantt.includes('[floorGroupsByGroup, collapsedGroups, collapsedFloors, timelineDays, bookingsByResource]'));
 });
+
+test('invoice PDF preview is mounted only after selecting a document', () => {
+  const billing = readFileSync(new URL('../src/components/BillingInvoicingView.tsx', import.meta.url), 'utf8');
+  assert.ok(billing.includes('{selectedInvoice && ('));
+  assert.ok(billing.includes('<InvoicePreviewModal'));
+});
