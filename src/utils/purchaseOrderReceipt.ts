@@ -80,7 +80,15 @@ export function buildPurchaseOrderReceiptPlan(
     receivedAt,
   };
   const mutations: PurchaseOrderReceiptMutation[] = [
-    { entity: 'purchase_order', entityId: purchaseOrder.id, payload: purchaseOrder as unknown as Record<string, unknown> },
+    {
+      entity: 'purchase_order',
+      entityId: purchaseOrder.id,
+      payload: purchaseOrder as unknown as Record<string, unknown>,
+      toOutboxPayload: () => ({
+        ...purchaseOrder,
+        receiptMovements: movements,
+      } as unknown as Record<string, unknown>),
+    },
     ...updatedStockItems
       .filter((item) => quantities.has(item.id))
       .map((item) => {
@@ -105,6 +113,9 @@ export function buildPurchaseOrderReceiptPlan(
       entity: 'stock_movement' as const,
       entityId: movement.id,
       payload: movement as unknown as Record<string, unknown>,
+      // The receipt RPC writes these rows and stock projections together.
+      // Their immutable P2P events are still appended by the IndexedDB transaction.
+      skipOutbox: true,
     })),
   ];
   return { purchaseOrder, stockItems: updatedStockItems, movements, mutations };
