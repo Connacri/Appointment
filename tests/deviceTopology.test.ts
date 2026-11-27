@@ -84,6 +84,8 @@ test('registry verification and hydration gate mutations during reconnect', () =
     ...ready, registry, localDeviceId: 'pc-a', coordinationAuthority: 'supabase', coreDataHydrated: false,
   });
   assert.equal(hydrating.state, 'RECONNECTING');
+  assert.equal(hydrating.canMutate, false);
+  assert.equal(hydrating.reason, 'data_not_ready');
 });
 
 test('only an authorized administrator can explicitly transition to single-device', () => {
