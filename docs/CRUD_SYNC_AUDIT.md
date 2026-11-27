@@ -166,3 +166,13 @@ The supplier and purchase-order CRUD callbacks no longer use the generic fire-an
 ### Purchase-order dispatch ordering (2026-11-27)
 
 Dispatch actions now await local purchase-order persistence before writing the sent status and channel. This avoids marking an order as sent when its preceding draft/confirmation command has not committed locally.
+
+
+### Atomic purchase-order receipt — 2026-11-27
+
+The cloud receipt path now uses one purchase-order Outbox command carrying its immutable
+movement set. A single PostgreSQL RPC validates order lines, locks the order and stock rows,
+and commits all movement rows, stock balances and the received status together. Individual
+movement P2P envelopes remain durable, while duplicate cloud movement dispatch is suppressed.
+A retry after a lost ACK is idempotent; subsequent edits for the same order cannot overtake a
+failed receipt command. Offline local receipt remains local/provisional until this RPC succeeds.
