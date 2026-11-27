@@ -31,6 +31,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -92,6 +97,6 @@ jobs:
           name: appointment-windows-native-x64
           path: |
             windows-native/target/release/appointment-pms-native.exe
-            windows-native/dist/Appointment-PMS-Setup-v1.2.0.exe
+            windows-native/dist/Appointment-PMS-Setup-v*.exe
           if-no-files-found: error
           retention-days: 30
