@@ -9,7 +9,6 @@ import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { PlanningTimeline } from './components/PlanningTimeline';
 import { LegendBar } from './components/LegendBar';
-import { BookingModal } from './components/BookingModal';
 import { OfflineBanner } from './components/OfflineBanner';
 import { SyncTerminal } from './components/SyncTerminal';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal';
@@ -18,6 +17,10 @@ import { WorkspaceProvider } from './services/supabase/WorkspaceContext';
 import { VideoBubble } from './services/VideoBubbleBridge';
 import { PullToRefresh } from './components/PullToRefresh';
 import { useBrandIconSync } from './hooks/useBrandIconSync';
+
+const BookingModal = React.lazy(() =>
+  import('./components/BookingModal').then((m) => ({ default: m.BookingModal })),
+);
 
 /**
  * Secondary views are code-split: Vite emits one chunk per module and the chunk
@@ -415,10 +418,10 @@ const MainLayout: React.FC = () => {
       <SyncTerminal />
 
       {/* Global Interactive Modals — mounted on demand */}
-      {(activeRoleDefinition.permissions.canManageBookings ||
-        activeRoleDefinition.allowedTabs.includes('planning') ||
-        activeRoleDefinition.allowedTabs.includes('my_bookings')) && <BookingModal />}
       <Suspense fallback={null}>
+        {(activeRoleDefinition.permissions.canManageBookings ||
+          activeRoleDefinition.allowedTabs.includes('planning') ||
+          activeRoleDefinition.allowedTabs.includes('my_bookings')) && <BookingModal />}
         {isCockpitOpen && (activeRoleDefinition.permissions.canManageRoles || activeRoleDefinition.permissions.canManageBookings) && <AgentsCockpitModal />}
         {isLegalModalOpen && <LegalModal />}
         {isIndexedDBOpen && (activeRoleDefinition.permissions.canManageRoles || activeRoleDefinition.permissions.canManageBookings) && (

@@ -935,7 +935,9 @@ mod tests {
         let components: Vec<_> = version.split('.').collect();
         assert_eq!(components.len(), 3, "release version must use MAJOR.MINOR.PATCH");
         assert!(
-            components.iter().all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit())),
+            components
+                .iter()
+                .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit())),
             "release version must contain numeric components"
         );
     }

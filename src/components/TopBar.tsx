@@ -47,8 +47,11 @@ import {
   type StaffNotification,
 } from '../utils/staffNotifications';
 import { RoleIcon } from './RoleIcon';
-import { BookingFinderModal } from './BookingFinderModal';
 import { LanDiscoveryStatus } from './LanDiscoveryStatus';
+
+const BookingFinderModal = React.lazy(() =>
+  import('./BookingFinderModal').then((m) => ({ default: m.BookingFinderModal })),
+);
 
 export const TopBar: React.FC = () => {
   const {
@@ -1254,12 +1257,14 @@ export const TopBar: React.FC = () => {
 
       <div className="hidden sm:block"><LanDiscoveryStatus /></div>
 
-      {uiCaps.canViewPlanningOrBookings && (
-        <BookingFinderModal
-          isOpen={isBookingFinderOpen}
-          onClose={() => setIsBookingFinderOpen(false)}
-        />
-      )}
+      <React.Suspense fallback={null}>
+        {uiCaps.canViewPlanningOrBookings && (
+          <BookingFinderModal
+            isOpen={isBookingFinderOpen}
+            onClose={() => setIsBookingFinderOpen(false)}
+          />
+        )}
+      </React.Suspense>
     </header>
   );
 };

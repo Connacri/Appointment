@@ -31,7 +31,7 @@ import { useApp } from '../context/AppContext';
 import { ResourceGroup, ResourceItem, TimelineBooking } from '../types/booking';
 import { statusConfig } from './LegendBar';
 import { getTranslation } from '../i18n/translations';
-import { BookingPrintReportModal } from './BookingPrintReportModal';
+
 import { computeTimelineBarGeometry } from '../utils/timelineBarGeometry';
 import { useTimelineSync } from '../hooks/useTimelineSync';
 import {
@@ -56,6 +56,10 @@ import {
   isTimelineCellAvailableForQuickCreate,
 } from '../utils/timelineSearch';
 import { computeAvailabilityByDay } from '../utils/availability';
+
+const BookingPrintReportModal = React.lazy(() =>
+  import('./BookingPrintReportModal').then((m) => ({ default: m.BookingPrintReportModal })),
+);
 
 /**
  * Gantt timeline with day-by-day availability and quick-create booking cells.
@@ -268,6 +272,7 @@ export const PlanningTimeline: React.FC = () => {
   const [isGanttToolsOpen, setIsGanttToolsOpen] = useState(false);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [scrollVisibleDate, setScrollVisibleDate] = useState<string>(() => currentBaseDate);
+  const [visibleDayRange, setVisibleDayRange] = useState({ start: 0, end: 64 });
   useEffect(() => {
     try {
       window.localStorage.setItem(TIMELINE_ZOOM_STORAGE_KEY, String(zoomLevel));
@@ -310,6 +315,7 @@ export const PlanningTimeline: React.FC = () => {
     if (visibleDay && visibleDay.dateStr) {
       setScrollVisibleDate(visibleDay.dateStr);
     }
+    updateVisibleDayRange(el);
 
     // Infinite scroll: when the user reaches the edge of the visible window,
     // shift the base date so the window slides and new dates appear.
@@ -489,6 +495,31 @@ export const PlanningTimeline: React.FC = () => {
     return dates;
   }, [timelineWindowStart, timelineWindowDays, language, timelineSync.todayDateStr]);
 
+  // Keep the 24-month navigation range without mounting hundreds of off-screen
+  // day cells for every room. A bounded overscan avoids blank edges during scroll.
+  const updateVisibleDayRange = useCallback((element: HTMLDivElement) => {
+    const resourceColumn = element.querySelector('[data-gantt-resource-column="true"]') as HTMLElement | null;
+    const viewportWidth = Math.max(0, element.clientWidth - (resourceColumn?.offsetWidth ?? 0));
+    const scrollPosition = Math.max(0, Math.abs(element.scrollLeft));
+    const overscanDays = isMobileScreen ? 8 : 12;
+    const firstVisible = Math.floor(scrollPosition / colWidth);
+    const start = Math.max(0, firstVisible - overscanDays);
+    const end = Math.min(
+      timelineDays.length,
+      Math.max(start + 1, Math.ceil((scrollPosition + viewportWidth) / colWidth) + overscanDays),
+    );
+    setVisibleDayRange((current) =>
+      current.start === start && current.end === end ? current : { start, end },
+    );
+  }, [colWidth, isMobileScreen, timelineDays.length]);
+
+  const renderedTimelineDays = useMemo(
+    () => timelineDays.slice(visibleDayRange.start, visibleDayRange.end),
+    [timelineDays, visibleDayRange.start, visibleDayRange.end],
+  );
+  const timelineLeadingSpacerWidth = visibleDayRange.start * colWidth;
+  const timelineTrailingSpacerWidth = Math.max(0, timelineDays.length - visibleDayRange.end) * colWidth;
+
   // O(1) per-resource booking index: replaces O(bookings) .filter/.some scans
   // inside every day cell and floor/row availability calculation.
   const bookingsByResource = useMemo(() => {
@@ -535,7 +566,8 @@ export const PlanningTimeline: React.FC = () => {
 
     prevColWidthRef.current = colWidth;
     prevBaseDateRef.current = currentBaseDate;
-  }, [currentBaseDate, timelineDays, colWidth, isRTL, isMobileScreen]);
+    updateVisibleDayRange(el);
+  }, [currentBaseDate, timelineDays, colWidth, isRTL, isMobileScreen, updateVisibleDayRange]);
 
   // Derive the marker index from the exact date rendered in the day columns.
   // This keeps the red marker aligned even when the timeline window is extended/prepended.
@@ -1594,7 +1626,10 @@ export const PlanningTimeline: React.FC = () => {
             }`}
             title={getTranslation('ganttScrollDragTip', language)}
           >
-            {timelineDays.map((day) => {
+            {timelineLeadingSpacerWidth > 0 && (
+              <div aria-hidden="true" className="shrink-0 pointer-events-none" style={{ width: `${timelineLeadingSpacerWidth}px` }} />
+            )}
+            {renderedTimelineDays.map((day) => {
               const isCompactCols = colWidth < 46;
               const isDetailedCols = colWidth >= 115;
               const monthStartBorder = day.isFirstOfMonth
@@ -1657,6 +1692,9 @@ export const PlanningTimeline: React.FC = () => {
                 </div>
               );
             })}
+            {timelineTrailingSpacerWidth > 0 && (
+              <div aria-hidden="true" className="shrink-0 pointer-events-none" style={{ width: `${timelineTrailingSpacerWidth}px` }} />
+            )}
           </div>
 
           {/* Resource Rows & Gantt Bars Matrix */}
@@ -1668,7 +1706,10 @@ export const PlanningTimeline: React.FC = () => {
                 <div key={grp.id} className="flex flex-col">
                   {/* Group Availability Row */}
                   <div className="h-7 sm:h-8 min-h-[28px] sm:min-h-[32px] max-h-[28px] sm:max-h-[32px] shrink-0 flex pms-gantt-subsurface border-b border-[rgb(var(--pms-border))] select-none">
-                    {timelineDays.map((day) => {
+                    {timelineLeadingSpacerWidth > 0 && (
+                      <div aria-hidden="true" className="shrink-0 pointer-events-none" style={{ width: `${timelineLeadingSpacerWidth}px` }} />
+                    )}
+                    {renderedTimelineDays.map((day) => {
                       const avail = groupAvailability[grp.id]?.[day.dateStr] ?? 0;
                       const isFree = avail > 0;
                       return (
@@ -1691,6 +1732,9 @@ export const PlanningTimeline: React.FC = () => {
                         </div>
                       );
                     })}
+                    {timelineTrailingSpacerWidth > 0 && (
+                      <div aria-hidden="true" className="shrink-0 pointer-events-none" style={{ width: `${timelineTrailingSpacerWidth}px` }} />
+                    )}
                   </div>
 
                   {/* Floor headers and individual room rows */}
@@ -1698,7 +1742,10 @@ export const PlanningTimeline: React.FC = () => {
                     <React.Fragment key={floorGroup.key}>
                       {floorGroup.label && (
                         <div className="h-7 min-h-[28px] max-h-[28px] shrink-0 flex pms-gantt-subsurface border-b border-[rgb(var(--pms-border))]">
-                          {timelineDays.map((day) => {
+                          {timelineLeadingSpacerWidth > 0 && (
+                            <div aria-hidden="true" className="shrink-0 pointer-events-none" style={{ width: `${timelineLeadingSpacerWidth}px` }} />
+                          )}
+                          {renderedTimelineDays.map((day) => {
                             const available =
                               floorAvailability.get(`${grp.id}:${floorGroup.key}`)?.[day.dateStr] ??
                               floorGroup.resources.length;
@@ -1720,6 +1767,9 @@ export const PlanningTimeline: React.FC = () => {
                               </div>
                             );
                           })}
+                          {timelineTrailingSpacerWidth > 0 && (
+                            <div aria-hidden="true" className="shrink-0 pointer-events-none" style={{ width: `${timelineTrailingSpacerWidth}px` }} />
+                          )}
                         </div>
                       )}
                       {!collapsedFloors[`${grp.id}:${floorGroup.key}`] && floorGroup.resources.map((res) => {
@@ -1741,7 +1791,10 @@ export const PlanningTimeline: React.FC = () => {
                             }}
                           >
                             {/* Background Grid Cells (clicking an empty bookable cell opens pre-filled booking modal) */}
-                            {timelineDays.map((day) => {
+                             {timelineLeadingSpacerWidth > 0 && (
+                              <div aria-hidden="true" className="shrink-0 pointer-events-none" style={{ width: `${timelineLeadingSpacerWidth}px` }} />
+                            )}
+                            {renderedTimelineDays.map((day) => {
                               const isPast = day.dateStr < realTodayStr;
                               const isEmptyBookable = isTimelineCellAvailableForQuickCreate(
                                 res,
@@ -1827,6 +1880,9 @@ export const PlanningTimeline: React.FC = () => {
                                 />
                               );
                             })}
+                            {timelineTrailingSpacerWidth > 0 && (
+                              <div aria-hidden="true" className="shrink-0 pointer-events-none" style={{ width: `${timelineTrailingSpacerWidth}px` }} />
+                            )}
 
                           {/* Render Booking Gantt Bars overlaying the grid */}
                           {resBookings.map((bkg) => {
@@ -2077,11 +2133,13 @@ export const PlanningTimeline: React.FC = () => {
             );
           })()}
 
-      <BookingPrintReportModal
-        isOpen={isPoliceBatchPrintOpen}
-        onClose={() => setIsPoliceBatchPrintOpen(false)}
-        initialMode="today"
-      />
+      <React.Suspense fallback={null}>
+        <BookingPrintReportModal
+          isOpen={isPoliceBatchPrintOpen}
+          onClose={() => setIsPoliceBatchPrintOpen(false)}
+          initialMode="today"
+        />
+      </React.Suspense>
     </div>
   );
 };

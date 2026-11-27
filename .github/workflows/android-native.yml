@@ -84,7 +84,7 @@ jobs:
         run: |
           chmod +x android/gradlew
           cd android
-          VERSION_NAME="$(node -p "require('./package.json').version")"
+          VERSION_NAME="$(node -p "require('../package.json').version")"
           ./gradlew assembleDebug --no-daemon --max-workers=2 -PversionName="$VERSION_NAME" -PversionCode="${{ github.run_number }}"
 
       - name: Upload debug APK
