@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  APPOINTMENT_ACADEMY_PROGRESS_KEY,
+  LEGACY_ACADEMY_PROGRESS_KEY,
   filterHelpTutorials,
   normalizeHelpSearchText,
   parseCompletedTutorialIds,
@@ -35,9 +37,12 @@ const tutorials = [
 
 test('academy search is accent-insensitive and searches procedural content in every language', () => {
   assert.equal(normalizeHelpSearchText('ÉTAGE & Réservation'), 'etage & reservation');
+  assert.equal(normalizeHelpSearchText('  Café   CRÈME  '), 'cafe creme');
+  assert.equal(normalizeHelpSearchText('مُرَاجَعَة'), 'مراجعة');
   assert.deepEqual(filterHelpTutorials(tutorials, 'all', 'reservation').map((item) => item.id), ['planning']);
   assert.deepEqual(filterHelpTutorials(tutorials, 'all', 'CardLock MDB').map((item) => item.id), ['locks']);
   assert.deepEqual(filterHelpTutorials(tutorials, 'all', 'out-of-order').map((item) => item.id), ['planning']);
+  assert.deepEqual(filterHelpTutorials(tutorials, 'all', '  building   ' ).map((item) => item.id), ['planning', 'locks']);
   assert.deepEqual(filterHelpTutorials(tutorials, 'access', 'planning').map((item) => item.id), []);
   assert.equal(filterHelpTutorials(tutorials, 'all', '   ').length, 2);
 });
@@ -48,6 +53,20 @@ test('academy completion data accepts only unique known tutorial IDs', () => {
     ['planning', 'locks'],
   );
   assert.deepEqual(parseCompletedTutorialIds({ bad: true }, ['planning']), []);
+});
+
+test('academy progress migrates the legacy Omnibook key to the Appointment key', () => {
+  const validIds = ['planning', 'locks'];
+  const writes: Array<[string, string]> = [];
+  const storage = {
+    getItem: (key: string) => key === LEGACY_ACADEMY_PROGRESS_KEY
+      ? '["planning","stale","planning"]'
+      : null,
+    setItem: (key: string, value: string) => writes.push([key, value]),
+  };
+
+  assert.deepEqual(readCompletedTutorialIds(storage, validIds), ['planning']);
+  assert.deepEqual(writes, [[APPOINTMENT_ACADEMY_PROGRESS_KEY, '["planning"]']]);
 });
 
 test('academy progress storage tolerates malformed, unavailable, and quota-blocked storage', () => {

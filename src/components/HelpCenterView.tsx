@@ -7,7 +7,11 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { WINDOWS_CARDLOCK_MDB_PATHS, ANDROID_CARDLOCK_MDB_PATHS, WEB_CARDLOCK_MDB_PATHS } from '../locks/database/mdbPaths';
-import { filterHelpTutorials, readCompletedTutorialIds, writeCompletedTutorialIds } from '../utils/helpCenter';
+import {
+  filterHelpTutorials,
+  readCompletedTutorialIds,
+  writeCompletedTutorialIds,
+} from '../utils/helpCenter';
 
 type Locale = 'fr' | 'en' | 'ar';
 type Tutorial = {
@@ -380,66 +384,81 @@ const tutorials: Tutorial[] = [
     duration: '8 min',
     availability: 'available',
     title: {
-      fr: 'Encoder et lire les serrures proUSB en direct via WebHID',
-      en: 'Encode and read proUSB door locks directly via WebHID',
-      ar: 'تشفير وقراءة بطاقات أقفال proUSB مباشرة عبر WebHID',
+      fr: 'Connecter le lecteur et contrôler les cartes proUSB',
+      en: 'Connect the reader and inspect proUSB cards',
+      ar: 'ربط القارئ وفحص بطاقات proUSB',
     },
     summary: {
-      fr: 'Connecter le lecteur USB Mifare (VID 0x0471 / PID 0xa112), lire les données d’une carte et encoder des cartes Client, Étage, Bâtiment et Horloge.',
-      en: 'Connect the Mifare USB encoder (VID 0x0471 / PID 0xa112), read card sectors, and issue Guest, Floor, Building and Clock cards.',
-      ar: 'توصيل جهاز التشفير USB Mifare مباشرة عبر المتصفح، وقراءة البطاقة وإصدار بطاقات النزلاء والمباني والطوابق وساعة القفل.',
+      fr: 'Connecter l’encodeur, lire une carte et vérifier son type, son établissement et son périmètre avant toute émission.',
+      en: 'Connect the encoder, read a card and verify its type, property scope and validity before issuing anything.',
+      ar: 'ربط جهاز التشفير وقراءة البطاقة والتحقق من نوعها والمؤسسة ونطاق صلاحيتها قبل إصدار أي بطاقة.',
     },
     prerequisites: {
-      fr: ['Navigateur compatible WebHID (Chrome, Edge, Opera ou application Android Capacitor).', 'Encodeur USB branché au poste de réception.', 'Carte Mifare Classic 1K vierge ou à réinitialiser.'],
-      en: ['WebHID compatible browser (Chrome, Edge, Opera or Capacitor app).', 'USB encoder plugged into the workstation.', 'Mifare Classic 1K card.'],
-      ar: ['متصفح يدعم WebHID (كروم، إيدج، أوبرا أو تطبيق أندرويد).', 'جهاز تشفير USB متصل بحاسوب الاستقبال.', 'بطاقة مايفير كلاسيك 1K.'],
+      fr: ['Un poste et un navigateur ou une application native compatibles avec le transport USB disponible.', 'Encodeur USB proUSB pris en charge et carte de test non utilisée en exploitation.', 'Une sauvegarde de CardLock.mdb si la base est utilisée.'],
+      en: ['A workstation and browser or native app compatible with the available USB transport.', 'A supported proUSB USB encoder and a test card not used in live operations.', 'Back up CardLock.mdb when that database is in use.'],
+      ar: ['حاسوب ومتصفح أو تطبيق أصلي متوافق مع وسيلة اتصال USB المتاحة.', 'جهاز تشفير proUSB مدعوم وبطاقة اختبار غير مستخدمة في التشغيل الفعلي.', 'أنشئ نسخة احتياطية من CardLock.mdb عند استخدام قاعدة البيانات.'],
     },
     steps: {
       fr: [
-        'Ouvrez le module « Serrures proUSB (WebHID) » dans le menu principal.',
-        'Cliquez sur « Connecter l’encodeur USB » et sélectionnez le périphérique USB proUSB dans la fenêtre du navigateur.',
-        'Posez une carte sur le lecteur et cliquez sur « Détecter & Lire la carte » pour analyser le secteur 1 et le secteur 2.',
-        'Pour une carte client : sélectionnez la chambre, la date et l’heure de départ, puis cliquez sur « Encoder la carte Client ».',
-        'Pour une carte de service : choisissez le type (Carte Étage pour les femmes de chambre, Carte Bâtiment pour le gouvernant, ou Carte Générale pour la direction).',
-        'Pour synchroniser l’heure des serrures : utilisez la « Carte Horloge » qui injecte l’heure exacte de l’ordinateur dans les serrures.',
-        'Vérifiez le bip sonore de confirmation et le numéro de série physique (UID) de la carte.',
-        'En cas d’annulation ou de départ anticipé, cliquez sur « Effacer / Réinitialiser la carte » pour libérer le support RFID.',
+        'Ouvrez « Serrures proUSB » depuis le menu de l’application.',
+        'Ouvrez l’onglet matériel / lecteur USB, puis connectez l’encodeur et vérifiez son identification.',
+        'Présentez une carte de test et lancez la lecture ; contrôlez le type décodé, le code système, le bâtiment, l’étage et les dates lorsqu’ils existent.',
+        'Comparez le résultat avec la carte réelle et les données CardLock.mdb importées. Un numéro de chambre seul ne suffit pas à identifier une chambre multi-bâtiments.',
+        'Pour une carte Client, vérifiez la réservation, la chambre exacte, le bâtiment, l’étage et les heures avant émission.',
+        'Pour une carte Étage ou Bâtiment, sélectionnez explicitement le bâtiment réel et, pour l’étage, l’étage réel correspondant. Les identifiants 0 sont valides dans CardLock.',
+        'Testez toute carte nouvellement émise sur une serrure de test ou hors exploitation avant de l’utiliser pour un client ou une équipe.',
+        'Après un changement d’établissement ou de code système, n’utilisez pas d’anciennes cartes : suivez la procédure de reconfiguration avec une carte système autorisée.',
       ],
       en: [
-        'Open proUSB Locks (WebHID) from the main navigation.',
-        'Click Connect USB Encoder and select the proUSB device in the browser dialog.',
-        'Place a card on the reader and click Detect & Read to inspect sectors 1 and 2.',
-        'For a guest card: choose room, check-out date and time, then click Encode Guest Card.',
-        'For a staff card: select Floor Card (housekeeping), Building Card, or Master Card.',
-        'To sync lock clocks: issue a Clock Card that transmits the computer time to locks upon tapping.',
-        'Listen for the confirmation beep and verify the physical UID.',
-        'For early checkout or reassignment, click Erase / Reset Card to clear sectors.',
+        'Open proUSB Locks from the application menu.',
+        'Open the hardware / USB reader tab, connect the encoder and verify its identity.',
+        'Present a test card and read it; inspect the decoded type, system code, building, floor and dates when available.',
+        'Compare the result with the physical card and imported CardLock.mdb data. A room number alone does not identify a room across multiple buildings.',
+        'For a Guest Card, verify the booking, exact room, building, floor and access times before issuing it.',
+        'For a Floor or Building Card, explicitly select the real building and, for a floor card, the matching real floor. CardLock identifier 0 is valid.',
+        'Test every newly issued card on a test lock or outside live operations before using it for a guest or staff member.',
+        'After changing property or system code, do not reuse old cards; follow the authorized system-card recommissioning procedure.',
       ],
       ar: [
-        'افتح قسم «أقفال proUSB الذكية» من القائمة الرئيسية.',
-        'اضغط على «ربط جهاز التشفير USB» واختر الجهاز في نافذة المتصفح.',
-        'ضع البطاقة فوق الجهاز واضغط «فحص وقراءة البطاقة» للاطلاع على بيانات القطاعين 1 و 2.',
-        'لبطاقة النزيل: حدد الغرفة وتاريخ ووقت المغادرة ثم اضغط «تشفير بطاقة النزيل».',
-        'لبطاقات الطاقم: اختر بطاقة طابق لعاملات النظافة، أو بطاقة مبنى للمشرف، أو بطاقة رئيسية للإدارة.',
-        'لمزامنة وقت الأقفال: أصدر «بطاقة الساعة» التي تنقل توقيت الحاسوب إلى أقفال الأبواب بمجرد تمريرها.',
-        'تأكد من سماع نغمة التأكيد وظهور المعرف الفيزيائي UID.',
-        'عند مغادرة النزيل، اضغط «مسح وتهيئة البطاقة» لإعادة استخدامها بأمان.',
+        'افتح قسم أقفال proUSB من قائمة التطبيق.',
+        'افتح تبويب الأجهزة / قارئ USB، ثم اربط جهاز التشفير وتحقق من هويته.',
+        'ضع بطاقة اختبار واقرأها؛ تحقق من النوع ورمز النظام والمبنى والطابق والتواريخ عند توفرها.',
+        'قارن النتيجة بالبطاقة الفعلية وبيانات CardLock.mdb المستوردة. رقم الغرفة وحده لا يميز الغرف بين مبانٍ متعددة.',
+        'قبل إصدار بطاقة نزيل، تحقق من الحجز والغرفة والمبنى والطابق وأوقات الدخول بدقة.',
+        'لبطاقة الطابق أو المبنى، حدد المبنى الحقيقي صراحةً، وحدد الطابق الحقيقي المطابق لبطاقة الطابق. القيمة 0 معرف صالح في CardLock.',
+        'اختبر كل بطاقة جديدة على قفل تجريبي أو خارج التشغيل الفعلي قبل استخدامها للنزلاء أو الموظفين.',
+        'بعد تغيير المؤسسة أو رمز النظام، لا تستخدم البطاقات القديمة؛ اتبع إجراء إعادة البرمجة باستخدام بطاقة نظام مخولة.',
       ],
     },
     result: {
-      fr: 'La carte RFID est programmée et prête à ouvrir immédiatement la serrure autonome sans nécessiter le logiciel proUSB externe.',
-      en: 'The RFID card is programmed and ready to unlock the autonomous door lock without needing external proUSB software.',
-      ar: 'تمت برمجة بطاقة RFID وهي جاهزة لفتح القفل الذكي مباشرة دون الحاجة لبرنامج proUSB الخارجي.',
+      fr: 'Le lecteur est identifié et les données de la carte sont contrôlées. La lecture ne prouve pas à elle seule que la serrure acceptera l’accès.',
+      en: 'The reader is identified and card data is inspected. Reading a card alone does not prove the lock will grant access.',
+      ar: 'تم التعرف على القارئ وفحص بيانات البطاقة. قراءة البطاقة وحدها لا تثبت أن القفل سيقبل الدخول.',
     },
     warnings: {
-      fr: ['Ne déconnectez pas le lecteur USB pendant l’écriture d’un secteur.', 'Assurez-vous que le code système (System Code) de votre établissement est correctement saisi dans les paramètres serrures.'],
-      en: ['Do not disconnect the reader during sector write operations.', 'Ensure property System Code is configured correctly in lock settings.'],
-      ar: ['لا تفصل كابل USB أثناء كتابة البيانات على البطاقة.', 'تأكد من مطابقة كود النظام (System Code) الخاص بفندقك في الإعدادات.'],
+      fr: [
+        'Ne déconnectez jamais le lecteur pendant une écriture.',
+        'Une carte Maître ouvre toutes les chambres ; une carte universelle de système sert à la mise en service et ne doit pas être distribuée comme carte de service.',
+        'La carte Spéciale 0x90 est expérimentale : son marqueur PIN est vérifié par l’application, pas par une protection cryptographique confirmée dans la serrure. Ne l’utilisez pas pour sécuriser une chambre.',
+        'La présence d’un type de carte dans le logiciel ne garantit pas sa compatibilité avec chaque modèle de serrure. Validez physiquement chaque famille avant exploitation.',
+      ],
+      en: [
+        'Never disconnect the encoder during a write operation.',
+        'A Master Card opens all rooms; a universal system card is for commissioning and must not be issued as a staff card.',
+        'The 0x90 Special Card is experimental: its PIN marker is checked by the app, not by confirmed cryptographic enforcement in the lock. Do not rely on it to secure a room.',
+        'A card type appearing in the software does not guarantee compatibility with every lock model. Physically validate each family before live use.',
+      ],
+      ar: [
+        'لا تفصل جهاز التشفير أثناء عملية الكتابة.',
+        'تفتح بطاقة Master جميع الغرف؛ أما بطاقة النظام الشاملة فهي مخصصة للتهيئة ولا توزع كبطاقة خدمة.',
+        'بطاقة 0x90 الخاصة تجريبية: يتحقق التطبيق من علامة PIN ولا توجد حماية تشفيرية مؤكدة داخل القفل. لا تعتمد عليها لتأمين غرفة.',
+        'ظهور نوع البطاقة في البرنامج لا يضمن توافقه مع كل طرازات الأقفال. اختبر كل نوع فعلياً قبل التشغيل.',
+      ],
     },
     tips: {
-      fr: ['Utilisez des cartes Mifare Classic 1K de bonne qualité certifiées 13.56 MHz.', 'Générez toujours une carte Horloge chaque mois pour éviter tout décalage temporel des serrures.'],
-      en: ['Use high quality 13.56 MHz Mifare Classic 1K cards.', 'Issue a Clock Card monthly to prevent internal clock drift on locks.'],
-      ar: ['استخدم بطاقات أصلية 13.56 ميغاهرتز عالية الجودة.', 'أصدر بطاقة ساعة شهرياً لتفادي انحراف التوقيت الداخلي للأقفال.'],
+      fr: ['Conservez une sauvegarde du MDB et un registre des cartes émises.', 'Utilisez une carte de test et une serrure de test pour chaque changement de format ou de code système.', 'Créez une carte Horloge uniquement lorsque le réglage de l’horloge est nécessaire et selon la procédure du fabricant.'],
+      en: ['Keep a backup of the MDB and a register of issued cards.', 'Use a test card and test lock for each format or system-code change.', 'Issue a Clock Card only when clock adjustment is required and according to the manufacturer procedure.'],
+      ar: ['احتفظ بنسخة احتياطية من MDB وسجل للبطاقات الصادرة.', 'استخدم بطاقة وقفل اختبار عند كل تغيير في التنسيق أو رمز النظام.', 'أصدر بطاقة الساعة عند الحاجة لضبط الوقت ووفق تعليمات الشركة المصنعة فقط.'],
     },
   },
   {
@@ -449,14 +468,14 @@ const tutorials: Tutorial[] = [
     duration: '6 min',
     availability: 'available',
     title: {
-      fr: 'Fiche de police officielle & Enregistrement des pièces d’identité',
-      en: 'Official police registration forms & ID card management',
-      ar: 'استمارة شرطة الحدود وبطاقة التعريف وتسجيل النزلاء',
+      fr: 'Fiche d’informations client & Export des arrivées',
+      en: 'Guest information form & arrival export',
+      ar: 'بيانات النزيل وتصدير سجل الوصول',
     },
     summary: {
-      fr: 'Remplir les informations légales des clients (CNI, Passeport, Permis), imprimer la fiche de police réglementaire et exporter le registre d’arrivée.',
-      en: 'Record legal guest credentials (ID card, Passport, Driver License), print official police forms, and export arrival log.',
-      ar: 'تسجيل البيانات القانونية للنزلاء (بطاقة التعريف، جواز السفر)، وطباعة استمارة الشرطة وتصدير سجل الوصول اليومي.',
+      fr: 'Renseigner les informations de séjour et d’identité disponibles, puis préparer un document et un export des arrivées à vérifier avant tout usage réglementaire.',
+      en: 'Record available stay and identity details, then prepare a document and arrival export for review before any regulatory use.',
+      ar: 'تسجيل بيانات الإقامة والهوية المتاحة ثم إعداد مستند وكشف الوصول لمراجعتهما قبل أي استخدام تنظيمي.',
     },
     prerequisites: {
       fr: ['Avoir une réservation active au statut Confirmée ou En cours (In-house).', 'Avoir la pièce d’identité physique du client en main.'],
@@ -470,9 +489,9 @@ const tutorials: Tutorial[] = [
         'Sélectionnez le type de document : Carte Nationale d’Identité (CNI), Passeport ou Permis de conduire.',
         'Saisissez le numéro officiel, la date et le lieu de délivrance, ainsi que la wilaya / pays de résidence.',
         'Indiquez la nationalité, la profession et le numéro d’immatriculation du véhicule si le client est motorisé.',
-        'Cliquez sur « Imprimer la Fiche de Police » pour générer le document officiel au format légal bilingue.',
-        'Faites signer la fiche par le client et classez-la dans le registre physique de l’hôtel.',
-        'Exportez au besoin la liste quotidienne des arrivées en format PDF ou tableur pour transmission aux autorités.',
+        'Générez le document disponible dans Appointment, puis vérifiez son modèle, ses champs et sa version avant toute utilisation externe.',
+        'Appliquez la procédure de signature, d’archivage et de transmission validée par votre établissement.',
+        'N’exportez ou ne transmettez les informations qu’aux destinataires autorisés et selon la procédure de votre établissement.',
       ],
       en: [
         'Open the stay folio from the Gantt planner or Bookings view.',
@@ -480,9 +499,9 @@ const tutorials: Tutorial[] = [
         'Select document type: National ID (CNI), Passport, or Driving License.',
         'Input document number, issue date, issuing authority and home province / country.',
         'Fill in nationality, occupation and vehicle license plate if applicable.',
-        'Click Print Police Form to generate the bilingual regulatory PDF document.',
-        'Have the guest sign the form and file it in the official front desk binder.',
-        'Export daily arrival logs to PDF or spreadsheet when required for authorities.',
+        'Generate the document available in Appointment and review its template, fields and version before external use.',
+        'Follow the signature, retention and transmission procedure approved by your property.',
+        'Export or transmit guest information only to authorized recipients under your property procedure.',
       ],
       ar: [
         'افتح بطاقة الحجز من مخطط جانت أو قائمة الإقامات.',
@@ -490,15 +509,15 @@ const tutorials: Tutorial[] = [
         'اختر نوع الوثيقة: بطاقة التعريف الوطنية، جواز السفر، أو رخصة السياقة.',
         'أدخل الرقم الوطني وتاريخ ومكان الإصدار، وولاية أو بلد الإقامة.',
         'سجل الجنسية، المهنة، ورقم لوحة ترقيم السيارة إن وجدت.',
-        'اضغط على «طباعة استمارة الشرطة» لإنشاء الملف الرسمي المعتمد ثنائي اللغة.',
-        'اطلب توقيع النزيل واحتفظ بالاستمارة في سجل الاستقبال المعتمد.',
-        'قم بتصدير كشف الوصول اليومي بصيغة PDF لتقديمه للجهات المختصة عند الطلب.',
+        'أنشئ المستند المتاح في Appointment وراجع النموذج والحقول والإصدار قبل استخدامه خارج التطبيق.',
+        'اتبع إجراء التوقيع والحفظ والإرسال المعتمد لدى مؤسستك.',
+        'لا تصدر أو ترسل بيانات النزلاء إلا إلى الجهات المخولة ووفق إجراء مؤسستك.',
       ],
     },
     result: {
-      fr: 'La fiche de police est conforme à la réglementation hôtelière et prête à être signée et transmise.',
-      en: 'The police form is strictly compliant with hospitality regulations and ready for signature.',
-      ar: 'استمارة الشرطة مطابقة للوائح الفندقية ومعتمدة وجاهزة للتوقيع والتسليم.',
+      fr: 'Les informations sont regroupées dans le document et l’export disponibles ; leur conformité doit être vérifiée par l’établissement avant usage officiel.',
+      en: 'Information is collected in the available document and export; the property must verify legal compliance before official use.',
+      ar: 'تم جمع البيانات في المستند والكشف المتاحين؛ ويجب على المؤسسة التحقق من المطابقة القانونية قبل الاستخدام الرسمي.',
     },
     warnings: {
       fr: ['Ne conservez pas de copies numériques de pièces d’identité sans consentement et sans chiffrement sécurisé.'],
@@ -583,9 +602,9 @@ const tutorials: Tutorial[] = [
 ];
 
 const ui = {
-  fr: { heading: 'Centre d’aide', subtitle: 'Apprenez à utiliser Appointment, étape par étape.', search: 'Rechercher un tutoriel, une opération…', all: 'Tous', available: 'Disponible', planned: 'À venir', min: 'min', prerequisites: 'Avant de commencer', steps: 'Procédure détaillée', result: 'Résultat attendu', warnings: 'Points de vigilance', tips: 'Bonnes pratiques', back: 'Tous les tutoriels', progress: 'Tutoriels terminés', completed: 'Terminé', mark: 'Marquer comme terminé', categories: { reservations: 'Réservations', finance: 'Facturation & paiements', operations: 'Opérations hôtelières', services: 'Services & Spa', access: 'Accès & QR', management: 'Pilotage & distribution', administration: 'Administration', future: 'Fonctionnalités en préparation' }, empty: 'Aucun tutoriel ne correspond à votre recherche.' },
-  en: { heading: 'Help center', subtitle: 'Learn how to use Appointment, step by step.', search: 'Search tutorials and tasks…', all: 'All', available: 'Available', planned: 'Coming soon', min: 'min', prerequisites: 'Before you start', steps: 'Step-by-step guide', result: 'Expected result', warnings: 'Important warnings', tips: 'Best practices', back: 'All tutorials', progress: 'Completed tutorials', completed: 'Completed', mark: 'Mark as completed', categories: { reservations: 'Reservations', finance: 'Billing & payments', operations: 'Hotel operations', services: 'Services & Spa', access: 'Access & QR', management: 'Management & distribution', administration: 'Administration', future: 'In development' }, empty: 'No tutorial matches your search.' },
-  ar: { heading: 'مركز المساعدة', subtitle: 'تعلم استخدام Appointment خطوة بخطوة.', search: 'ابحث عن دليل أو عملية…', all: 'الكل', available: 'متاح', planned: 'قريباً', min: 'دقيقة', prerequisites: 'قبل البدء', steps: 'الخطوات التفصيلية', result: 'النتيجة المتوقعة', warnings: 'تنبيهات مهمة', tips: 'أفضل الممارسات', back: 'كل الدروس', progress: 'الدروس المكتملة', completed: 'مكتمل', mark: 'وضع علامة مكتمل', categories: { reservations: 'الحجوزات', finance: 'الفوترة والمدفوعات', operations: 'عمليات الفندق', services: 'الخدمات والسبا', access: 'الدخول وQR', management: 'الإدارة والتوزيع', administration: 'الإدارة التقنية', future: 'قيد التطوير' }, empty: 'لا يوجد دليل يطابق البحث.' }
+  fr: { heading: 'Centre d’aide', subtitle: 'Apprenez à utiliser Appointment, étape par étape.', search: 'Rechercher un tutoriel, une opération…', all: 'Tous', available: 'Disponible', planned: 'À venir', min: 'min', prerequisites: 'Avant de commencer', steps: 'Procédure détaillée', result: 'Résultat attendu', warnings: 'Points de vigilance', tips: 'Bonnes pratiques', back: 'Tous les tutoriels', progress: 'Tutoriels terminés', completed: 'Terminé', mark: 'Marquer comme terminé', categories: { reservations: 'Réservations', finance: 'Facturation & paiements', operations: 'Opérations hôtelières', services: 'Services & Spa', access: 'Accès & QR', management: 'Pilotage & distribution', administration: 'Administration', future: 'Fonctionnalités en préparation' }, plannedNotice: 'Cette procédure décrit un processus cible ou une capacité encore en validation. Ne l’utilisez pas comme procédure de production.', progressDevice: 'Progression enregistrée sur cet appareil et ce navigateur.', empty: 'Aucun tutoriel ne correspond à votre recherche.' },
+  en: { heading: 'Help center', subtitle: 'Learn how to use Appointment, step by step.', search: 'Search tutorials and tasks…', all: 'All', available: 'Available', planned: 'Coming soon', min: 'min', prerequisites: 'Before you start', steps: 'Step-by-step guide', result: 'Expected result', warnings: 'Important warnings', tips: 'Best practices', back: 'All tutorials', progress: 'Completed tutorials', completed: 'Completed', mark: 'Mark as completed', categories: { reservations: 'Reservations', finance: 'Billing & payments', operations: 'Hotel operations', services: 'Services & Spa', access: 'Access & QR', management: 'Management & distribution', administration: 'Administration', future: 'In development' }, plannedNotice: 'This procedure describes a target workflow or a capability still being validated. Do not use it as a production procedure.', progressDevice: 'Progress is saved on this device and browser.', empty: 'No tutorial matches your search.' },
+  ar: { heading: 'مركز المساعدة', subtitle: 'تعلم استخدام Appointment خطوة بخطوة.', search: 'ابحث عن دليل أو عملية…', all: 'الكل', available: 'متاح', planned: 'قريباً', min: 'دقيقة', prerequisites: 'قبل البدء', steps: 'الخطوات التفصيلية', result: 'النتيجة المتوقعة', warnings: 'تنبيهات مهمة', tips: 'أفضل الممارسات', back: 'كل الدروس', progress: 'الدروس المكتملة', completed: 'مكتمل', mark: 'وضع علامة مكتمل', categories: { reservations: 'الحجوزات', finance: 'الفوترة والمدفوعات', operations: 'عمليات الفندق', services: 'الخدمات والسبا', access: 'الدخول وQR', management: 'الإدارة والتوزيع', administration: 'الإدارة التقنية', future: 'قيد التطوير' }, plannedNotice: 'تصف هذه الإجراءات سير عمل مستقبلياً أو وظيفة لا تزال قيد التحقق. لا تستخدمها كإجراء إنتاجي.', progressDevice: 'يتم حفظ التقدم على هذا الجهاز والمتصفح فقط.', empty: 'لا يوجد دليل يطابق البحث.' }
 };
 
 export const HelpCenterView: React.FC = () => {
@@ -595,7 +614,11 @@ export const HelpCenterView: React.FC = () => {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const validTutorialIds = useMemo(() => tutorials.map((item) => item.id), []);
+  const validTutorialIds = useMemo(
+    () => tutorials.filter((item) => item.availability === 'available').map((item) => item.id),
+    [],
+  );
+  const availableTutorialCount = validTutorialIds.length;
   const getHelpStorage = () => {
     try {
       return typeof window === 'undefined' ? null : window.localStorage;
@@ -640,13 +663,18 @@ export const HelpCenterView: React.FC = () => {
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3 sm:max-w-md">
             <div className="rounded-xl bg-white/10 p-3"><div className="text-2xl font-bold">{tutorials.filter(x => x.availability === 'available').length}</div><div className="text-xs text-slate-300">{t.available}</div></div>
-            <div className="rounded-xl bg-white/10 p-3"><div className="text-2xl font-bold">{completed.length}</div><div className="text-xs text-slate-300">{t.progress}</div></div>
+            <div className="rounded-xl bg-white/10 p-3"><div className="text-2xl font-bold">{completed.length} / {availableTutorialCount}</div><div className="text-xs text-slate-300">{t.progress}</div></div>
+          </div>
+          <p className="mt-3 text-[11px] text-slate-300">{t.progressDevice}</p>
+        </header>
+
+        {selected ? (
           </div>
         </header>
 
         {selected ? (
           <article className="space-y-5">
-            <button onClick={() => setSelectedId(null)} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-900">
+            <button type="button" onClick={() => setSelectedId(null)} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-900">
               {isRtl ? <ChevronRight size={17}/> : <ChevronLeft size={17}/>} {t.back}
             </button>
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-7">
@@ -655,6 +683,12 @@ export const HelpCenterView: React.FC = () => {
                 <span className="inline-flex items-center gap-1 text-xs text-slate-500"><Clock3 size={13}/>{selected.duration}</span>
                 <span className="text-xs text-slate-500">{t.categories[selected.category as keyof typeof t.categories]}</span>
               </div>
+              {selected.availability === 'planned' && (
+                <div role="note" className="mt-4 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm leading-6 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                  <AlertTriangle size={18} className="mt-1 shrink-0" />
+                  <span>{t.plannedNotice}</span>
+                </div>
+              )}
               <h2 className="mt-3 text-xl font-bold text-slate-900 dark:text-white sm:text-2xl">{selected.title[locale]}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{selected.summary[locale]}</p>
               <section className="mt-6">
@@ -681,7 +715,7 @@ export const HelpCenterView: React.FC = () => {
               </section>
               <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5 dark:border-slate-800">
                 <span className="text-xs text-slate-500">{completed.includes(selected.id) ? t.completed : ''}</span>
-                <button disabled={selected.availability === 'planned' || completed.includes(selected.id)} onClick={() => markCompleted(selected.id)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700">
+                <button type="button" disabled={selected.availability === 'planned' || completed.includes(selected.id)} onClick={() => markCompleted(selected.id)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700">
                   <CheckCircle2 size={16}/>{completed.includes(selected.id) ? t.completed : t.mark}
                 </button>
               </div>
@@ -706,7 +740,7 @@ export const HelpCenterView: React.FC = () => {
             {filtered.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 dark:border-slate-700">{t.empty}</div> : (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {filtered.map(item=>{ const Icon=item.icon; return (
-                  <button key={item.id} onClick={()=>setSelectedId(item.id)} className="group rounded-2xl border border-slate-200 bg-white p-4 text-left rtl:text-right shadow-xs transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-700">
+                  <button type="button" key={item.id} aria-label={item.title[locale]} onClick={()=>setSelectedId(item.id)} className="group rounded-2xl border border-slate-200 bg-white p-4 text-left rtl:text-right shadow-xs transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-700">
                     <div className="flex items-start justify-between gap-3">
                       <div className="rounded-xl bg-blue-50 p-2.5 text-blue-700 dark:bg-blue-950 dark:text-blue-300"><Icon size={21}/></div>
                       <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${item.availability==='available'?'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300':'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}>{item.availability==='available'?t.available:t.planned}</span>
