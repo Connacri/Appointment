@@ -42,7 +42,7 @@ import { DomainType } from '../types/booking';
 import { APP_THEMES } from '../data/themes';
 import { ROLE_CATEGORY_META } from '../data/roles';
 import type { RoleCategory, AppTabId } from '../types/roles';
-import { getRoleUiCapabilities } from '../utils/rolePermissions';
+import { getRoleUiCapabilities, isTabAllowedForRole } from '../utils/rolePermissions';
 import { RoleIcon } from './RoleIcon';
 import { supabase } from '../services/supabase/supabaseClient';
 import { DEFAULT_FAVICON_PATH, resolveAppIconHref } from '../utils/faviconSync';
@@ -658,8 +658,8 @@ export const Sidebar: React.FC = () => {
             )}
           </button>
 
-          {/* Appointment Académie & Tutoriels (Directly above À Propos) */}
-          {!uiCaps.isFocusedOperationalRole && (
+          {/* Appointment Academy is informational and available to every role. */}
+          {isTabAllowedForRole(activeRoleDefinition, 'help') && (
             <button
               type="button"
               onClick={() => {
@@ -667,14 +667,21 @@ export const Sidebar: React.FC = () => {
                 setIsSidebarMobileOpen(false);
               }}
               className={`cursor-pointer transition-colors shadow-2xs ${
-                activeView === 'help'
-                  ? 'bg-blue-600 text-white font-bold shadow-sm'
-                  : showCompact
-                  ? 'mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60'
-                  : 'w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold bg-blue-50/80 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60'
+                showCompact
+                  ? `mx-auto w-10 h-10 min-h-10 flex items-center justify-center rounded-xl ${
+                      activeView === 'help'
+                        ? 'bg-blue-600 text-white font-bold shadow-sm'
+                        : 'bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60'
+                    }`
+                  : `w-full flex items-center gap-2.5 px-3 min-h-[42px] py-2 rounded-xl text-xs font-semibold ${
+                      activeView === 'help'
+                        ? 'bg-blue-600 text-white font-bold shadow-sm'
+                        : 'bg-blue-50/80 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/60'
+                    }`
               }`}
               title={language === 'fr' ? 'Appointment Académie & Tutoriels' : language === 'ar' ? 'أكاديمية ودروس Appointment' : 'Appointment Academy & Tutorials'}
               aria-label={language === 'fr' ? 'Appointment Académie' : language === 'ar' ? 'أكاديمية Appointment' : 'Appointment Academy'}
+              aria-current={activeView === 'help' ? 'page' : undefined}
             >
               <GraduationCap size={16} className={`shrink-0 ${activeView === 'help' ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} />
               {!showCompact && (

@@ -6,7 +6,7 @@ import {
   AlertTriangle, Lightbulb, PlayCircle, GraduationCap, Wrench, FileText, Palette,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { WINDOWS_CARDLOCK_MDB_PATHS, ANDROID_CARDLOCK_MDB_PATHS, WEB_CARDLOCK_MDB_PATHS } from '../locks/database/mdbPaths';
+import { filterHelpTutorials, readCompletedTutorialIds, writeCompletedTutorialIds } from '../utils/helpCenter';
 
 type Locale = 'fr' | 'en' | 'ar';
 type Tutorial = {
@@ -594,22 +594,29 @@ export const HelpCenterView: React.FC = () => {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [completed, setCompleted] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('omnibook_help_completed') || '[]'); }
-    catch { return []; }
-  });
+  const validTutorialIds = useMemo(() => tutorials.map((item) => item.id), []);
+  const getHelpStorage = () => {
+    try {
+      return typeof window === 'undefined' ? null : window.localStorage;
+    } catch {
+      return null;
+    }
+  };
+  const [completed, setCompleted] = useState<string[]>(() =>
+    readCompletedTutorialIds(getHelpStorage(), validTutorialIds)
+  );
 
-  const filtered = useMemo(() => tutorials.filter((item) => {
-    const matchesCategory = category === 'all' || item.category === category;
-    const haystack = [item.title[locale], item.summary[locale], item.title.fr, item.summary.fr].join(' ').toLowerCase();
-    return matchesCategory && haystack.includes(query.trim().toLowerCase());
-  }), [category, locale, query]);
+  const filtered = useMemo(
+    () => filterHelpTutorials(tutorials, category, query),
+    [category, query],
+  );
 
   const selected = tutorials.find((item) => item.id === selectedId);
   const markCompleted = (id: string) => {
-    const next = completed.includes(id) ? completed : [...completed, id];
+    if (completed.includes(id) || !validTutorialIds.includes(id)) return;
+    const next = [...completed, id];
     setCompleted(next);
-    localStorage.setItem('omnibook_help_completed', JSON.stringify(next));
+    writeCompletedTutorialIds(getHelpStorage(), next, validTutorialIds);
   };
   const categories = Array.from(new Set(tutorials.map((item) => item.category)));
   const isRtl = locale === 'ar';
@@ -673,7 +680,7 @@ export const HelpCenterView: React.FC = () => {
               </section>
               <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5 dark:border-slate-800">
                 <span className="text-xs text-slate-500">{completed.includes(selected.id) ? t.completed : ''}</span>
-                <button disabled={selected.availability === 'planned'} onClick={() => markCompleted(selected.id)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700">
+                <button disabled={selected.availability === 'planned' || completed.includes(selected.id)} onClick={() => markCompleted(selected.id)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700">
                   <CheckCircle2 size={16}/>{completed.includes(selected.id) ? t.completed : t.mark}
                 </button>
               </div>
@@ -682,17 +689,23 @@ export const HelpCenterView: React.FC = () => {
         ) : (
           <>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
-              <input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.search} className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:focus:ring-blue-950"/>
+              <Search className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-slate-400`} size={18}/>
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder={t.search}
+                aria-label={t.search}
+                className={`h-12 w-full rounded-xl border border-slate-200 bg-white ${isRtl ? 'pr-10 pl-4 text-right' : 'pl-10 pr-4 text-left'} text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:focus:ring-blue-950`}
+              />
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1">
-              <button onClick={()=>setCategory('all')} className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold ${category==='all'?'bg-blue-600 text-white':'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300'}`}>{t.all}</button>
-              {categories.map(key=><button key={key} onClick={()=>setCategory(key)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${category===key?'bg-blue-600 text-white':'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300'}`}>{t.categories[key as keyof typeof t.categories]}</button>)}
+              <button type="button" aria-pressed={category === 'all'} onClick={() => setCategory('all')} className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold ${category==='all'?'bg-blue-600 text-white':'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300'}`}>{t.all}</button>
+              {categories.map(key=><button type="button" key={key} aria-pressed={category === key} onClick={() => setCategory(key)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${category===key?'bg-blue-600 text-white':'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300'}`}>{t.categories[key as keyof typeof t.categories]}</button>)}
             </div>
             {filtered.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 dark:border-slate-700">{t.empty}</div> : (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {filtered.map(item=>{ const Icon=item.icon; return (
-                  <button key={item.id} onClick={()=>setSelectedId(item.id)} className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-xs transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-700">
+                  <button key={item.id} onClick={()=>setSelectedId(item.id)} className="group rounded-2xl border border-slate-200 bg-white p-4 text-left rtl:text-right shadow-xs transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-700">
                     <div className="flex items-start justify-between gap-3">
                       <div className="rounded-xl bg-blue-50 p-2.5 text-blue-700 dark:bg-blue-950 dark:text-blue-300"><Icon size={21}/></div>
                       <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${item.availability==='available'?'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300':'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}>{item.availability==='available'?t.available:t.planned}</span>
