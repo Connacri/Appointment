@@ -1,3 +1,4 @@
+-- data-contract: function-only
 -- Harden exposed PostgreSQL privileges without changing business rows.
 -- RLS filters row operations; TRUNCATE, REFERENCES and MAINTAIN are table-level
 -- privileges and are not constrained by row policies.

@@ -9,7 +9,7 @@ The initial audit confirmed that the PostgreSQL role `authenticated` had `TRUNCA
 
 This was a P0 authorization defect: PostgreSQL RLS does not filter table-wide operations such as `TRUNCATE` or `REFERENCES`. RLS policies alone were therefore insufficient to prevent a signed-in client from truncating data across workspaces.
 
-Migration `20261127001800_harden_public_table_privileges.sql`:
+Migration `20261127001723_harden_public_table_privileges.sql`:
 - removes all table privileges from `anon`;
 - removes `TRUNCATE`, `REFERENCES`, `TRIGGER` and `MAINTAIN` from `authenticated`;
 - removes all client privileges from the two technical tables that have no RLS policies;

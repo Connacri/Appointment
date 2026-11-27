@@ -7,6 +7,10 @@ const migration = readFileSync(
   'utf8',
 );
 
+test('migration is explicitly marked as a non-type-changing function/privilege change', () => {
+  assert.match(migration, /^-- data-contract: function-only/m);
+});
+
 test('existing public tables remove RLS-bypass and schema-management privileges', () => {
   assert.match(migration, /REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM anon/i);
   assert.match(

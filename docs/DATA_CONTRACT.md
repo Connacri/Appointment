@@ -412,3 +412,30 @@ order and preventing a TypeScript use-before-declaration error.
 
 Regression coverage explicitly asserts the reconnecting state, disabled mutation capability
 and `data_not_ready` reason for both MULTI_DEVICE and SINGLE_DEVICE while core data is not hydrated.
+
+
+### Public database privilege hardening — 2026-11-27
+
+A live PostgreSQL grant audit found that the default public-schema ACLs had granted
+`TRUNCATE`, `REFERENCES`, `TRIGGER` and `MAINTAIN` to `authenticated` across
+all 21 public tables. These privileges are not constrained by row-level security.
+The `anon` role also had table privileges on the technical `keepalive_pings` and
+`pms_mdb_imports` tables.
+
+Migration `20261127001723_harden_public_table_privileges` now:
+- revokes all public-table privileges from `anon`;
+- removes table-wide RLS-bypass/schema-management privileges from `authenticated`;
+- removes client privileges from the two technical default-deny tables;
+- hardens default privileges for future `postgres`-created public tables and sequences;
+- extends the existing postgres-owned DDL event trigger to enable RLS and remove
+  dangerous grants from future public tables/sequences created by platform-managed roles;
+- leaves `service_role` grants and business rows unchanged.
+
+This migration changes privileges and an internal DDL trigger function only. It does not
+change table/column/function API shapes, so generated `database.types.ts` remains byte-for-byte
+identical to the current live schema output.
+
+Post-deployment SQL verification on 2026-11-27 confirmed 21 public tables, zero tables
+with any `anon` table privileges, zero tables with dangerous `authenticated` table
+privileges, and no loss of authenticated SELECT on the 19 application tables. A
+transactional public-table/identity-sequence DDL probe passed and was rolled back.
