@@ -53,8 +53,10 @@ test('raw booking and resource setters cannot bypass the mutation policy', () =>
 });
 
 test('initial establishment setup is the only no-registry bootstrap exception', () => {
-  assert.match(app, /const assertInitialSetupMutationAllowed = \(\): void => \{\s+if \(!hasOnboardedRef\.current && !deviceRegistry\) return/);
-  assert.doesNotMatch(app, /assertBusinessMutationAllowed: \(allowInitialSetup/);
+  assert.match(app, /const assertBusinessMutationAllowed = \(allowInitialSetup = false\): void => \{/);
+  assert.match(app, /const assertInitialSetupMutationAllowed = \(\): void => \{\s+assertBusinessMutationAllowed\(true\)/);
+  assert.match(app, /assertBusinessMutationAllowed: \(\) => assertBusinessMutationAllowed\(\)/);
+  assert.match(app, /assertInitialSetupMutationAllowed: \(\) => assertBusinessMutationAllowed\(true\)/);
 });
 
 
@@ -64,9 +66,9 @@ test('customer profile and onboarding mutations respect the topology gate', () =
 });
 
 test('physical lock card issuance, revocation, settings and destructive actions are guarded', () => {
-  assert.match(proUsb, /const runWithCardProgress[\\s\\S]*?assertBusinessMutationAllowed\(\)/);
+  assert.match(proUsb, /const runWithCardProgress[\s\S]*?assertBusinessMutationAllowed\(\)/);
   assert.match(sectionProUsb('const confirmRevoke', 'const cancelRevoke'), /runGuardedLockMutation/);
-  assert.match(proUsb, /const runGuardedLockMutation[\\s\\S]*?assertBusinessMutationAllowed\(\)/);
+  assert.match(proUsb, /const runGuardedLockMutation[\s\S]*?assertBusinessMutationAllowed\(\)/);
   assert.match(proUsb, /lockManager\.clearMdb\(\)[\\s\\S]{0,250}runGuardedLockMutation|runGuardedLockMutation[\\s\\S]{0,250}lockManager\.clearMdb\(\)/);
   assert.match(proUsb, /runGuardedLockMutation\(\(\) => lockManager\.updateSettings\(\{ guestAccessBolt:/);
   assert.match(proUsb, /runGuardedLockMutation\(\(\) => lockManager\.clearLogs\(\)\)/);
@@ -74,8 +76,8 @@ test('physical lock card issuance, revocation, settings and destructive actions 
 
 test('CardLock imports and BookingModal card writes check device mutation authority first', () => {
   assert.match(sectionProUsb('const handleImportMdb', 'const handleIssueCommissioning'), /assertBusinessMutationAllowed\(\)/);
-  assert.match(setupModal, /assertBusinessMutationAllowed\(isFirstLaunch\)[\\s\\S]*?lockManager\.importMdb/);
-  assert.match(inspector, /assertBusinessMutationAllowed\(\)[\\s\\S]*?lockManager\.importMdb/);
+  assert.match(setupModal, /assertInitialSetupMutationAllowed\(\)[\s\S]*?lockManager\.importMdb/);
+  assert.match(inspector, /assertBusinessMutationAllowed\(\)[\s\S]*?lockManager\.importMdb/);
   assert.match(bookingModal, /const handleCreateRoomCard[\s\S]*?assertBusinessMutationAllowed\(\)/);
 });
 

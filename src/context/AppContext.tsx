@@ -958,13 +958,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Bootstrap exception is deliberately limited to the first establishment setup.
   // It does not authorize bookings, stock, tasks, staff, invoices or other operations.
-  const assertBusinessMutationAllowed = (): void => {
+  const assertBusinessMutationAllowed = (allowInitialSetup = false): void => {
+    if (allowInitialSetup && !hasOnboardedRef.current && !deviceRegistry) return;
     assertCriticalMutationAllowed();
   };
 
   const assertInitialSetupMutationAllowed = (): void => {
-    if (!hasOnboardedRef.current && !deviceRegistry) return;
-    assertCriticalMutationAllowed();
+    assertBusinessMutationAllowed(true);
   };
 
   const createMutationId = (): string => {
@@ -4192,8 +4192,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deviceRegistry,
         deviceMutationAvailability,
         configureSingleDeviceTopology,
-        assertBusinessMutationAllowed,
-        assertInitialSetupMutationAllowed,
+        assertBusinessMutationAllowed: () => assertBusinessMutationAllowed(),
+        assertInitialSetupMutationAllowed: () => assertBusinessMutationAllowed(true),
         refreshWorkspaces: workspace.refreshWorkspaces,
         language,
         setLanguage,
