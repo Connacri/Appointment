@@ -314,11 +314,21 @@ fn civil_from_days(days_since_epoch: i64) -> (i64, i64, i64) {
 }
 
 fn wall_clock_minute(date: &str, time: &str) -> Option<i64> {
-    let mut date_parts = date.split('-');
-    let year = date_parts.next()?.parse::<i64>().ok()?;
-    let month = date_parts.next()?.parse::<i64>().ok()?;
-    let day = date_parts.next()?.parse::<i64>().ok()?;
-    if date_parts.next().is_some() || year < 1 || !(1..=12).contains(&month) {
+    let date_bytes = date.as_bytes();
+    if date_bytes.len() != 10
+        || date_bytes[4] != b'-'
+        || date_bytes[7] != b'-'
+        || !date_bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| matches!(index, 4 | 7) || byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let year = date.get(0..4)?.parse::<i64>().ok()?;
+    let month = date.get(5..7)?.parse::<i64>().ok()?;
+    let day = date.get(8..10)?.parse::<i64>().ok()?;
+    if year < 1 || !(1..=12).contains(&month) {
         return None;
     }
     let leap_year = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
@@ -332,10 +342,19 @@ fn wall_clock_minute(date: &str, time: &str) -> Option<i64> {
         return None;
     }
 
-    let mut time_parts = time.split(':');
-    let hour = time_parts.next()?.parse::<i64>().ok()?;
-    let minute = time_parts.next()?.parse::<i64>().ok()?;
-    if time_parts.next().is_some() || !(0..=23).contains(&hour) || !(0..=59).contains(&minute) {
+    let time_bytes = time.as_bytes();
+    if time_bytes.len() != 5
+        || time_bytes[2] != b':'
+        || !time_bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| index == 2 || byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let hour = time.get(0..2)?.parse::<i64>().ok()?;
+    let minute = time.get(3..5)?.parse::<i64>().ok()?;
+    if !(0..=23).contains(&hour) || !(0..=59).contains(&minute) {
         return None;
     }
     Some(days_from_civil(year, month, day) * 1_440 + hour * 60 + minute)
@@ -384,10 +403,12 @@ fn booking_candidate(event: &P2pEvent) -> Option<BookingConflictCandidate> {
     let check_in = payload
         .get("checkInTime")
         .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
         .unwrap_or("14:00");
     let check_out = payload
         .get("checkOutTime")
         .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
         .unwrap_or("12:00");
     let start = wall_clock_minute(start_date, check_in)?;
     let end = wall_clock_minute(end_date, check_out)?;
