@@ -1,5 +1,9 @@
 apply plugin: 'com.android.application'
 
+def appPackageJson = new groovy.json.JsonSlurper().parse(
+    new File(rootProject.projectDir.parentFile, "package.json")
+)
+
 android {
     namespace = "com.planning.oran"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -8,7 +12,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode Integer.parseInt(String.valueOf(project.findProperty("versionCode") ?: "1"))
-        versionName String.valueOf(project.findProperty("versionName") ?: "1.0.1")
+        versionName String.valueOf(project.findProperty("versionName") ?: appPackageJson.version)
         resConfigs "fr", "en", "ar"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

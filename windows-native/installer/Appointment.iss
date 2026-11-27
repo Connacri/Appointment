@@ -1,6 +1,6 @@
 #define AppName "Appointment PMS"
 #ifndef AppVersion
-  #define AppVersion "1.2.0"
+  #define AppVersion "0.0.0"
 #endif
 #define AppPublisher "Connacri"
 #define AppExeName "appointment-pms-native.exe"

@@ -931,6 +931,12 @@ mod tests {
     #[test]
     fn application_identity_is_stable() {
         assert_eq!(env!("CARGO_PKG_NAME"), "appointment-pms-native");
-        assert_eq!(env!("CARGO_PKG_VERSION"), "1.2.0");
+        let version = env!("CARGO_PKG_VERSION");
+        let components: Vec<_> = version.split('.').collect();
+        assert_eq!(components.len(), 3, "release version must use MAJOR.MINOR.PATCH");
+        assert!(
+            components.iter().all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit())),
+            "release version must contain numeric components"
+        );
     }
 }

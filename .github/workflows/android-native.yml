@@ -84,7 +84,8 @@ jobs:
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew assembleDebug --no-daemon --max-workers=2
+          VERSION_NAME="$(node -p "require('./package.json').version")"
+          ./gradlew assembleDebug --no-daemon --max-workers=2 -PversionName="$VERSION_NAME" -PversionCode="${{ github.run_number }}"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

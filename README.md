@@ -9,7 +9,7 @@
 <br />
 
 [![Build & Deploy](https://img.shields.io/github/actions/workflow/status/Connacri/Appointment/release-and-deploy.yml?branch=main&label=build%20%26%20deploy&logo=githubactions)](https://github.com/Connacri/Appointment/actions/workflows/release-and-deploy.yml)
-[![Version](https://img.shields.io/badge/version-1.2.0-2563EB?logo=semver)](https://github.com/Connacri/Appointment/releases)
+[![Version](https://img.shields.io/github/v/release/Connacri/Appointment?logo=semver)](https://github.com/Connacri/Appointment/releases)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111827)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
