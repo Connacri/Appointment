@@ -33,10 +33,12 @@ begin
      or nullif(btrim(p_order_id), '') is null
      or p_received_at is null
      or nullif(btrim(p_actor_name), '') is null
-     or jsonb_typeof(p_movements) <> 'array'
-     or jsonb_array_length(p_movements) < 1
-     or jsonb_array_length(p_movements) > 100 then
+     or p_movements is null
+     or jsonb_typeof(p_movements) is distinct from 'array' then
     raise exception 'Invalid purchase-order receipt payload' using errcode = '22023';
+  end if;
+  if jsonb_array_length(p_movements) < 1 or jsonb_array_length(p_movements) > 100 then
+    raise exception 'Purchase-order receipt movement count is outside the allowed range' using errcode = '22023';
   end if;
 
   -- Serialize all receipt attempts for this order before checking its state.
