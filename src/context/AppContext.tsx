@@ -4193,7 +4193,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deviceMutationAvailability,
         configureSingleDeviceTopology,
         assertBusinessMutationAllowed: () => assertBusinessMutationAllowed(),
-        assertInitialSetupMutationAllowed: () => assertBusinessMutationAllowed(true),
+        assertInitialSetupMutationAllowed,
         refreshWorkspaces: workspace.refreshWorkspaces,
         language,
         setLanguage,

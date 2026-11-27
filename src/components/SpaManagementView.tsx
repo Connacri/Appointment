@@ -56,7 +56,7 @@ import {
 import { playSuccessFeedback, playClickFeedback, playErrorFeedback } from '../utils/audioFeedback';
 
 export const SpaManagementView: React.FC = () => {
-  const { language, currency, bookings } = useApp();
+  const { language, currency, bookings, assertBusinessMutationAllowed, deviceMutationAvailability } = useApp();
 
   const [activeTab, setActiveTab] = useState<'appointments' | 'facilities' | 'treatments' | 'therapists'>('appointments');
   const [appointments, setAppointments] = useState<SpaAppointment[]>(initialSpaAppointments);
@@ -104,6 +104,7 @@ export const SpaManagementView: React.FC = () => {
 
   // Handle appointment status transitions
   const handleUpdateAppointmentStatus = (id: string, newStatus: SpaAppointmentStatus) => {
+    assertBusinessMutationAllowed();
     setAppointments((prev) =>
       prev.map((a) => {
         if (a.id !== id) return a;
@@ -146,6 +147,7 @@ export const SpaManagementView: React.FC = () => {
 
   // Toggle Facility Status (e.g. mark clean or toggle maintenance)
   const handleFacilityCleaned = (facilityId: string) => {
+    assertBusinessMutationAllowed();
     setFacilities((prev) =>
       prev.map((f) => (f.id === facilityId ? { ...f, status: 'available', currentGuest: undefined, currentTreatment: undefined } : f))
     );
@@ -154,6 +156,7 @@ export const SpaManagementView: React.FC = () => {
 
   // Toggle Therapist Availability
   const handleToggleTherapist = (therapistId: string) => {
+    assertBusinessMutationAllowed();
     setTherapists((prev) =>
       prev.map((t) => (t.id === therapistId ? { ...t, isAvailable: !t.isAvailable } : t))
     );
@@ -162,6 +165,7 @@ export const SpaManagementView: React.FC = () => {
 
   // Create New Spa Booking
   const handleCreateAppointment = (e: React.FormEvent) => {
+    assertBusinessMutationAllowed();
     e.preventDefault();
 
     const selectedTreatment = treatments.find((t) => t.id === formTreatmentId) || treatments[0];
@@ -299,6 +303,7 @@ export const SpaManagementView: React.FC = () => {
               setSelectedTreatmentForBooking(null);
               setIsNewBookingModalOpen(true);
             }}
+            disabled={!deviceMutationAvailability.canMutate}
             className="flex items-center gap-1.5 h-8 sm:h-9 px-3 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer"
           >
             <Plus size={15} />
@@ -547,6 +552,7 @@ export const SpaManagementView: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleUpdateAppointmentStatus(apt.id, 'in_progress')}
+                            disabled={!deviceMutationAvailability.canMutate}
                             className="h-7 px-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-[11px] font-bold transition-colors cursor-pointer"
                           >
                             Démarrer
@@ -557,6 +563,7 @@ export const SpaManagementView: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleUpdateAppointmentStatus(apt.id, 'completed')}
+                            disabled={!deviceMutationAvailability.canMutate}
                             className="h-7 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[11px] font-bold transition-colors cursor-pointer"
                           >
                             Terminer Soin
@@ -662,6 +669,7 @@ export const SpaManagementView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleFacilityCleaned(fac.id)}
+                      disabled={!deviceMutationAvailability.canMutate}
                       className="h-7 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[11px] font-bold cursor-pointer transition-colors"
                     >
                       Valider Désinfection (Prêt)
@@ -682,6 +690,7 @@ export const SpaManagementView: React.FC = () => {
                         setFormFacilityId(fac.id);
                         setIsNewBookingModalOpen(true);
                       }}
+                      disabled={!deviceMutationAvailability.canMutate}
                       className="h-7 px-2.5 bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 text-white dark:text-slate-900 rounded-md text-[11px] font-bold cursor-pointer transition-colors"
                     >
                       Affecter Soin
@@ -834,6 +843,7 @@ export const SpaManagementView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleToggleTherapist(th.id)}
+                  disabled={!deviceMutationAvailability.canMutate}
                   className="h-7 px-2.5 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md text-[11px] font-semibold text-slate-700 dark:text-slate-300 cursor-pointer"
                 >
                   {th.isAvailable ? 'Passer en pause' : 'Prendre service'}
@@ -1096,6 +1106,7 @@ export const SpaManagementView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={!deviceMutationAvailability.canMutate}
                   className="h-8 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
                 >
                   <CheckCircle2 size={14} />

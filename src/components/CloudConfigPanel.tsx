@@ -37,6 +37,10 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
     refreshWorkspaces,
     cloudSyncStatus,
     forceSupabaseSync,
+    assertInitialSetupMutationAllowed,
+    deviceMutationAvailability,
+    deviceRegistry,
+    hasOnboarded,
   } = useApp();
 
   const initialSupabase = useMemo(() => readSupabaseRuntimeConfig(), []);
@@ -61,6 +65,7 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
   }>({ tone: 'idle', text: '' });
 
   const supabaseConfigured = Boolean(supabaseUrl.trim() && (supabasePublishableKey.trim() || supabaseAnonKey.trim()));
+  const canEditCloudConfig = deviceMutationAvailability.canMutate || (!hasOnboarded && !deviceRegistry);
 
   const formatReportNotice = (report: CloudRecoveryReport) => {
     if (report.skippedOffline) {
@@ -152,6 +157,7 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
   };
 
   const handleSaveSupabase = async () => {
+    assertInitialSetupMutationAllowed();
     const url = supabaseUrl.trim();
     const pub = supabasePublishableKey.trim();
     const anon = supabaseAnonKey.trim();
@@ -171,6 +177,7 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
   };
 
   const handleResetSupabase = async () => {
+    assertInitialSetupMutationAllowed();
     resetSupabaseRuntimeConfig();
     setSupabaseUrl(DEFAULT_SUPABASE_URL);
     setSupabasePublishableKey(DEFAULT_SUPABASE_PUBLISHABLE_KEY);
@@ -328,6 +335,7 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
           <button
             type="button"
             onClick={() => void handleResetSupabase()}
+            disabled={!canEditCloudConfig}
             className="min-h-9 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <RefreshCw size={12} />
@@ -349,6 +357,7 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
               inputMode="url"
               value={supabaseUrl}
               onChange={(e) => setSupabaseUrl(e.target.value)}
+              disabled={!canEditCloudConfig}
               placeholder="https://xxxxx.supabase.co"
               className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -375,6 +384,7 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
               autoComplete="off"
               value={supabasePublishableKey}
               onChange={(e) => setSupabasePublishableKey(e.target.value)}
+              disabled={!canEditCloudConfig}
               placeholder="sb_publishable_..."
               className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -393,6 +403,7 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
               aria-label={getTranslation('cloudSupabaseAnonLabel', language)}
               value={supabaseAnonKey}
               onChange={(e) => setSupabaseAnonKey(e.target.value)}
+              disabled={!canEditCloudConfig}
               placeholder="eyJhbGciOiJIUzI1NiIsIn..."
               className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs text-slate-900 dark:text-white"
             />
@@ -438,7 +449,7 @@ export const CloudConfigPanel: React.FC<CloudConfigPanelProps> = ({ onRecoveredP
           </button>
           <button
             type="button"
-            disabled={isRecovering}
+            disabled={!canEditCloudConfig || isRecovering}
             onClick={() => void handleSaveSupabase()}
             className="min-h-11 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2 cursor-pointer disabled:opacity-50"
           >

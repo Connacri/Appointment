@@ -34,7 +34,7 @@ import { ChannelConnection, ChannelAlert, SyncLogEvent, AlertSeverity, ChannelSy
 import { initialChannels, initialAlerts, initialSyncLogs } from '../data/channelMockData';
 
 export const ChannelManagerView: React.FC = () => {
-  const { language, currentDomain, resourceGroups } = useApp();
+  const { language, currentDomain, resourceGroups, assertBusinessMutationAllowed, deviceMutationAvailability } = useApp();
 
   const [activeTab, setActiveTab] = useState<'alerts' | 'channels' | 'parity' | 'logs' | 'keystore_guide'>('alerts');
   const [severityFilter, setSeverityFilter] = useState<'all' | 'critical' | 'warning'>('all');
@@ -86,6 +86,7 @@ export const ChannelManagerView: React.FC = () => {
 
   // Toggle channel active status
   const toggleChannel = (id: string) => {
+    assertBusinessMutationAllowed();
     setChannels((prev) =>
       prev.map((c) => (c.id === id ? { ...c, isActive: !c.isActive } : c))
     );
@@ -93,6 +94,7 @@ export const ChannelManagerView: React.FC = () => {
 
   // Trigger single channel sync
   const handleSyncChannel = (id: string) => {
+    assertBusinessMutationAllowed();
     if (syncingChannelId) return;
     setSyncingChannelId(id);
 
@@ -121,6 +123,7 @@ export const ChannelManagerView: React.FC = () => {
 
   // Trigger sync all channels
   const handleSyncAll = () => {
+    assertBusinessMutationAllowed();
     if (isSyncingAll) return;
     setIsSyncingAll(true);
 
@@ -147,6 +150,7 @@ export const ChannelManagerView: React.FC = () => {
 
   // Submit New Channel
   const handleCreateChannel = (e: React.FormEvent) => {
+    assertBusinessMutationAllowed();
     e.preventDefault();
     if (!newChannelName.trim()) return;
 
@@ -201,6 +205,7 @@ export const ChannelManagerView: React.FC = () => {
 
   // Save Configured Channel
   const handleSaveConfig = () => {
+    assertBusinessMutationAllowed();
     if (!configuringChannel) return;
     setChannels((prev) =>
       prev.map((c) => (c.id === configuringChannel.id ? configuringChannel : c))
@@ -223,6 +228,7 @@ export const ChannelManagerView: React.FC = () => {
 
   // Resolve Alert via workflow
   const handleExecuteResolution = () => {
+    assertBusinessMutationAllowed();
     if (!resolvingAlert) return;
 
     setAlerts((prev) =>
@@ -300,7 +306,7 @@ export const ChannelManagerView: React.FC = () => {
 
           <button
             onClick={handleSyncAll}
-            disabled={isSyncingAll}
+            disabled={!deviceMutationAvailability.canMutate || isSyncingAll}
             className="flex items-center gap-1.5 h-8 sm:h-9 px-2.5 sm:px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs transition disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw size={14} className={isSyncingAll ? 'animate-spin' : ''} />
@@ -611,6 +617,7 @@ export const ChannelManagerView: React.FC = () => {
                     />
                     <button
                       onClick={() => toggleChannel(channel.id)}
+                      disabled={!deviceMutationAvailability.canMutate}
                       className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
                         channel.isActive
                           ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
@@ -662,7 +669,7 @@ export const ChannelManagerView: React.FC = () => {
 
                     <button
                       onClick={() => handleSyncChannel(channel.id)}
-                      disabled={syncingChannelId === channel.id}
+                      disabled={!deviceMutationAvailability.canMutate || syncingChannelId === channel.id}
                       className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
                     >
                       <RefreshCw
@@ -960,6 +967,7 @@ export const ChannelManagerView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={!deviceMutationAvailability.canMutate}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-xs"
                 >
                   Connecter & Synchroniser
@@ -1077,6 +1085,7 @@ export const ChannelManagerView: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSaveConfig}
+                  disabled={!deviceMutationAvailability.canMutate}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold shadow-xs"
                 >
                   Enregistrer les Modifications
@@ -1209,6 +1218,7 @@ export const ChannelManagerView: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleExecuteResolution}
+                  disabled={!deviceMutationAvailability.canMutate}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold shadow-xs"
                 >
                   Exécuter & Synchroniser l'OTA

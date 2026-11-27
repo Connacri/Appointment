@@ -316,7 +316,8 @@ export const IndexedDbInspectorModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
 }> = ({ isOpen, onClose }) => {
-  const { language, setBookings, setResourceGroups, assertBusinessMutationAllowed, deviceMutationAvailability } = useApp();
+  const { language, setBookings, setResourceGroups, assertBusinessMutationAllowed, assertInitialSetupMutationAllowed, deviceMutationAvailability, deviceRegistry, hasOnboarded } = useApp();
+  const canEditCloudConfig = deviceMutationAvailability.canMutate || (!hasOnboarded && !deviceRegistry);
   const t = COPY[language] || COPY.fr;
   const isRtl = language === 'ar';
   const mt = MANAGEMENT_COPY[language] || MANAGEMENT_COPY.fr;
@@ -501,6 +502,7 @@ export const IndexedDbInspectorModal: React.FC<{
   };
 
   const saveSupabase = () => {
+    assertInitialSetupMutationAllowed();
     const key = publishableKey.trim() || anonKey.trim();
     if (!/^https:\/\//i.test(supabaseUrl.trim()) || !key) {
       setSupabaseState({ status: 'error', message: mt.invalid });
@@ -514,6 +516,7 @@ export const IndexedDbInspectorModal: React.FC<{
   };
 
   const resetDefaultSupabase = () => {
+    assertInitialSetupMutationAllowed();
     setSupabaseUrl(DEFAULT_SUPABASE_URL);
     setPublishableKey(DEFAULT_SUPABASE_KEY);
     setAnonKey('');
@@ -716,6 +719,7 @@ export const IndexedDbInspectorModal: React.FC<{
 
                   <button
                     type="button"
+                    disabled={!canEditCloudConfig}
                     onClick={resetDefaultSupabase}
                     className="self-start sm:self-auto flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-2xs transition-colors cursor-pointer"
                   >
@@ -849,6 +853,7 @@ export const IndexedDbInspectorModal: React.FC<{
 
                   <button
                     type="button"
+                    disabled={!canEditCloudConfig}
                     onClick={saveSupabase}
                     className="flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-5 text-xs font-bold shadow-md shadow-emerald-600/25 transition-all cursor-pointer active:scale-95"
                   >

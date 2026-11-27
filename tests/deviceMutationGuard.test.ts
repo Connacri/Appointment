@@ -9,6 +9,9 @@ const bookingModal = readFileSync(new URL('../src/components/BookingModal.tsx', 
 const setupModal = readFileSync(new URL('../src/components/EstablishmentSetupModal.tsx', import.meta.url), 'utf8');
 const inspector = readFileSync(new URL('../src/components/IndexedDbInspectorModal.tsx', import.meta.url), 'utf8');
 const myBookings = readFileSync(new URL('../src/components/MyBookingsView.tsx', import.meta.url), 'utf8');
+const channelManager = readFileSync(new URL('../src/components/ChannelManagerView.tsx', import.meta.url), 'utf8');
+const spaManagement = readFileSync(new URL('../src/components/SpaManagementView.tsx', import.meta.url), 'utf8');
+const cloudConfig = readFileSync(new URL('../src/components/CloudConfigPanel.tsx', import.meta.url), 'utf8');
 
 function sectionProUsb(start: string, end: string): string {
   const from = proUsb.indexOf(start);
@@ -86,4 +89,21 @@ test('read-only UI disables high-risk profile, booking and lock controls', () =>
   assert.match(myBookings, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
   assert.match(proUsb, /disabled=\{!deviceMutationAvailability\.canMutate \|\| isWriting\}/);
   assert.match(proUsb, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
+});
+
+
+test('OTA channel and Spa mutations are rejected and disabled in read-only mode', () => {
+  assert.match(channelManager, /const handleCreateChannel[\s\S]*?assertBusinessMutationAllowed\(\)/);
+  assert.match(channelManager, /const handleExecuteResolution[\s\S]*?assertBusinessMutationAllowed\(\)/);
+  assert.match(channelManager, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
+  assert.match(spaManagement, /const handleCreateAppointment[\s\S]*?assertBusinessMutationAllowed\(\)/);
+  assert.match(spaManagement, /const handleUpdateAppointmentStatus[\s\S]*?assertBusinessMutationAllowed\(\)/);
+  assert.match(spaManagement, /disabled=\{!deviceMutationAvailability\.canMutate\}/);
+});
+
+test('Supabase runtime configuration remains editable only during explicit first-run bootstrap or writable mode', () => {
+  assert.match(cloudConfig, /assertInitialSetupMutationAllowed\(\)/);
+  assert.match(cloudConfig, /canEditCloudConfig = deviceMutationAvailability\.canMutate \|\| \(!hasOnboarded && !deviceRegistry\)/);
+  assert.match(inspector, /assertInitialSetupMutationAllowed\(\)/);
+  assert.match(inspector, /disabled=\{!canEditCloudConfig\}/);
 });
