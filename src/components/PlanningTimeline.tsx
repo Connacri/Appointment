@@ -862,7 +862,11 @@ export const PlanningTimeline: React.FC = () => {
   const floorAvailability = useMemo(() => {
     const map = new Map<string, Record<string, number>>();
     for (const [groupId, floors] of floorGroupsByGroup) {
+      // A collapsed building or floor has no visible availability cells. Avoid
+      // scanning its reservations until the user expands that section.
+      if (collapsedGroups[groupId]) continue;
       for (const floor of floors) {
+        if (floor.label && collapsedFloors[`${groupId}:${floor.key}`]) continue;
         map.set(
           `${groupId}:${floor.key}`,
           computeAvailabilityByDay(floor.resources, bookingsByResource, timelineDays),
@@ -870,7 +874,7 @@ export const PlanningTimeline: React.FC = () => {
       }
     }
     return map;
-  }, [floorGroupsByGroup, timelineDays, bookingsByResource]);
+  }, [floorGroupsByGroup, collapsedGroups, collapsedFloors, timelineDays, bookingsByResource]);
 
   // Open an explicit status selector instead of silently cycling through statuses.
   const renderHousekeepingTag = (status?: string, resourceId?: string, resourceName?: string) => {

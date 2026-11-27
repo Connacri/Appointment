@@ -40,3 +40,9 @@ test('secondary navigation chunks are prefetched on pointer intent and keyboard 
   assert.match(sidebar, /case 'billing': void import\('\.\/BillingInvoicingView'\)/);
   assert.match(sidebar, /case 'prousb': void import\('\.\/ProUsbLockSystemView'\)/);
 });
+
+test('Gantt floor availability is calculated only for expanded building and floor sections', () => {
+  assert.ok(gantt.includes('if (collapsedGroups[groupId]) continue;'));
+  assert.ok(gantt.includes('if (floor.label && collapsedFloors[`${groupId}:${floor.key}`]) continue;'));
+  assert.ok(gantt.includes('[floorGroupsByGroup, collapsedGroups, collapsedFloors, timelineDays, bookingsByResource]'));
+});
