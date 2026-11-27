@@ -409,6 +409,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const workspace = useWorkspace();
+  const [isCoreDataHydrated, setIsCoreDataHydrated] = useState(false);
   const [language, setLanguageState] = useState<Language>(() => {
     return (localStorage.getItem('omnibook_lang') as Language) || 'fr';
   });
@@ -1239,8 +1240,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // mockData is retained only as a legacy-ID deny-list during migration.
   const [resourceGroups, setResourceGroups] = useState<ResourceGroup[]>([]);
   const [bookings, setBookings] = useState<TimelineBooking[]>([]);
-  const [isCoreDataHydrated, setIsCoreDataHydrated] = useState(false);
-  
   // Local-only records use a separate IndexedDB store and are never assigned a
   // fabricated workspace ID or emitted as P2P events.
   useEffect(() => {
