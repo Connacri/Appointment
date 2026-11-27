@@ -163,8 +163,7 @@ export type ActiveAppView =
   | 'spa'
   | 'events'
   | 'roles'
-  | 'help'
-;
+  | 'help';
 
 interface AppContextType {
   activeWorkspaceId: string;
