@@ -933,7 +933,11 @@ mod tests {
         assert_eq!(env!("CARGO_PKG_NAME"), "appointment-pms-native");
         let version = env!("CARGO_PKG_VERSION");
         let components: Vec<_> = version.split('.').collect();
-        assert_eq!(components.len(), 3, "release version must use MAJOR.MINOR.PATCH");
+        assert_eq!(
+            components.len(),
+            3,
+            "release version must use MAJOR.MINOR.PATCH"
+        );
         assert!(
             components
                 .iter()
