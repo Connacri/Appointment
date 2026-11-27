@@ -281,7 +281,6 @@ export const BUILT_IN_ROLES: RoleDefinition[] = [
       'prousb',
       'spa',
       'events',
-      'videos',
     ],
     permissions: {
       canManageBookings: true,
