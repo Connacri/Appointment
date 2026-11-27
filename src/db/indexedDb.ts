@@ -23,11 +23,12 @@ import {
   getBookingArchivePeriodKey,
   isBookingEligibleForArchive,
 } from '../utils/bookingArchive';
-import { detectP2pBookingConflicts, type BookingConflictSnapshot } from '../services/p2p/bookingConflictDetection';
+import { detectP2pBookingConflicts, isBookingConflictSuperseded, type BookingConflictSnapshot } from '../services/p2p/bookingConflictDetection';
 import { validateDeviceRegistry, type DeviceRegistry } from '../services/p2p/deviceTopology';
 import {
   createP2pEvent,
   getP2pRecordState,
+  maximalP2pEvents,
   mergeP2pEvents,
   validateP2pEvent,
   validateP2pCursorAdvance,
@@ -1316,7 +1317,7 @@ class IndexedDbStore {
           const eventById = new Map<string, P2pEvent>();
                 const conflictStore = tx.objectStore('p2pBookingConflicts');
           const finishConflictScan = (): void => {
-            const conflicts = detectP2pBookingConflicts([...eventById.values()]);
+            let conflicts: BookingConflictSnapshot[] = [];
             const applyResolution = (conflictId: string, done: () => void): void => {
               const conflictRequest = conflictStore.get(conflictId);
               conflictRequest.onsuccess = () => {
@@ -1326,7 +1327,31 @@ class IndexedDbStore {
                   .getAll(IDBKeyRange.only([batch.workspaceId, 'booking_conflict', conflictId]));
                 resolutionRequest.onsuccess = () => {
                   const state = getP2pRecordState(resolutionRequest.result as P2pEvent[]);
-                  if (state.kind !== 'resolved') { done(); return; }
+                  if (state.kind !== 'resolved') {
+                    if (state.kind === 'missing'
+                      && !conflicts.some((item) => item.id === conflictId)
+                      && isBookingConflictSuperseded(conflict, [...eventById.values()])) {
+                      const currentFrontiers = [...eventById.values()];
+                      const firstFrontier = maximalP2pEvents(currentFrontiers.filter((item) =>
+                        item.workspaceId === batch.workspaceId && item.entity === 'booking'
+                        && item.entityId === conflict.firstBookingId));
+                      const secondFrontier = maximalP2pEvents(currentFrontiers.filter((item) =>
+                        item.workspaceId === batch.workspaceId && item.entity === 'booking'
+                        && item.entityId === conflict.secondBookingId));
+                      conflictStore.put({
+                        ...conflict,
+                        status: 'superseded',
+                        supersededAt: new Date().toISOString(),
+                        supersededByEventIds: [...firstFrontier, ...secondFrontier]
+                          .filter((item) => item.eventId !== conflict.firstEventId
+                            && item.eventId !== conflict.secondEventId)
+                          .map((item) => item.eventId)
+                          .sort(),
+                      } satisfies BookingConflictSnapshot);
+                    }
+                    done();
+                    return;
+                  }
                   const event = state.event;
                   const payload = event.payload as Record<string, unknown>;
                   const expectedSourceIds = [conflict.firstEventId, conflict.secondEventId].sort();
@@ -1426,25 +1451,43 @@ class IndexedDbStore {
               const pendingRequest = conflictStore.index('workspaceStatus')
                 .getAll(IDBKeyRange.only([batch.workspaceId, 'pending']));
               pendingRequest.onsuccess = () => {
-                const pendingIds = (pendingRequest.result as BookingConflictSnapshot[]).map((item) => item.id);
-                const conflictIds = [...new Set([
-                  ...conflicts.map((conflict) => conflict.id),
-                  ...pendingIds,
-                  ...batch.events.filter((event) => event.entity === 'booking_conflict').map((event) => event.entityId),
-                ])];
-                const applyResolutionNext = (index: number): void => {
-                  if (index >= conflictIds.length) {
-                    tx.objectStore('p2pPeerCursors').put({
-                      workspaceId: batch.workspaceId,
-                      peerId: batch.peerId,
-                      cursor: batch.nextCursor,
-                      updatedAt: new Date().toISOString(),
-                    });
+                const pendingConflicts = pendingRequest.result as BookingConflictSnapshot[];
+                const pendingIds = pendingConflicts.map((item) => item.id);
+                const affectedBookingIds = new Set(pendingFrontiers.map((item) => item.entityId));
+                const incomingResolutionIds = new Set(batch.events
+                  .filter((event) => event.entity === 'booking_conflict')
+                  .map((event) => event.entityId));
+                const pendingBookingIds = [...new Set(pendingConflicts
+                  .filter((item) => affectedBookingIds.has(item.firstBookingId)
+                    || affectedBookingIds.has(item.secondBookingId)
+                    || incomingResolutionIds.has(item.id))
+                  .flatMap((item) => [item.firstBookingId, item.secondBookingId]))];
+                const loadPendingFrontiers = (index: number): void => {
+                  if (index >= pendingBookingIds.length) {
+                    conflicts = detectP2pBookingConflicts([...eventById.values()]);
+                    const conflictIds = [...new Set([
+                      ...conflicts.map((conflict) => conflict.id),
+                      ...pendingIds,
+                      ...batch.events.filter((event) => event.entity === 'booking_conflict').map((event) => event.entityId),
+                    ])];
+                    const applyResolutionNext = (resolutionIndex: number): void => {
+                      if (resolutionIndex >= conflictIds.length) {
+                        tx.objectStore('p2pPeerCursors').put({
+                          workspaceId: batch.workspaceId,
+                          peerId: batch.peerId,
+                          cursor: batch.nextCursor,
+                          updatedAt: new Date().toISOString(),
+                        });
+                        return;
+                      }
+                      applyResolution(conflictIds[resolutionIndex], () => applyResolutionNext(resolutionIndex + 1));
+                    };
+                    applyResolutionNext(0);
                     return;
                   }
-                  applyResolution(conflictIds[index], () => applyResolutionNext(index + 1));
+                  loadFrontier(pendingBookingIds[index], () => loadPendingFrontiers(index + 1));
                 };
-                applyResolutionNext(0);
+                loadPendingFrontiers(0);
               };
               pendingRequest.onerror = abort;
             };
