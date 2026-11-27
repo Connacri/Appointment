@@ -110,7 +110,7 @@ test('marks an overlap superseded only when a newer booking frontier replaces a 
     createdAt: '2026-11-26T10:01:00.000Z',
   };
   assert.equal(detectP2pBookingConflicts([newerA, originalB]).length, 0);
-  assert.equal(isBookingConflictSuperseded(conflict, [newerA, originalB]), true);
+  assert.equal(isBookingConflictSuperseded(conflict, [originalA, newerA, originalB]), true);
 });
 
 test('does not supersede a conflict when one booking frontier is unavailable', () => {
