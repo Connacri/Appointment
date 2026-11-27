@@ -8,7 +8,7 @@ Il ne contient aucun secret : uniquement des **noms** de secrets et de variables
 - Aucune release ni signature de production n'est produite en local.
   L'APK/AAB Android signé et les binaires Windows natifs **non signés** sont construits uniquement par GitHub Actions.
 - La version applicative a une source unique : `package.json` → `version`. Le script de release génère aussi `src/version.ts` depuis cette valeur pour l'afficher dans « À propos » ; ce fichier ne doit jamais être incrémenté manuellement.
-- Un push sur `main` touchant le code applicatif, Android, Windows natif, les assets, les scripts de build ou la configuration de release déclenche : qualité → Android signé → Rust/Win32 natif Windows signé → GitHub Release de snapshot.
+- Un push sur `main` touchant le code applicatif, Android, Windows natif, les assets, les scripts de build ou la configuration de release déclenche : qualité → Android signé → Rust/Win32 natif Windows non signé → GitHub Release de snapshot.
 - Un tag `vX.Y.Z` déclenche une release officielle ; le tag doit être **égal** à `package.json` (vérifié par le workflow).
 - `workflow_dispatch` permet de relancer manuellement le pipeline (`release_track`).
 - Le site statique est déployé séparément par `.github/workflows/deploy-web.yml`. Il ne fait pas partie du pipeline de release binaire.
@@ -19,7 +19,7 @@ Il ne contient aucun secret : uniquement des **noms** de secrets et de variables
 |---|---|---|
 | Build & Update Production Website | `npm ci`, build Vite, zip Web, upload de l'artefact Pages, `actions/deploy-pages` | Site GitHub Pages |
 | Build & Sign Android (APK + AAB) | build Web base relative, `cap sync`, signature release, vérification `apksigner`, upload | `app-release.apk`, `app-release.aab`, `mapping.txt` |
-| Build & Sign Native Windows | `cargo fmt`, `cargo test`, Clippy, `cargo build --release`, installateur Inno Setup, signature Authenticode | EXE Rust/Win32, installateur natif, ZIP natif |
+| Build Native Windows (non signé) | `cargo fmt`, `cargo test`, Clippy, `cargo build --release`, installateur Inno Setup, contrôle d'absence de signature | EXE Rust/Win32, installateur natif, ZIP natif |
 | Publish GitHub Release | récupère les artefacts Android et Windows natifs, les renomme avec la version, calcule `SHA256SUMS.txt`, publie la release | Release GitHub |
 
 `versionCode` Android = `github.run_number` ; il ne doit jamais régresser ni être réutilisé.
@@ -54,8 +54,7 @@ ANDROID_KEYSTORE_PASSWORD
 ANDROID_KEY_ALIAS
 ANDROID_KEY_PASSWORD
 PLAY_STORE_JSON_KEY          (optionnel : active l'upload Play)
-WINDOWS_CERT_BASE64          (obligatoire : signature Authenticode de production)
-WINDOWS_CERT_PASSWORD        (mot de passe du certificat PFX)
+Les binaires Windows natifs sont actuellement publiés non signés ; aucun certificat Authenticode Windows n'est utilisé.
 ```
 
 Variables GitHub :
@@ -74,7 +73,7 @@ Ne jamais committer de keystore, `.env`, JSON de service account ou mot de passe
 ## 5. Vérification après un push
 
 1. `gh run watch <run_id> --exit-status`
-2. Vérifier que les jobs qualité, Android signé, Windows Rust natif et publication sont verts et que la release contient les artefacts versionnés.
+2. Vérifier que les jobs qualité, Android signé, Windows Rust natif non signé et publication sont verts et que la release contient les artefacts versionnés.
 3. Le job Pages compare automatiquement l'asset `assets/index-*.js` servi par
    `https://connacri.github.io/Appointment/` avec celui du build (10 minutes de réessais pour la
    propagation CDN) : un site resté sur l'ancien build fait échouer le run.
